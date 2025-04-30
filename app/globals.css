@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 180 100% 50%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 300 100% 50%;
+    --secondary-foreground: 0 0% 0%;
+
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-orbitron;
+  }
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-500 to-blue-500;
+}
+
+.gradient-bg {
+  @apply bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-blue-500/20;
+}
+
+.gradient-border {
+  @apply border border-transparent bg-gradient-to-r from-cyan-500 via-purple-500 to-blue-500 bg-clip-border;
+}
+
+.card-glow {
+  @apply relative overflow-hidden rounded-xl border border-muted/30 bg-black/30 backdrop-blur-sm;
+}
+
+.card-glow::before {
+  content: "";
+  @apply absolute inset-0 -z-10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-blue-500/10 opacity-0 transition-opacity duration-500;
+}
+
+.card-glow:hover::before {
+  @apply opacity-100;
+}
