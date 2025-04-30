@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { FileText, Loader2, Search } from "lucide-react"
@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-provider"
 import { supabase } from "@/lib/supabase"
 import type { Analysis } from "@/lib/supabase"
 
-export default function HistoryPage() {
+function HistoryContent() {
   const [analyses, setAnalyses] = useState<Analysis[]>([])
   const [filteredAnalyses, setFilteredAnalyses] = useState<Analysis[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -183,5 +183,22 @@ export default function HistoryPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container py-10">
+          <div className="flex flex-col items-center justify-center h-[50vh]">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="mt-4 text-lg">Loading history...</p>
+          </div>
+        </div>
+      }
+    >
+      <HistoryContent />
+    </Suspense>
   )
 }

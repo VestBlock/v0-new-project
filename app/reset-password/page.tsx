@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -8,15 +8,15 @@ import * as z from "zod"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/lib/supabase"
 
-const resetPasswordSchema = z
+const formSchema = z
   .object({
-    password: z.string().min(8, {
-      message: "Password must be at least 8 characters.",
+    password: z.string().min(6, {
+      message: "Password must be at least 6 characters.",
     }),
     confirmPassword: z.string(),
   })
@@ -25,17 +25,16 @@ const resetPasswordSchema = z
     path: ["confirmPassword"],
   })
 
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>
-
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const [isLoading, setIsLoading] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isTokenValid, setIsTokenValid] = useState(false)
+  const [isCheckingToken, setIsCheckingToken] = useState(true)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
 
-  const form = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       password: "",
       confirmPassword: "",
@@ -43,108 +42,162 @@ export default function ResetPasswordPage() {
   })
 
   useEffect(() => {
-    // Check if we have the necessary parameters
-    if (!searchParams.has("access_token") && !searchParams.has("type")) {
-      toast({
-        variant: "destructive",
-        title: "Invalid reset link",
-        description: "The password reset link is invalid or has expired.",
-      })
-      router.push("/login")
-    }
-  }, [searchParams, router, toast])
+    const verifyToken = async () => {
+      const token = searchParams.get("token")
 
-  async function onSubmit(data: ResetPasswordValues) {
+      if (!token) {
+        setIsTokenValid(false)
+        setIsCheckingToken(false)
+        return
+      }
+
+      try {
+        // Verify the token with Supabase
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: "recovery",
+        })
+
+        if (error) {
+          throw error
+        }
+
+        setIsTokenValid(true)
+      } catch (error) {
+        console.error("Token verification error:", error)
+        setIsTokenValid(false)
+      } finally {
+        setIsCheckingToken(false)
+      }
+    }
+
+    verifyToken()
+  }, [searchParams])
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
 
     try {
+      // Update the password
       const { error } = await supabase.auth.updateUser({
-        password: data.password,
+        password: values.password,
       })
 
-      if (error) {
-        throw error
-      }
+      if (error) throw error
 
-      setIsSubmitted(true)
-    } catch (error: any) {
+      toast({
+        title: "Password reset successful",
+        description: "Your password has been reset. You can now log in with your new password.",
+      })
+
+      // Redirect to login page
+      router.push("/login")
+    } catch (error) {
+      console.error("Password reset error:", error)
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "Something went wrong. Please try again.",
+        title: "Password reset failed",
+        description: "There was an error resetting your password. Please try again.",
       })
     } finally {
       setIsLoading(false)
     }
   }
 
-  return (
-    <div className="container flex h-[calc(100vh-4rem)] items-center justify-center">
-      <Card className="w-full max-w-md card-glow">
+  if (isCheckingToken) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-4">Verifying your reset link...</p>
+      </div>
+    )
+  }
+
+  if (!isTokenValid) {
+    return (
+      <Card className="mx-auto w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Reset your password</CardTitle>
+          <CardTitle className="text-2xl">Invalid or Expired Link</CardTitle>
           <CardDescription>
-            {isSubmitted ? "Your password has been reset" : "Enter your new password below"}
+            The password reset link is invalid or has expired. Please request a new password reset link.
           </CardDescription>
         </CardHeader>
-        {isSubmitted ? (
-          <CardContent className="space-y-4">
-            <div className="rounded-md bg-muted p-4">
-              <p className="text-sm">
-                Your password has been successfully reset. You can now sign in with your new password.
-              </p>
-            </div>
-            <Button asChild className="w-full">
-              <a href="/login">Sign in</a>
-            </Button>
-          </CardContent>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>New Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm New Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Resetting password...
-                    </>
-                  ) : (
-                    "Reset password"
-                  )}
-                </Button>
-              </CardFooter>
-            </form>
-          </Form>
-        )}
+        <CardFooter>
+          <Button asChild className="w-full">
+            <a href="/forgot-password">Request New Link</a>
+          </Button>
+        </CardFooter>
       </Card>
-    </div>
+    )
+  }
+
+  return (
+    <Card className="mx-auto w-full max-w-md card-glow">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl">Reset Password</CardTitle>
+        <CardDescription>Enter your new password below</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resetting Password...
+                </>
+              ) : (
+                "Reset Password"
+              )}
+            </Button>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container flex h-[calc(100vh-4rem)] items-center justify-center">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="mt-4 text-lg">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <div className="container flex h-[calc(100vh-4rem)] items-center justify-center">
+        <ResetPasswordContent />
+      </div>
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -53,7 +53,7 @@ type AnalysisData = {
   }
 }
 
-export default function CreditAnalysisPage() {
+function CreditAnalysisContent() {
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -308,5 +308,22 @@ export default function CreditAnalysisPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export default function CreditAnalysisPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container py-10">
+          <div className="flex flex-col items-center justify-center h-[50vh]">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="mt-4 text-lg">Loading analysis...</p>
+          </div>
+        </div>
+      }
+    >
+      <CreditAnalysisContent />
+    </Suspense>
   )
 }
