@@ -13,13 +13,14 @@ import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-provider"
+import { supabase } from "@/lib/supabase"
 
 const formSchema = z.object({
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
-  password: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
+  password: z.string().min(1, {
+    message: "Password is required.",
   }),
 })
 
@@ -27,10 +28,13 @@ function LoginContent() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/dashboard"
+  const returnTo = searchParams.get("returnTo") || "/dashboard"
   const { signIn, user } = useAuth()
   const { toast } = useToast()
   const [isMounted, setIsMounted] = useState(false)
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false)
+  const [emailToConfirm, setEmailToConfirm] = useState("")
+  const [resendingEmail, setResendingEmail] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -43,27 +47,38 @@ function LoginContent() {
   useEffect(() => {
     setIsMounted(true)
     if (user) {
-      router.push(redirect)
+      router.push(returnTo)
     }
-  }, [user, router, redirect])
+  }, [user, router, returnTo])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
+    setNeedsEmailConfirmation(false)
+    setEmailToConfirm("")
 
     try {
-      const { error } = await signIn({
-        email: values.email,
-        password: values.password,
-      })
+      const { error } = await signIn(values.email, values.password)
 
-      if (error) throw error
-
-      toast({
-        title: "Login successful",
-        description: "Welcome back to VestBlock!",
-      })
-
-      router.push(redirect)
+      if (error) {
+        // Check if this is an email confirmation error
+        if (error.message?.includes("Email not confirmed")) {
+          setNeedsEmailConfirmation(true)
+          setEmailToConfirm(values.email)
+          toast({
+            variant: "warning",
+            title: "Email not confirmed",
+            description: "Please check your inbox and confirm your email before logging in.",
+          })
+        } else {
+          throw error
+        }
+      } else {
+        toast({
+          title: "Login successful",
+          description: "Welcome back to VestBlock!",
+        })
+        router.push(returnTo)
+      }
     } catch (error) {
       console.error("Login error:", error)
       toast({
@@ -73,6 +88,34 @@ function LoginContent() {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function resendConfirmationEmail() {
+    if (!emailToConfirm) return
+
+    setResendingEmail(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: emailToConfirm,
+      })
+
+      if (error) throw error
+
+      toast({
+        title: "Confirmation email sent",
+        description: "Please check your inbox and follow the link to confirm your email.",
+      })
+    } catch (error) {
+      console.error("Error resending confirmation:", error)
+      toast({
+        variant: "destructive",
+        title: "Failed to resend confirmation",
+        description: "There was a problem sending the confirmation email. Please try again.",
+      })
+    } finally {
+      setResendingEmail(false)
     }
   }
 
@@ -128,6 +171,45 @@ function LoginContent() {
               </Button>
             </form>
           </Form>
+          {needsEmailConfirmation && (
+            <div className="mt-4 rounded-md bg-amber-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-amber-800">Email not confirmed</h3>
+                  <div className="mt-2 text-sm text-amber-700">
+                    <p>Please check your inbox and confirm your email before logging in.</p>
+                  </div>
+                  <div className="mt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={resendConfirmationEmail}
+                      disabled={resendingEmail}
+                    >
+                      {resendingEmail ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Resend confirmation email"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
           <div className="text-center text-sm">

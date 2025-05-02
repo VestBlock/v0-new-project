@@ -1,78 +1,132 @@
 import { createClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
+import { createServerClient } from "@supabase/ssr"
+import type { Database } from "./database.types"
 
+// Types
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+export type Analysis = Database["public"]["Tables"]["analyses"]["Row"]
+export type CreditScore = Database["public"]["Tables"]["credit_scores"]["Row"]
+export type Notification = Database["public"]["Tables"]["notifications"]["Row"]
+export type ChatMessage = Database["public"]["Tables"]["chat_messages"]["Row"]
+export type DisputeLetter = Database["public"]["Tables"]["dispute_letters"]["Row"]
+export type Note = Database["public"]["Tables"]["notes"]["Row"]
+
+// Environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 
-// Create a single supabase client for the browser
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Client-side singleton pattern to prevent multiple instances
+let supabaseInstance: ReturnType<typeof createClient> | null = null
 
-// Create a server-side client (for API routes)
-export const createServerSupabaseClient = () => {
-  const supabaseUrl = process.env.SUPABASE_URL || ""
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-  return createClient(supabaseUrl, supabaseServiceKey)
+// Create a Supabase client for the browser
+export const supabase = (() => {
+  if (supabaseInstance) return supabaseInstance
+
+  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    db: {
+      schema: "public",
+    },
+    global: {
+      fetch: (...args) => {
+        // Add custom fetch options here if needed
+        return fetch(...args)
+      },
+    },
+  })
+
+  return supabaseInstance
+})()
+
+// Create a Supabase client for server components
+export function createServerSupabaseClient() {
+  const cookieStore = cookies()
+
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+      set(name: string, value: string, options: { path: string; maxAge: number; domain?: string }) {
+        try {
+          cookieStore.set({ name, value, ...options })
+        } catch (error) {
+          // This can happen in middleware when cookies are already sent
+          console.error("Error setting cookie:", error)
+        }
+      },
+      remove(name: string, options: { path: string; domain?: string }) {
+        try {
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 })
+        } catch (error) {
+          console.error("Error removing cookie:", error)
+        }
+      },
+    },
+  })
 }
 
-// Types for our database tables
-export type Profile = {
-  id: string
-  email: string
-  full_name?: string
-  phone?: string
-  is_pro: boolean
-  role?: string
-  created_at: string
-  updated_at: string
+// Create a Supabase admin client with service role
+export function createAdminSupabaseClient() {
+  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
 }
 
-export type Analysis = {
-  id: string
-  user_id: string
-  file_path: string
-  ocr_text?: string
-  status: "processing" | "completed" | "error"
-  result?: any
-  created_at: string
-  completed_at?: string
-  notes?: string
+// Connection pool for server-side operations
+const connectionPool: { [key: string]: ReturnType<typeof createClient> } = {}
+
+// Get a connection from the pool
+export function getSupabaseConnection(key = "default") {
+  if (!connectionPool[key]) {
+    connectionPool[key] = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+      },
+    })
+  }
+  return connectionPool[key]
 }
 
-export type ChatMessage = {
-  id: string
-  analysis_id: string
-  user_id: string
-  role: "user" | "assistant"
-  content: string
-  created_at: string
+// Clear the connection pool
+export function clearConnectionPool() {
+  Object.keys(connectionPool).forEach((key) => {
+    delete connectionPool[key]
+  })
 }
 
-export type DisputeLetter = {
-  id: string
-  analysis_id: string
-  user_id: string
-  bureau: string
-  account_name: string
-  account_number: string
-  issue_type: string
-  letter_content: string
-  created_at: string
-}
+// Batch operations helper
+export async function batchSupabaseOperations<T>(operations: (() => Promise<T>)[], concurrency = 5): Promise<T[]> {
+  const results: T[] = []
+  const errors: Error[] = []
 
-export type Notification = {
-  id: string
-  user_id: string
-  title: string
-  message: string
-  type: "info" | "success" | "warning" | "error"
-  is_read: boolean
-  created_at: string
-}
+  // Process operations in batches
+  for (let i = 0; i < operations.length; i += concurrency) {
+    const batch = operations.slice(i, i + concurrency)
+    const batchResults = await Promise.allSettled(batch.map((op) => op()))
 
-export type UserNote = {
-  id: string
-  analysis_id: string
-  user_id: string
-  content: string
-  created_at: string
-  updated_at: string
+    batchResults.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        results.push(result.value)
+      } else {
+        errors.push(result.reason)
+        console.error(`Batch operation ${i + index} failed:`, result.reason)
+      }
+    })
+  }
+
+  if (errors.length > 0) {
+    console.warn(`${errors.length} out of ${operations.length} batch operations failed`)
+  }
+
+  return results
 }

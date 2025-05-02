@@ -1,42 +1,76 @@
 import { supabase } from "./supabase"
-import type { UserNote } from "./supabase"
+
+export type Note = {
+  id: string
+  analysis_id: string
+  user_id: string
+  title: string
+  content: string
+  created_at: string
+}
 
 type CreateNoteParams = {
-  userId: string
   analysisId: string
+  userId: string
+  title: string
   content: string
 }
 
-export async function createNote({ userId, analysisId, content }: CreateNoteParams) {
+type UpdateNoteParams = {
+  noteId: string
+  title?: string
+  content?: string
+}
+
+export async function createNote({ analysisId, userId, title, content }: CreateNoteParams) {
   try {
     const { data, error } = await supabase
-      .from("user_notes")
+      .from("notes")
       .insert({
-        user_id: userId,
         analysis_id: analysisId,
+        user_id: userId,
+        title,
         content,
       })
       .select()
 
     if (error) throw error
 
-    return { success: true, data: data[0] as UserNote }
+    return { success: true, note: data[0] as Note }
   } catch (error) {
     console.error("Error creating note:", error)
     return { success: false, error }
   }
 }
 
-export async function updateNote(noteId: string, content: string) {
+export async function getNotes(analysisId: string) {
   try {
-    const { error } = await supabase
-      .from("user_notes")
-      .update({ content, updated_at: new Date().toISOString() })
-      .eq("id", noteId)
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("analysis_id", analysisId)
+      .order("created_at", { ascending: false })
 
     if (error) throw error
 
-    return { success: true }
+    return { success: true, notes: data as Note[] }
+  } catch (error) {
+    console.error("Error getting notes:", error)
+    return { success: false, error, notes: [] }
+  }
+}
+
+export async function updateNote({ noteId, title, content }: UpdateNoteParams) {
+  try {
+    const updates: { title?: string; content?: string } = {}
+    if (title !== undefined) updates.title = title
+    if (content !== undefined) updates.content = content
+
+    const { data, error } = await supabase.from("notes").update(updates).eq("id", noteId).select()
+
+    if (error) throw error
+
+    return { success: true, note: data[0] as Note }
   } catch (error) {
     console.error("Error updating note:", error)
     return { success: false, error }
@@ -45,7 +79,7 @@ export async function updateNote(noteId: string, content: string) {
 
 export async function deleteNote(noteId: string) {
   try {
-    const { error } = await supabase.from("user_notes").delete().eq("id", noteId)
+    const { error } = await supabase.from("notes").delete().eq("id", noteId)
 
     if (error) throw error
 
@@ -53,23 +87,5 @@ export async function deleteNote(noteId: string) {
   } catch (error) {
     console.error("Error deleting note:", error)
     return { success: false, error }
-  }
-}
-
-export async function getNotes(userId: string, analysisId: string): Promise<UserNote[]> {
-  try {
-    const { data, error } = await supabase
-      .from("user_notes")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("analysis_id", analysisId)
-      .order("created_at", { ascending: false })
-
-    if (error) throw error
-
-    return data as UserNote[]
-  } catch (error) {
-    console.error("Error getting notes:", error)
-    return []
   }
 }

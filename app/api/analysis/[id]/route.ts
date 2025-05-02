@@ -1,58 +1,105 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-// Create Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+import type { NextRequest } from "next/server"
+import { supabase } from "@/lib/supabase"
+import { getServerSession } from "@/lib/auth-provider"
+import { createSuccessResponse, createErrorResponse, safeJsonParse, sanitizeForJson } from "@/lib/json-utils"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Get the current user
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get the analysis ID from the URL
+    const analysisId = params.id
+
+    // Get the user session
+    const session = await getServerSession()
+
+    if (!session || !session.user) {
+      return createErrorResponse("Unauthorized", 401)
     }
 
-    const token = authHeader.split(" ")[1]
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get the analysis from the database
+    // Fetch the analysis from the database
     const { data: analysis, error } = await supabase
       .from("analyses")
       .select("*")
-      .eq("id", params.id)
-      .eq("user_id", user.id)
+      .eq("id", analysisId)
+      .eq("user_id", session.user.id)
       .single()
 
-    if (error || !analysis) {
-      return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
+    if (error) {
+      console.error("Error fetching analysis:", error)
+      return createErrorResponse("Analysis not found", 404)
+    }
+
+    if (!analysis) {
+      return createErrorResponse("Analysis not found", 404)
     }
 
     // If the analysis is still processing, return the status
     if (analysis.status === "processing") {
-      return NextResponse.json({ status: "processing" })
+      return createSuccessResponse({ status: "processing" }, 202)
     }
 
     // If the analysis failed, return the error
     if (analysis.status === "error") {
-      return NextResponse.json({ error: "Analysis failed" }, { status: 500 })
+      return createErrorResponse("Analysis failed", 500, {
+        errorMessage: analysis.error_message || "Unknown error",
+      })
     }
 
+    // Check if the analysis has a result
+    let result = analysis.result
+
+    // If result is a string, try to parse it as JSON
+    if (typeof result === "string") {
+      result = safeJsonParse(result)
+    }
+
+    // If we still don't have a valid result, create a default one
+    if (!result) {
+      // Create a default result structure
+      const defaultResult = {
+        id: analysisId,
+        overview: {
+          score: null,
+          summary: "Analysis data is not available. This could be due to an incomplete processing or a system error.",
+          positiveFactors: [],
+          negativeFactors: [],
+        },
+        disputes: { items: [] },
+        creditHacks: { recommendations: [] },
+        creditCards: { recommendations: [] },
+        sideHustles: { recommendations: [] },
+      }
+
+      // Update the analysis with the default result
+      const { error: updateError } = await supabase
+        .from("analyses")
+        .update({
+          result: defaultResult,
+          status: "completed",
+        })
+        .eq("id", analysisId)
+
+      if (updateError) {
+        console.error("Error updating analysis with default result:", updateError)
+      }
+
+      return createSuccessResponse({
+        id: analysisId,
+        ...defaultResult,
+      })
+    }
+
+    // Sanitize the result to ensure it can be safely serialized
+    const sanitizedResult = sanitizeForJson(result)
+
     // Return the analysis result
-    return NextResponse.json({
-      id: analysis.id,
-      ...analysis.result,
+    return createSuccessResponse({
+      id: analysisId,
+      ...sanitizedResult,
     })
   } catch (error) {
-    console.error("Get analysis error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error in analysis API:", error)
+    return createErrorResponse("An unexpected error occurred while fetching the analysis", 500, {
+      details: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }

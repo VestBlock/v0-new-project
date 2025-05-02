@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "./supabase"
 import type { Profile } from "./supabase"
+import { createServerSupabaseClient } from "./supabase"
 
 // Types
 type User = {
@@ -26,6 +27,45 @@ type AuthContextType = {
   updateProfile: (data: Partial<Omit<Profile, "id" | "email" | "created_at" | "updated_at">>) => Promise<{ error: any }>
   sendPasswordResetEmail: (email: string) => Promise<{ error: any }>
   refreshUser: () => Promise<void>
+}
+
+// Add this function after the imports but before the AuthContext definition
+
+/**
+ * Gets the user session on the server side
+ */
+export async function getServerSession() {
+  const supabase = createServerSupabaseClient()
+
+  try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession()
+
+    if (sessionError || !session) {
+      return { session: null, user: null, profile: null }
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .single()
+
+    if (profileError) {
+      console.error("[AUTH] Error fetching user profile:", profileError)
+    }
+
+    return {
+      session,
+      user: session.user,
+      profile: profile || null,
+    }
+  } catch (error) {
+    console.error("[AUTH] Error getting server session:", error)
+    return { session: null, user: null, profile: null }
+  }
 }
 
 // Create context

@@ -1,142 +1,126 @@
-"use client"
-
 import type React from "react"
+import type { Metadata } from "next"
+import Link from "next/link"
+import { redirect } from "next/navigation"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-provider"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
-import { Loader2, LayoutDashboard, Users, FileText, Settings, LogOut } from "lucide-react"
+import { createClient } from "@supabase/supabase-js"
+import { Button } from "@/components/ui/button"
+import { BarChart3, Users, FileText, Settings, Home, AlertCircle, Activity, List } from "lucide-react"
 
-export default function AdminLayout({
-  children,
-}: {
+export const metadata: Metadata = {
+  title: "Admin Dashboard",
+  description: "Admin dashboard for VestBlock",
+}
+
+interface AdminLayoutProps {
   children: React.ReactNode
-}) {
-  const { user, isLoading, signOut } = useAuth()
-  const router = useRouter()
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true)
+}
 
-  useEffect(() => {
-    async function checkAdminStatus() {
-      if (!user) {
-        if (!isLoading) {
-          router.push("/login?redirect=/admin")
-        }
-        return
-      }
+export default async function AdminLayout({ children }: AdminLayoutProps) {
+  // Create Supabase client
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+  const supabase = createClient(supabaseUrl, supabaseKey)
 
-      try {
-        const response = await fetch("/api/admin/check-status")
-        const data = await response.json()
+  // Check if user is authenticated and is an admin
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-        if (data.isAdmin) {
-          setIsAdmin(true)
-        } else {
-          setIsAdmin(false)
-          router.push("/dashboard")
-        }
-      } catch (error) {
-        console.error("Error checking admin status:", error)
-        setIsAdmin(false)
-        router.push("/dashboard")
-      } finally {
-        setIsCheckingAdmin(false)
-      }
-    }
-
-    checkAdminStatus()
-  }, [user, isLoading, router])
-
-  if (isLoading || isCheckingAdmin) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-lg">Loading admin panel...</span>
-      </div>
-    )
+  if (!session) {
+    redirect("/login?redirect=/admin")
   }
 
-  if (!isAdmin) {
-    return null
+  // Get user data
+  const { data: userData, error: userError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", session.user.id)
+    .single()
+
+  if (userError || !userData || userData.role !== "admin") {
+    redirect("/dashboard")
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen">
-        <Sidebar className="border-r">
-          <SidebarHeader className="border-b px-6 py-4">
-            <h1 className="text-xl font-bold">VestBlock Admin</h1>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Main</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <a href="/admin">
-                        <LayoutDashboard className="h-4 w-4" />
-                        <span>Dashboard</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <a href="/admin/users">
-                        <Users className="h-4 w-4" />
-                        <span>Users</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <a href="/admin/analyses">
-                        <FileText className="h-4 w-4" />
-                        <span>Analyses</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-            <SidebarGroup>
-              <SidebarGroupLabel>System</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <a href="/admin/settings">
-                        <Settings className="h-4 w-4" />
-                        <span>Settings</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => signOut()}>
-                      <LogOut className="h-4 w-4" />
-                      <span>Logout</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-        </Sidebar>
-        <div className="flex-1 overflow-auto">{children}</div>
+    <div className="flex min-h-screen flex-col">
+      <div className="flex flex-1">
+        <aside className="w-64 border-r bg-gray-100/40 dark:bg-gray-800/40">
+          <div className="flex h-full flex-col">
+            <div className="flex h-14 items-center border-b px-4">
+              <Link className="flex items-center font-semibold" href="/admin">
+                <span className="text-lg font-bold">Admin Dashboard</span>
+              </Link>
+            </div>
+            <nav className="flex-1 overflow-auto py-2">
+              <div className="px-3 py-2">
+                <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wide">General</h2>
+                <div className="space-y-1">
+                  <Link href="/admin">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/admin/users">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Users className="mr-2 h-4 w-4" />
+                      Users
+                    </Button>
+                  </Link>
+                  <Link href="/admin/analyses">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Analyses
+                    </Button>
+                  </Link>
+                  <Link href="/admin/settings">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Settings
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+              <div className="px-3 py-2">
+                <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wide">Monitoring</h2>
+                <div className="space-y-1">
+                  <Link href="/admin/openai-monitoring">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Activity className="mr-2 h-4 w-4" />
+                      OpenAI Monitoring
+                    </Button>
+                  </Link>
+                  <Link href="/admin/queue-monitor">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <List className="mr-2 h-4 w-4" />
+                      Queue Monitor
+                    </Button>
+                  </Link>
+                  <Link href="/admin/openai-diagnostic">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <AlertCircle className="mr-2 h-4 w-4" />
+                      OpenAI Diagnostic
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+              <div className="px-3 py-2">
+                <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wide">Navigation</h2>
+                <div className="space-y-1">
+                  <Link href="/dashboard">
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Home className="mr-2 h-4 w-4" />
+                      Back to App
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </nav>
+          </div>
+        </aside>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
-    </SidebarProvider>
+    </div>
   )
 }

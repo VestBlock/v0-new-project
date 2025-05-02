@@ -1,51 +1,41 @@
 import type React from "react"
-import { Inter, Orbitron } from "next/font/google"
+import "./globals.css"
 import type { Metadata } from "next"
-import { Toaster } from "@/components/ui/toaster"
+import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/lib/auth-provider"
+import { Navbar } from "@/components/navbar"
 import { NotificationProvider } from "@/lib/notification-provider"
 import { Analytics } from "@/components/analytics"
-import Navbar from "@/components/navbar"
-import "./globals.css"
+import { Footer } from "@/components/footer"
 import { Suspense } from "react"
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-})
-
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  variable: "--font-orbitron",
-})
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "VestBlock - AI Credit Repair & Financial Empowerment",
+  title: "VestBlock - AI-Powered Credit Repair & Financial Empowerment",
   description:
-    "Analyze your credit, get personalized recommendations, and improve your financial future with AI-powered insights.",
+    "Analyze your credit report, generate dispute letters, and get personalized financial strategies with our AI-powered platform.",
     generator: 'v0.dev'
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${orbitron.variable} font-sans bg-black text-white`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <body className={`${inter.className} min-h-screen flex flex-col`}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             <NotificationProvider>
               <div className="flex min-h-screen flex-col">
-                <Navbar />
                 <Suspense>
-                  <main className="flex-1">{children}</main>
+                  <Navbar />
                 </Suspense>
+                <main className="flex-1">{children}</main>
+                <Footer />
               </div>
-              <Analytics />
               <Toaster />
+              <Analytics />
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>

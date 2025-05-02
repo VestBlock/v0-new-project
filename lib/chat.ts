@@ -1,68 +1,93 @@
 import { supabase } from "./supabase"
-import type { ChatMessage } from "./supabase"
 
-type SendMessageParams = {
-  userId: string
+export type ChatMessage = {
+  id: string
+  analysis_id: string
+  user_id: string
+  role: "user" | "assistant"
+  content: string
+  created_at: string
+}
+
+type SendChatMessageParams = {
   analysisId: string
+  userId: string
   content: string
 }
 
-export async function sendUserMessage({ userId, analysisId, content }: SendMessageParams) {
+export async function getChatMessages(analysisId: string) {
   try {
+    console.log("Getting chat messages for analysis:", analysisId)
+
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("analysis_id", analysisId)
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      console.error("Error getting chat messages:", error)
+      throw error
+    }
+
+    console.log("Chat messages retrieved successfully:", data?.length || 0)
+    return { success: true, messages: data as ChatMessage[] }
+  } catch (error) {
+    console.error("Error getting chat messages:", error)
+    return { success: false, error, messages: [] }
+  }
+}
+
+export async function sendChatMessage({ analysisId, userId, content }: SendChatMessageParams) {
+  try {
+    console.log("Sending chat message:", { analysisId, userId, contentLength: content.length })
+
     const { data, error } = await supabase
       .from("chat_messages")
       .insert({
-        user_id: userId,
         analysis_id: analysisId,
+        user_id: userId,
         role: "user",
         content,
       })
       .select()
 
-    if (error) throw error
+    if (error) {
+      console.error("Error sending chat message:", error)
+      throw error
+    }
 
-    return { success: true, data: data[0] as ChatMessage }
+    console.log("Chat message sent successfully")
+    return { success: true, message: data[0] as ChatMessage }
   } catch (error) {
-    console.error("Error sending user message:", error)
+    console.error("Error sending chat message:", error)
     return { success: false, error }
   }
 }
 
-export async function sendAssistantMessage({ userId, analysisId, content }: SendMessageParams) {
+export async function addAIMessage({ analysisId, userId, content }: SendChatMessageParams) {
   try {
+    console.log("Adding AI message:", { analysisId, userId, contentLength: content.length })
+
     const { data, error } = await supabase
       .from("chat_messages")
       .insert({
-        user_id: userId,
         analysis_id: analysisId,
+        user_id: userId,
         role: "assistant",
         content,
       })
       .select()
 
-    if (error) throw error
+    if (error) {
+      console.error("Error adding AI message:", error)
+      throw error
+    }
 
-    return { success: true, data: data[0] as ChatMessage }
+    console.log("AI message added successfully")
+    return { success: true, message: data[0] as ChatMessage }
   } catch (error) {
-    console.error("Error sending assistant message:", error)
+    console.error("Error adding AI message:", error)
     return { success: false, error }
-  }
-}
-
-export async function getChatMessages(userId: string, analysisId: string): Promise<ChatMessage[]> {
-  try {
-    const { data, error } = await supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("analysis_id", analysisId)
-      .order("created_at", { ascending: true })
-
-    if (error) throw error
-
-    return data as ChatMessage[]
-  } catch (error) {
-    console.error("Error getting chat messages:", error)
-    return []
   }
 }

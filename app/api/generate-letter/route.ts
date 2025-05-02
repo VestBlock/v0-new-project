@@ -1,14 +1,26 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createDisputeLetter } from "@/lib/disputes"
-import { createNotification } from "@/lib/notifications"
-import { supabase } from "@/lib/supabase"
+import type { NextRequest } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import { openai } from "@ai-sdk/openai"
+import { generateTextWithRetry } from "@/lib/openai-client"
+import { createSuccessResponse, createErrorResponse, sanitizeForJson } from "@/lib/json-utils"
+
+// Create Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate the user
+    // Verify OpenAI API key is set
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OpenAI API key is not configured")
+      return createErrorResponse("OpenAI API key is not configured. Please add it to your environment variables.", 500)
+    }
+
+    // Get the current user
     const authHeader = request.headers.get("authorization")
     if (!authHeader) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", 401)
     }
 
     const token = authHeader.split(" ")[1]
@@ -18,15 +30,39 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", 401)
+    }
+
+    // Check if user is Pro
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("is_pro, role")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError) {
+      console.error("Error fetching user profile:", profileError)
+      return createErrorResponse("Failed to verify user subscription", 500)
+    }
+
+    const isPro = profile?.is_pro || profile?.role === "admin"
+    if (!isPro) {
+      return createErrorResponse("Pro subscription required", 403)
     }
 
     // Get request body
-    const body = await request.json()
-    const { analysisId, bureau, accountName, accountNumber, issueType } = body
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return createErrorResponse("Invalid JSON in request body", 400)
+    }
 
-    if (!analysisId || !bureau || !accountName || !accountNumber || !issueType) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    const { analysisId, dispute, userInfo } = body
+
+    if (!analysisId || !dispute) {
+      return createErrorResponse("Missing required fields", 400)
     }
 
     // Verify the analysis belongs to the user
@@ -38,141 +74,80 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (analysisError || !analysis) {
-      return NextResponse.json({ error: "Analysis not found" }, { status: 404 })
+      return createErrorResponse("Analysis not found", 404)
     }
 
-    // Generate the dispute letter content
-    const letterContent = generateDisputeLetterContent(bureau, accountName, accountNumber, issueType, user.email)
+    // Generate the letter using OpenAI
+    console.log("Generating dispute letter with OpenAI")
 
-    // Save the dispute letter
-    const {
-      success,
-      data: letter,
-      error,
-    } = await createDisputeLetter({
-      userId: user.id,
-      analysisId,
-      bureau,
-      accountName,
-      accountNumber,
-      issueType,
-      letterContent,
-    })
+    // Sanitize inputs to prevent JSON issues
+    const sanitizedDispute = sanitizeForJson(dispute)
+    const sanitizedUserInfo = sanitizeForJson(userInfo || {})
 
-    if (!success || error) {
-      return NextResponse.json({ error: "Failed to create dispute letter" }, { status: 500 })
+    const prompt = `
+Generate a formal dispute letter to send to ${sanitizedDispute.bureau} credit bureau. 
+The letter should dispute the following account:
+
+Account Name: ${sanitizedDispute.accountName}
+Account Number: ${sanitizedDispute.accountNumber || "Not provided"}
+Issue Type: ${sanitizedDispute.issueType}
+Recommended Action: ${sanitizedDispute.recommendedAction}
+
+The letter should be from:
+Name: ${sanitizedUserInfo.name || "Consumer"}
+Address: ${sanitizedUserInfo.address || "123 Main St, Anytown, USA"}
+Email: ${sanitizedUserInfo.email || "consumer@example.com"}
+Phone: ${sanitizedUserInfo.phone || "555-123-4567"}
+
+The letter should:
+1. Be professionally formatted with today's date
+2. Include the consumer's information
+3. Include the credit bureau's address
+4. Reference the specific account being disputed
+5. Clearly state the reason for the dispute
+6. Request that the item be investigated and removed or corrected
+7. Reference rights under the Fair Credit Reporting Act
+8. Include a closing with the consumer's signature
+
+Format the letter as plain text that can be copied and pasted.
+`
+
+    try {
+      const { text } = await generateTextWithRetry({
+        model: openai("gpt-4o"),
+        prompt,
+        temperature: 0.7,
+        maxTokens: 1500,
+        userId: user.id, // Pass user ID for logging
+      })
+
+      // Store the generated letter in the database
+      const { error: insertError } = await supabase.from("dispute_letters").insert({
+        user_id: user.id,
+        analysis_id: analysisId,
+        bureau: sanitizedDispute.bureau,
+        account_name: sanitizedDispute.accountName,
+        account_number: sanitizedDispute.accountNumber || "",
+        issue_type: sanitizedDispute.issueType,
+        letter_content: text,
+      })
+
+      if (insertError) {
+        console.error("Error storing dispute letter:", insertError)
+        // Continue anyway, just log the error
+      }
+
+      return createSuccessResponse({ content: text })
+    } catch (error) {
+      console.error("Error generating letter with OpenAI:", error)
+      return createErrorResponse("Failed to generate letter with OpenAI. Please try again later.", 500, {
+        details: error instanceof Error ? error.message : "Unknown error",
+      })
     }
-
-    // Create a notification
-    await createNotification({
-      userId: user.id,
-      title: "Dispute Letter Generated",
-      message: `Your dispute letter for ${accountName} has been generated.`,
-      type: "success",
-    })
-
-    return NextResponse.json({ letter })
   } catch (error) {
-    console.error("Error generating dispute letter:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Generate letter error:", error)
+    return createErrorResponse("Internal server error", 500, {
+      details: error instanceof Error ? error.message : "Unknown error",
+    })
   }
-}
-
-function generateDisputeLetterContent(
-  bureau: string,
-  accountName: string,
-  accountNumber: string,
-  issueType: string,
-  userEmail: string,
-): string {
-  const date = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
-  const bureauAddresses: Record<string, string> = {
-    Experian: "P.O. Box 4500\nAllen, TX 75013",
-    Equifax: "P.O. Box 740256\nAtlanta, GA 30374",
-    TransUnion: "P.O. Box 2000\nChester, PA 19016",
-  }
-
-  const bureauAddress = bureauAddresses[bureau] || bureauAddresses.Experian
-
-  let letterBody = ""
-
-  switch (issueType) {
-    case "Collection Account":
-      letterBody = `I am writing to dispute a collection account that appears on my credit report. The account in question is with ${accountName}, account number ${accountNumber}.
-
-This account is inaccurate because:
-- I have no record of this debt
-- I have not received proper validation of this debt as required by the Fair Debt Collection Practices Act
-- The information reported is incomplete or incorrect
-
-Under the Fair Credit Reporting Act, you are required to verify this information with the original creditor or delete it from my credit report. Please investigate this matter and remove this collection account from my credit report.`
-      break
-
-    case "Late Payment":
-      letterBody = `I am writing to dispute a late payment that appears on my credit report. The account in question is with ${accountName}, account number ${accountNumber}.
-
-This late payment is inaccurate because:
-- I have always made payments on time for this account
-- I have documentation showing the payment was made before the due date
-- This was a one-time oversight due to extenuating circumstances
-
-I request that you investigate this matter and remove the late payment notation from my credit report. I have been a customer in good standing and this isolated incident does not accurately reflect my payment history.`
-      break
-
-    case "Incorrect Balance":
-      letterBody = `I am writing to dispute an incorrect balance that appears on my credit report. The account in question is with ${accountName}, account number ${accountNumber}.
-
-The balance reported is inaccurate because:
-- I have made payments that are not reflected in the current balance
-- The balance includes fees or charges that were not authorized
-- The account has been paid in full or settled
-
-Please investigate this matter and update my credit report to reflect the correct balance for this account.`
-      break
-
-    default:
-      letterBody = `I am writing to dispute information that appears on my credit report. The account in question is with ${accountName}, account number ${accountNumber}.
-
-This information is inaccurate because:
-- The information does not belong to me
-- The information is outdated or obsolete
-- The information is incomplete or incorrect
-
-Under the Fair Credit Reporting Act, you are required to investigate this dispute and correct any inaccurate information. Please review this matter and make the necessary corrections to my credit report.`
-  }
-
-  return `${date}
-
-${bureauAddress}
-
-Re: Dispute of Inaccurate Information in Credit Report
-
-To Whom It May Concern:
-
-My name is [YOUR FULL NAME] and my Social Security Number is [YOUR SSN]. I am writing to dispute inaccurate information that appears on my credit report.
-
-${letterBody}
-
-As required by the Fair Credit Reporting Act, please investigate this matter and provide me with the results of your investigation. If you cannot verify this information, please remove it from my credit report.
-
-Please send me a corrected copy of my credit report at the address below.
-
-Thank you for your prompt attention to this matter.
-
-Sincerely,
-
-[YOUR SIGNATURE]
-
-[YOUR FULL NAME]
-[YOUR ADDRESS]
-[YOUR CITY, STATE ZIP]
-[YOUR PHONE NUMBER]
-${userEmail}
-
-Enclosures: [LIST ANY SUPPORTING DOCUMENTS]`
 }

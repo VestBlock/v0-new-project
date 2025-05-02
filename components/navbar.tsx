@@ -1,168 +1,229 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X } from "lucide-react"
+import { Menu, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-provider"
-import { cn } from "@/lib/utils"
 import { Logo } from "@/components/logo"
-import { NotificationsDropdown } from "@/components/notifications-dropdown"
 import { UserDropdown } from "@/components/user-dropdown"
+import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { SearchAnalyses } from "@/components/search-analyses"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
-const navItems = [
-  { name: "Home", href: "/" },
-  { name: "Free Analysis", href: "/free-analysis" },
-  { name: "Pro Analysis", href: "/pro-analysis" },
-  { name: "Financial Advisor", href: "/financial-advisor" },
-]
-
-export default function Navbar() {
+export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
+
+  const isActive = (path: string) => {
+    return pathname === path
+  }
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname])
+
+  // Prevent scrolling when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "auto"
+    }
+
+    return () => {
+      document.body.style.overflow = "auto"
+    }
+  }, [mobileMenuOpen])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between p-4 lg:px-8" aria-label="Global">
-        <div className="flex lg:flex-1">
-          <Link href="/" className="-m-1.5 p-1.5">
-            <Logo className="h-8 w-auto" />
+    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
+      <div className="container flex h-16 items-center">
+        <div className="mr-4 md:mr-6">
+          <Link href="/" className="flex items-center space-x-2">
+            <Logo />
           </Link>
         </div>
-        <div className="flex lg:hidden">
-          <button
-            type="button"
-            className="-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-gray-400"
-            onClick={() => setMobileMenuOpen(true)}
+
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center space-x-6 text-sm">
+          <Link
+            href="/"
+            className={`transition-colors hover:text-foreground/80 ${
+              isActive("/") ? "font-medium text-foreground" : "text-foreground/60"
+            }`}
           >
-            <span className="sr-only">Open main menu</span>
-            <Menu className="h-6 w-6" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="hidden lg:flex lg:gap-x-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                pathname === item.href ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </div>
-        <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:gap-x-4 lg:items-center">
+            Home
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center text-foreground/60 hover:text-foreground/80 transition-colors">
+                Features <ChevronDown className="ml-1 h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem asChild>
+                <Link href="/credit-analysis">Credit Analysis</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/history">Analysis History</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/progress">Progress Tracking</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Link
+            href="/pricing"
+            className={`transition-colors hover:text-foreground/80 ${
+              isActive("/pricing") ? "font-medium text-foreground" : "text-foreground/60"
+            }`}
+          >
+            Pricing
+          </Link>
+
+          <Link
+            href="/resources"
+            className={`transition-colors hover:text-foreground/80 ${
+              isActive("/resources") ? "font-medium text-foreground" : "text-foreground/60"
+            }`}
+          >
+            Resources
+          </Link>
+
+          <Link
+            href="/faq"
+            className={`transition-colors hover:text-foreground/80 ${
+              isActive("/faq") ? "font-medium text-foreground" : "text-foreground/60"
+            }`}
+          >
+            FAQ
+          </Link>
+
+          <Link
+            href="/contact"
+            className={`transition-colors hover:text-foreground/80 ${
+              isActive("/contact") ? "font-medium text-foreground" : "text-foreground/60"
+            }`}
+          >
+            Contact
+          </Link>
+        </nav>
+
+        <div className="flex-1 flex justify-end md:justify-center px-4">{user && <SearchAnalyses />}</div>
+
+        <div className="flex items-center gap-2">
           {user ? (
             <>
               <NotificationsDropdown />
               <UserDropdown />
             </>
           ) : (
-            <>
-              <Button asChild variant="outline">
+            <div className="hidden sm:flex items-center gap-2">
+              <Button asChild variant="ghost" size="sm">
                 <Link href="/login">Login</Link>
               </Button>
-              <Button
-                asChild
-                variant="default"
-                className="bg-gradient-to-r from-cyan-500 via-purple-500 to-blue-500 text-white"
-              >
-                <Link href="/pricing">Upgrade to Pro</Link>
+              <Button asChild size="sm">
+                <Link href="/register">Register</Link>
               </Button>
-            </>
+            </div>
           )}
-        </div>
-      </nav>
 
-      {/* Mobile menu */}
+          {/* Mobile Menu Button */}
+          <button
+            className="ml-2 md:hidden rounded-sm p-1.5 text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="lg:hidden">
-          <div className="fixed inset-0 z-50" />
-          <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
-            <div className="flex items-center justify-between">
-              <Link href="/" className="-m-1.5 p-1.5">
-                <Logo className="h-8 w-auto" />
-              </Link>
-              <button
-                type="button"
-                className="-m-2.5 rounded-md p-2.5 text-gray-400"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <span className="sr-only">Close menu</span>
-                <X className="h-6 w-6" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="mt-6 flow-root">
-              <div className="-my-6 divide-y divide-gray-500/10">
-                <div className="space-y-2 py-6">
-                  {navItems.map((item) => (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-white hover:bg-muted"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {item.name}
-                    </Link>
-                  ))}
-                </div>
-                <div className="py-6 space-y-2">
-                  {user ? (
-                    <>
-                      <Link
-                        href="/dashboard"
-                        className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-white hover:bg-muted"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        Dashboard
-                      </Link>
-                      <Link
-                        href="/profile"
-                        className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-white hover:bg-muted"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        Profile
-                      </Link>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() => {
-                          setMobileMenuOpen(false)
-                          setTimeout(() => {
-                            // Use setTimeout to avoid state update during render
-                            signOut()
-                          }, 0)
-                        }}
-                      >
-                        Logout
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button asChild variant="outline" className="w-full justify-start">
-                        <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-                          Login
-                        </Link>
-                      </Button>
-                      <Button
-                        asChild
-                        variant="default"
-                        className="w-full justify-start bg-gradient-to-r from-cyan-500 via-purple-500 to-blue-500 text-white"
-                      >
-                        <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}>
-                          Upgrade to Pro
-                        </Link>
-                      </Button>
-                    </>
-                  )}
-                </div>
+        <div className="fixed inset-0 top-16 z-50 h-[calc(100vh-4rem)] bg-background md:hidden">
+          <nav className="flex flex-col p-6 space-y-4">
+            <Link
+              href="/"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Home
+            </Link>
+            <Link
+              href="/dashboard"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/dashboard") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/history"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/history") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              History
+            </Link>
+            <Link
+              href="/progress"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/progress") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Progress
+            </Link>
+            <Link
+              href="/pricing"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/pricing") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/resources"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/resources") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Resources
+            </Link>
+            <Link
+              href="/faq"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/faq") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              FAQ
+            </Link>
+            <Link
+              href="/contact"
+              className={`px-4 py-2 text-lg hover:bg-accent rounded-md ${
+                isActive("/contact") ? "font-medium bg-accent/50" : ""
+              }`}
+            >
+              Contact
+            </Link>
+
+            {!user && (
+              <div className="pt-4 flex flex-col space-y-2">
+                <Button asChild>
+                  <Link href="/login">Login</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/register">Register</Link>
+                </Button>
               </div>
-            </div>
-          </div>
+            )}
+          </nav>
         </div>
       )}
     </header>

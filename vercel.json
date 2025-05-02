@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SITE_URL": "${NEXT_PUBLIC_SITE_URL}"
+  },
+  "functions": {
+    "app/api/ocr/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/analyze/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/export-pdf/[id]/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "app/api/generate-letter/route.ts": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "app/api/chat/route.ts": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  }
+}
