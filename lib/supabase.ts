@@ -12,171 +12,89 @@ export type ChatMessage = Database["public"]["Tables"]["chat_messages"]["Row"]
 export type DisputeLetter = Database["public"]["Tables"]["dispute_letters"]["Row"]
 export type Note = Database["public"]["Tables"]["notes"]["Row"]
 
-// Environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+// Get environment variables (with console logging for debugging)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// Client-side singleton pattern to prevent multiple instances
+console.log("Supabase URL:", supabaseUrl ? "Found" : "Missing")
+console.log("Supabase Anon Key:", supabaseAnonKey ? "Found" : "Missing")
+
+// Simple client singleton
 let supabaseInstance: ReturnType<typeof createClient> | null = null
 
-// Create a Supabase client for the browser
+// Browser client - with proper error handling
 export const supabase = (() => {
-  if (supabaseInstance) return supabaseInstance
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!url || !key) {
-    console.error("Supabase URL or Anon Key is missing. Check your environment variables.")
-    // Return a dummy client that logs errors instead of throwing
-    return {
-      auth: {
-        getSession: async () => ({ data: { session: null }, error: new Error("Supabase not initialized") }),
-        onAuthStateChange: () => ({ data: null, error: null, subscription: { unsubscribe: () => {} } }),
-        // Add other auth methods as needed
-      },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            single: async () => ({ data: null, error: new Error("Supabase not initialized") }),
-            limit: () => ({ data: null, error: new Error("Supabase not initialized") }),
-          }),
-          limit: () => ({ data: null, error: new Error("Supabase not initialized") }),
-        }),
-        insert: () => ({ data: null, error: new Error("Supabase not initialized") }),
-        update: () => ({ data: null, error: new Error("Supabase not initialized") }),
-        delete: () => ({ data: null, error: new Error("Supabase not initialized") }),
-      }),
-      // Add other methods as needed
-    } as any
+  // If environment variables are missing, return a stub client
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("ERROR: Supabase URL or Anon Key is missing")
+    return createStubClient()
   }
 
-  try {
-    supabaseInstance = createClient<Database>(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-      db: {
-        schema: "public",
-      },
-      global: {
-        fetch: (...args) => {
-          // Add custom fetch options here if needed
-          return fetch(...args)
-        },
-      },
-    })
+  // Return existing instance if available
+  if (supabaseInstance) return supabaseInstance
 
+  try {
+    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey)
     return supabaseInstance
   } catch (error) {
-    console.error("Failed to initialize Supabase client:", error)
-    // Return dummy client as above
-    return {
-      auth: {
-        getSession: async () => ({ data: { session: null }, error: new Error("Supabase initialization failed") }),
-        // Add other methods as needed
-      },
-      from: () => ({
-        // Add methods as needed
-      }),
-    } as any
+    console.error("ERROR: Failed to create Supabase client:", error)
+    return createStubClient()
   }
 })()
 
-// Create a Supabase client for server components
+// Server client
 export function createServerSupabaseClient() {
+  // Early return with clear error if env vars are missing
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Cannot create server Supabase client: Missing URL or Anon Key")
+  }
+
   const cookieStore = cookies()
 
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name: string) {
+      get(name) {
         return cookieStore.get(name)?.value
       },
-      set(name: string, value: string, options: { path: string; maxAge: number; domain?: string }) {
-        try {
-          cookieStore.set({ name, value, ...options })
-        } catch (error) {
-          // This can happen in middleware when cookies are already sent
-          console.error("Error setting cookie:", error)
-        }
+      set(name, value, options) {
+        cookieStore.set({ name, value, ...options })
       },
-      remove(name: string, options: { path: string; domain?: string }) {
-        try {
-          cookieStore.set({ name, value: "", ...options, maxAge: 0 })
-        } catch (error) {
-          console.error("Error removing cookie:", error)
-        }
+      remove(name, options) {
+        cookieStore.set({ name, value: "", ...options, maxAge: 0 })
       },
     },
   })
 }
 
-// Create a Supabase admin client with service role
+// Admin client
 export function createAdminSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceKey) {
-    console.error("Supabase URL or Service Role Key is missing. Check your environment variables.")
-    throw new Error("Cannot create admin Supabase client: missing credentials")
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Cannot create admin Supabase client: Missing URL or Service Key")
   }
 
-  return createClient<Database>(url, serviceKey, {
+  return createClient<Database>(supabaseUrl, supabaseServiceKey)
+}
+
+// Create a stub client that gracefully handles errors
+function createStubClient() {
+  return {
     auth: {
-      autoRefreshToken: false,
-      persistSession: false,
+      getSession: async () => ({ data: { session: null }, error: new Error("Supabase not initialized") }),
+      signOut: async () => ({ error: new Error("Supabase not initialized") }),
     },
-  })
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: null, error: new Error("Supabase not initialized") }),
+        }),
+      }),
+    }),
+    // Add other stub methods as needed
+  } as any
 }
 
-// Connection pool for server-side operations
-const connectionPool: { [key: string]: ReturnType<typeof createClient> } = {}
-
-// Get a connection from the pool
-export function getSupabaseConnection(key = "default") {
-  if (!connectionPool[key]) {
-    connectionPool[key] = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: false,
-      },
-    })
-  }
-  return connectionPool[key]
-}
-
-// Clear the connection pool
-export function clearConnectionPool() {
-  Object.keys(connectionPool).forEach((key) => {
-    delete connectionPool[key]
-  })
-}
-
-// Batch operations helper
-export async function batchSupabaseOperations<T>(operations: (() => Promise<T>)[], concurrency = 5): Promise<T[]> {
-  const results: T[] = []
-  const errors: Error[] = []
-
-  // Process operations in batches
-  for (let i = 0; i < operations.length; i += concurrency) {
-    const batch = operations.slice(i, i + concurrency)
-    const batchResults = await Promise.allSettled(batch.map((op) => op()))
-
-    batchResults.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        results.push(result.value)
-      } else {
-        errors.push(result.reason)
-        console.error(`Batch operation ${i + index} failed:`, result.reason)
-      }
-    })
-  }
-
-  if (errors.length > 0) {
-    console.warn(`${errors.length} out of ${operations.length} batch operations failed`)
-  }
-
-  return results
+// Helper to check if Supabase is properly initialized
+export function isSupabaseInitialized() {
+  return !!supabaseUrl && !!supabaseAnonKey && !!supabaseInstance
 }

@@ -1,37 +1,38 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET() {
   try {
-    return NextResponse.json(
-      {
-        success: true,
-        message: "API connection successful",
-        timestamp: new Date().toISOString(),
-      },
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    )
-  } catch (error) {
-    console.error("Test connection error:", error)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    // Ensure we return JSON even on error
-    return NextResponse.json(
-      {
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({
         success: false,
-        error: "API test failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-      },
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    )
+        error: "Missing Supabase environment variables",
+      })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Simple query to test connection
+    const { data, error } = await supabase.from("profiles").select("id").limit(1)
+
+    if (error) {
+      return NextResponse.json({
+        success: false,
+        error: error.message,
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Supabase connection successful",
+    })
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      error: "Failed to connect to Supabase",
+    })
   }
 }

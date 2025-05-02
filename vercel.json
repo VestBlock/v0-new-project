@@ -5,7 +5,7 @@
       "src": "package.json",
       "use": "@vercel/next",
       "config": {
-        "installCommand": "npm install --force && node scripts/remove-react-day-picker.js",
+        "installCommand": "npm install --legacy-peer-deps",
         "buildCommand": "npm run build"
       }
     }

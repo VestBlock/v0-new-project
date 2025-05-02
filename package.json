@@ -64,11 +64,10 @@
     "pdfkit": "latest",
     "uuid": "latest",
     "p-retry": "latest",
-    "@supabase/ssr": "latest",
     "fs": "latest",
     "path": "latest",
     "child_process": "latest",
-    "react-datepicker": "latest"
+    "@supabase/ssr": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
