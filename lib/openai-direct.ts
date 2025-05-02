@@ -13,6 +13,116 @@ const RETRY_DELAY = 1000
 const TIMEOUT_MS = 50000
 
 /**
+ * Direct OpenAI integration with no mock data
+ * Simple, reliable implementation for Vercel
+ */
+
+// Use native fetch for simplicity and reliability
+export async function callOpenAI({
+  prompt,
+  model = "gpt-4o",
+  temperature = 0.7,
+  maxTokens = 1000,
+  systemPrompt,
+}: {
+  prompt: string
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  systemPrompt?: string
+}) {
+  // Verify API key exists
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not defined in environment variables")
+  }
+
+  try {
+    const messages = []
+
+    // Add system prompt if provided
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt })
+    }
+
+    // Add user prompt
+    messages.push({ role: "user", content: prompt })
+
+    // Call OpenAI API directly
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${JSON.stringify(error)}`)
+    }
+
+    const data = await response.json()
+    return data.choices[0].message.content
+  } catch (error) {
+    console.error("OpenAI API call failed:", error)
+    throw error
+  }
+}
+
+// Function to analyze credit report text
+export async function analyzeCreditReport(text: string) {
+  const systemPrompt =
+    "You are a credit analysis expert. Provide detailed, accurate analysis based only on the provided information."
+
+  const prompt = `
+Analyze the following credit report text and provide insights:
+
+${text}
+
+Focus on:
+1. Credit scores
+2. Account details
+3. Negative items
+4. Recommendations for improvement
+`
+
+  return callOpenAI({
+    prompt,
+    model: "gpt-4o",
+    temperature: 0.3,
+    maxTokens: 2000,
+    systemPrompt,
+  })
+}
+
+// Function to check if OpenAI API is working
+export async function testOpenAIConnection() {
+  try {
+    const result = await callOpenAI({
+      prompt: "Respond with 'OpenAI connection successful' if you receive this message.",
+      model: "gpt-3.5-turbo",
+      maxTokens: 20,
+    })
+
+    return {
+      success: true,
+      message: result,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+/**
  * Directly analyze a credit report using OpenAI
  */
 export async function analyzeCreditReportDirect(

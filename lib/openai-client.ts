@@ -2,10 +2,20 @@ import { createClient } from "@supabase/supabase-js"
 import pRetry from "p-retry"
 import { sanitizeForJson } from "./json-utils"
 
-// Create Supabase client for logging
+// Create Supabase client for logging (with safety checks)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+let supabase: ReturnType<typeof createClient> | null = null
+
+// Only create the client if both URL and key are available
+if (supabaseUrl && supabaseServiceKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseServiceKey)
+  } catch (error) {
+    console.error("Failed to create Supabase client for OpenAI logging:", error)
+    // Continue without the client - logging will be skipped
+  }
+}
 
 // Error types for better handling
 export enum OpenAIErrorType {
@@ -131,6 +141,12 @@ async function logOpenAIRequest(
     retryCount?: number
   },
 ) {
+  // Skip logging if Supabase client isn't available
+  if (!supabase) {
+    console.warn("OpenAI request logging skipped: Supabase client not available")
+    return
+  }
+
   try {
     // Sanitize data before inserting
     const sanitizedOptions = sanitizeForJson(options)
@@ -187,16 +203,18 @@ export async function generateTextWithRetry(options: {
       retryable: false,
     }
 
-    await logOpenAIRequest(requestId, {
-      userId: options.userId,
-      model: modelName,
-      promptLength,
-      success: false,
-      errorType: error.type,
-      errorMessage: error.message,
-      latencyMs: Date.now() - startTime,
-      retryCount: 0,
-    })
+    if (supabase) {
+      await logOpenAIRequest(requestId, {
+        userId: options.userId,
+        model: modelName,
+        promptLength,
+        success: false,
+        errorType: error.type,
+        errorMessage: error.message,
+        latencyMs: Date.now() - startTime,
+        retryCount: 0,
+      })
+    }
 
     throw new Error(`OpenAI API key is not configured. Please add it to your environment variables.`)
   }
@@ -288,16 +306,18 @@ export async function generateTextWithRetry(options: {
           console.error(`OpenAI API error (attempt ${retryCount + 1}/${retryAttempts}):`, parsedError)
 
           // Log the error
-          await logOpenAIRequest(requestId, {
-            userId: options.userId,
-            model: modelName,
-            promptLength,
-            success: false,
-            errorType: parsedError.type,
-            errorMessage: parsedError.message,
-            latencyMs: Date.now() - startTime,
-            retryCount: retryCount,
-          })
+          if (supabase) {
+            await logOpenAIRequest(requestId, {
+              userId: options.userId,
+              model: modelName,
+              promptLength,
+              success: false,
+              errorType: parsedError.type,
+              errorMessage: parsedError.message,
+              latencyMs: Date.now() - startTime,
+              retryCount: retryCount,
+            })
+          }
 
           // Increment retry count
           retryCount++
@@ -326,15 +346,17 @@ export async function generateTextWithRetry(options: {
     )
 
     // Log successful request
-    await logOpenAIRequest(requestId, {
-      userId: options.userId,
-      model: modelName,
-      promptLength,
-      success: true,
-      responseLength: result.text.length,
-      latencyMs: Date.now() - startTime,
-      retryCount,
-    })
+    if (supabase) {
+      await logOpenAIRequest(requestId, {
+        userId: options.userId,
+        model: modelName,
+        promptLength,
+        success: true,
+        responseLength: result.text.length,
+        latencyMs: Date.now() - startTime,
+        retryCount,
+      })
+    }
 
     return result
   } catch (error) {
@@ -342,16 +364,18 @@ export async function generateTextWithRetry(options: {
     const parsedError = parseOpenAIError(error)
 
     // Log the final failure
-    await logOpenAIRequest(requestId, {
-      userId: options.userId,
-      model: modelName,
-      promptLength,
-      success: false,
-      errorType: parsedError.type,
-      errorMessage: parsedError.message,
-      latencyMs: Date.now() - startTime,
-      retryCount,
-    })
+    if (supabase) {
+      await logOpenAIRequest(requestId, {
+        userId: options.userId,
+        model: modelName,
+        promptLength,
+        success: false,
+        errorType: parsedError.type,
+        errorMessage: parsedError.message,
+        latencyMs: Date.now() - startTime,
+        retryCount,
+      })
+    }
 
     // Enhance the error with our parsed details
     const enhancedError = new Error(parsedError.message)

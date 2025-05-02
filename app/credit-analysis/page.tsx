@@ -123,82 +123,89 @@ function CreditAnalysisContent() {
       }
 
       // Fetch the analysis record from Supabase
-      const { data: analysisRecord, error: dbError } = await supabase
-        .from("analyses")
-        .select("*")
-        .eq("id", analysisId)
-        .eq("user_id", user.id)
-        .single()
+      try {
+        const { data: analysisRecord, error: dbError } = await supabase
+          .from("analyses")
+          .select("*")
+          .eq("id", analysisId)
+          .eq("user_id", user.id)
+          .single()
 
-      if (dbError) {
-        console.error("Error fetching analysis record:", dbError)
-        throw new Error(`Analysis not found: ${dbError.message}`)
-      }
+        if (dbError) {
+          console.error("Error fetching analysis record:", dbError)
+          throw new Error(`Analysis not found: ${dbError.message}`)
+        }
 
-      if (!analysisRecord) {
-        throw new Error("Analysis not found in database")
-      }
+        if (!analysisRecord) {
+          throw new Error("Analysis not found in database")
+        }
 
-      console.log(`Analysis fetched from DB: ${analysisRecord.status}`)
-      setAnalysis(analysisRecord as Analysis)
+        console.log(`Analysis fetched from DB: ${analysisRecord.status}`)
+        setAnalysis(analysisRecord as Analysis)
 
-      // If the analysis failed, show an error
-      if (analysisRecord.status === "error") {
-        setError(analysisRecord.error_message || "There was an error analyzing your credit report. Please try again.")
-        setIsLoading(false)
-        return
-      }
-
-      // Check if result exists in the database record
-      if (analysisRecord.result) {
-        console.log("Setting analysis data from database")
-        try {
-          // Ensure result is properly parsed if it's a string
-          const resultData =
-            typeof analysisRecord.result === "string" ? safeJsonParse(analysisRecord.result) : analysisRecord.result
-
-          if (!resultData) {
-            throw new Error("Invalid analysis result format")
-          }
-
-          // Sanitize the result to ensure it can be safely serialized
-          const sanitizedResult = sanitizeForJson(resultData)
-
-          setAnalysisData({
-            id: analysisRecord.id,
-            ...sanitizedResult,
-          })
+        // If the analysis failed, show an error
+        if (analysisRecord.status === "error") {
+          setError(analysisRecord.error_message || "There was an error analyzing your credit report. Please try again.")
           setIsLoading(false)
           return
-        } catch (parseError) {
-          console.error("Error parsing result data:", parseError)
-          throw new Error("Invalid analysis result format")
         }
-      }
 
-      // If no result in DB, try fetching from API
-      console.log("Fetching analysis from API")
-      const response = await fetch(`/api/analysis/${analysisId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+        // Check if result exists in the database record
+        if (analysisRecord.result) {
+          console.log("Setting analysis data from database")
+          try {
+            // Ensure result is properly parsed if it's a string
+            const resultData =
+              typeof analysisRecord.result === "string" ? safeJsonParse(analysisRecord.result) : analysisRecord.result
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to fetch analysis: ${response.status}`)
-      }
+            if (!resultData) {
+              throw new Error("Invalid analysis result format")
+            }
 
-      const data = await response.json()
+            // Sanitize the result to ensure it can be safely serialized
+            const sanitizedResult = sanitizeForJson(resultData)
 
-      // Set the analysis data from the API response
-      if (data && data.id) {
-        console.log("Setting analysis data from API")
-        setAnalysisData(data)
+            setAnalysisData({
+              id: analysisRecord.id,
+              ...sanitizedResult,
+            })
+            setIsLoading(false)
+            return
+          } catch (parseError) {
+            console.error("Error parsing result data:", parseError)
+            throw new Error("Invalid analysis result format")
+          }
+        }
+
+        // If no result in DB, try fetching from API
+        console.log("Fetching analysis from API")
+        const response = await fetch(`/api/analysis/${analysisId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to fetch analysis: ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        // Set the analysis data from the API response
+        if (data && data.id) {
+          console.log("Setting analysis data from API")
+          setAnalysisData(data)
+          setIsLoading(false)
+        } else {
+          console.error("API returned no data or invalid data format")
+          throw new Error("Analysis result not found or invalid format")
+        }
+      } catch (supabaseError) {
+        console.error("Supabase operation failed:", supabaseError)
+        setError("Failed to connect to the database. Please try again later.")
         setIsLoading(false)
-      } else {
-        console.error("API returned no data or invalid data format")
-        throw new Error("Analysis result not found or invalid format")
+        return
       }
     } catch (error) {
       console.error("Error fetching analysis:", error)

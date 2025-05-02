@@ -1,48 +1,50 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-provider"
 import { supabase } from "@/lib/supabase"
 
-const formSchema = z.object({
-  email: z.string().email({
-    message: "Please enter a valid email address.",
-  }),
-  password: z.string().min(1, {
-    message: "Password is required.",
-  }),
-})
+// Simple validation function instead of using zod with react-hook-form
+function validateEmail(email: string): string | null {
+  if (!email) return "Email is required"
+  if (!/\S+@\S+\.\S+/.test(email)) return "Please enter a valid email address"
+  return null
+}
 
-function LoginContent() {
+function validatePassword(password: string): string | null {
+  if (!password) return "Password is required"
+  return null
+}
+
+export default function LoginPage() {
+  // Form state
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+
+  // UI state
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const returnTo = searchParams.get("returnTo") || "/dashboard"
-  const { signIn, user } = useAuth()
-  const { toast } = useToast()
   const [isMounted, setIsMounted] = useState(false)
   const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false)
   const [emailToConfirm, setEmailToConfirm] = useState("")
   const [resendingEmail, setResendingEmail] = useState(false)
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  })
+  // Hooks
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get("returnTo") || "/dashboard"
+  const { signIn, user } = useAuth()
+  const { toast } = useToast()
 
   useEffect(() => {
     setIsMounted(true)
@@ -51,19 +53,38 @@ function LoginContent() {
     }
   }, [user, router, returnTo])
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  // Form validation
+  const validateForm = (): boolean => {
+    const newErrors: { email?: string; password?: string } = {}
+
+    const emailError = validateEmail(email)
+    if (emailError) newErrors.email = emailError
+
+    const passwordError = validatePassword(password)
+    if (passwordError) newErrors.password = passwordError
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  // Form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!validateForm()) return
+
     setIsLoading(true)
     setNeedsEmailConfirmation(false)
     setEmailToConfirm("")
 
     try {
-      const { error } = await signIn(values.email, values.password)
+      const { error } = await signIn(email, password)
 
       if (error) {
         // Check if this is an email confirmation error
         if (error.message?.includes("Email not confirmed")) {
           setNeedsEmailConfirmation(true)
-          setEmailToConfirm(values.email)
+          setEmailToConfirm(email)
           toast({
             variant: "warning",
             title: "Email not confirmed",
@@ -91,7 +112,8 @@ function LoginContent() {
     }
   }
 
-  async function resendConfirmationEmail() {
+  // Resend confirmation email
+  const resendConfirmationEmail = async () => {
     if (!emailToConfirm) return
 
     setResendingEmail(true)
@@ -120,7 +142,14 @@ function LoginContent() {
   }
 
   if (!isMounted) {
-    return null
+    return (
+      <div className="container flex h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="mt-4 text-lg">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -131,46 +160,45 @@ function LoginContent() {
           <CardDescription>Enter your email and password to access your account</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="name@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={!!errors.email}
               />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+              {errors.email && <p className="text-sm font-medium text-destructive">{errors.email}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={!!errors.password}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Logging in...
-                  </>
-                ) : (
-                  "Login"
-                )}
-              </Button>
-            </form>
-          </Form>
+              {errors.password && <p className="text-sm font-medium text-destructive">{errors.password}</p>}
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Logging in...
+                </>
+              ) : (
+                "Login"
+              )}
+            </Button>
+          </form>
+
           {needsEmailConfirmation && (
             <div className="mt-4 rounded-md bg-amber-50 p-4">
               <div className="flex">
@@ -226,22 +254,5 @@ function LoginContent() {
         </CardFooter>
       </Card>
     </div>
-  )
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="container flex h-[calc(100vh-4rem)] items-center justify-center">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="mt-4 text-lg">Loading...</p>
-          </div>
-        </div>
-      }
-    >
-      <LoginContent />
-    </Suspense>
   )
 }

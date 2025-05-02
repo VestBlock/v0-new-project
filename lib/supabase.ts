@@ -24,24 +24,66 @@ let supabaseInstance: ReturnType<typeof createClient> | null = null
 export const supabase = (() => {
   if (supabaseInstance) return supabaseInstance
 
-  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-    db: {
-      schema: "public",
-    },
-    global: {
-      fetch: (...args) => {
-        // Add custom fetch options here if needed
-        return fetch(...args)
-      },
-    },
-  })
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  return supabaseInstance
+  if (!url || !key) {
+    console.error("Supabase URL or Anon Key is missing. Check your environment variables.")
+    // Return a dummy client that logs errors instead of throwing
+    return {
+      auth: {
+        getSession: async () => ({ data: { session: null }, error: new Error("Supabase not initialized") }),
+        onAuthStateChange: () => ({ data: null, error: null, subscription: { unsubscribe: () => {} } }),
+        // Add other auth methods as needed
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: new Error("Supabase not initialized") }),
+            limit: () => ({ data: null, error: new Error("Supabase not initialized") }),
+          }),
+          limit: () => ({ data: null, error: new Error("Supabase not initialized") }),
+        }),
+        insert: () => ({ data: null, error: new Error("Supabase not initialized") }),
+        update: () => ({ data: null, error: new Error("Supabase not initialized") }),
+        delete: () => ({ data: null, error: new Error("Supabase not initialized") }),
+      }),
+      // Add other methods as needed
+    } as any
+  }
+
+  try {
+    supabaseInstance = createClient<Database>(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+      db: {
+        schema: "public",
+      },
+      global: {
+        fetch: (...args) => {
+          // Add custom fetch options here if needed
+          return fetch(...args)
+        },
+      },
+    })
+
+    return supabaseInstance
+  } catch (error) {
+    console.error("Failed to initialize Supabase client:", error)
+    // Return dummy client as above
+    return {
+      auth: {
+        getSession: async () => ({ data: { session: null }, error: new Error("Supabase initialization failed") }),
+        // Add other methods as needed
+      },
+      from: () => ({
+        // Add methods as needed
+      }),
+    } as any
+  }
 })()
 
 // Create a Supabase client for server components
@@ -74,7 +116,15 @@ export function createServerSupabaseClient() {
 
 // Create a Supabase admin client with service role
 export function createAdminSupabaseClient() {
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    console.error("Supabase URL or Service Role Key is missing. Check your environment variables.")
+    throw new Error("Cannot create admin Supabase client: missing credentials")
+  }
+
+  return createClient<Database>(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

@@ -1,7 +1,15 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "installCommand": "npm install --legacy-peer-deps",
+        "buildCommand": "npm run build"
+      }
+    }
+  ],
   "framework": "nextjs",
   "regions": ["iad1"],
   "headers": [
@@ -16,7 +24,7 @@
     }
   ],
   "env": {
-    "NEXT_PUBLIC_SITE_URL": "${NEXT_PUBLIC_SITE_URL}"
+    "NEXT_PUBLIC_SITE_URL": "${VERCEL_URL}"
   },
   "functions": {
     "app/api/ocr/route.ts": {
