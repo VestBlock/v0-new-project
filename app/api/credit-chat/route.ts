@@ -1,47 +1,28 @@
-import type { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { generateCreditChatResponse } from "@/lib/openai-credit-analyzer"
 import { createClient } from "@supabase/supabase-js"
-import { generateCreditChatResponse } from "@/lib/openai-credit-service"
 
-// Configure for quick response time
-export const config = {
-  runtime: "nodejs",
-  maxDuration: 30, // 30 seconds for chat responses
-}
-
-// Create Supabase client with safety checks
+// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-let supabase: ReturnType<typeof createClient> | null = null
-
-if (supabaseUrl && supabaseServiceKey) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseServiceKey)
-  } catch (error) {
-    console.error("Failed to initialize Supabase client:", error)
-  }
-}
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function POST(request: NextRequest) {
   console.log("[CREDIT-CHAT] API route called")
   const startTime = performance.now()
 
   try {
-    // Verify Supabase client is available
-    if (!supabase) {
-      return Response.json({ success: false, error: "Database connection unavailable" }, { status: 500 })
-    }
-
     // Verify OpenAI API key is set
     if (!process.env.OPENAI_API_KEY) {
       console.error("OpenAI API key is not configured")
-      return Response.json({ success: false, error: "OpenAI API key is not configured" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "OpenAI API key is not configured" }, { status: 500 })
     }
 
     // Get the current user
     const authHeader = request.headers.get("authorization")
     if (!authHeader) {
       console.error("No authorization header provided")
-      return Response.json({ success: false, error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split(" ")[1]
@@ -52,24 +33,7 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       console.error("Authentication error:", authError)
-      return Response.json({ success: false, error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check if user is Pro
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("is_pro, role")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError) {
-      console.error("Error fetching user profile:", profileError)
-      return Response.json({ success: false, error: "Failed to verify user subscription" }, { status: 500 })
-    }
-
-    const isPro = profile?.is_pro || profile?.role === "admin"
-    if (!isPro) {
-      return Response.json({ success: false, error: "Pro subscription required" }, { status: 403 })
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
     // Get request body
@@ -78,13 +42,13 @@ export async function POST(request: NextRequest) {
       body = await request.json()
     } catch (parseError) {
       console.error("Error parsing request body:", parseError)
-      return Response.json({ success: false, error: "Invalid JSON in request body" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "Invalid JSON in request body" }, { status: 400 })
     }
 
     const { analysisId, message } = body
 
     if (!analysisId || !message) {
-      return Response.json({ success: false, error: "Missing required fields" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
     }
 
     // Verify the analysis belongs to the user
@@ -96,7 +60,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (analysisError || !analysis) {
-      return Response.json({ success: false, error: "Analysis not found" }, { status: 404 })
+      return NextResponse.json({ success: false, error: "Analysis not found" }, { status: 404 })
     }
 
     // Save the user message
@@ -113,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     if (saveError) {
       console.error("Error saving user message:", saveError)
-      return Response.json({ success: false, error: "Failed to save message" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "Failed to save message" }, { status: 500 })
     }
 
     // Get previous chat messages
@@ -125,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     if (chatError) {
       console.error("Error fetching chat messages:", chatError)
-      return Response.json({ success: false, error: "Failed to fetch chat history" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "Failed to fetch chat history" }, { status: 500 })
     }
 
     // Prepare the conversation history for OpenAI
@@ -134,7 +98,7 @@ export async function POST(request: NextRequest) {
       content: msg.content,
     }))
 
-    // Generate the AI response using our optimized service
+    // Generate the AI response
     const result = await generateCreditChatResponse(user.id, analysisId, message, conversationHistory, analysis.result)
 
     if (!result.success) {
@@ -151,11 +115,10 @@ export async function POST(request: NextRequest) {
         })
         .catch((err) => console.error("Failed to save error message:", err))
 
-      return Response.json(
+      return NextResponse.json(
         {
           success: false,
           error: result.error,
-          metrics: result.metrics,
         },
         { status: 500 },
       )
@@ -171,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     if (aiSaveError) {
       console.error("Error saving AI response:", aiSaveError)
-      return Response.json({ success: false, error: "Failed to save AI response" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "Failed to save AI response" }, { status: 500 })
     }
 
     // Get updated chat messages
@@ -183,22 +146,19 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       console.error("Error fetching updated chat messages:", updateError)
-      return Response.json({ success: false, error: "Failed to fetch updated chat history" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "Failed to fetch updated chat history" }, { status: 500 })
     }
 
     const endTime = performance.now()
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       messages: updatedMessages,
-      metrics: {
-        ...result.metrics,
-        totalProcessingTimeMs: Math.round(endTime - startTime),
-      },
+      processingTimeMs: Math.round(endTime - startTime),
     })
   } catch (error) {
     console.error("[CREDIT-CHAT] API error:", error)
-    return Response.json(
+    return NextResponse.json(
       {
         success: false,
         error: "Internal server error",

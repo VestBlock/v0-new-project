@@ -19,7 +19,7 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    // Disable React 19 features to ensure compatibility
+    // Explicitly set React version to 18.2.0
     react: {
       version: '18.2.0',
     },
@@ -74,6 +74,13 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       'react/jsx-runtime': require.resolve('react/jsx-runtime'),
+    };
+    
+    // Add resolution for React 18.2.0
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'react': require.resolve('react'),
+      'react-dom': require.resolve('react-dom'),
     };
     
     return config;
