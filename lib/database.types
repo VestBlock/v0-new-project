@@ -143,6 +143,8 @@ export interface Database {
           is_pro: boolean
           role: string | null
           created_at: string
+          phone: string | null
+          updated_at: string | null
         }
         Insert: {
           id: string
@@ -152,6 +154,8 @@ export interface Database {
           is_pro?: boolean
           role?: string | null
           created_at?: string
+          phone?: string | null
+          updated_at?: string | null
         }
         Update: {
           id?: string
@@ -161,6 +165,37 @@ export interface Database {
           is_pro?: boolean
           role?: string | null
           created_at?: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+      }
+      credit_scores: {
+        Row: {
+          id: string
+          user_id: string
+          bureau: string
+          score: number
+          date: string
+          source: string
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          bureau: string
+          score: number
+          date: string
+          source: string
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          bureau?: string
+          score?: number
+          date?: string
+          source?: string
+          notes?: string | null
         }
       }
     }

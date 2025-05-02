@@ -18,10 +18,6 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
-  // Disable experimental features to reduce complexity
-  experimental: {
-    // None
-  },
   // Configure headers for security
   headers: async () => {
     return [
@@ -53,24 +49,7 @@ const nextConfig = {
         permanent: true,
       },
     ];
-  },
-  // Configure webpack for compatibility
-  webpack: (config, { isServer }) => {
-    // Fix for react-day-picker compatibility
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'react/jsx-runtime': require.resolve('react/jsx-runtime'),
-    };
-    
-    // Add resolution for React 18.2.0
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'react': require.resolve('react'),
-      'react-dom': require.resolve('react-dom'),
-    };
-    
-    return config;
-  },
+  }
 };
 
 export default nextConfig;
