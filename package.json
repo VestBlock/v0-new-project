@@ -64,7 +64,9 @@
     "pdfkit": "latest",
     "uuid": "latest",
     "p-retry": "latest",
-    "@supabase/ssr": "latest"
+    "@supabase/ssr": "latest",
+    "fs": "latest",
+    "path": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

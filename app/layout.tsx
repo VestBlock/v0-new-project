@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/lib/notification-provider"
 import { Analytics } from "@/components/analytics"
 import { Footer } from "@/components/footer"
 import { Suspense } from "react"
+import { ReactVersionChecker } from "@/components/react-version-checker"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
+        {process.env.NODE_ENV !== "production" && <ReactVersionChecker />}
       </body>
     </html>
   )
