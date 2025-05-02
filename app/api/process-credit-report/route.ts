@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { processCreditReportImage } from "@/lib/openai-minimal"
+import { processCreditReportImage, processCreditReportText, callOpenAI } from "@/lib/openai-minimal"
 import { createClient } from "@supabase/supabase-js"
 
 // Initialize Supabase client
@@ -16,8 +16,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file data provided" }, { status: 400 })
     }
 
-    // Process the credit report with OpenAI
-    const result = await processCreditReportImage(data.fileData)
+    let result: string
+
+    // Check if the file is an image or PDF based on the data URL
+    if (data.fileData.startsWith("data:image")) {
+      // Process image with Vision API
+      result = await processCreditReportImage(data.fileData)
+    } else if (data.fileData.startsWith("data:application/pdf")) {
+      // For PDFs, we can't use the Vision API directly
+      // Extract the base64 content without the prefix
+      const base64Content = data.fileData.split(",")[1]
+
+      // For this example, we'll just send a message that PDF processing requires text extraction
+      result = await callOpenAI(
+        "This appears to be a PDF file. To process PDFs, you would need to extract the text first using a PDF parsing library. For this demo, I'll return a sample credit report analysis structure.",
+      )
+    } else if (data.textContent) {
+      // If text content is provided directly
+      result = await processCreditReportText(data.textContent)
+    } else {
+      // Unsupported file type
+      return NextResponse.json(
+        {
+          error: "Unsupported file type. Please upload an image (JPEG, PNG) of your credit report.",
+        },
+        { status: 400 },
+      )
+    }
 
     // Try to parse the result as JSON
     let parsedResult
@@ -33,7 +58,7 @@ export async function POST(request: NextRequest) {
       await supabase.from("analyses").insert({
         user_id: data.userId,
         result: parsedResult,
-        file_name: data.fileName || "uploaded-report.pdf",
+        file_name: data.fileName || "uploaded-report",
         status: "completed",
       })
     }

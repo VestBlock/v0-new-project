@@ -31,10 +31,23 @@ export async function callOpenAI(prompt: string, model = "gpt-4o") {
   return data.choices[0].message.content
 }
 
-// Process credit report with vision API
+// Process credit report text
+export async function processCreditReportText(text: string) {
+  return callOpenAI(
+    `Extract the credit score and all important information from this credit report text: ${text}. Format as JSON with fields: score (number), accountSummary (text), negativeItems (array), positiveItems (array).`,
+  )
+}
+
+// Process credit report with vision API - only for image files
 export async function processCreditReportImage(base64Image: string) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not defined")
+  }
+
+  // Make sure the base64 string is properly formatted for the API
+  // It should start with data:image format
+  if (!base64Image.startsWith("data:image")) {
+    throw new Error("Invalid image format. Only image types (JPEG, PNG) are supported.")
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
