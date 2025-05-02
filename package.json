@@ -66,7 +66,8 @@
     "p-retry": "latest",
     "@supabase/ssr": "latest",
     "fs": "latest",
-    "path": "latest"
+    "path": "latest",
+    "child_process": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

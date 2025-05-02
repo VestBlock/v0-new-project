@@ -18,23 +18,9 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
+  // Disable experimental features to reduce complexity
   experimental: {
-    // Explicitly set React version to 18.2.0
-    react: {
-      version: '18.2.0',
-    },
-    // Optimize serverless functions
-    serverComponentsExternalPackages: [
-      'sharp',
-      'pdf-parse',
-      'p-retry',
-    ],
-    // Improve memory usage
-    optimizePackageImports: [
-      'lucide-react',
-      'date-fns',
-      'react-day-picker',
-    ],
+    // None
   },
   // Configure headers for security
   headers: async () => {
