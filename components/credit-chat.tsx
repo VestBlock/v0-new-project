@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, Send, Bot, User, RefreshCw } from "lucide-react"
+import { AlertCircle, Send, Bot, User, RefreshCw, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/lib/auth-provider"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface ChatMessage {
   id: string
@@ -31,6 +32,8 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "unknown">("unknown")
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const { user, getToken } = useAuth()
@@ -44,8 +47,16 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
   useEffect(() => {
     if (initialMessages.length === 0) {
       loadMessages()
+    } else {
+      // If we have initial messages, we're probably connected
+      setConnectionStatus("connected")
     }
   }, [analysisId])
+
+  // Check OpenAI connection status
+  useEffect(() => {
+    checkConnectionStatus()
+  }, [])
 
   // Load messages from the server
   const loadMessages = async () => {
@@ -69,12 +80,14 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
       const data = await response.json()
       if (data.success) {
         setMessages(data.messages)
+        setConnectionStatus("connected")
       } else {
         throw new Error(data.error || "Failed to load chat messages")
       }
     } catch (err) {
       console.error("Error loading messages:", err)
       setError("Failed to load chat messages. Please try again.")
+      setConnectionStatus("disconnected")
       toast({
         title: "Error",
         description: "Failed to load chat messages",
@@ -82,6 +95,34 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Check OpenAI connection status
+  const checkConnectionStatus = async () => {
+    if (!user) return
+
+    try {
+      setIsCheckingConnection(true)
+      const token = await getToken()
+      const response = await fetch("/api/check-openai", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        setConnectionStatus("disconnected")
+        return
+      }
+
+      const data = await response.json()
+      setConnectionStatus(data.success ? "connected" : "disconnected")
+    } catch (err) {
+      console.error("Error checking OpenAI connection:", err)
+      setConnectionStatus("disconnected")
+    } finally {
+      setIsCheckingConnection(false)
     }
   }
 
@@ -118,6 +159,7 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
         body: JSON.stringify({
           analysisId,
           message: input,
+          conversationHistory: messages.slice(-10), // Send last 10 messages for context
         }),
       })
 
@@ -129,23 +171,64 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
       const data = await response.json()
 
       if (data.success) {
-        setMessages(data.messages)
+        // If we got a response with messages, use those
+        if (data.messages && data.messages.length > 0) {
+          setMessages(data.messages)
+        } else if (data.response) {
+          // Otherwise, add the AI response to our messages
+          const aiMessage: ChatMessage = {
+            id: `temp-response-${Date.now()}`,
+            analysis_id: analysisId,
+            user_id: user.id,
+            role: "assistant",
+            content: data.response,
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => [...prev.filter((msg) => !msg.id.startsWith("temp-")), userMessage, aiMessage])
+        }
+
+        setConnectionStatus("connected")
       } else {
         throw new Error(data.error || "Failed to get response")
       }
     } catch (err) {
       console.error("Error sending message:", err)
       setError(err instanceof Error ? err.message : "Failed to send message")
+      setConnectionStatus("disconnected")
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : "Failed to send message",
         variant: "destructive",
       })
 
-      // Remove the optimistic message
-      setMessages((prev) => prev.filter((msg) => !msg.id.startsWith("temp-")))
+      // Add a system message about the error
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        analysis_id: analysisId,
+        user_id: user.id,
+        role: "system",
+        content: "Sorry, I'm having trouble connecting to my knowledge base. Please try again in a moment.",
+        created_at: new Date().toISOString(),
+      }
+
+      // Keep the user message but add the error message
+      setMessages((prev) => [...prev.filter((msg) => !msg.id.includes("temp-response")), errorMessage])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Retry connection
+  const retryConnection = async () => {
+    await checkConnectionStatus()
+    if (connectionStatus === "connected") {
+      loadMessages()
+    } else {
+      toast({
+        title: "Still Disconnected",
+        description: "We're still having trouble connecting to our AI service. Please try again later.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -163,6 +246,27 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
 
   return (
     <div className="flex flex-col h-full">
+      {connectionStatus === "disconnected" && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Connection Issue</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>We're having trouble connecting to our AI service. Some features may be limited.</span>
+            <Button variant="outline" size="sm" onClick={retryConnection} disabled={isCheckingConnection}>
+              {isCheckingConnection ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> Checking...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Retry
+                </>
+              )}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && !isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-8">
@@ -271,10 +375,10 @@ export default function CreditChat({ analysisId, initialMessages = [] }: CreditC
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your credit report..."
-            disabled={isLoading}
+            disabled={isLoading || connectionStatus === "disconnected"}
             className="flex-1"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+          <Button type="submit" disabled={isLoading || !input.trim() || connectionStatus === "disconnected"}>
             {isLoading ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
           </Button>
         </form>

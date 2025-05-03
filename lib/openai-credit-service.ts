@@ -112,7 +112,7 @@ export async function analyzeCreditReportWithAI(
     requestId,
     startTime,
     success: false,
-    model: "gpt-4-vision-preview",
+    model: "gpt-4o",
     operation: "credit_analysis",
     retryCount: 0,
     userId,
@@ -141,7 +141,7 @@ export async function analyzeCreditReportWithAI(
           analysisId,
           metrics: {
             processingTimeMs: Date.now() - startTime,
-            modelUsed: "gpt-4-vision-preview",
+            modelUsed: "gpt-4o",
             retryCount: 0,
             cacheHit: true,
           },
@@ -220,7 +220,7 @@ Format as plain text with appropriate structure.
               Authorization: `Bearer ${OPENAI_API_KEY}`,
             },
             body: JSON.stringify({
-              model: "gpt-4-vision-preview",
+              model: "gpt-4o",
               messages: [
                 {
                   role: "user",
@@ -309,7 +309,7 @@ Format as plain text with appropriate structure.
       analysisId,
       metrics: {
         processingTimeMs: Date.now() - startTime,
-        modelUsed: "gpt-4-vision-preview",
+        modelUsed: "gpt-4o",
         retryCount,
         cacheHit,
       },
@@ -332,7 +332,7 @@ Format as plain text with appropriate structure.
       analysisId,
       metrics: {
         processingTimeMs: Date.now() - startTime,
-        modelUsed: "gpt-4-vision-preview",
+        modelUsed: "gpt-4o",
         retryCount,
         cacheHit,
       },
@@ -366,7 +366,7 @@ async function analyzeExtractedText(text: string, userId: string): Promise<any> 
     requestId,
     startTime,
     success: false,
-    model: "gpt-4",
+    model: "gpt-4o",
     operation: "text_analysis",
     retryCount: 0,
     userId,
@@ -480,7 +480,7 @@ IMPORTANT:
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt },

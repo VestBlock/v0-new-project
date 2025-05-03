@@ -27,6 +27,7 @@ type AuthContextType = {
   updateProfile: (data: Partial<Omit<Profile, "id" | "email" | "created_at" | "updated_at">>) => Promise<{ error: any }>
   sendPasswordResetEmail: (email: string) => Promise<{ error: any }>
   refreshUser: () => Promise<void>
+  checkAuthStatus: () => Promise<boolean>
 }
 
 // Add this function after the imports but before the AuthContext definition
@@ -164,16 +165,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signUp = async (email: string, password: string, fullName?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      console.log("[AUTH] Starting signup process for:", email)
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    })
-    return { error }
+      })
+
+      if (error) {
+        console.error("[AUTH] Signup error:", error.message)
+        return { error }
+      }
+
+      console.log("[AUTH] Signup successful, user created:", data?.user?.id)
+      return { error: null }
+    } catch (err: any) {
+      console.error("[AUTH] Unexpected error during signup:", err)
+      return { error: err }
+    }
   }
 
   const signOut = async () => {
@@ -206,6 +221,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error }
   }
 
+  const checkAuthStatus = async () => {
+    try {
+      const { data, error } = await supabase.auth.getSession()
+      if (error) {
+        console.error("[AUTH] Error checking auth status:", error)
+        return false
+      }
+      return !!data.session
+    } catch (err) {
+      console.error("[AUTH] Unexpected error checking auth status:", err)
+      return false
+    }
+  }
+
   const value = {
     user,
     profile,
@@ -216,6 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     sendPasswordResetEmail,
     refreshUser,
+    checkAuthStatus, // Add this new function
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

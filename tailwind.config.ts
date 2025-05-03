@@ -65,6 +65,13 @@ const config = {
           accent: "hsl(var(--sidebar-accent, var(--muted)))",
           "accent-foreground": "hsl(var(--sidebar-accent-foreground, var(--muted-foreground)))",
         },
+        // New brand colors
+        brand: {
+          blue: "#00C2CB",
+          purple: "#8A56E8",
+          darkblue: "#0A4D92",
+          black: "#0A0A0A",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

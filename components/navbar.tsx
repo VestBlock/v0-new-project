@@ -40,7 +40,7 @@ export function Navbar() {
   }, [mobileMenuOpen])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm">
       <div className="container flex h-16 items-center">
         <div className="mr-4 md:mr-6">
           <Link href="/" className="flex items-center space-x-2">
@@ -128,7 +128,7 @@ export function Navbar() {
               <Button asChild variant="ghost" size="sm">
                 <Link href="/login">Login</Link>
               </Button>
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="bg-brand-blue hover:bg-brand-blue/90 text-white">
                 <Link href="/register">Register</Link>
               </Button>
             </div>
@@ -218,7 +218,11 @@ export function Navbar() {
                 <Button asChild>
                   <Link href="/login">Login</Link>
                 </Button>
-                <Button asChild variant="outline">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-brand-purple text-brand-purple hover:bg-brand-purple/10"
+                >
                   <Link href="/register">Register</Link>
                 </Button>
               </div>

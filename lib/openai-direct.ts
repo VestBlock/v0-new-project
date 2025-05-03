@@ -1,317 +1,194 @@
-import { v4 as uuidv4 } from "uuid"
+/**
+ * Direct OpenAI integration with zero fallbacks to mock data
+ * This implementation prioritizes real data or fails explicitly
+ */
+
 import { createClient } from "@supabase/supabase-js"
-import { extractJsonFromText, sanitizeForJson } from "@/lib/json-utils"
+import { v4 as uuidv4 } from "uuid"
+import { sanitizeForJson } from "./json-utils"
+
+// Environment variables
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 
 // Create Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// Constants for configuration
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000
-const TIMEOUT_MS = 50000
+// Constants
+const DEFAULT_TIMEOUT_MS = 90000 // 90 seconds
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 2000
 
 /**
- * Direct OpenAI integration with no mock data
- * Simple, reliable implementation for Vercel
+ * Process a credit report using OpenAI with zero fallbacks to mock data
+ * This function will either succeed with real data or fail explicitly
  */
-
-// Use native fetch for simplicity and reliability
-export async function callOpenAI({
-  prompt,
-  model = "gpt-4o",
-  temperature = 0.7,
-  maxTokens = 1000,
-  systemPrompt,
-}: {
-  prompt: string
-  model?: string
-  temperature?: number
-  maxTokens?: number
-  systemPrompt?: string
-}) {
-  // Verify API key exists
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not defined in environment variables")
-  }
-
-  try {
-    const messages = []
-
-    // Add system prompt if provided
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt })
-    }
-
-    // Add user prompt
-    messages.push({ role: "user", content: prompt })
-
-    // Call OpenAI API directly
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${JSON.stringify(error)}`)
-    }
-
-    const data = await response.json()
-    return data.choices[0].message.content
-  } catch (error) {
-    console.error("OpenAI API call failed:", error)
-    throw error
-  }
-}
-
-// Function to analyze credit report text
-export async function analyzeCreditReport(text: string) {
-  const systemPrompt =
-    "You are a credit analysis expert. Provide detailed, accurate analysis based only on the provided information."
-
-  const prompt = `
-Analyze the following credit report text and provide insights:
-
-${text}
-
-Focus on:
-1. Credit scores
-2. Account details
-3. Negative items
-4. Recommendations for improvement
-`
-
-  return callOpenAI({
-    prompt,
-    model: "gpt-4o",
-    temperature: 0.3,
-    maxTokens: 2000,
-    systemPrompt,
-  })
-}
-
-// Function to check if OpenAI API is working
-export async function testOpenAIConnection() {
-  try {
-    const result = await callOpenAI({
-      prompt: "Respond with 'OpenAI connection successful' if you receive this message.",
-      model: "gpt-3.5-turbo",
-      maxTokens: 20,
-    })
-
-    return {
-      success: true,
-      message: result,
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
-  }
-}
-
-/**
- * Directly analyze a credit report using OpenAI
- */
-export async function analyzeCreditReportDirect(
+export async function processCreditReportDirect(
   fileBuffer: ArrayBuffer,
   fileName: string,
-  fileType: string,
   userId: string,
   options: {
     signal?: AbortSignal
   } = {},
 ): Promise<{
   success: boolean
-  analysisId?: string
+  analysisId: string
   result?: any
   error?: string
+  metrics?: {
+    processingTimeMs: number
+    retryCount: number
+    tokenUsage?: {
+      prompt: number
+      completion: number
+      total: number
+    }
+  }
 }> {
-  console.log(`[OPENAI-DIRECT] Starting direct analysis for file: ${fileName}`)
-
-  // Create a new analysis record in the database first
   const analysisId = uuidv4()
+  const startTime = Date.now()
+  const retryCount = 0
+  let tokenUsage = {
+    prompt: 0,
+    completion: 0,
+    total: 0,
+  }
 
   try {
-    // Insert the analysis record with "processing" status
-    const { error: insertError } = await supabase.from("analyses").insert({
-      id: analysisId,
-      user_id: userId,
-      status: "processing",
-      file_name: fileName,
-      notes: "Processing credit report...",
-    })
-
-    if (insertError) {
-      console.error("[OPENAI-DIRECT] Error creating analysis record:", insertError)
-      return {
-        success: false,
-        error: "Failed to create analysis record",
-      }
+    // Verify API key
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is not configured")
     }
 
-    console.log(`[OPENAI-DIRECT] Created analysis record with ID: ${analysisId}`)
-
-    // Convert ArrayBuffer to Base64
-    const base64 = Buffer.from(fileBuffer).toString("base64")
-    const dataUri = fileType.startsWith("image/")
-      ? `data:${fileType};base64,${base64}`
-      : fileType === "application/pdf"
-        ? `data:application/pdf;base64,${base64}`
-        : `data:text/plain;base64,${base64}`
-
-    // Extract text from the file
-    console.log(`[OPENAI-DIRECT] Extracting text from ${fileType} file...`)
-
-    let extractedText: string
-
+    // Create analysis record in database
     try {
-      // For text files, just decode the base64
-      if (fileType === "text/plain") {
-        extractedText = Buffer.from(fileBuffer).toString("utf-8")
-        console.log(`[OPENAI-DIRECT] Extracted ${extractedText.length} characters from text file`)
-      } else {
-        // For PDFs and images, use OpenAI to extract text
-        extractedText = await extractTextWithRetry(dataUri, fileType, options.signal)
-        console.log(`[OPENAI-DIRECT] Extracted ${extractedText.length} characters from ${fileType} file`)
-      }
+      await supabase.from("analyses").insert({
+        id: analysisId,
+        user_id: userId,
+        status: "processing",
+        file_path: fileName,
+        notes: "Processing credit report...",
+        created_at: new Date().toISOString(),
+      })
+    } catch (dbError) {
+      console.error("Error creating analysis record:", dbError)
+      // Continue anyway - we'll return the analysis ID even if DB insert fails
+    }
 
-      // Update the analysis record with the extracted text
+    // Convert file to base64
+    const base64 = Buffer.from(fileBuffer).toString("base64")
+    const dataUri = `data:application/pdf;base64,${base64}`
+
+    // Extract text from file
+    let extractedText: string
+    try {
+      extractedText = await extractTextFromFileDirect(dataUri, options.signal)
+
+      // Update analysis with extracted text
       await supabase
         .from("analyses")
         .update({
+          ocr_text: extractedText,
           notes: `Extracted ${extractedText.length} characters. Analyzing...`,
         })
         .eq("id", analysisId)
     } catch (extractError) {
-      console.error("[OPENAI-DIRECT] Error extracting text:", extractError)
+      console.error("Error extracting text:", extractError)
 
-      // Update the analysis record with the error
+      // Update analysis with error
       await supabase
         .from("analyses")
         .update({
           status: "error",
           notes: `Error extracting text: ${extractError instanceof Error ? extractError.message : "Unknown error"}`,
+          error_message: extractError instanceof Error ? extractError.message : "Unknown error",
         })
         .eq("id", analysisId)
 
-      return {
-        success: false,
-        analysisId,
-        error: `Failed to extract text from file: ${
-          extractError instanceof Error ? extractError.message : "Unknown error"
-        }`,
-      }
+      throw extractError
     }
 
     // Analyze the extracted text
-    console.log(`[OPENAI-DIRECT] Analyzing extracted text...`)
-
+    let analysisResult: any
     try {
-      const analysisResult = await analyzeTextWithRetry(extractedText, options.signal)
-      console.log(`[OPENAI-DIRECT] Analysis complete`)
+      const analysisResponse = await analyzeTextDirect(extractedText, options.signal)
+      analysisResult = analysisResponse.result
+      tokenUsage = analysisResponse.tokenUsage || tokenUsage
 
-      // Update the analysis record with the result
-      const { error: updateError } = await supabase
+      // Update analysis with result
+      await supabase
         .from("analyses")
         .update({
           status: "completed",
-          notes: "Analysis completed successfully",
           result: analysisResult,
+          notes: "Analysis completed successfully with real-time OpenAI data",
+          completed_at: new Date().toISOString(),
         })
         .eq("id", analysisId)
-
-      if (updateError) {
-        console.error("[OPENAI-DIRECT] Error updating analysis record:", updateError)
-        // Continue anyway - we have the result
-      }
-
-      return {
-        success: true,
-        analysisId,
-        result: analysisResult,
-      }
     } catch (analysisError) {
-      console.error("[OPENAI-DIRECT] Error analyzing text:", analysisError)
+      console.error("Error analyzing text:", analysisError)
 
-      // Update the analysis record with the error
+      // Update analysis with error - NO FALLBACK TO MOCK DATA
       await supabase
         .from("analyses")
         .update({
           status: "error",
           notes: `Error analyzing text: ${analysisError instanceof Error ? analysisError.message : "Unknown error"}`,
+          error_message: analysisError instanceof Error ? analysisError.message : "Unknown error",
         })
         .eq("id", analysisId)
 
-      return {
-        success: false,
-        analysisId,
-        error: `Failed to analyze text: ${analysisError instanceof Error ? analysisError.message : "Unknown error"}`,
-      }
+      throw analysisError
+    }
+
+    return {
+      success: true,
+      analysisId,
+      result: analysisResult,
+      metrics: {
+        processingTimeMs: Date.now() - startTime,
+        retryCount,
+        tokenUsage,
+      },
     }
   } catch (error) {
-    console.error("[OPENAI-DIRECT] Unhandled error in analyzeCreditReportDirect:", error)
-
-    // Try to update the analysis record with the error
-    try {
-      await supabase
-        .from("analyses")
-        .update({
-          status: "error",
-          notes: `Unhandled error: ${error instanceof Error ? error.message : "Unknown error"}`,
-        })
-        .eq("id", analysisId)
-    } catch (updateError) {
-      console.error("[OPENAI-DIRECT] Error updating analysis record with error:", updateError)
-    }
+    console.error("Error processing credit report:", error)
 
     return {
       success: false,
       analysisId,
-      error: `Unhandled error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      error: error instanceof Error ? error.message : "Unknown error",
+      metrics: {
+        processingTimeMs: Date.now() - startTime,
+        retryCount,
+        tokenUsage,
+      },
     }
   }
 }
 
 /**
- * Extract text from a file using OpenAI with retry logic
+ * Extract text from a file using OpenAI's vision capabilities
+ * No fallbacks to mock data - will throw an error if extraction fails
  */
-async function extractTextWithRetry(dataUri: string, fileType: string, signal?: AbortSignal): Promise<string> {
+async function extractTextFromFileDirect(dataUri: string, signal?: AbortSignal): Promise<string> {
   let retries = 0
-  let lastError: any = null
 
-  while (retries < MAX_RETRIES) {
+  while (retries <= MAX_RETRIES) {
     try {
-      console.log(`[OPENAI-DIRECT] Extracting text attempt ${retries + 1}/${MAX_RETRIES}`)
+      // Create a timeout signal
+      const timeoutController = new AbortController()
+      const timeoutId = setTimeout(() => timeoutController.abort(), DEFAULT_TIMEOUT_MS)
 
-      const controller = new AbortController()
-      // Use the provided signal or create a new one
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
+      // Combine signals if needed
+      const combinedSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal
 
       try {
-        const prompt =
-          fileType === "application/pdf"
-            ? "Extract ALL text from this credit report PDF. Include ALL numbers, account details, and financial information. Format it as plain text with appropriate line breaks."
-            : "Extract ALL text from this credit report image. Include ALL numbers, account details, and financial information. Format it as plain text with appropriate line breaks."
+        console.log(`[OPENAI-DIRECT] Extracting text (attempt ${retries + 1}/${MAX_RETRIES + 1})`)
 
-        // Use fetch directly to call OpenAI API
-        const url = "https://api.openai.com/v1/chat/completions"
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        }
+        const prompt =
+          "Extract ALL text from this credit report. Include ALL numbers, account details, and financial information. Format it as plain text with appropriate line breaks."
 
         // Correctly format the content array for the message
         const content = [
@@ -325,99 +202,113 @@ async function extractTextWithRetry(dataUri: string, fileType: string, signal?: 
           },
         ]
 
-        const body = JSON.stringify({
-          model: "gpt-4o", // Use GPT-4o which supports vision
-          messages: [
-            {
-              role: "user",
-              content,
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 4096,
-        })
-
-        console.log(`[OPENAI-DIRECT] Sending request to OpenAI API with model gpt-4-vision-preview`)
-
-        const fetchResponse = await fetch(url, {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers,
-          body,
-          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "user",
+                content,
+              },
+            ],
+            temperature: 0.1,
+            max_tokens: 4096,
+          }),
+          signal: combinedSignal,
         })
 
         clearTimeout(timeoutId)
 
-        if (!fetchResponse.ok) {
-          const errorData = await fetchResponse.json().catch(() => ({}))
-          console.error(`[OPENAI-DIRECT] API error response:`, errorData)
-
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
           throw new Error(
-            `OpenAI API error: ${fetchResponse.status} ${fetchResponse.statusText}${
+            `OpenAI API error: ${response.status} ${response.statusText}${
               errorData.error ? ` - ${errorData.error.message || JSON.stringify(errorData.error)}` : ""
             }`,
           )
         }
 
-        const data = await fetchResponse.json()
+        const data = await response.json()
 
         if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-          console.error(`[OPENAI-DIRECT] Unexpected API response format:`, data)
           throw new Error("Unexpected response format from OpenAI API")
         }
 
+        // Log token usage
+        if (data.usage) {
+          console.log(`[OPENAI-DIRECT] Token usage for extraction: ${JSON.stringify(data.usage)}`)
+        }
+
         return data.choices[0].message.content || ""
-      } catch (error) {
+      } finally {
         clearTimeout(timeoutId)
-        throw error
       }
     } catch (error) {
-      lastError = error
       console.error(`[OPENAI-DIRECT] Extraction attempt ${retries + 1} failed:`, error)
 
       // Check if we should retry
-      if (error.name === "AbortError" || signal?.aborted) {
-        throw new Error("Operation aborted or timed out")
+      if (
+        (error instanceof DOMException && error.name === "AbortError") ||
+        signal?.aborted ||
+        retries >= MAX_RETRIES ||
+        error.message?.includes("quota") ||
+        error.message?.includes("authentication")
+      ) {
+        throw error
       }
 
       // Wait before retrying
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * Math.pow(2, retries)))
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, retries)))
       retries++
     }
   }
 
-  throw lastError || new Error("Failed to extract text after multiple attempts")
+  throw new Error("Failed to extract text after multiple attempts")
 }
 
 /**
- * Analyze text using OpenAI with retry logic
+ * Analyze text using OpenAI
+ * No fallbacks to mock data - will throw an error if analysis fails
  */
-async function analyzeTextWithRetry(text: string, signal?: AbortSignal): Promise<any> {
+async function analyzeTextDirect(
+  text: string,
+  signal?: AbortSignal,
+): Promise<{
+  result: any
+  tokenUsage: {
+    prompt: number
+    completion: number
+    total: number
+  }
+}> {
   let retries = 0
-  let lastError: any = null
 
   // Truncate text if it's too long
   const maxChars = 60000
   const truncatedText = text.length > maxChars ? text.substring(0, maxChars) : text
 
-  if (text.length > maxChars) {
-    console.log(`[OPENAI-DIRECT] Text truncated from ${text.length} to ${truncatedText.length} characters`)
-  }
-
-  while (retries < MAX_RETRIES) {
+  while (retries <= MAX_RETRIES) {
     try {
-      console.log(`[OPENAI-DIRECT] Analyzing text attempt ${retries + 1}/${MAX_RETRIES}`)
+      // Create a timeout signal
+      const timeoutController = new AbortController()
+      const timeoutId = setTimeout(() => timeoutController.abort(), DEFAULT_TIMEOUT_MS)
 
-      const controller = new AbortController()
-      const combinedSignal = signal
-        ? { signal: AbortSignal.any([signal, controller.signal]) }
-        : { signal: controller.signal }
-
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
+      // Combine signals if needed
+      const combinedSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal
 
       try {
-        const prompt = `
-You are an expert credit analyst with deep knowledge of credit repair strategies, financial products, and side hustles. Analyze the following credit report text and provide a comprehensive analysis with the following sections:
+        console.log(`[OPENAI-DIRECT] Analyzing text (attempt ${retries + 1}/${MAX_RETRIES + 1})`)
+
+        const systemPrompt =
+          "You are an expert credit analyst. Return ONLY valid JSON without any markdown, code blocks, or explanations. If you cannot find a credit score in the report, set score to null. DO NOT make up data."
+
+        const userPrompt = `
+Analyze the following credit report text and provide a comprehensive analysis with the following sections:
 
 1. Overview: 
    - IMPORTANT: If the credit report does NOT explicitly mention a credit score, set the score to null.
@@ -502,195 +393,165 @@ IMPORTANT:
 - If the report doesn't have enough information, acknowledge this in the summary and provide general advice.
 `
 
-        const systemPrompt =
-          "You are an expert credit analyst. Return ONLY valid JSON without any markdown, code blocks, or explanations. If you cannot find a credit score in the report, set score to null. DO NOT make up data."
-
-        // Use fetch directly to call OpenAI API
-        const url = "https://api.openai.com/v1/chat/completions"
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        }
-
-        const body = JSON.stringify({
-          model: "gpt-4o", // Use GPT-4o for text analysis
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 4096,
-        })
-
-        console.log(`[OPENAI-DIRECT] Sending request to OpenAI API with model gpt-4`)
-
-        const fetchResponse = await fetch(url, {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers,
-          body,
-          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.3,
+            max_tokens: 4096,
+          }),
+          signal: combinedSignal,
         })
 
         clearTimeout(timeoutId)
 
-        if (!fetchResponse.ok) {
-          const errorData = await fetchResponse.json().catch(() => ({}))
-          console.error(`[OPENAI-DIRECT] API error response:`, errorData)
-
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
           throw new Error(
-            `OpenAI API error: ${fetchResponse.status} ${fetchResponse.statusText}${
+            `OpenAI API error: ${response.status} ${response.statusText}${
               errorData.error ? ` - ${errorData.error.message || JSON.stringify(errorData.error)}` : ""
             }`,
           )
         }
 
-        const data = await fetchResponse.json()
+        const data = await response.json()
 
         if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-          console.error(`[OPENAI-DIRECT] Unexpected API response format:`, data)
           throw new Error("Unexpected response format from OpenAI API")
         }
 
         const responseContent = data.choices[0].message.content || ""
 
-        // Parse the result as JSON
+        // Log token usage
+        const tokenUsage = {
+          prompt: data.usage?.prompt_tokens || 0,
+          completion: data.usage?.completion_tokens || 0,
+          total: data.usage?.total_tokens || 0,
+        }
+
+        console.log(`[OPENAI-DIRECT] Token usage for analysis: ${JSON.stringify(tokenUsage)}`)
+
+        // Parse the JSON response
         try {
-          // Use our enhanced JSON extraction function
-          const jsonResult = extractJsonFromText(responseContent)
+          // Extract JSON from the response (in case there's any extra text)
+          const jsonMatch = responseContent.match(/\{[\s\S]*\}/)
+          const jsonString = jsonMatch ? jsonMatch[0] : responseContent
 
-          if (!jsonResult) {
-            throw new Error("Failed to extract valid JSON from response")
-          }
-
-          console.log(`[OPENAI-DIRECT] Successfully parsed JSON response`)
+          const result = JSON.parse(jsonString)
 
           // Validate the score is either null or a number between 300-850
-          if (jsonResult.overview && jsonResult.overview.score !== null) {
-            const score = Number(jsonResult.overview.score)
+          if (result.overview && result.overview.score !== null) {
+            const score = Number(result.overview.score)
             if (isNaN(score) || score < 300 || score > 850) {
-              console.log(`[OPENAI-DIRECT] Invalid score detected (${jsonResult.overview.score}), setting to null`)
-              jsonResult.overview.score = null
-            } else {
-              console.log(`[OPENAI-DIRECT] Valid credit score found: ${score}`)
+              console.log(`[OPENAI-DIRECT] Invalid score detected (${result.overview.score}), setting to null`)
+              result.overview.score = null
             }
-          } else {
-            console.log(`[OPENAI-DIRECT] No credit score found in report, score is null`)
           }
 
-          // Sanitize the result to ensure it can be safely serialized
-          return sanitizeForJson(jsonResult)
-        } catch (parseError) {
-          console.error(`[OPENAI-DIRECT] Error parsing OpenAI response as JSON:`, parseError)
-
-          // If we can't parse the JSON, create a default structure
           return {
-            overview: {
-              score: null,
-              summary:
-                "We were unable to properly analyze your credit report. The system encountered an error processing the data.",
-              positiveFactors: ["Unable to determine positive factors due to processing error"],
-              negativeFactors: ["Unable to determine negative factors due to processing error"],
-            },
-            disputes: { items: [] },
-            creditHacks: {
-              recommendations: [
-                {
-                  title: "Get a free copy of your credit report",
-                  description:
-                    "Since we had trouble analyzing your report, we recommend getting a fresh copy from annualcreditreport.com and trying again.",
-                  impact: "high",
-                  timeframe: "immediate",
-                  steps: [
-                    "Visit annualcreditreport.com",
-                    "Request your free credit report",
-                    "Upload the new report to VestBlock",
-                  ],
-                },
-              ],
-            },
-            creditCards: { recommendations: [] },
-            sideHustles: { recommendations: [] },
+            result: sanitizeForJson(result),
+            tokenUsage,
           }
+        } catch (parseError) {
+          console.error("[OPENAI-DIRECT] Error parsing OpenAI response as JSON:", parseError)
+          throw new Error("Failed to parse OpenAI response as JSON")
         }
-      } catch (error) {
+      } finally {
         clearTimeout(timeoutId)
-        throw error
       }
     } catch (error) {
-      lastError = error
       console.error(`[OPENAI-DIRECT] Analysis attempt ${retries + 1} failed:`, error)
 
       // Check if we should retry
-      if (error.name === "AbortError" || signal?.aborted) {
-        throw new Error("Operation aborted or timed out")
+      if (
+        (error instanceof DOMException && error.name === "AbortError") ||
+        signal?.aborted ||
+        retries >= MAX_RETRIES ||
+        error.message?.includes("quota") ||
+        error.message?.includes("authentication")
+      ) {
+        throw error
       }
 
       // Wait before retrying
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * Math.pow(2, retries)))
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, retries)))
       retries++
     }
   }
 
-  // If we've exhausted all retries, return a fallback analysis
-  console.error(`[OPENAI-DIRECT] Failed to analyze text after ${MAX_RETRIES} attempts, using fallback`)
-
-  return {
-    overview: {
-      score: null,
-      summary: "We were unable to properly analyze your credit report after multiple attempts.",
-      positiveFactors: ["Unable to determine positive factors due to processing error"],
-      negativeFactors: ["Unable to determine negative factors due to processing error"],
-    },
-    disputes: { items: [] },
-    creditHacks: {
-      recommendations: [
-        {
-          title: "Get a free copy of your credit report",
-          description:
-            "Since we had trouble analyzing your report, we recommend getting a fresh copy from annualcreditreport.com and trying again.",
-          impact: "high",
-          timeframe: "immediate",
-          steps: [
-            "Visit annualcreditreport.com",
-            "Request your free credit report",
-            "Upload the new report to VestBlock",
-          ],
-        },
-      ],
-    },
-    creditCards: { recommendations: [] },
-    sideHustles: { recommendations: [] },
-  }
+  throw new Error("Failed to analyze text after multiple attempts")
 }
 
 /**
- * Check if OpenAI API is working
+ * Generate chat response using OpenAI
+ * No fallbacks to mock data - will throw an error if generation fails
  */
-export async function checkOpenAIDirectConnection(): Promise<{
+export async function generateChatResponseDirect(
+  userId: string,
+  analysisId: string,
+  message: string,
+  conversationHistory: Array<{ role: string; content: string }>,
+  analysisData: any,
+): Promise<{
   success: boolean
-  message: string
-  latencyMs?: number
+  response?: string
+  error?: string
+  tokenUsage?: {
+    prompt: number
+    completion: number
+    total: number
+  }
 }> {
-  const startTime = Date.now()
-
   try {
-    // Try a simple request to verify the API works
-    const url = "https://api.openai.com/v1/chat/completions"
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    // Verify API key
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is not configured")
     }
 
-    const body = JSON.stringify({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: "Say 'OpenAI API is working'" }],
-      max_tokens: 10,
-    })
+    // Create a system prompt with the analysis context
+    const systemPrompt = `
+You are a helpful credit assistant. You have analyzed the user's credit report and have the following information:
 
-    const response = await fetch(url, {
+Credit Score: ${analysisData.overview?.score || "Unknown"}
+Summary: ${analysisData.overview?.summary || "No summary available"}
+Positive Factors: ${JSON.stringify(analysisData.overview?.positiveFactors || [])}
+Negative Factors: ${JSON.stringify(analysisData.overview?.negativeFactors || [])}
+Disputes: ${JSON.stringify(analysisData.disputes?.items || [])}
+Credit Hacks: ${JSON.stringify(analysisData.creditHacks?.recommendations || [])}
+Side Hustles: ${JSON.stringify(analysisData.sideHustles?.recommendations || [])}
+
+Use this information to provide helpful, personalized responses to the user's questions about their credit. 
+Be concise, friendly, and informative. If you don't know something, admit it rather than making up information.
+`
+
+    // Format the conversation history
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...conversationHistory,
+      { role: "user", content: message },
+    ]
+
+    // Call OpenAI API
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers,
-      body,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+      }),
     })
 
     if (!response.ok) {
@@ -703,20 +564,283 @@ export async function checkOpenAIDirectConnection(): Promise<{
     }
 
     const data = await response.json()
-    const latencyMs = Date.now() - startTime
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error("Unexpected response format from OpenAI API")
+    }
+
+    const chatResponse = data.choices[0].message.content || ""
+
+    // Log token usage
+    const tokenUsage = {
+      prompt: data.usage?.prompt_tokens || 0,
+      completion: data.usage?.completion_tokens || 0,
+      total: data.usage?.total_tokens || 0,
+    }
+
+    console.log(`[OPENAI-DIRECT] Token usage for chat: ${JSON.stringify(tokenUsage)}`)
+
+    // Store the message in the database
+    try {
+      await supabase.from("chat_messages").insert([
+        {
+          analysis_id: analysisId,
+          user_id: userId,
+          role: "user",
+          content: message,
+        },
+        {
+          analysis_id: analysisId,
+          user_id: userId,
+          role: "assistant",
+          content: chatResponse,
+        },
+      ])
+    } catch (dbError) {
+      console.error("Error storing chat messages:", dbError)
+      // Continue anyway, we can still return the response
+    }
 
     return {
       success: true,
-      message: "OpenAI API is accessible and working",
+      response: chatResponse,
+      tokenUsage,
+    }
+  } catch (error) {
+    console.error("Error generating chat response:", error)
+
+    // NO FALLBACK - return the error
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+/**
+ * Check if OpenAI API is accessible and working
+ * This is a direct connection test with no fallbacks
+ */
+export async function checkOpenAIDirectConnection(): Promise<{
+  success: boolean
+  message: string
+  latencyMs?: number
+}> {
+  const startTime = Date.now()
+
+  try {
+    // Verify API key
+    if (!OPENAI_API_KEY) {
+      return {
+        success: false,
+        message: "OpenAI API key is not configured",
+      }
+    }
+
+    // Simple test request to OpenAI
+    const response = await fetch("https://api.openai.com/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      // Short timeout for connection test
+      signal: AbortSignal.timeout(10000),
+    })
+
+    const latencyMs = Date.now() - startTime
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return {
+        success: false,
+        message: `OpenAI API error: ${response.status} ${response.statusText}${
+          errorData.error ? ` - ${errorData.error.message || ""}` : ""
+        }`,
+        latencyMs,
+      }
+    }
+
+    // Successfully connected
+    return {
+      success: true,
+      message: "Successfully connected to OpenAI API",
       latencyMs,
     }
   } catch (error) {
-    const latencyMs = Date.now() - startTime
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unknown error connecting to OpenAI",
+      latencyMs: Date.now() - startTime,
+    }
+  }
+}
+
+/**
+ * Generic function to call OpenAI API with any prompt
+ */
+export async function callOpenAI(
+  prompt: string,
+  options: {
+    model?: string
+    temperature?: number
+    maxTokens?: number
+    systemPrompt?: string
+    signal?: AbortSignal
+  } = {},
+): Promise<{
+  success: boolean
+  content?: string
+  error?: string
+  tokenUsage?: {
+    prompt: number
+    completion: number
+    total: number
+  }
+}> {
+  try {
+    // Verify API key
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is not configured")
+    }
+
+    const model = options.model || "gpt-4o"
+    const temperature = options.temperature ?? 0.7
+    const maxTokens = options.maxTokens || 1000
+    const systemPrompt = options.systemPrompt || "You are a helpful assistant."
+
+    // Create messages array
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ]
+
+    // Call OpenAI API
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+      signal: options.signal,
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(
+        `OpenAI API error: ${response.status} ${response.statusText}${
+          errorData.error ? ` - ${errorData.error.message || JSON.stringify(errorData.error)}` : ""
+        }`,
+      )
+    }
+
+    const data = await response.json()
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error("Unexpected response format from OpenAI API")
+    }
+
+    const content = data.choices[0].message.content || ""
+
+    // Log token usage
+    const tokenUsage = {
+      prompt: data.usage?.prompt_tokens || 0,
+      completion: data.usage?.completion_tokens || 0,
+      total: data.usage?.total_tokens || 0,
+    }
+
+    return {
+      success: true,
+      content,
+      tokenUsage,
+    }
+  } catch (error) {
+    console.error("Error calling OpenAI:", error)
 
     return {
       success: false,
-      message: `OpenAI API check failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+/**
+ * Analyze a credit report directly using OpenAI
+ * This is a wrapper around processCreditReportDirect with a simpler interface
+ */
+export async function analyzeCreditReportDirect(
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  userId: string,
+): Promise<{
+  success: boolean
+  analysisId?: string
+  result?: any
+  error?: string
+}> {
+  try {
+    const result = await processCreditReportDirect(fileBuffer, fileName, userId)
+
+    return {
+      success: result.success,
+      analysisId: result.analysisId,
+      result: result.result,
+      error: result.error,
+    }
+  } catch (error) {
+    console.error("Error in analyzeCreditReportDirect:", error)
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error analyzing credit report",
+    }
+  }
+}
+
+/**
+ * Test OpenAI connection with a simple prompt
+ */
+export async function testOpenAIConnection(): Promise<{
+  success: boolean
+  message: string
+  response?: string
+  latencyMs?: number
+}> {
+  const startTime = Date.now()
+
+  try {
+    const result = await callOpenAI("Respond with 'OpenAI connection successful' if you receive this message.", {
+      temperature: 0,
+      maxTokens: 20,
+      signal: AbortSignal.timeout(15000),
+    })
+
+    const latencyMs = Date.now() - startTime
+
+    if (!result.success) {
+      return {
+        success: false,
+        message: result.error || "Failed to connect to OpenAI",
+        latencyMs,
+      }
+    }
+
+    return {
+      success: true,
+      message: "OpenAI connection test successful",
+      response: result.content,
       latencyMs,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unknown error testing OpenAI connection",
+      latencyMs: Date.now() - startTime,
     }
   }
 }

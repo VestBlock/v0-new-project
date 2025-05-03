@@ -1,11 +1,10 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,9 +12,12 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-provider"
 import { CompatibilityWarning } from "@/components/compatibility-warning"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { supabase } from "@/lib/supabase"
 
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error">("checking")
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -23,10 +25,33 @@ export default function RegisterPage() {
     confirmPassword: "",
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [serverError, setServerError] = useState<string | null>(null)
 
   const router = useRouter()
   const { toast } = useToast()
   const { signUp } = useAuth()
+
+  // Check Supabase connection on component mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        // Simple ping to check if Supabase is accessible
+        const { data, error } = await supabase.from("profiles").select("count").limit(1)
+
+        if (error) {
+          console.error("Supabase connection error:", error)
+          setConnectionStatus("error")
+        } else {
+          setConnectionStatus("connected")
+        }
+      } catch (err) {
+        console.error("Failed to check Supabase connection:", err)
+        setConnectionStatus("error")
+      }
+    }
+
+    checkConnection()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -40,12 +65,17 @@ export default function RegisterPage() {
         return newErrors
       })
     }
+
+    // Clear server error when user makes changes
+    if (serverError) {
+      setServerError(null)
+    }
   }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.fullName || formData.fullName.length < 2) {
+    if (!formData.fullName || formData.fullName.trim().length < 2) {
       newErrors.fullName = "Full name must be at least 2 characters."
     }
 
@@ -67,6 +97,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setServerError(null)
 
     if (!validateForm()) {
       return
@@ -78,6 +109,15 @@ export default function RegisterPage() {
       const { error } = await signUp(formData.email, formData.password, formData.fullName)
 
       if (error) {
+        console.error("Signup error:", error)
+
+        // Handle specific Supabase error messages
+        if (error.message?.includes("already registered")) {
+          setServerError("This email is already registered. Please try logging in instead.")
+        } else {
+          setServerError(error.message || "Registration failed. Please try again.")
+        }
+
         throw error
       }
 
@@ -86,7 +126,10 @@ export default function RegisterPage() {
         description: "Please check your email to confirm your account.",
       })
 
-      router.push("/login")
+      // Redirect after a short delay to allow the user to see the success message
+      setTimeout(() => {
+        router.push("/login")
+      }, 2000)
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -105,6 +148,40 @@ export default function RegisterPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>Enter your information to create an account</CardDescription>
+
+          {connectionStatus === "checking" && (
+            <Alert className="bg-yellow-50 border-yellow-200">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertTitle>Checking connection...</AlertTitle>
+              <AlertDescription>Verifying connection to our services...</AlertDescription>
+            </Alert>
+          )}
+
+          {connectionStatus === "error" && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Connection Error</AlertTitle>
+              <AlertDescription>
+                Unable to connect to our services. Please try again later or contact support.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {connectionStatus === "connected" && (
+            <Alert className="bg-green-50 border-green-200">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertTitle>Ready to sign up</AlertTitle>
+              <AlertDescription>Connection established. You can now create your account.</AlertDescription>
+            </Alert>
+          )}
+
+          {serverError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Registration Error</AlertTitle>
+              <AlertDescription>{serverError}</AlertDescription>
+            </Alert>
+          )}
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -116,6 +193,7 @@ export default function RegisterPage() {
                 placeholder="John Doe"
                 value={formData.fullName}
                 onChange={handleChange}
+                disabled={isLoading || connectionStatus !== "connected"}
               />
               {errors.fullName && <p className="text-sm font-medium text-destructive">{errors.fullName}</p>}
             </div>
@@ -129,6 +207,7 @@ export default function RegisterPage() {
                 placeholder="john.doe@example.com"
                 value={formData.email}
                 onChange={handleChange}
+                disabled={isLoading || connectionStatus !== "connected"}
               />
               {errors.email && <p className="text-sm font-medium text-destructive">{errors.email}</p>}
             </div>
@@ -142,6 +221,7 @@ export default function RegisterPage() {
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
+                disabled={isLoading || connectionStatus !== "connected"}
               />
               {errors.password && <p className="text-sm font-medium text-destructive">{errors.password}</p>}
             </div>
@@ -155,6 +235,7 @@ export default function RegisterPage() {
                 placeholder="••••••••"
                 value={formData.confirmPassword}
                 onChange={handleChange}
+                disabled={isLoading || connectionStatus !== "connected"}
               />
               {errors.confirmPassword && (
                 <p className="text-sm font-medium text-destructive">{errors.confirmPassword}</p>
@@ -162,7 +243,7 @@ export default function RegisterPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || connectionStatus !== "connected"}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

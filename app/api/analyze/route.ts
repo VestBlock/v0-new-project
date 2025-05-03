@@ -1,165 +1,258 @@
 import type { NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+import { analyzeCredit } from "@/lib/openai-realtime-service"
 import { createNotification } from "@/lib/notifications"
-import { analyzeCreditReportDirect } from "@/lib/openai-direct"
-import { withErrorHandler } from "@/lib/error-handling"
-import { createSuccessResponse, createErrorResponse } from "@/lib/api-patterns"
+import { NextResponse } from "next/server"
 
-// Add this configuration at the top of the file, after the imports
+// Configure for longer execution time
 export const config = {
   runtime: "nodejs",
-  maxDuration: 60, // Extends timeout to 60 seconds
+  maxDuration: 300, // 5 minutes for thorough analysis
 }
 
-async function handler(request: NextRequest) {
-  console.log("Analyze API called - using direct OpenAI integration")
+// Create Supabase client with safety checks
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+let supabase: ReturnType<typeof createClient> | null = null
 
-  // Verify OpenAI API key is set
-  if (!process.env.OPENAI_API_KEY) {
-    console.error("OpenAI API key is not configured")
-    return createErrorResponse(
-      "OpenAI API key is not configured. Please add it to your environment variables.",
-      "MISSING_API_KEY",
-      null,
-      { statusCode: 500 },
-    )
-  }
-
-  // Get the current user
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader) {
-    console.error("No authorization header provided")
-    return createErrorResponse("Unauthorized", "UNAUTHORIZED", null, { statusCode: 401 })
-  }
-
-  const token = authHeader.split(" ")[1]
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    console.error("Authentication error:", authError)
-    return createErrorResponse("Unauthorized", "UNAUTHORIZED", authError, { statusCode: 401 })
-  }
-
-  console.log("User authenticated:", user.id)
-
-  // Get request body
-  let body
+if (supabaseUrl && supabaseServiceKey) {
   try {
-    body = await request.json()
-  } catch (parseError) {
-    console.error("Error parsing request body:", parseError)
-    return createErrorResponse("Invalid JSON in request body", "INVALID_JSON", parseError, { statusCode: 400 })
+    supabase = createClient(supabaseUrl, supabaseServiceKey)
+  } catch (error) {
+    console.error("Failed to initialize Supabase client:", error)
   }
+}
 
-  const { analysisId, text } = body
+export async function POST(request: NextRequest) {
+  console.log("[ANALYZE] API route called")
+  const startTime = performance.now()
 
-  // Add a size check after parsing the request body
-  if (text && text.length > 1000000) {
-    // 1MB text limit
-    console.error("Text too large:", text.length, "characters")
-    return createErrorResponse(
-      "Text too large. Please limit to 1MB.",
-      "TEXT_TOO_LARGE",
-      { size: text.length },
-      { statusCode: 400 },
-    )
-  }
-
-  if (!text) {
-    console.error("Missing required text field")
-    return createErrorResponse("Missing required text field", "MISSING_FIELD", null, { statusCode: 400 })
-  }
-
-  // Create a notification for the user that analysis is starting
   try {
-    await createNotification({
-      userId: user.id,
-      title: "Credit Report Analysis Started",
-      message: "Your credit report is being analyzed. This may take a minute or two.",
-      type: "info",
-    })
-  } catch (notifError) {
-    console.error("Failed to create start notification:", notifError)
-    // Continue anyway, this is not critical
-  }
+    // Verify Supabase client is available
+    if (!supabase) {
+      return NextResponse.json({ success: false, error: "Database connection unavailable" }, { status: 500 })
+    }
 
-  // Process the text directly with OpenAI
-  // We'll create a text file buffer from the text
-  const textEncoder = new TextEncoder()
-  const fileBuffer = textEncoder.encode(text).buffer
+    // Get the current user
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader) {
+      console.error("No authorization header provided")
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
 
-  const analysisResult = await analyzeCreditReportDirect(fileBuffer, "manual-text.txt", "text/plain", user.id)
+    const token = authHeader.split(" ")[1]
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token)
 
-  if (!analysisResult.success) {
-    console.error("Analysis failed:", analysisResult.error)
+    if (authError || !user) {
+      console.error("Authentication error:", authError)
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
 
-    // Create an error notification for the user
+    console.log("[ANALYZE] User authenticated:", user.id)
+
+    // Get request body
+    let body
     try {
-      await createNotification({
-        userId: user.id,
-        title: "Analysis Failed",
-        message: `We encountered an error analyzing your credit report: ${analysisResult.error}. Please try again.`,
-        type: "error",
-      })
-    } catch (notifError) {
-      console.error("Failed to create error notification:", notifError)
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return NextResponse.json({ success: false, error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    return createErrorResponse(
-      "Failed to analyze credit report",
-      "ANALYSIS_FAILED",
-      { details: analysisResult.error, analysisId: analysisResult.analysisId },
-      { statusCode: 500 },
+    // Check if this is a retry of an existing analysis
+    if (body.analysisId) {
+      console.log(`[ANALYZE] Retrying analysis: ${body.analysisId}`)
+
+      // Get the existing analysis
+      const { data: existingAnalysis, error: fetchError } = await supabase
+        .from("analyses")
+        .select("*")
+        .eq("id", body.analysisId)
+        .eq("user_id", user.id)
+        .single()
+
+      if (fetchError || !existingAnalysis) {
+        console.error("Error fetching existing analysis:", fetchError)
+        return NextResponse.json({ success: false, error: "Analysis not found or access denied" }, { status: 404 })
+      }
+
+      // Create a notification for the user that analysis is restarting
+      try {
+        await createNotification({
+          userId: user.id,
+          title: "Analysis Retry Started",
+          message: "Your credit report is being re-analyzed with real-time AI.",
+          type: "info",
+        })
+      } catch (notifError) {
+        console.error("Failed to create start notification:", notifError)
+        // Continue anyway, this is not critical
+      }
+
+      // Use the existing OCR text if available
+      if (existingAnalysis.ocr_text) {
+        const textEncoder = new TextEncoder()
+        const fileBuffer = textEncoder.encode(existingAnalysis.ocr_text).buffer
+        const fileName = existingAnalysis.file_path || "retry-analysis.txt"
+
+        // Process with our real-time OpenAI service
+        const analysisResult = await analyzeCredit(fileBuffer, fileName, user.id, {
+          signal: AbortSignal.timeout(280000), // 280 second timeout
+        })
+
+        if (!analysisResult.success) {
+          console.error("Retry analysis failed:", analysisResult.error)
+
+          // Create an error notification for the user
+          try {
+            await createNotification({
+              userId: user.id,
+              title: "Retry Analysis Failed",
+              message: `We encountered an error re-analyzing your credit report: ${analysisResult.error.message}. Please try again.`,
+              type: "error",
+            })
+          } catch (notifError) {
+            console.error("Failed to create error notification:", notifError)
+          }
+
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Failed to re-analyze credit report",
+              details: analysisResult.error,
+              analysisId: body.analysisId,
+            },
+            { status: 500 },
+          )
+        }
+
+        console.log("[ANALYZE] Retry analysis completed successfully")
+
+        // Create a success notification for the user
+        try {
+          await createNotification({
+            userId: user.id,
+            title: "Retry Analysis Complete",
+            message: "Your credit report has been re-analyzed successfully.",
+            type: "success",
+          })
+        } catch (notificationError) {
+          console.error("Failed to create success notification:", notificationError)
+        }
+
+        const endTime = performance.now()
+
+        return NextResponse.json({
+          success: true,
+          analysisId: body.analysisId,
+          result: analysisResult.result,
+          metrics: {
+            ...analysisResult.metrics,
+            totalProcessingTimeMs: Math.round(endTime - startTime),
+          },
+        })
+      } else {
+        return NextResponse.json({ success: false, error: "No OCR text available for retry" }, { status: 400 })
+      }
+    }
+
+    // Handle text input
+    if (body.text) {
+      console.log("[ANALYZE] Processing text input")
+
+      // Create a notification for the user that  {
+      console.log("[ANALYZE] Processing text input")
+
+      // Create a notification for the user that analysis is starting
+      try {
+        await createNotification({
+          userId: user.id,
+          title: "Credit Report Analysis Started",
+          message: "Your credit report is being analyzed with real-time AI. This may take a few minutes.",
+          type: "info",
+        })
+      } catch (notifError) {
+        console.error("Failed to create start notification:", notifError)
+        // Continue anyway, this is not critical
+      }
+
+      // Convert text to buffer
+      const textEncoder = new TextEncoder()
+      const fileBuffer = textEncoder.encode(body.text).buffer
+      const fileName = "manual-text.txt"
+
+      // Process with our real-time OpenAI service
+      const analysisResult = await analyzeCredit(fileBuffer, fileName, user.id, {
+        signal: AbortSignal.timeout(280000), // 280 second timeout
+      })
+
+      if (!analysisResult.success) {
+        console.error("Analysis failed:", analysisResult.error)
+
+        // Create an error notification for the user
+        try {
+          await createNotification({
+            userId: user.id,
+            title: "Analysis Failed",
+            message: `We encountered an error analyzing your credit report: ${analysisResult.error.message}. Please try again.`,
+            type: "error",
+          })
+        } catch (notifError) {
+          console.error("Failed to create error notification:", notifError)
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to analyze credit report",
+            details: analysisResult.error,
+            analysisId: analysisResult.analysisId,
+          },
+          { status: 500 },
+        )
+      }
+
+      console.log("[ANALYZE] Text analysis completed successfully")
+
+      // Create a success notification for the user
+      try {
+        await createNotification({
+          userId: user.id,
+          title: "Credit Analysis Complete",
+          message: "Your credit report has been analyzed with real-time AI.",
+          type: "success",
+        })
+      } catch (notificationError) {
+        console.error("Failed to create success notification:", notificationError)
+      }
+
+      const endTime = performance.now()
+
+      return NextResponse.json({
+        success: true,
+        analysisId: analysisResult.analysisId,
+        result: analysisResult.result,
+        metrics: {
+          ...analysisResult.metrics,
+          totalProcessingTimeMs: Math.round(endTime - startTime),
+        },
+      })
+    }
+
+    // If we get here, no valid input was provided
+    return NextResponse.json({ success: false, error: "Missing required text field" }, { status: 400 })
+  } catch (error) {
+    console.error("[ANALYZE] API error:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
     )
   }
-
-  console.log("Analysis completed successfully")
-
-  // Create a success notification for the user
-  try {
-    await createNotification({
-      userId: user.id,
-      title: "Credit Analysis Complete",
-      message:
-        analysisResult.result.overview.score !== null
-          ? `Your credit analysis is ready. Your credit score is ${analysisResult.result.overview.score}.`
-          : "Your credit analysis is ready. We couldn't determine a specific score from your report.",
-      type: "success",
-    })
-  } catch (notificationError) {
-    console.error("Failed to create success notification:", notificationError)
-  }
-
-  // Store the credit score in the credit_scores table ONLY if it's a valid score
-  try {
-    if (
-      analysisResult.result.overview.score !== null &&
-      analysisResult.result.overview.score >= 300 &&
-      analysisResult.result.overview.score <= 850
-    ) {
-      await supabase.from("credit_scores").insert({
-        user_id: user.id,
-        bureau: "AI Estimate", // Since this is an AI estimate
-        score: analysisResult.result.overview.score,
-        date: new Date().toISOString().split("T")[0], // Current date in YYYY-MM-DD format
-        source: "VestBlock Analysis",
-        notes: "Score estimated from credit report analysis",
-      })
-      console.log("Stored credit score in database")
-    }
-  } catch (scoreError) {
-    console.error("Error storing credit score:", scoreError)
-  }
-
-  return createSuccessResponse({
-    success: true,
-    analysisId: analysisResult.analysisId,
-    directResult: analysisResult.result,
-  })
 }
-
-// Wrap the handler with our error handler
-export const POST = withErrorHandler(handler)

@@ -1,5 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+
+// Import the standardized response patterns
+import { createSuccessResponse, createErrorResponse } from "@/lib/api-patterns"
 
 // Create Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || ""
@@ -11,7 +14,7 @@ export async function POST(request: NextRequest) {
     // Get the current user
     const authHeader = request.headers.get("authorization")
     if (!authHeader) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", 401)
     }
 
     const token = authHeader.split(" ")[1]
@@ -21,7 +24,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", 401, authError)
     }
 
     // Check if the user is already Pro
@@ -32,20 +35,20 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (profileError) {
-      return NextResponse.json({ error: "Failed to get user profile" }, { status: 500 })
+      return createErrorResponse("Failed to get user profile", 500, profileError)
     }
 
     if (profile && profile.is_pro) {
-      return NextResponse.json({ error: "User is already Pro" }, { status: 400 })
+      return createErrorResponse("User is already Pro", 400)
     }
 
     // In a real implementation, this would create a Stripe checkout session
     // For now, we'll return a placeholder URL
     const checkoutUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe-success?user_id=${user.id}`
 
-    return NextResponse.json({ url: checkoutUrl })
+    return createSuccessResponse({ url: checkoutUrl })
   } catch (error) {
     console.error("Create checkout error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return createErrorResponse("Internal server error", 500, error instanceof Error ? error.message : undefined)
   }
 }

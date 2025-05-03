@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { openai } from "@ai-sdk/openai"
 import { generateTextWithRetry } from "@/lib/openai-client"
-import { createSuccessResponse, createErrorResponse, sanitizeForJson } from "@/lib/json-utils"
+import { sanitizeForJson } from "@/lib/json-utils"
+import { createSuccessResponse, createErrorResponse } from "@/lib/api-patterns"
 
 // Create Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""

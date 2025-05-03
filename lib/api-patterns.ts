@@ -355,15 +355,18 @@ export interface ApiResponse<T> {
 /**
  * Create a successful API response
  */
-export function createSuccessResponse<T>(data: T, meta?: ApiResponse<T>["meta"]): ApiResponse<T> {
-  return {
-    success: true,
-    data,
-    meta: {
-      timestamp: new Date().toISOString(),
-      ...meta,
+export function createSuccessResponse<T>(data: T, statusCode = 200, meta?: ApiResponse<T>["meta"]): Response {
+  return Response.json(
+    {
+      success: true,
+      data,
+      meta: {
+        timestamp: new Date().toISOString(),
+        ...meta,
+      },
     },
-  }
+    { status: statusCode },
+  )
 }
 
 /**
@@ -371,20 +374,22 @@ export function createSuccessResponse<T>(data: T, meta?: ApiResponse<T>["meta"])
  */
 export function createErrorResponse<T>(
   message: string,
-  code?: string,
+  statusCode = 500,
   details?: any,
   meta?: ApiResponse<T>["meta"],
-): ApiResponse<T> {
-  return {
-    success: false,
-    error: {
-      message,
-      code,
-      details,
+): Response {
+  return Response.json(
+    {
+      success: false,
+      error: {
+        message,
+        details,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+        ...meta,
+      },
     },
-    meta: {
-      timestamp: new Date().toISOString(),
-      ...meta,
-    },
-  }
+    { status: statusCode },
+  )
 }

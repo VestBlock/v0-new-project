@@ -3,33 +3,33 @@ import { Facebook, Instagram, Twitter, Linkedin, Mail, MapPin } from "lucide-rea
 
 export function Footer() {
   return (
-    <footer className="bg-slate-900 text-slate-200">
+    <footer className="bg-gray-950 text-gray-400 py-12 border-t border-gray-800">
       <div className="container py-12 md:py-16">
         <div className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
-            <h3 className="text-xl font-bold">VestBlock</h3>
+            <h3 className="text-xl font-bold text-white">VestBlock</h3>
             <p className="text-slate-400 text-sm max-w-xs">
               AI-powered credit repair and financial empowerment platform. Upload your credit report, get personalized
               recommendations, and improve your financial health.
             </p>
             <div className="flex space-x-4">
-              <Link href="#" className="text-slate-400 hover:text-white">
+              <Link href="#" className="text-brand-blue hover:text-brand-blue/80">
                 <Facebook className="h-5 w-5" />
               </Link>
-              <Link href="#" className="text-slate-400 hover:text-white">
+              <Link href="#" className="text-brand-blue hover:text-brand-blue/80">
                 <Instagram className="h-5 w-5" />
               </Link>
-              <Link href="#" className="text-slate-400 hover:text-white">
+              <Link href="#" className="text-brand-blue hover:text-brand-blue/80">
                 <Twitter className="h-5 w-5" />
               </Link>
-              <Link href="#" className="text-slate-400 hover:text-white">
+              <Link href="#" className="text-brand-blue hover:text-brand-blue/80">
                 <Linkedin className="h-5 w-5" />
               </Link>
             </div>
           </div>
 
           <div>
-            <h3 className="text-lg font-medium mb-4">Quick Links</h3>
+            <h3 className="text-lg font-semibold mb-4 text-white">Quick Links</h3>
             <ul className="space-y-2 text-sm text-slate-400">
               <li>
                 <Link href="/" className="hover:text-white">
@@ -65,7 +65,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-lg font-medium mb-4">Features</h3>
+            <h3 className="text-lg font-semibold mb-4 text-white">Features</h3>
             <ul className="space-y-2 text-sm text-slate-400">
               <li>
                 <Link href="#" className="hover:text-white">
@@ -101,7 +101,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-lg font-medium mb-4">Contact</h3>
+            <h3 className="text-lg font-semibold mb-4 text-white">Contact</h3>
             <ul className="space-y-3 text-sm text-slate-400">
               <li className="flex items-start">
                 <MapPin className="h-5 w-5 mr-2 shrink-0 text-slate-300" />
