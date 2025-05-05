@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-provider"
 import { searchAnalyses } from "@/lib/analyses"
-import type { Analysis } from "@/lib/supabase"
+import type { Analysis } from "@/lib/supabase-client"
 
 export function SearchAnalyses() {
   const [query, setQuery] = useState("")

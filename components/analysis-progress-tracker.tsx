@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Loader2, CheckCircle2, AlertTriangle, Clock, FileText } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 import { useToast } from "@/hooks/use-toast"
 
 interface AnalysisProgressTrackerProps {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createPayPalOrder } from "@/lib/paypal"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 
 export async function POST(req: Request) {
   try {

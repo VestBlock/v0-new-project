@@ -27,7 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, Trash2, Edit, AlertCircle } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import type { Profile } from "@/lib/supabase"
+import type { Profile } from "@/lib/supabase-client"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<Profile[]>([])

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { getServerSession } from "@/lib/auth-provider"
+import { supabase } from "@/lib/supabase-client"
 import { createSuccessResponse, createErrorResponse, safeJsonParse, sanitizeForJson } from "@/lib/json-utils"
+import { getServerSession } from "@/lib/auth-server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {

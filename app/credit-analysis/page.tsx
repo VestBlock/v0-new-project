@@ -16,10 +16,10 @@ import { SideHustlesTab } from "@/components/analysis/side-hustles-tab"
 import { CreditCardsTab } from "@/components/analysis/credit-cards-tab"
 import { ChatTab } from "@/components/analysis/chat-tab"
 import { NotesTab } from "@/components/analysis/notes-tab"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 import { safeJsonParse, sanitizeForJson } from "@/lib/json-utils"
 import { AnalysisProgressTracker } from "@/components/analysis-progress-tracker"
-import type { Analysis } from "@/lib/supabase"
+import type { Analysis } from "@/lib/supabase-client"
 
 type AnalysisData = {
   id: string

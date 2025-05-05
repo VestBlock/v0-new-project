@@ -4,19 +4,19 @@ import type React from "react"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Upload, FileText, AlertTriangle, Info, FileUp, FileCheck, Bug } from "lucide-react"
+import { Loader2, Upload, FileText, AlertTriangle, Info, RefreshCw, FileUp, FileCheck, Bug } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-provider"
 import { getUserAnalyses } from "@/lib/analyses"
 import { SearchAnalyses } from "@/components/search-analyses"
-import { supabase } from "@/lib/supabase"
-import type { Analysis } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
+import type { Analysis } from "@/lib/supabase-client"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { safeJsonParse } from "@/lib/json-utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { OCRFileProcessor } from "@/components/ocr-file-processor"
+import { PDFUploader } from "@/components/pdf-uploader"
 
 export default function DashboardPage() {
   const [isUploading, setIsUploading] = useState(false)
@@ -91,7 +91,7 @@ export default function DashboardPage() {
   }
 
   // Function to create a demo analysis directly from the client
-  const handleCreateDemoAnalysis = async () => {
+  const createDemoAnalysis = async () => {
     if (!user) return
 
     setIsUploading(true)
@@ -113,15 +113,19 @@ export default function DashboardPage() {
         description: "Creating a sample analysis with real-time AI for demonstration purposes.",
       })
 
-      // Call the create-demo endpoint
-      const response = await fetch("/api/create-demo", {
+      // Call the analyze-credit endpoint with demo flag
+      const response = await fetch("/api/analyze-credit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        credentials: "include",
+        body: JSON.stringify({
+          userId: user.id,
+          isDemoMode: true,
+          text: "This is a demo credit report for VestBlock. The user has a credit score of 720. They have 5 credit cards with a total balance of $12,000. They have 1 auto loan with a balance of $15,000. They have 1 mortgage with a balance of $250,000. They have 1 student loan with a balance of $25,000. They have 1 collection account with a balance of $500. They have 2 late payments in the last 12 months.",
+        }),
       })
 
       // Get the response text first
@@ -174,7 +178,6 @@ export default function DashboardPage() {
     }
   }
 
-  // Function to handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !user) return
@@ -195,15 +198,12 @@ export default function DashboardPage() {
 
       // Check file type
       const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "text/plain"]
-      const fileExtension = file.name.split(".").pop()?.toLowerCase()
-      const isAllowedExtension = ["pdf", "jpg", "jpeg", "png", "txt"].includes(fileExtension || "")
-
-      if (!allowedTypes.includes(file.type) && !isAllowedExtension) {
+      if (!allowedTypes.includes(file.type)) {
         throw new Error("File type not supported. Please upload a PDF, JPG, PNG, or TXT file")
       }
 
       // Show warning for PDF files
-      if (file.type === "application/pdf" || fileExtension === "pdf") {
+      if (file.type === "application/pdf") {
         setIsPdfWarningVisible(true)
         toast({
           title: "PDF Processing",
@@ -240,10 +240,6 @@ export default function DashboardPage() {
 
       // Use a simple fetch with detailed error handling
       try {
-        // Set a longer timeout for the fetch request
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minute timeout
-
         const response = await fetch("/api/analyze-credit", {
           method: "POST",
           headers: {
@@ -257,34 +253,19 @@ export default function DashboardPage() {
             fileType: file.type,
             priority: "high",
           }),
-          signal: controller.signal,
-          credentials: "include",
         })
-
-        clearTimeout(timeoutId)
 
         // Get the response text first
         const responseText = await response.text()
-        console.log("API response status:", response.status)
-        console.log("API response content-type:", response.headers.get("content-type"))
+        console.log("API response:", response.status, responseText.substring(0, 200))
 
         // Save raw response for debugging
         setRawResponse(responseText)
 
-        // Check if response is empty
-        if (!responseText || responseText.trim() === "") {
-          throw new Error("Server returned an empty response")
-        }
-
-        // Check if it's HTML or starts with "Internal Server Error"
-        if (
-          responseText.includes("<!DOCTYPE") ||
-          responseText.includes("<html") ||
-          responseText.includes("Internal Server Error") ||
-          responseText.startsWith("Internal s")
-        ) {
-          setDebugInfo(`Server returned non-JSON response: ${responseText.substring(0, 300)}...`)
-          throw new Error("Server returned an error response. Please try again or contact support.")
+        // Check if it's HTML
+        if (responseText.includes("<!DOCTYPE") || responseText.includes("<html")) {
+          setDebugInfo(`Server returned HTML: ${responseText.substring(0, 300)}...`)
+          throw new Error("Server returned HTML instead of JSON. This indicates a server-side error.")
         }
 
         // Try to parse as JSON
@@ -292,11 +273,8 @@ export default function DashboardPage() {
         try {
           data = JSON.parse(responseText)
         } catch (e) {
-          console.error("JSON parse error:", e)
           setDebugInfo(`Failed to parse response as JSON: ${responseText.substring(0, 300)}...`)
-
-          // If not JSON, create a structured error message
-          throw new Error(`Server returned invalid JSON. This may indicate a server-side issue.`)
+          throw new Error(`Failed to parse server response as JSON. Response: ${responseText.substring(0, 100)}...`)
         }
 
         if (!response.ok) {
@@ -311,23 +289,14 @@ export default function DashboardPage() {
         })
 
         // Redirect to the analysis page
-        if (data.analysisId || data.id) {
-          router.push(`/credit-analysis?id=${data.analysisId || data.id}`)
+        if (data.analysisId) {
+          router.push(`/credit-analysis?id=${data.analysisId}`)
         } else {
           throw new Error("No analysis ID returned from server")
         }
       } catch (error) {
         console.error("API error:", error)
-
-        // Check if it's an abort error (timeout)
-        if (error.name === "AbortError") {
-          setUploadError(
-            "Request timed out. The server took too long to respond. Please try again with a smaller file or try later.",
-          )
-        } else {
-          setUploadError(error.message || "Failed to process file")
-        }
-
+        setUploadError(error.message || "Failed to process file")
         toast({
           variant: "destructive",
           title: "Upload Failed",
@@ -372,30 +341,6 @@ export default function DashboardPage() {
     if (fileInput) {
       fileInput.click()
     }
-  }
-
-  // Function to try a smaller file or different format
-  const handleTryDifferentFile = () => {
-    // Clear previous errors
-    setUploadError(null)
-    setDebugInfo(null)
-    setRawResponse(null)
-
-    toast({
-      title: "Try Different File",
-      description: "Please select a smaller file or a different format (JPG/PNG recommended).",
-    })
-
-    // Trigger file input click to reopen the file dialog
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    if (fileInput) {
-      fileInput.click()
-    }
-  }
-
-  // Function to try manual text entry instead
-  const handleTryManualEntry = () => {
-    router.push("/manual-upload")
   }
 
   // Memoize formatting functions to prevent unnecessary re-renders
@@ -516,28 +461,6 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground mt-1">Upload and manage your credit reports</p>
         </div>
-        <div>
-          <Button asChild className="flex items-center">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                className="hidden"
-                accept=".jpg,.jpeg,.png,.pdf,.txt"
-                onChange={handleFileUpload}
-                disabled={isUploading}
-              />
-              {isUploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" /> Upload Credit Report
-                </>
-              )}
-            </label>
-          </Button>
-        </div>
       </div>
 
       {uploadError && (
@@ -569,18 +492,12 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={testApiConnection}>
                 <Bug className="mr-2 h-4 w-4" /> Test API Connection
               </Button>
-              <Button variant="outline" size="sm" onClick={handleTryDifferentFile}>
-                <FileUp className="mr-2 h-4 w-4" /> Try Different File
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleTryManualEntry}>
-                <FileText className="mr-2 h-4 w-4" /> Try Manual Entry
-              </Button>
               <Button variant="outline" size="sm" onClick={handleRetry} disabled={isUploading}>
-                <Loader2 className={`mr-2 h-4 w-4 ${isUploading ? "animate-spin" : ""}`} /> Retry Upload
+                <RefreshCw className="mr-2 h-4 w-4" /> Retry Upload
               </Button>
             </div>
           </CardContent>
@@ -623,7 +540,6 @@ export default function DashboardPage() {
           <TabsTrigger value="upload">Upload Report</TabsTrigger>
           <TabsTrigger value="reports">Your Reports</TabsTrigger>
           <TabsTrigger value="demo">Demo Mode</TabsTrigger>
-          <TabsTrigger value="ocr">OCR Tool</TabsTrigger>
         </TabsList>
 
         <TabsContent value="upload">
@@ -645,9 +561,8 @@ export default function DashboardPage() {
                   </AlertDescription>
                 </Alert>
                 <div className="flex gap-4">
-                  {/* Direct file upload button */}
                   <Button asChild className="flex-1">
-                    <label className="cursor-pointer flex items-center justify-center">
+                    <label className="cursor-pointer">
                       <input
                         type="file"
                         className="hidden"
@@ -673,6 +588,11 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+          {/* Add this where appropriate in the dashboard layout */}
+          <div className="mt-6">
+            <h2 className="text-xl font-semibold mb-4">Upload Credit Report</h2>
+            <PDFUploader />
+          </div>
         </TabsContent>
 
         <TabsContent value="reports">
@@ -713,7 +633,7 @@ export default function DashboardPage() {
               <p className="text-muted-foreground text-center mb-6 max-w-md">
                 Don't have a credit report handy? Create a sample analysis to explore the features of VestBlock.
               </p>
-              <Button onClick={handleCreateDemoAnalysis} disabled={isUploading}>
+              <Button onClick={createDemoAnalysis} disabled={isUploading}>
                 {isUploading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
@@ -724,17 +644,6 @@ export default function DashboardPage() {
               </Button>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="ocr">
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">OCR Text Extraction Tool</h2>
-            <p className="text-muted-foreground">
-              Use our advanced OCR tool to extract text from PDFs and images. This can be useful for preparing credit
-              reports for analysis.
-            </p>
-            <OCRFileProcessor />
-          </div>
         </TabsContent>
       </Tabs>
     </div>

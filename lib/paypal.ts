@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 
 // PayPal API base URLs
 const PAYPAL_API_BASE =

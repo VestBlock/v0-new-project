@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { v4 as uuidv4 } from "uuid"
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 import { extractJsonFromText, sanitizeForJson } from "./json-utils"
 
 // Create Supabase client for logging and queue management

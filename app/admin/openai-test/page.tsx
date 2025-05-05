@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-provider"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 
 export default function OpenAITestPage() {
   const [loading, setLoading] = useState(false)

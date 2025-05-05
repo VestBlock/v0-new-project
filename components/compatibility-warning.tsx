@@ -12,30 +12,18 @@ export function CompatibilityWarning() {
     const issues: string[] = []
 
     try {
-      // Check for browser compatibility issues
+      // Check React version
+      const reactVersion = require("react").version
+      if (reactVersion !== "18.2.0") {
+        issues.push(`React version mismatch: expected 18.2.0, got ${reactVersion}`)
+      }
+
+      // Check for other potential issues
       if (typeof window !== "undefined") {
         // Check for browser compatibility
         const userAgent = window.navigator.userAgent
         if (userAgent.includes("MSIE") || userAgent.includes("Trident/")) {
           issues.push("Internet Explorer is not supported")
-        }
-
-        // Check for mobile devices with small screens
-        if (window.innerWidth < 375) {
-          issues.push("Screen size may be too small for optimal experience")
-        }
-
-        // Check for localStorage support
-        try {
-          localStorage.setItem("test", "test")
-          localStorage.removeItem("test")
-        } catch (e) {
-          issues.push("Local storage is not available (required for session management)")
-        }
-
-        // Check for cookies enabled
-        if (!navigator.cookieEnabled) {
-          issues.push("Cookies are disabled (required for authentication)")
         }
       }
     } catch (error) {

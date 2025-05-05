@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CheckCircle, XCircle, AlertTriangle, RefreshCw, BarChart3, Clock } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 import { checkOpenAIConnectivity } from "@/lib/openai-client"
 
 // Types for OpenAI logs

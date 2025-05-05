@@ -4,7 +4,7 @@
  * This file contains utilities to improve database performance
  */
 
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 
 /**
  * Batches database operations to reduce round trips

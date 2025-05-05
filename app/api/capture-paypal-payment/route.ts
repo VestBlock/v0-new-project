@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { capturePayPalPayment, updateUserToPro } from "@/lib/paypal"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {

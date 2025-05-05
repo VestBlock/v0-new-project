@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 
 // OpenAI monitoring interface
 export interface OpenAIMonitoringStats {

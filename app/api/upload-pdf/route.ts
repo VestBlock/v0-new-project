@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import { processPDF } from "@/lib/pdf-processor"
 import { createNotification } from "@/lib/notifications"
 
+
 // Configure for longer execution time
 export const config = {
   runtime: "nodejs",
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Process the PDF file
     const processingResult = await processPDF(fileBuffer, file.name, user.id)
+    console.log("🚀 ~ POST ~ processingResult:", processingResult)
 
     if (!processingResult.success) {
       console.error("PDF processing failed:", processingResult.error)

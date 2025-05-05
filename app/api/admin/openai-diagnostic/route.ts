@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
 import { runOpenAIDiagnostic } from "@/lib/openai-diagnostic"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 
 export async function GET(request: NextRequest) {
   try {

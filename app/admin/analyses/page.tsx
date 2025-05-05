@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, Trash2, Eye, FileText } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import type { Analysis } from "@/lib/supabase"
+import type { Analysis } from "@/lib/supabase-client"
 
 export default function AnalysesPage() {
   const [analyses, setAnalyses] = useState<Analysis[]>([])

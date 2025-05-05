@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 import type { Notification } from "./supabase"
 import { useAuth } from "./auth-provider"
 import { useToast } from "@/components/ui/use-toast"

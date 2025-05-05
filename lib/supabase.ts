@@ -17,8 +17,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-console.log("[SUPABASE] Initialization - URL:", supabaseUrl ? "Found" : "Missing")
-console.log("[SUPABASE] Initialization - Anon Key:", supabaseAnonKey ? "Found" : "Missing")
+console.log("Supabase URL:", supabaseUrl ? "Found" : "Missing")
+console.log("Supabase Anon Key:", supabaseAnonKey ? "Found" : "Missing")
 
 // Simple client singleton
 let supabaseInstance: ReturnType<typeof createClient> | null = null
@@ -27,7 +27,7 @@ let supabaseInstance: ReturnType<typeof createClient> | null = null
 export const supabase = (() => {
   // If environment variables are missing, return a stub client
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[SUPABASE] ERROR: Supabase URL or Anon Key is missing")
+    console.error("ERROR: Supabase URL or Anon Key is missing")
     return createStubClient()
   }
 
@@ -35,17 +35,10 @@ export const supabase = (() => {
   if (supabaseInstance) return supabaseInstance
 
   try {
-    console.log("[SUPABASE] Creating new Supabase client instance")
-    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    })
-    console.log("[SUPABASE] Supabase client created successfully")
+    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey)
     return supabaseInstance
   } catch (error) {
-    console.error("[SUPABASE] ERROR: Failed to create Supabase client:", error)
+    console.error("ERROR: Failed to create Supabase client:", error)
     return createStubClient()
   }
 })()
@@ -104,23 +97,4 @@ function createStubClient() {
 // Helper to check if Supabase is properly initialized
 export function isSupabaseInitialized() {
   return !!supabaseUrl && !!supabaseAnonKey && !!supabaseInstance
-}
-
-// Add this function at the end of the file
-export async function testSupabaseConnection() {
-  try {
-    console.log("[SUPABASE] Testing connection...")
-    const { data, error } = await supabase.from("profiles").select("count").limit(1)
-
-    if (error) {
-      console.error("[SUPABASE] Connection test failed:", error)
-      return { success: false, error }
-    }
-
-    console.log("[SUPABASE] Connection test successful")
-    return { success: true, data }
-  } catch (err) {
-    console.error("[SUPABASE] Connection test exception:", err)
-    return { success: false, error: err }
-  }
 }

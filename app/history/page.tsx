@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-provider"
-import { supabase } from "@/lib/supabase"
-import type { Analysis } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
+import type { Analysis } from "@/lib/supabase-client"
 
 function HistoryContent() {
   const [analyses, setAnalyses] = useState<Analysis[]>([])

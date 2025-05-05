@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase-client"
 import type { Analysis } from "./supabase"
 import { sanitizeForJson, memoizedJsonParse } from "./json-utils"
 
