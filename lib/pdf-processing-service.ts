@@ -1,45 +1,44 @@
-import { createClient } from "@supabase/supabase-js"
-import { v4 as uuidv4 } from "uuid"
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf"
-import type { TextItem } from "pdfjs-dist/types/src/display/api"
+import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Use the same PDF parser as pdf-processor.ts
+const PDFParser = require('pdf2json');
 
 // Environment variables
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Create Supabase admin client
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-// Configure PDF.js for Node.js environment
-const pdfjsWorker = require("pdfjs-dist/legacy/build/pdf.worker.entry")
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 /**
  * Process a PDF file by extracting text
- * This uses PDF.js legacy build which is more compatible with Node.js
+ * This uses pdf2json which is more compatible with Next.js
  */
 export async function processPDF(
   fileBuffer: ArrayBuffer,
   fileName: string,
   userId: string,
   options: {
-    maxPages?: number
-  } = {},
+    maxPages?: number;
+  } = {}
 ): Promise<{
-  success: boolean
-  text?: string
-  pageCount?: number
-  error?: string
-  processingId: string
+  success: boolean;
+  text?: string;
+  pageCount?: number;
+  error?: string;
+  processingId: string;
 }> {
-  const processingId = uuidv4()
-  const startTime = Date.now()
+  const processingId = uuidv4();
+  const startTime = Date.now();
 
   // Default options
-  const { maxPages = 20 } = options
+  const { maxPages = 20 } = options;
 
   try {
-    console.log(`[PDF-PROCESSOR] Starting PDF processing for file: ${fileName}`)
+    console.log(
+      `[PDF-PROCESSOR] Starting PDF processing for file: ${fileName}`
+    );
 
     // Log processing start
     await logProcessingEvent({
@@ -47,68 +46,145 @@ export async function processPDF(
       userId,
       fileName,
       fileSize: fileBuffer.byteLength,
-      event: "processing_started",
-      details: `Started processing ${fileName} (${(fileBuffer.byteLength / (1024 * 1024)).toFixed(2)}MB)`,
-    })
+      event: 'processing_started',
+      details: `Started processing ${fileName} (${(
+        fileBuffer.byteLength /
+        (1024 * 1024)
+      ).toFixed(2)}MB)`,
+    });
 
-    // Load the PDF document
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) })
-    const pdfDocument = await loadingTask.promise
+    // Convert ArrayBuffer to Buffer
+    const buffer = Buffer.from(fileBuffer);
 
-    const pageCount = pdfDocument.numPages
-    console.log(`[PDF-PROCESSOR] PDF has ${pageCount} pages`)
+    // Create a promise to handle the PDF parsing
+    const result = await new Promise<{ text: string; pageCount: number }>(
+      (resolve, reject) => {
+        const pdfParser = new PDFParser(null, 1);
 
-    // Limit pages to process
-    const pagesToProcess = Math.min(pageCount, maxPages)
+        pdfParser.on('pdfParser_dataError', (errData: any) => {
+          console.error(
+            `[PDF-PROCESSOR] PDF parsing error:`,
+            errData.parserError
+          );
+          reject(new Error(`PDF parsing failed: ${errData.parserError}`));
+        });
 
-    let extractedText = ""
+        pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+          try {
+            // Extract text from all pages
+            let fullText = '';
+            let pageCount = 0;
 
-    // Process each page
-    for (let i = 1; i <= pagesToProcess; i++) {
-      console.log(`[PDF-PROCESSOR] Processing page ${i}/${pagesToProcess}`)
+            if (pdfData && pdfData.Pages) {
+              pageCount = pdfData.Pages.length;
 
-      const page = await pdfDocument.getPage(i)
+              // Limit pages to process
+              const pagesToProcess = Math.min(pageCount, maxPages);
 
-      // Extract text
-      const textContent = await page.getTextContent()
-      const pageText = textContent.items.map((item: TextItem) => item.str).join(" ")
+              for (let pageIndex = 0; pageIndex < pagesToProcess; pageIndex++) {
+                const page = pdfData.Pages[pageIndex];
+                let pageText = '';
 
-      extractedText += `--- Page ${i} ---\n${pageText}\n\n`
+                if (page.Texts) {
+                  page.Texts.forEach((text: any) => {
+                    if (text.R && text.R[0] && text.R[0].T) {
+                      // Decode the text properly
+                      const decodedText = decodeURIComponent(text.R[0].T);
+                      pageText += decodedText + ' ';
+                    }
+                  });
+                }
 
-      // Clean up page resources
-      page.cleanup()
-    }
+                if (pageText) {
+                  fullText += `--- Page ${pageIndex + 1} ---\n${pageText}\n\n`;
+                }
+              }
+            }
+
+            if (!fullText.trim()) {
+              reject(new Error('No text could be extracted from the PDF.'));
+            } else {
+              resolve({ text: fullText, pageCount });
+            }
+          } catch (error) {
+            reject(error);
+          }
+        });
+
+        // Parse the PDF buffer
+        pdfParser.parseBuffer(buffer);
+      }
+    );
+
+    console.log(
+      `[PDF-PROCESSOR] Successfully extracted ${result.text.length} characters from PDF`
+    );
 
     // Log completion
     await logProcessingEvent({
       processingId,
       userId,
-      event: "processing_complete",
-      details: `Processed ${pagesToProcess} pages in ${Date.now() - startTime}ms`,
-    })
+      event: 'processing_complete',
+      details: `Processed ${result.pageCount} pages in ${
+        Date.now() - startTime
+      }ms`,
+    });
 
     return {
       success: true,
-      text: extractedText,
-      pageCount,
+      text: result.text,
+      pageCount: result.pageCount,
       processingId,
-    }
+    };
   } catch (error) {
-    console.error(`[PDF-PROCESSOR] Error processing PDF:`, error)
+    console.error(`[PDF-PROCESSOR] Error processing PDF:`, error);
 
-    // Log error
-    await logProcessingEvent({
-      processingId,
-      userId,
-      event: "processing_error",
-      details: error instanceof Error ? error.message : String(error),
-      error: error instanceof Error ? error : new Error(String(error)),
-    })
+    // Try fallback method if primary method fails
+    try {
+      console.log(`[PDF-PROCESSOR] Attempting fallback extraction...`);
+      const fallbackResult = await extractTextFromPDFFallback(
+        fileBuffer,
+        userId
+      );
 
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      processingId,
+      if (fallbackResult.success && fallbackResult.text) {
+        console.log(`[PDF-PROCESSOR] Fallback extraction succeeded`);
+
+        // Log fallback success
+        await logProcessingEvent({
+          processingId,
+          userId,
+          event: 'fallback_extraction_success',
+          details: `Fallback extracted ${
+            fallbackResult.text.length
+          } characters in ${Date.now() - startTime}ms`,
+        });
+
+        return {
+          success: true,
+          text: fallbackResult.text,
+          processingId,
+        };
+      } else {
+        throw new Error(
+          fallbackResult.error || 'Fallback extraction also failed'
+        );
+      }
+    } catch (fallbackError) {
+      // Log error for both primary and fallback methods
+      await logProcessingEvent({
+        processingId,
+        userId,
+        event: 'processing_error',
+        details: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        processingId,
+      };
     }
   }
 }
@@ -118,29 +194,29 @@ export async function processPDF(
  */
 export async function extractTextFromPDFFallback(
   fileBuffer: ArrayBuffer,
-  userId: string,
+  userId: string
 ): Promise<{
-  success: boolean
-  text?: string
-  error?: string
+  success: boolean;
+  text?: string;
+  error?: string;
 }> {
   try {
     // Use pdf-parse as a fallback
-    const pdfParse = require("pdf-parse")
+    const pdfParse = require('pdf-parse');
 
-    const dataBuffer = Buffer.from(fileBuffer)
-    const data = await pdfParse(dataBuffer)
+    const dataBuffer = Buffer.from(fileBuffer);
+    const data = await pdfParse(dataBuffer);
 
     return {
       success: true,
       text: data.text,
-    }
+    };
   } catch (error) {
-    console.error(`[PDF-PROCESSOR] Fallback extraction failed:`, error)
+    console.error(`[PDF-PROCESSOR] Fallback extraction failed:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
-    }
+    };
   }
 }
 
@@ -156,16 +232,16 @@ async function logProcessingEvent({
   details,
   error,
 }: {
-  processingId: string
-  userId: string
-  fileName?: string
-  fileSize?: number
-  event: string
-  details: string
-  error?: Error
+  processingId: string;
+  userId: string;
+  fileName?: string;
+  fileSize?: number;
+  event: string;
+  details: string;
+  error?: Error;
 }) {
   try {
-    await supabase.from("pdf_processing_logs").insert({
+    await supabase.from('pdf_processing_logs').insert({
       processing_id: processingId,
       user_id: userId,
       file_name: fileName,
@@ -175,9 +251,9 @@ async function logProcessingEvent({
       error_message: error?.message,
       error_stack: error?.stack,
       timestamp: new Date().toISOString(),
-    })
+    });
   } catch (logError) {
-    console.error(`[PDF-PROCESSOR] Failed to log processing event:`, logError)
+    console.error(`[PDF-PROCESSOR] Failed to log processing event:`, logError);
     // Don't throw - logging should never break the main flow
   }
 }
