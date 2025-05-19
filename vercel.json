@@ -29,11 +29,11 @@
   "functions": {
     "app/api/ocr/route.ts": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 30
     },
     "app/api/analyze/route.ts": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 30
     },
     "app/api/export-pdf/[id]/route.ts": {
       "memory": 1024,
