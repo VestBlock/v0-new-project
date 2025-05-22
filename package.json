@@ -61,6 +61,7 @@
     "pdf2json": "3.1.5",
     "pdfkit": "latest",
     "react": "^19",
+    "react-date-picker": "11.0.0",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
     "react-hook-form": "latest",
