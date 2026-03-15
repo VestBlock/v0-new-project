@@ -1,7 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -9,47 +7,23 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['localhost', 'vestblock.io', 'vestblock-assets.vercel.app'],
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
     unoptimized: true,
   },
-  // Configure headers for security
-  headers: async () => {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-        ],
-      },
-    ];
+  reactStrictMode: true, // Recommended for highlighting potential problems
+  experimental: {
+    // ✅ valid on Next 14.x
+    serverComponentsExternalPackages: [
+      'pdfjs-dist',
+      'sharp',
+      'tesseract.js',
+      '@react-pdf/renderer',
+    ],
   },
-  // Configure redirects
-  redirects: async () => {
-    return [
-      {
-        source: '/home',
-        destination: '/',
-        permanent: true,
-      },
-    ];
-  }
+  webpack: (config, { dev }) => {
+    if (dev) config.devtool = 'source-map'; // avoid eval-* (prevents pdf.js crash)
+    return config;
+  },
+  experimental: { esmExternals: 'loose' }, // helps when any ESM sneaks in
 };
 
 export default nextConfig;

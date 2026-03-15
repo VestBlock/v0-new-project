@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss"
 
-const config = {
+const config: Config = {
   darkMode: ["class"],
   content: [
     "./pages/**/*.{ts,tsx}",
@@ -9,7 +9,6 @@ const config = {
     "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
-  prefix: "",
   theme: {
     container: {
       center: true,
@@ -19,10 +18,6 @@ const config = {
       },
     },
     extend: {
-      fontFamily: {
-        sans: ["var(--font-inter)"],
-        orbitron: ["var(--font-orbitron)"],
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,21 +52,6 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background, var(--background)))",
-          foreground: "hsl(var(--sidebar-foreground, var(--foreground)))",
-          border: "hsl(var(--sidebar-border, var(--border)))",
-          ring: "hsl(var(--sidebar-ring, var(--ring)))",
-          accent: "hsl(var(--sidebar-accent, var(--muted)))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground, var(--muted-foreground)))",
-        },
-        // New brand colors
-        brand: {
-          blue: "#00C2CB",
-          purple: "#8A56E8",
-          darkblue: "#0A4D92",
-          black: "#0A0A0A",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -91,10 +71,11 @@ const config = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        bounce: "bounce 1s infinite",
       },
     },
   },
   plugins: [require("tailwindcss-animate")],
-} satisfies Config
+}
 
 export default config

@@ -1,0 +1,278 @@
+{
+  "version": 2,
+  "last_updated": "2025-08-17",
+  "reporting_disclaimer": "Tradeline/reporting policies change frequently—verify on the provider site during application.",
+  "catalog": {
+    "vendors": [
+      {
+        "id": "uline",
+        "name": "Uline",
+        "category": "vendor",
+        "subcategory": "net30_office",
+        "notes": "Starter net-30 account for shipping & warehouse supplies.",
+        "ein_required": true,
+        "min_revenue": 0,
+        "pg_required": "varies",
+        "fit_tags": ["starter", "any", "low_revenue"],
+        "link": "https://www.uline.com/",
+        "reports_to": ["Dun & Bradstreet"],
+        "weight": 9
+      },
+      {
+        "id": "quill",
+        "name": "Quill",
+        "category": "vendor",
+        "subcategory": "net30_office",
+        "notes": "Office supplies; starter vendor for new files.",
+        "ein_required": true,
+        "min_revenue": 0,
+        "pg_required": "varies",
+        "fit_tags": ["starter", "any", "low_revenue"],
+        "link": "https://www.quill.com/",
+        "reports_to": ["Dun & Bradstreet", "Experian Business"],
+        "weight": 9
+      },
+      {
+        "id": "grainger",
+        "name": "Grainger",
+        "category": "vendor",
+        "subcategory": "industrial",
+        "notes": "Industrial/MRO supplier; common early vendor line.",
+        "ein_required": true,
+        "min_revenue": 0,
+        "pg_required": "varies",
+        "fit_tags": ["starter", "any"],
+        "link": "https://www.grainger.com/",
+        "reports_to": ["Dun & Bradstreet"],
+        "weight": 8
+      }
+    ],
+    "monitoring": [
+      {
+        "id": "nav-prime",
+        "name": "Nav Prime",
+        "category": "monitoring",
+        "notes": "Monitors D&B, Experian, Equifax; membership payment creates a tradeline.",
+        "link": "https://www.nav.com/nav-prime/",
+        "fit_tags": ["any", "monitoring", "builder"],
+        "weight": 10
+      },
+      {
+        "id": "dnb-credit-insights",
+        "name": "D&B Credit Insights",
+        "category": "monitoring",
+        "notes": "Dun & Bradstreet scores/alerts and business credit tools.",
+        "link": "https://www.dnb.com/en-us/products/dnb-credit-insights.html",
+        "fit_tags": ["any", "monitoring"],
+        "weight": 8
+      },
+      {
+        "id": "experian-business-credit-advantage",
+        "name": "Experian Business Credit Advantage",
+        "category": "monitoring",
+        "notes": "Unlimited access to your Experian business report & score plus alerts.",
+        "link": "https://www.experian.com/small-business/monitor-business-credit",
+        "fit_tags": ["any", "monitoring"],
+        "weight": 8
+      }
+    ],
+    "fleet": [
+      {
+        "id": "wex-fleet-card",
+        "name": "WEX Fleet Card",
+        "category": "fleet",
+        "notes": "Fuel controls, reporting & potential rebates; accepted at ~95% U.S. stations.",
+        "link": "https://www.wexinc.com/products/fuel-cards-fleet/select/small-business/",
+        "ein_required": true,
+        "pg_required": "varies",
+        "fit_tags": ["transport", "services", "starter"],
+        "weight": 7
+      },
+      {
+        "id": "shell-business-flex",
+        "name": "Shell Card Business Flex",
+        "category": "fleet",
+        "notes": "Shell-focused rebates; manage fuel spend and reports.",
+        "link": "https://www.wexinc.com/products/fuel-cards-fleet/select/business-gas-card/shell-fleet-navigator-card/",
+        "ein_required": true,
+        "pg_required": "varies",
+        "fit_tags": ["transport", "services"],
+        "weight": 6
+      },
+      {
+        "id": "fuelman-mixed-fleet",
+        "name": "Fuelman Mixed Fleet",
+        "category": "fleet",
+        "notes": "Controls, network coverage, and expense tracking for local fleets.",
+        "link": "https://www.fuelman.com/card-details/mixed-fleet/",
+        "ein_required": true,
+        "pg_required": "varies",
+        "fit_tags": ["transport", "services"],
+        "weight": 6
+      }
+    ],
+    "cards": [
+      {
+        "id": "bill-spend-expense",
+        "name": "BILL Spend & Expense (formerly Divvy)",
+        "category": "card_charge",
+        "notes": "Corporate charge card with budgets & controls; no preset limit model.",
+        "min_revenue": 0,
+        "pg_required": "varies",
+        "fit_tags": ["no_pg_possible", "ops_controls", "starter"],
+        "link": "https://www.bill.com/products/spend-management/",
+        "weight": 8
+      },
+      {
+        "id": "ramp",
+        "name": "Ramp",
+        "category": "card_charge",
+        "notes": "Corporate card + spend platform; strong controls & rewards.",
+        "min_revenue": 0,
+        "pg_required": "no_pg_possible",
+        "fit_tags": ["no_pg_possible", "tech", "ops_controls"],
+        "link": "https://ramp.com/",
+        "weight": 7
+      },
+      {
+        "id": "brex",
+        "name": "Brex",
+        "category": "card_charge",
+        "notes": "For funded startups; no personal guarantee for eligible companies.",
+        "min_revenue": 0,
+        "pg_required": "no_pg_possible",
+        "eligibility_notes": "Startup/institutional banking & funds criteria apply.",
+        "fit_tags": ["startups", "no_pg_possible", "tech"],
+        "link": "https://www.brex.com/solutions/startups",
+        "weight": 6
+      }
+    ],
+    "cards_credit": [
+      {
+        "id": "capital-on-tap",
+        "name": "Capital on Tap",
+        "category": "card_credit",
+        "notes": "Small business credit card; fast online application.",
+        "min_revenue": 2000,
+        "pg_required": "likely",
+        "fit_tags": ["low_revenue", "starter"],
+        "link": "https://www.capitalontap.com/",
+        "weight": 7
+      },
+      {
+        "id": "amex-blue-business-cash",
+        "name": "AmEx Blue Business Cash",
+        "category": "card_credit",
+        "notes": "Mainstream business credit card with cash-back rewards.",
+        "min_revenue": 0,
+        "pg_required": "likely",
+        "fit_tags": ["mainstream", "rewards"],
+        "link": "https://www.americanexpress.com/us/credit-cards/card/blue-business-cash/",
+        "weight": 7
+      }
+    ],
+    "utilities_reporting": [
+      {
+        "id": "ecredable-business",
+        "name": "eCredable for Business",
+        "category": "utilities_reporting",
+        "notes": "Reports eligible utility/telecom accounts (and subscription) to major bureaus.",
+        "link": "https://www.ecredable.com/business/pricing",
+        "fit_tags": ["builder", "low_revenue", "any"],
+        "weight": 7
+      }
+    ],
+    "banking": [
+      {
+        "id": "bluevine-checking",
+        "name": "Bluevine Business Checking",
+        "category": "banking",
+        "notes": "Online business checking; integrates with Bluevine credit products.",
+        "link": "https://www.bluevine.com/",
+        "fit_tags": ["any", "banking"],
+        "weight": 8
+      },
+      {
+        "id": "mercury",
+        "name": "Mercury",
+        "category": "banking",
+        "notes": "Startup-friendly banking with virtual/physical cards and controls.",
+        "link": "https://mercury.com/",
+        "fit_tags": ["startups", "tech", "banking"],
+        "weight": 7
+      },
+      {
+        "id": "relay",
+        "name": "Relay",
+        "category": "banking",
+        "notes": "Multi-account, multi-user banking with spend controls.",
+        "link": "https://relayfi.com/",
+        "fit_tags": ["any", "ops_controls", "banking"],
+        "weight": 6
+      },
+      {
+        "id": "novo",
+        "name": "Novo",
+        "category": "banking",
+        "notes": "Online business checking for small businesses & freelancers.",
+        "link": "https://www.novo.co/",
+        "fit_tags": ["solo", "freelance", "banking"],
+        "weight": 6
+      }
+    ],
+    "lenders": [
+      {
+        "id": "bluevine-loc",
+        "name": "Bluevine Line of Credit",
+        "category": "lender",
+        "notes": "LOC up to $250k; fast access if approved.",
+        "min_revenue": 0,
+        "pg_required": "likely",
+        "fit_tags": ["working_capital", "scale"],
+        "link": "https://www.bluevine.com/business-loans/line-of-credit",
+        "weight": 8
+      },
+      {
+        "id": "fundbox",
+        "name": "Fundbox",
+        "category": "lender",
+        "notes": "Short-term working capital/LOC products for SMBs.",
+        "pg_required": "likely",
+        "fit_tags": ["working_capital", "starter"],
+        "link": "https://fundbox.com/",
+        "weight": 7
+      },
+      {
+        "id": "ondeck",
+        "name": "OnDeck",
+        "category": "lender",
+        "notes": "Term loans and lines of credit for established SMBs.",
+        "pg_required": "likely",
+        "fit_tags": ["scale", "working_capital"],
+        "link": "https://www.ondeck.com/",
+        "weight": 7
+      },
+      {
+        "id": "lendio",
+        "name": "Lendio Marketplace",
+        "category": "lender",
+        "notes": "Marketplace matching across multiple lenders & products.",
+        "pg_required": "varies",
+        "fit_tags": ["compare_options", "working_capital"],
+        "link": "https://www.lendio.com/",
+        "weight": 7
+      },
+      {
+        "id": "paypal-working-capital",
+        "name": "PayPal Working Capital",
+        "category": "lender",
+        "notes": "Fixed-fee loan repaid from PayPal sales; no personal credit check.",
+        "pg_required": "none",
+        "eligibility_notes": "Requires PayPal business history; state availability varies.",
+        "fit_tags": ["ecommerce", "receivables"],
+        "link": "https://www.paypal.com/us/business/financial-services/working-capital-loan",
+        "weight": 6
+      }
+    ]
+  }
+}

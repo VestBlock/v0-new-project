@@ -1,54 +1,49 @@
-import { NextResponse } from "next/server"
-import { verifyPayPalWebhook, updateUserToPro } from "@/lib/paypal"
-import { createNotification } from "@/lib/notifications"
+import { type NextRequest, NextResponse } from "next/server"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
-// Disable body parsing, we need the raw body for signature verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    // Get the raw body as text
-    const rawBody = await req.text()
+    const body = await req.text()
+    const event = JSON.parse(body)
 
-    // Get headers for verification
-    const headers: { [key: string]: string } = {}
-    req.headers.forEach((value, key) => {
-      headers[key.toLowerCase()] = value
-    })
+    console.log("PayPal webhook received:", event.event_type)
 
-    // Verify the webhook signature
-    const isValid = await verifyPayPalWebhook(rawBody, headers)
-
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 })
-    }
-
-    // Parse the webhook payload
-    const event = JSON.parse(rawBody)
-
-    // Handle different event types
+    // Handle successful payment completion
     if (event.event_type === "PAYMENT.CAPTURE.COMPLETED") {
-      const userId = event.resource.custom_id
+      const payment = event.resource
+      const payerEmail = payment.payer?.email_address
+      const amount = payment.amount?.value
 
-      // Update user to Pro
-      await updateUserToPro(userId)
+      if (payerEmail && amount === "75.00") {
+        const supabase = getSupabaseServer()
 
-      // Create a notification for the user
-      await createNotification({
-        userId,
-        title: "Welcome to VestBlock Pro!",
-        message: "Your payment was successful. You now have access to all Pro features.",
-        type: "success",
-      })
+        // Find user by email and update their payment status
+        const { data: userProfile, error: userError } = await supabase
+          .from("user_profiles")
+          .select("user_id")
+          .eq("email", payerEmail)
+          .single()
+
+        if (userProfile && !userError) {
+          // Record the payment
+          const { error: paymentError } = await supabase.from("payments").insert({
+            user_id: userProfile.user_id,
+            amount: Number.parseFloat(amount),
+            status: "completed",
+            payment_method: "paypal",
+            paypal_transaction_id: payment.id,
+          })
+
+          if (!paymentError) {
+            console.log(`Payment recorded for user: ${payerEmail}`)
+          }
+        }
+      }
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("Error processing PayPal webhook:", error)
+    console.error("PayPal webhook error:", error)
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }
 }

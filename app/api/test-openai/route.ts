@@ -1,22 +1,22 @@
-import { testOpenAIConnection } from "@/lib/openai-direct"
-import { NextResponse } from "next/server"
+import { testOpenAIConnection } from "@/lib/openai-service"
 
 export async function GET() {
   try {
+    console.log("[Test OpenAI API] Testing OpenAI connection")
+
     const result = await testOpenAIConnection()
 
-    if (result.success) {
-      return NextResponse.json({ success: true, message: result.message })
-    } else {
-      return NextResponse.json({ success: false, error: result.error }, { status: 500 })
-    }
+    console.log("[Test OpenAI API] Test result:", result)
+
+    return Response.json(result)
   } catch (error) {
-    console.error("Error testing OpenAI connection:", error)
-    return NextResponse.json(
+    console.error("[Test OpenAI API] Error:", error)
+
+    return Response.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        apiKey: process.env.OPENAI_API_KEY ? "API key is set" : "API key is missing",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )

@@ -1,68 +1,91 @@
-import type { NextRequest } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import { callOpenAI } from "@/lib/openai-direct"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import OpenAI from "openai"
 
-// Create Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-// Cache for recent chat responses to reduce API calls
-const chatResponseCache = new Map<string, { response: string; timestamp: number }>()
-const CHAT_CACHE_TTL = 300000 // 5 minutes cache TTL
-const MAX_CHAT_CACHE_SIZE = 100 // Maximum number of chat responses to cache
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
-    const body = await request.json()
+    const { messages, context } = await request.json()
 
-    // Validate input
-    if (!body.message) {
-      return NextResponse.json({ success: false, error: "Missing message" }, { status: 400 })
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Messages array is required" }, { status: 400 })
     }
 
-    // Optional context from credit report
-    const context = body.context || ""
+    // VestBot system prompt with financial expertise
+    const systemPrompt = `You are VestBot, an expert AI financial advisor specializing in credit repair, financial empowerment, and wealth building. You work for VestBlock.io, a platform that helps people improve their credit and build wealth.
 
-    // System prompt with context if available
-    const systemPrompt = context
-      ? `You are a helpful credit assistant. Use this context about the user's credit report: ${context}`
-      : "You are a helpful credit assistant. Answer questions about credit reports and financial matters."
+Your expertise includes:
+- Credit repair strategies and dispute processes
+- Credit score improvement techniques
+- Debt management and consolidation
+- Financial planning and budgeting
+- Investment basics and wealth building
+- Side hustles and income generation
+- Credit card optimization
+- Loan qualification strategies
 
-    // Call OpenAI for chat response
-    const response = await callOpenAI({
-      prompt: body.message,
-      systemPrompt,
-      model: "gpt-4o",
+Your personality:
+- Professional yet friendly and approachable
+- Encouraging and motivating
+- Practical and action-oriented
+- Empathetic to financial struggles
+- Knowledgeable about credit laws and regulations
+
+Guidelines:
+- Always provide actionable, specific advice
+- Reference credit laws (FCRA, FDCPA) when relevant
+- Suggest concrete next steps
+- Be encouraging about credit improvement possibilities
+- Ask clarifying questions when needed
+- Provide realistic timelines for credit improvement
+- Emphasize the importance of patience and consistency
+
+${context ? `Additional context: ${context}` : ""}
+
+Remember to be helpful, accurate, and supportive in all your responses.`
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
       temperature: 0.7,
+      max_tokens: 1000,
+      stream: false,
     })
 
-    // Return the response
-    return NextResponse.json({ success: true, response })
-  } catch (error) {
-    console.error("Error in chat:", error)
+    const response = completion.choices[0]?.message?.content
+
+    if (!response) {
+      return NextResponse.json({ error: "No response generated" }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      message: response,
+      usage: completion.usage,
+    })
+  } catch (error: any) {
+    console.error("Chat API Error:", error)
+
+    // Handle specific OpenAI errors
+    if (error?.error?.type === "insufficient_quota") {
+      return NextResponse.json({ error: "API quota exceeded. Please try again later." }, { status: 429 })
+    }
+
+    if (error?.error?.type === "invalid_api_key") {
+      return NextResponse.json({ error: "API configuration error. Please contact support." }, { status: 500 })
+    }
+
     return NextResponse.json(
       {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to process chat request",
+        details: error.message || "Unknown error occurred",
       },
       { status: 500 },
     )
   }
 }
 
-// Clear chat response cache
-export function clearChatResponseCache(): void {
-  chatResponseCache.clear()
-  console.log("Chat response cache cleared")
-}
-
-// Get chat response cache stats
-export function getChatResponseCacheStats(): { size: number; hitRate: number } {
-  return {
-    size: chatResponseCache.size,
-    hitRate: 0, // This would need to be tracked separately
-  }
+export async function GET() {
+  return NextResponse.json({ message: "Chat API is running. Use POST to send messages." }, { status: 200 })
 }
