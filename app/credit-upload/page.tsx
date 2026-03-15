@@ -1,6 +1,7 @@
 'use client';
 
 import type React from 'react';
+import { Suspense } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 
-export default function CreditUploadPage() {
+function CreditUploadContent() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -611,5 +612,18 @@ export default function CreditUploadPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CreditUploadPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading...</p>
+      </div>
+    }>
+      <CreditUploadContent />
+    </Suspense>
   );
 }
