@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/auth-context';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';

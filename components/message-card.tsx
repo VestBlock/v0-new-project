@@ -1,6 +1,6 @@
 "use client"
 
-import type { Message } from "ai/react"
+import type { Message } from "@ai-sdk/react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm" // For GitHub Flavored Markdown (tables, strikethrough, etc.)
 import { cn } from "@/lib/utils"
