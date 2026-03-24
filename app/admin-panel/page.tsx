@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Navigation } from '@/components/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Table,

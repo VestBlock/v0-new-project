@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Navigation } from "@/components/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FileUpload } from "@/components/file-upload"
@@ -75,7 +74,7 @@ export default function UploadReportPage()
 
 return (
     <div className="min-h-screen bg-background">
-      <Navigation />
+      
       <main className="pt-32 px-4 pb-16">
         <div className="container mx-auto max-w-3xl">
           <h1 className="text-3xl font-bold mb-2 gradient-text">Upload Credit Report</h1>

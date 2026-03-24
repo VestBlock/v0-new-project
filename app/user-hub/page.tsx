@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Navigation } from "@/components/navigation"
 import { InteractiveRoadmap } from "@/components/interactive-roadmap"
 import { ChatInterface } from "@/components/chat-interface"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -242,7 +241,7 @@ Can you give me more details or advice on this?`
   if (isLoadingProfileAndRoadmap || authLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <Navigation />
+        
         <main className="flex-grow flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
         </main>
@@ -253,7 +252,7 @@ Can you give me more details or advice on this?`
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen bg-background">
-        <Navigation />
+        
         <main className="pt-32 px-4 text-center">
           <p>Please log in to access your User Hub.</p>
           <Button onClick={() => router.push("/login?redirect=/user-hub")} className="mt-4">
@@ -267,7 +266,7 @@ Can you give me more details or advice on this?`
   if (error && !isGeneratingRoadmap && !isLoadingProfileAndRoadmap) {
     return (
       <div className="min-h-screen bg-background">
-        <Navigation />
+        
         <main className="pt-32 px-4 container mx-auto">
           <Card className="p-6 bg-destructive/10 border-destructive text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -289,7 +288,7 @@ Can you give me more details or advice on this?`
   if (!userProfile && !isLoadingProfileAndRoadmap) {
     return (
       <div className="min-h-screen bg-background">
-        <Navigation />
+        
         <main className="pt-32 px-4 container mx-auto">
           <Card className="p-6 bg-card/80 backdrop-blur text-center">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
@@ -306,7 +305,7 @@ Can you give me more details or advice on this?`
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navigation />
+      
       <main className="pt-20 md:pt-24 px-2 pb-16 flex-grow">
         <div className="container mx-auto max-w-5xl h-full">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">

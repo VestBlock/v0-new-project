@@ -19,13 +19,14 @@ import {
   Loader2,
   User,
   LogOut,
+  CreditCard,
+  FileText,
+  Briefcase,
   LayoutDashboard,
-  // Badge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import React from 'react';
-import { Badge } from './ui/badge';
 
 export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
@@ -33,34 +34,21 @@ export function Navigation() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = React.useState(false);
 
-  const allNavLinks = [
-    // { href: '/dashboard', label: 'Dashboard', auth: true },
-    { href: '/credit-upload', label: 'Credit Upload', auth: true },
-    {
-      href: '/tools/my-dispute-letters',
-      label: 'Dispute Letters',
-      auth: true,
-      isPro: true,
-    },
-    { href: '/tools/grants', label: 'Grant Writer', auth: true, isPro: true },
-    {
-      href: '/tools/business-credit',
-      label: 'Business Credit',
-      auth: true,
-      isPro: true,
-    },
-    ...(userProfile?.role === 'admin'
-      ? [
-          {
-            href: '/admin-panel',
-            label: 'Admin Panel',
-            auth: true,
-          },
-        ]
-      : []),
+  // Main public navigation links
+  const mainNavLinks = [
+    { href: '/funding', label: 'Funding' },
+    { href: '/ai-assistant', label: 'AI Assistant' },
+    { href: '/credit-upload', label: 'Credit Tools' },
+    { href: '/sell', label: 'Sell Property' },
   ];
 
-  const navLinks = allNavLinks.filter((link) => isAuthenticated && link.auth);
+  // User menu links (when logged in)
+  const userMenuLinks = [
+    { href: '/profile', label: 'Profile', icon: User },
+    { href: '/credit-upload', label: 'Credit Upload', icon: CreditCard },
+    { href: '/tools/my-dispute-letters', label: 'Dispute Letters', icon: FileText },
+    { href: '/tools/business-credit', label: 'Business Credit', icon: Briefcase },
+  ];
 
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
@@ -78,8 +66,6 @@ export function Navigation() {
     }
   }, [user]);
 
-  const isProMember = userProfile?.is_subscribed || isAdmin;
-
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
@@ -93,30 +79,27 @@ export function Navigation() {
             />
             <span className="font-bold">VestBlock</span>
           </Link>
+          {/* Desktop Navigation */}
           <nav className="hidden items-center space-x-6 text-sm font-medium md:flex">
-            {navLinks.map((link) => (
+            {mainNavLinks.map((link) => (
               <Link
                 key={link.href}
-                href={link.isPro && !isProMember ? '' : link.href}
+                href={link.href}
                 className={cn(
                   'transition-colors hover:text-foreground/80',
                   pathname === link.href
                     ? 'text-foreground'
-                    : 'text-foreground/60',
-                  link.isPro && !isProMember && 'opacity-60'
+                    : 'text-foreground/60'
                 )}
               >
                 {link.label}
-
-                {link.isPro && !isProMember && (
-                  <Badge className="ml-2 opacity-60">Pro</Badge>
-                )}
               </Link>
             ))}
           </nav>
         </div>
 
         <div className="flex flex-1 items-center justify-end space-x-2">
+          {/* Mobile Menu */}
           <div className="md:hidden">
             <Sheet>
               <SheetTrigger asChild>
@@ -136,7 +119,7 @@ export function Navigation() {
                   <span className="font-bold">VestBlock</span>
                 </Link>
                 <div className="flex flex-col space-y-3">
-                  {navLinks.map((link) => (
+                  {mainNavLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}
@@ -145,11 +128,46 @@ export function Navigation() {
                       {link.label}
                     </Link>
                   ))}
+                  <hr className="my-2" />
+                  {!isAuthenticated ? (
+                    <>
+                      <Link href="/login" className="text-foreground">
+                        Sign In
+                      </Link>
+                      <Link href="/register" className="text-foreground font-medium">
+                        Get Started
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      {userMenuLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className="text-foreground"
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                      {(userProfile?.role === 'admin' || isAdmin) && (
+                        <Link href="/admin-panel" className="text-foreground">
+                          Admin Panel
+                        </Link>
+                      )}
+                      <button
+                        onClick={signOut}
+                        className="text-left text-foreground"
+                      >
+                        Sign Out
+                      </button>
+                    </>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
           </div>
 
+          {/* Desktop Auth Section */}
           {isLoading ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : isAuthenticated ? (
@@ -178,18 +196,25 @@ export function Navigation() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {/* <DropdownMenuItem asChild>
-                  <Link href="/dashboard">
-                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                    Dashboard
-                  </Link>
-                </DropdownMenuItem> */}
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
+                {userMenuLinks.map((link) => (
+                  <DropdownMenuItem key={link.href} asChild>
+                    <Link href={link.href}>
+                      <link.icon className="mr-2 h-4 w-4" />
+                      {link.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+                {(userProfile?.role === 'admin' || isAdmin) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin-panel">
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Admin Panel
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -202,7 +227,7 @@ export function Navigation() {
               <Button variant="ghost" asChild>
                 <Link href="/login">Sign In</Link>
               </Button>
-              <Button asChild>
+              <Button asChild className="bg-cyan-500 hover:bg-cyan-600">
                 <Link href="/register">Get Started</Link>
               </Button>
             </nav>

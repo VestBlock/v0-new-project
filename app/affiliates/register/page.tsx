@@ -6,7 +6,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from "@/lib/supabase/client"
-import { Navigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -120,7 +119,7 @@ export default function AffiliateRegisterPage()
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <Navigation />
+        
         <main className="flex-grow flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
         </main>
@@ -129,7 +128,7 @@ export default function AffiliateRegisterPage()
   }
   return (
     <div className="min-h-screen bg-background circuit-bg">
-      <Navigation />
+      
       <main className="pt-24 md:pt-32 px-4 pb-16">
         <div className="container mx-auto max-w-2xl">
           <Card className="bg-card/80 backdrop-blur-sm">

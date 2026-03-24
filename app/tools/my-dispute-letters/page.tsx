@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { redirect, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { Navigation } from '@/components/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,

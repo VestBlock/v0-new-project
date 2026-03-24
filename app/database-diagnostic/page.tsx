@@ -8,7 +8,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle, XCircle, AlertTriangle, Database, RefreshCw, Play } from "lucide-react"
-import { Navigation } from "@/components/navigation"
 
 const EXPECTED_TABLES = ["user_profiles", "chat_history", "user_documents", "credit_reports", "dispute_letters"]
 const EXPECTED_BUCKETS = ["credit-reports", "dispute-letters"]
@@ -110,7 +109,7 @@ export default function DatabaseDiagnosticPage()
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation />
+      
       <main className="pt-32 px-4 pb-16">
         <div className="container mx-auto max-w-4xl">
           <div className="mb-8">

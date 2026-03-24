@@ -17,7 +17,14 @@ const supabaseAdmin = createClient(
   }
 );
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-initialize Resend to avoid build-time errors
+let resend: Resend | null = null;
+function getResend() {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 // Twilio SMS function
 async function sendSMS(to: string, message: string): Promise<boolean> {
@@ -150,17 +157,22 @@ export async function POST(request: NextRequest) {
     `;
 
     try {
-      const { error: emailError } = await resend.emails.send({
-        from: process.env.RESEND_EMAIL || 'noreply@vestblock.io',
-        to: 'contact@vestblock.io',
-        subject: `New House Seller Lead - ${data.propertyAddress}`,
-        html: emailHtml,
-      });
+      const resendClient = getResend();
+      if (resendClient) {
+        const { error: emailError } = await resendClient.emails.send({
+          from: process.env.RESEND_EMAIL || 'noreply@vestblock.io',
+          to: 'contact@vestblock.io',
+          subject: `New House Seller Lead - ${data.propertyAddress}`,
+          html: emailHtml,
+        });
 
-      if (emailError) {
-        console.error('Email send error:', emailError);
+        if (emailError) {
+          console.error('Email send error:', emailError);
+        } else {
+          console.log('Email notification sent successfully');
+        }
       } else {
-        console.log('Email notification sent successfully');
+        console.warn('Resend API key not configured, skipping email');
       }
     } catch (emailErr) {
       console.error('Email error:', emailErr);
