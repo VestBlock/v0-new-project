@@ -3,6 +3,19 @@ export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
+
+// Server-side Supabase client with service role key
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
 
 // Lazy-initialize Resend to avoid build-time errors
 let resend: Resend | null = null;
@@ -66,6 +79,39 @@ export async function POST(req: NextRequest) {
         </p>
       </div>
     `;
+
+    // Save to unified leads table
+    try {
+      const { error: leadsError } = await supabaseAdmin
+        .from('leads')
+        .insert({
+          lead_type: 'ai_assistant',
+          status: 'new',
+          name: contactName,
+          email: email,
+          phone: phone,
+          contact_info: {
+            name: contactName,
+            email: email,
+            phone: phone
+          },
+          form_data: {
+            businessName,
+            websiteUrl,
+            industry,
+            hasBookingSoftware,
+            bookingSoftwareName,
+            notes
+          }
+        });
+
+      if (leadsError) {
+        console.error('Leads table error:', leadsError);
+      }
+    } catch (dbErr) {
+      console.error('Database error:', dbErr);
+      // Don't fail the request if database fails
+    }
 
     // Send email notification
     try {

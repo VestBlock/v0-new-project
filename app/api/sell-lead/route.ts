@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Store in Supabase
+    // 1. Store in Supabase (legacy table)
     const { data: insertedLead, error: dbError } = await supabaseAdmin
       .from('real_estate_leads')
       .insert({
@@ -120,6 +120,35 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Lead saved to database:', insertedLead.id);
+
+    // 2. Also store in unified leads table
+    const { error: leadsError } = await supabaseAdmin
+      .from('leads')
+      .insert({
+        lead_type: 'sell_house',
+        status: 'new',
+        name: data.name,
+        phone: data.phone,
+        contact_info: {
+          name: data.name,
+          phone: data.phone
+        },
+        form_data: {
+          propertyAddress: data.propertyAddress,
+          city: data.city,
+          state: data.state,
+          propertyCondition: data.propertyCondition,
+          timelineToSell: data.timelineToSell,
+          mortgageBalance: data.mortgageBalance,
+          reasonForSelling: data.reasonForSelling,
+          legacyId: insertedLead.id
+        }
+      });
+
+    if (leadsError) {
+      console.error('Unified leads table error:', leadsError);
+      // Don't fail - legacy table insert succeeded
+    }
 
     // 2. Send Email Notification
     const emailHtml = `

@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { createClient } from "@supabase/supabase-js"
+
+// Server-side Supabase client with service role key
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+)
 
 // Lazy initialization to avoid build-time errors
 let resend: Resend | null = null
@@ -94,6 +107,51 @@ export async function POST(request: NextRequest) {
   Submitted from VestBlock Real Estate Funding page at ${new Date().toLocaleString()}
 </p>
 `
+
+    // Save to unified leads table
+    const { error: leadsError } = await supabaseAdmin
+      .from('leads')
+      .insert({
+        lead_type: 'real_estate',
+        status: 'new',
+        name: fullName,
+        email: email,
+        phone: phone,
+        contact_info: {
+          name: fullName,
+          email: email,
+          phone: phone
+        },
+        form_data: {
+          loanType,
+          creditScoreRange,
+          ...(loanType === 'dscr' ? {
+            entity,
+            propertyAddress,
+            propertyType,
+            purchasePrice,
+            expectedRent,
+            occupancy,
+            downPaymentLtv,
+            closingDate,
+            notes
+          } : {
+            experienceLevel,
+            propertyAddress,
+            purchasePrice,
+            rehabBudget,
+            arv,
+            exitStrategy,
+            closingTimeline,
+            fundsNeeded
+          })
+        }
+      })
+
+    if (leadsError) {
+      console.error('Leads table error:', leadsError)
+      // Continue with email - don't fail the request
+    }
 
     const resendClient = getResend()
 
