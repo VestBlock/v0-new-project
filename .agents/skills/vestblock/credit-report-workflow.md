@@ -15,6 +15,7 @@ Use this skill when changing VestBlock credit report upload, text extraction, AI
 9. Store dispute-letter PDFs in `dispute-letters`.
 10. Status moves to `completed`, `failed`, or `needs_review`.
 11. Email events are sent and logged.
+12. Admin follow-up tasks are created for uploads, failures, completed analyses, and `needs_review` reports.
 
 ## Statuses
 
@@ -31,6 +32,8 @@ Use this skill when changing VestBlock credit report upload, text extraction, AI
 - Do not let email failure break upload or analysis.
 - Do not expose technical errors to users.
 - Log failures to `admin_activity` and email failures to `email_events`.
+- Create admin tasks through `lib/admin/tasks.ts`; do not insert directly unless the helper is unavailable.
+- Avoid duplicate open tasks for the same report and task type.
 - Store extracted text and analysis JSON where schema supports it.
 - Keep service-role Supabase usage server-only.
 - Users can only access their own reports; admins can access all reports.
@@ -40,6 +43,9 @@ Use this skill when changing VestBlock credit report upload, text extraction, AI
 - `app/credit-upload/page.tsx`
 - `app/api/upload-credit-report/route.ts`
 - `lib/workflows/creditRepairWorkflow.ts`
+- `lib/admin/tasks.ts`
 - `lib/email/sendEmail.ts`
 - `lib/system/logEvent.ts`
 - `db/migrations/020-vestblock-ops-automation.sql`
+- `db/migrations/022-create-admin-tasks.sql`
+- `db/migrations/023-admin-task-automation-dedupe.sql`

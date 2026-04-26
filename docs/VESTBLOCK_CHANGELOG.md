@@ -139,6 +139,12 @@
 
 ## Features Added
 
+- Admin task automation helper.
+- Automatic admin tasks for new credit report uploads.
+- Automatic admin tasks for completed credit analyses.
+- Automatic urgent admin tasks for failed credit analyses.
+- Automatic admin tasks when reports are marked `needs_review`.
+- Duplicate guard for open workflow tasks tied to the same report.
 - Protected admin dashboard data API.
 - Admin overview metrics.
 - Credit Repair Command Center.
@@ -180,13 +186,21 @@ Optional legacy compatibility:
 
 ## Database Changes Required
 
-Run `db/migrations/020-vestblock-ops-automation.sql` in Supabase.
+Run these Supabase migrations in order:
 
-It adds:
+- `db/migrations/020-vestblock-ops-automation.sql`
+- `db/migrations/021-harden-storage-buckets.sql`
+- `db/migrations/022-create-admin-tasks.sql`
+- `db/migrations/023-admin-task-automation-dedupe.sql`
+
+They add:
 
 - Credit report workflow columns.
 - `email_events`
 - `admin_activity`
+- `admin_tasks`
+- Private storage bucket hardening.
+- Duplicate protection for open report-specific admin tasks.
 - Admin RLS helper and policies.
 - Profile role/subscription columns if missing.
 
@@ -211,6 +225,7 @@ It adds:
 
 - `git diff --check` passed.
 - `npm run build` passed when run with local dummy env values for Supabase, OpenAI, PayPal, and Resend.
+- Production Vercel deploy passed for the admin task queue release.
 - `npm run build` without env values failed on missing `OPENAI_API_KEY` in an existing biz-credit API route.
 
 ## Next Recommended Tasks

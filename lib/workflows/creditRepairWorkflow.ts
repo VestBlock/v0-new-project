@@ -1,4 +1,10 @@
 import {
+  createCreditAnalysisCompletedTask,
+  createCreditAnalysisFailureTask,
+  createCreditReportReviewTask,
+  createNeedsReviewTask,
+} from '@/lib/admin/tasks';
+import {
   sendAdminAlertEmail,
   sendAdminAnalysisCompletedEmail,
   sendCreditRepairFailureAlert,
@@ -27,6 +33,21 @@ type ReportRecordInput = {
   filePath?: string | null;
   fileUrl?: string | null;
 };
+
+function getGeneratedLetterCount(analysisJson: unknown) {
+  if (
+    typeof analysisJson !== 'object' ||
+    analysisJson === null ||
+    !('generated_letter_count' in analysisJson)
+  ) {
+    return null;
+  }
+
+  const count = Number(
+    (analysisJson as { generated_letter_count?: unknown }).generated_letter_count
+  );
+  return Number.isFinite(count) ? count : null;
+}
 
 async function updateReport(reportId: string, updates: Record<string, unknown>) {
   try {
@@ -89,6 +110,12 @@ export async function createCreditReportRecord(input: ReportRecordInput) {
       userId: input.userId,
       fileName: input.fileName,
     }),
+    createCreditReportReviewTask({
+      reportId: data.id,
+      userId: input.userId,
+      userEmail: input.userEmail,
+      fileName: input.fileName,
+    }),
   ]);
 
   await updateReport(data.id, { email_alert_sent: true });
@@ -112,6 +139,31 @@ export async function updateCreditReportStatus(
     entityId: reportId,
     metadata: { status, ...metadata },
   });
+
+  if (status === 'failed') {
+    await createCreditAnalysisFailureTask({
+      reportId,
+      errorMessage:
+        typeof metadata?.message === 'string'
+          ? metadata.message
+          : typeof metadata?.errorMessage === 'string'
+            ? metadata.errorMessage
+            : null,
+    });
+  }
+
+  if (status === 'needs_review') {
+    await createNeedsReviewTask({
+      reportId,
+      reason:
+        typeof metadata?.reason === 'string'
+          ? metadata.reason
+          : typeof metadata?.message === 'string'
+            ? metadata.message
+            : null,
+    });
+  }
+
   return result;
 }
 
@@ -147,6 +199,12 @@ export async function attachAnalysisResult(
       userId: details?.userId,
       analysisId: reportId,
     }),
+    createCreditAnalysisCompletedTask({
+      reportId,
+      userId: details?.userId,
+      userEmail: details?.userEmail,
+      generatedLetterCount: getGeneratedLetterCount(analysisJson),
+    }),
   ]);
   await logEvent({
     eventType: 'credit_analysis_completed',
@@ -180,6 +238,12 @@ export async function markCreditReportFailed(
     userEmail: details?.userEmail,
     userId: details?.userId,
     reportId,
+    errorMessage: message,
+  });
+  await createCreditAnalysisFailureTask({
+    reportId,
+    userId: details?.userId,
+    userEmail: details?.userEmail,
     errorMessage: message,
   });
   await logEvent({

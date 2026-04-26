@@ -1,0 +1,186 @@
+import { createAdminClient } from '@/lib/supabase/admin';
+
+export const adminTaskStatuses = [
+  'open',
+  'in_progress',
+  'waiting',
+  'completed',
+  'dismissed',
+] as const;
+
+export const adminTaskPriorities = ['low', 'normal', 'high', 'urgent'] as const;
+
+export type AdminTaskStatus = (typeof adminTaskStatuses)[number];
+export type AdminTaskPriority = (typeof adminTaskPriorities)[number];
+
+type CreateAdminTaskInput = {
+  title: string;
+  description?: string | null;
+  taskType?: string;
+  status?: AdminTaskStatus;
+  priority?: AdminTaskPriority;
+  assignedTo?: string | null;
+  userId?: string | null;
+  userEmail?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  sourceEventId?: string | null;
+  dueAt?: string | null;
+  metadata?: Record<string, unknown>;
+  createdBy?: string | null;
+};
+
+function addHours(hours: number) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+export const adminTaskDueDates = {
+  now: () => new Date().toISOString(),
+  hours: addHours,
+  days: (days: number) => addHours(days * 24),
+};
+
+export async function createAdminTask(input: CreateAdminTaskInput) {
+  const taskType = input.taskType || 'admin_followup';
+  const status = input.status || 'open';
+  const priority = input.priority || 'normal';
+
+  try {
+    const admin = createAdminClient();
+
+    if (input.entityType && input.entityId) {
+      const { data: existing, error: lookupError } = await admin
+        .from('admin_tasks')
+        .select('id,status')
+        .eq('task_type', taskType)
+        .eq('entity_type', input.entityType)
+        .eq('entity_id', input.entityId)
+        .in('status', ['open', 'in_progress', 'waiting'])
+        .limit(1)
+        .maybeSingle();
+
+      if (!lookupError && existing?.id) {
+        return { ok: true, task: existing, duplicate: true };
+      }
+    }
+
+    const { data, error } = await admin
+      .from('admin_tasks')
+      .insert({
+        title: input.title,
+        description: input.description ?? null,
+        task_type: taskType,
+        status,
+        priority,
+        assigned_to: input.assignedTo ?? null,
+        user_id: input.userId ?? null,
+        user_email: input.userEmail ?? null,
+        entity_type: input.entityType ?? null,
+        entity_id: input.entityId ?? null,
+        source_event_id: input.sourceEventId ?? null,
+        due_at: input.dueAt ?? null,
+        metadata_json: input.metadata ?? {},
+        created_by: input.createdBy ?? null,
+        completed_at: status === 'completed' ? new Date().toISOString() : null,
+      })
+      .select('id,status')
+      .single();
+
+    if (error) {
+      console.warn('[admin-task] insert skipped:', error.message);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, task: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[admin-task] unavailable:', message);
+    return { ok: false, error: message };
+  }
+}
+
+export async function createCreditReportReviewTask(input: {
+  reportId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  fileName?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Review new credit report upload',
+    description:
+      'A customer uploaded a credit report. Confirm analysis status, generated dispute letters, and whether follow-up is needed.',
+    taskType: 'credit_report_review',
+    priority: 'normal',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'credit_report',
+    entityId: input.reportId,
+    dueAt: adminTaskDueDates.days(1),
+    metadata: { fileName: input.fileName },
+  });
+}
+
+export async function createCreditAnalysisFailureTask(input: {
+  reportId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  errorMessage?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Fix failed credit analysis',
+    description:
+      'A credit repair analysis failed. Review the report, error details, and decide whether to rerun analysis or contact the customer.',
+    taskType: 'credit_analysis_failure',
+    priority: 'urgent',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'credit_report',
+    entityId: input.reportId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: { errorMessage: input.errorMessage },
+  });
+}
+
+export async function createCreditAnalysisCompletedTask(input: {
+  reportId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  generatedLetterCount?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Follow up on completed credit analysis',
+    description:
+      'A credit analysis completed. Check whether dispute letters were generated and whether the customer should receive a next-step follow-up.',
+    taskType: 'credit_analysis_followup',
+    priority: 'low',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'credit_report',
+    entityId: input.reportId,
+    dueAt: adminTaskDueDates.days(2),
+    metadata: { generatedLetterCount: input.generatedLetterCount },
+  });
+}
+
+export async function createNeedsReviewTask(input: {
+  reportId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  reason?: string | null;
+  createdBy?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Credit report needs manual review',
+    description:
+      'This credit report was marked as needing review. Inspect the analysis record, customer history, and any admin notes before follow-up.',
+    taskType: 'credit_report_needs_review',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'credit_report',
+    entityId: input.reportId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: { reason: input.reason },
+    createdBy: input.createdBy,
+  });
+}

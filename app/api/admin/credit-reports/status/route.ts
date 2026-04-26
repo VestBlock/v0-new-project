@@ -3,6 +3,7 @@ import { checkAdminAccess } from '@/lib/auth/admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { creditRepairStatuses } from '@/lib/workflows/creditRepairWorkflow';
 import { logEvent } from '@/lib/system/logEvent';
+import { createNeedsReviewTask } from '@/lib/admin/tasks';
 
 export async function PATCH(request: Request) {
   const adminCheck = await checkAdminAccess();
@@ -44,7 +45,7 @@ export async function PATCH(request: Request) {
     .from('credit_reports')
     .update(payload)
     .eq('id', reportId)
-    .select('id,status,admin_notes,updated_at')
+    .select('id,user_id,user_email,status,admin_notes,updated_at')
     .single();
 
   if (error) {
@@ -58,6 +59,16 @@ export async function PATCH(request: Request) {
     entityId: reportId,
     metadata: { action: 'status_update', status },
   });
+
+  if (status === 'needs_review') {
+    await createNeedsReviewTask({
+      reportId,
+      userId: data.user_id,
+      userEmail: data.user_email,
+      reason: adminNotes || 'Admin marked this report as needs_review.',
+      createdBy: adminCheck.user?.id,
+    });
+  }
 
   return NextResponse.json({ report: data });
 }

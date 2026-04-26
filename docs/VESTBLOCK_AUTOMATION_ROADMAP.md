@@ -72,6 +72,8 @@ Use `admin_activity` as the event stream and `admin_tasks` as the durable task q
 Future task types:
 
 - Review failed analysis.
+- Review new credit report uploads.
+- Follow up after completed credit analysis.
 - Follow up with paid customer.
 - Call funding lead.
 - Review report marked `needs_review`.
@@ -84,6 +86,8 @@ Implemented task queue foundation:
 - Protected `/api/admin/tasks` API for listing, creating, and updating tasks.
 - `/admin-panel` Tasks tab for status updates.
 - Initial restored-report backlog task for imported credit reports still in `uploaded`.
+- Workflow-created tasks for new uploads, completed analyses, failed analyses, and reports manually marked `needs_review`.
+- Duplicate guard so retries do not flood the admin queue with multiple open tasks for the same report and task type.
 
 ## Operator Skills Added
 

@@ -5,6 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 import type { NegativeItem } from '@/lib/extract-negative-items';
+import { createCreditReportReviewTask } from '@/lib/admin/tasks';
 import {
   attachAnalysisResult,
   attachDisputeLetters,
@@ -237,6 +238,14 @@ export async function POST(request: NextRequest) {
         userId,
         fileName: file.name,
       }),
+      reportId
+        ? createCreditReportReviewTask({
+            reportId,
+            userId,
+            userEmail,
+            fileName: file.name,
+          })
+        : Promise.resolve(),
     ]);
     await logEvent({
       eventType: 'credit_report_uploaded',
