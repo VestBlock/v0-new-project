@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Bell,
   CheckCircle2,
+  ClipboardList,
   CreditCard,
   FileText,
   Loader2,
@@ -54,6 +55,7 @@ type AdminDashboard = {
     totalPaidUsers: number;
     totalCompletedPayments: number;
     totalFundingLeads: number;
+    totalOpenTasks: number;
   };
   creditReports: Array<{
     id: string;
@@ -95,6 +97,22 @@ type AdminDashboard = {
   }>;
   payments: Array<any>;
   leads: Array<any>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    task_type: string;
+    status: string;
+    priority: string;
+    assigned_to?: string | null;
+    user_email?: string | null;
+    entity_type?: string | null;
+    entity_id?: string | null;
+    due_at?: string | null;
+    completed_at?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
 };
 
 const statuses = [
@@ -106,6 +124,8 @@ const statuses = [
   'failed',
   'needs_review',
 ];
+
+const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown';
@@ -122,6 +142,12 @@ function statusVariant(status: string) {
   return 'secondary';
 }
 
+function priorityVariant(priority: string) {
+  if (priority === 'urgent' || priority === 'high') return 'destructive';
+  if (priority === 'low') return 'outline';
+  return 'secondary';
+}
+
 export default function AdminPanelPage() {
   const { user, userProfile, isAuthenticated, isLoading: authLoading } =
     useAuth();
@@ -131,7 +157,9 @@ export default function AdminPanelPage() {
   const [error, setError] = useState('');
   const [statusDrafts, setStatusDrafts] = useState<Record<string, string>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [savingReportId, setSavingReportId] = useState<string | null>(null);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
   const isAdminEmail =
     user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -201,6 +229,11 @@ export default function AdminPanelPage() {
           dashboard.overview.totalCompletedPayments,
         icon: CreditCard,
       },
+      {
+        label: 'Open Tasks',
+        value: dashboard.overview.totalOpenTasks,
+        icon: ClipboardList,
+      },
     ];
   }, [dashboard]);
 
@@ -227,6 +260,29 @@ export default function AdminPanelPage() {
       );
     } finally {
       setSavingReportId(null);
+    }
+  };
+
+  const updateTaskStatus = async (taskId: string, currentStatus: string) => {
+    setSavingTaskId(taskId);
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId,
+          status: taskStatusDrafts[taskId] || currentStatus,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update task.');
+      }
+      await loadDashboard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update task.');
+    } finally {
+      setSavingTaskId(null);
     }
   };
 
@@ -298,6 +354,7 @@ export default function AdminPanelPage() {
             <TabsTrigger value="reports">Credit Reports</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
           </TabsList>
@@ -541,6 +598,120 @@ export default function AdminPanelPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="tasks">
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin Task Queue</CardTitle>
+                <CardDescription>
+                  Follow-up work for failed analyses, paid customers, funding
+                  leads, report reviews, and support actions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                {dashboard.tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No admin tasks found.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Task</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Due</TableHead>
+                        <TableHead>Related</TableHead>
+                        <TableHead>Update</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboard.tasks.map((task) => (
+                        <TableRow key={task.id}>
+                          <TableCell className="min-w-[260px]">
+                            <div className="font-medium">{task.title}</div>
+                            {task.description && (
+                              <div className="mt-1 max-w-[360px] text-xs text-muted-foreground">
+                                {task.description}
+                              </div>
+                            )}
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {task.task_type}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={priorityVariant(task.priority)}>
+                              {task.priority}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariant(task.status)}>
+                              {task.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{task.user_email || 'Unassigned'}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {formatDate(task.due_at)}
+                          </TableCell>
+                          <TableCell>
+                            {task.entity_type === 'credit_report' && task.entity_id ? (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={`/admin-panel/reports/${task.entity_id}`}>
+                                  Open
+                                </Link>
+                              </Button>
+                            ) : task.user_email || task.entity_type ? (
+                              <span className="text-sm text-muted-foreground">
+                                {task.entity_type || task.user_email}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">None</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="min-w-[200px]">
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={taskStatusDrafts[task.id] || task.status}
+                                onValueChange={(value) =>
+                                  setTaskStatusDrafts((current) => ({
+                                    ...current,
+                                    [task.id]: value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {taskStatuses.map((status) => (
+                                    <SelectItem key={status} value={status}>
+                                      {status}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                onClick={() => updateTaskStatus(task.id, task.status)}
+                                disabled={savingTaskId === task.id}
+                              >
+                                {savingTaskId === task.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  'Save'
+                                )}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="activity">

@@ -10,6 +10,25 @@
 
 ## 2026-04-26 Operator Skills Expansion
 
+## 2026-04-26 Admin Task Queue Upgrade
+
+## Files Changed
+
+- `db/migrations/022-create-admin-tasks.sql`
+- `app/api/admin/tasks/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+
+## Features Added
+
+- Added persistent `admin_tasks` table with RLS.
+- Added protected admin task API for list/create/update.
+- Added admin dashboard Tasks tab.
+- Added open task metric.
+- Added task status updates from the dashboard.
+- Seeded a high-priority restored-report backlog task for imported reports still in `uploaded`.
+
 ## Files Changed
 
 - `.agents/skills/vestblock/production-launch-verification.md`

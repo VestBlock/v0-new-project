@@ -40,7 +40,7 @@ export async function GET() {
 
   const supabase = createAdminClient();
 
-  const [users, reports, jobs, letters, payments, emailEvents, adminActivity, leads] =
+  const [users, reports, jobs, letters, payments, emailEvents, adminActivity, leads, tasks] =
     await Promise.all([
       safeRows<any>(
         supabase
@@ -111,6 +111,17 @@ export async function GET() {
           .order('created_at', { ascending: false })
           .limit(100),
         'leads'
+      ),
+      safeRows<any>(
+        supabase
+          .from('admin_tasks')
+          .select(
+            'id,title,description,task_type,status,priority,assigned_to,user_id,user_email,entity_type,entity_id,due_at,completed_at,metadata_json,created_by,created_at,updated_at'
+          )
+          .order('due_at', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(100),
+        'admin_tasks'
       ),
     ]);
 
@@ -238,6 +249,18 @@ export async function GET() {
       label: `${activity.action_type} ${activity.entity_type || ''}`.trim(),
       createdAt: activity.created_at,
     })),
+    ...tasks.slice(0, 20).map((task) => ({
+      id: `task-${task.id}`,
+      type: `admin_task_${task.status}`,
+      label: `Task: ${task.title}`,
+      createdAt: task.updated_at || task.created_at,
+      href:
+        task.entity_type === 'credit_report' && task.entity_id
+          ? `/admin-panel/reports/${task.entity_id}`
+          : task.user_id
+            ? `/admin-panel/users/${task.user_id}`
+            : undefined,
+    })),
   ]
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
     .slice(0, 30);
@@ -252,6 +275,9 @@ export async function GET() {
       totalPaidUsers: users.filter((user) => Boolean(user.is_subscribed)).length,
       totalCompletedPayments: countBy(payments, 'status', 'completed'),
       totalFundingLeads: leads.length,
+      totalOpenTasks: tasks.filter((task) =>
+        ['open', 'in_progress', 'waiting'].includes(String(task.status))
+      ).length,
     },
     creditReports,
     users: userManagement,
@@ -268,6 +294,7 @@ export async function GET() {
     },
     payments,
     leads,
+    tasks,
     recentActivity,
   });
 }

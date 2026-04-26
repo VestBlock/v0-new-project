@@ -67,7 +67,7 @@ Payments exist through PayPal. Next steps:
 
 ## Admin Task Queue Automation
 
-Use `admin_activity` as the first task queue source.
+Use `admin_activity` as the event stream and `admin_tasks` as the durable task queue.
 
 Future task types:
 
@@ -77,6 +77,13 @@ Future task types:
 - Review report marked `needs_review`.
 - Check failed email.
 - Contact users whose uploads have no completed analysis.
+
+Implemented task queue foundation:
+
+- `admin_tasks` table with status, priority, due date, assignment, user, and related entity fields.
+- Protected `/api/admin/tasks` API for listing, creating, and updating tasks.
+- `/admin-panel` Tasks tab for status updates.
+- Initial restored-report backlog task for imported credit reports still in `uploaded`.
 
 ## Operator Skills Added
 
