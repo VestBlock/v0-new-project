@@ -1,0 +1,35 @@
+# Revenue Operations Operator
+
+Use this skill when improving VestBlock pricing, checkout, paid customer tracking, upgrade prompts, billing visibility, or revenue follow-up.
+
+## Revenue Surfaces
+
+- PayPal order creation: `/api/create-order`
+- PayPal capture: `/api/capture-order`
+- Webhook route: `/api/paypal-webhook`
+- User subscription fields: `user_profiles.is_subscribed`, `paypal_order_id`
+- Admin visibility: `/admin-panel` payments and paid users
+
+## Operating Rules
+
+- Never log PayPal secrets or full payment payloads.
+- Store enough payment metadata to reconcile customers without storing sensitive card data.
+- Paid-user status should be visible to admins and reflected in user access.
+- Payment completion should trigger `sendNewPaidCustomerAlert()` when configured.
+- Failed payment or abandoned checkout automation should avoid repeated emails in a short window.
+
+## Useful Improvements
+
+- Add a durable `payments` row for every successful capture.
+- Add `payment_completed` to `admin_activity`.
+- Add admin filters for paid users and recent payments.
+- Add onboarding email after successful upgrade.
+- Add payment status badge in user detail pages.
+
+## QA Checklist
+
+- Checkout button creates PayPal order.
+- Capture endpoint updates subscription state.
+- Admin dashboard paid-user count changes after capture.
+- User sees paid tools after refresh.
+- Admin alert fires without breaking checkout if email fails.

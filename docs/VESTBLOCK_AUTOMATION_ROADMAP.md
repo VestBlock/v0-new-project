@@ -77,3 +77,27 @@ Future task types:
 - Review report marked `needs_review`.
 - Check failed email.
 - Contact users whose uploads have no completed analysis.
+
+## Operator Skills Added
+
+Future Codex sessions should use `.agents/skills/vestblock/` as the operating manual for VestBlock.
+
+Current skill groups:
+
+- Credit repair workflow.
+- Admin dashboard operations.
+- Email alert automation.
+- AEO content automation.
+- Funding lead automation.
+- User lifecycle automation.
+- Compliance-safe credit content.
+- Production launch verification.
+- Vercel/Supabase release operations.
+- Revenue operations.
+- Analytics and conversion operations.
+- Support and retention operations.
+- Security/privacy audits.
+- Credit repair QA.
+- Partner offer operations.
+
+These skills should guide future work before adding new features, changing env vars, moving domains, or touching private customer data.

@@ -8,6 +8,31 @@
 
 ## 2026-04-26 Production Hardening Pass
 
+## 2026-04-26 Operator Skills Expansion
+
+## Files Changed
+
+- `.agents/skills/vestblock/production-launch-verification.md`
+- `.agents/skills/vestblock/vercel-supabase-release-operator.md`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `.agents/skills/vestblock/analytics-conversion-operator.md`
+- `.agents/skills/vestblock/support-retention-operator.md`
+- `.agents/skills/vestblock/security-privacy-audit.md`
+- `.agents/skills/vestblock/credit-repair-qa-operator.md`
+- `.agents/skills/vestblock/partner-offer-operator.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+
+## Features Added
+
+- Added launch verification skill for deploys, domains, env vars, and smoke testing.
+- Added Vercel/Supabase release skill for safe production env and domain work.
+- Added revenue operations skill for paid users, PayPal, upgrades, and checkout follow-up.
+- Added analytics/conversion skill for privacy-safe funnel events.
+- Added support/retention skill for admin follow-up and lifecycle tasks.
+- Added security/privacy audit skill for RLS, storage, logs, and debug route reviews.
+- Added credit repair QA skill for upload, analysis, letters, and admin workflows.
+- Added partner offer skill for funding, referral, business credit, and lead operations.
+
 ## Files Changed
 
 - `middleware.ts`
