@@ -70,6 +70,7 @@ type AdminDashboard = {
   }>;
   users: Array<{
     id: string;
+    profileId?: string;
     email?: string | null;
     fullName?: string | null;
     role: string;
@@ -203,7 +204,7 @@ export default function AdminPanelPage() {
     ];
   }, [dashboard]);
 
-  const updateReportStatus = async (reportId: string) => {
+  const updateReportStatus = async (reportId: string, currentStatus: string) => {
     setSavingReportId(reportId);
     try {
       const response = await fetch('/api/admin/credit-reports/status', {
@@ -211,7 +212,7 @@ export default function AdminPanelPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId,
-          status: statusDrafts[reportId],
+          status: statusDrafts[reportId] || currentStatus,
           adminNotes: noteDrafts[reportId],
         }),
       });
@@ -389,7 +390,9 @@ export default function AdminPanelPage() {
                           />
                           <Button
                             size="sm"
-                            onClick={() => updateReportStatus(report.id)}
+                            onClick={() =>
+                              updateReportStatus(report.id, report.status)
+                            }
                             disabled={savingReportId === report.id}
                           >
                             {savingReportId === report.id ? (
@@ -431,6 +434,7 @@ export default function AdminPanelPage() {
                       <TableHead>Analyses</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Last Activity</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -450,6 +454,13 @@ export default function AdminPanelPage() {
                         <TableCell>{profile.analyses}</TableCell>
                         <TableCell>{formatDate(profile.createdAt)}</TableCell>
                         <TableCell>{formatDate(profile.lastActivity)}</TableCell>
+                        <TableCell>
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/admin-panel/users/${profile.id}`}>
+                              Open
+                            </Link>
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

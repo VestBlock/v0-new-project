@@ -161,7 +161,9 @@ export default function GrantsPage() {
   const [savingProfile, setSavingProfile] = React.useState(false);
   const [autoSave, setAutoSave] = React.useState(true);
   const [profileLoaded, setProfileLoaded] = React.useState(false);
-  const [isAdmin, setIsAdmin] = React.useState(false);
+  const isAdmin =
+    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
 
   const [answers, setAnswers] = React.useState<Answers>({
     state: 'GA',
@@ -180,6 +182,13 @@ export default function GrantsPage() {
     if (authLoading) return;
     if (!isAuthenticated) router.push('/login?redirect=/tools/grants');
   }, [authLoading, isAuthenticated, router]);
+
+  React.useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
+    if (!isProMember) {
+      router.push('/credit-upload');
+    }
+  }, [authLoading, isAuthenticated, isProMember, router]);
 
   React.useEffect(() => {
     if (!user || profileLoaded) return;
@@ -280,21 +289,7 @@ export default function GrantsPage() {
     }
   }
 
-  React.useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
-    }
-  }, [user]);
-
-  const isProMember = userProfile?.is_subscribed || isAdmin;
-
-  if (!isProMember) {
-    router.push('/credit-upload');
-    // redirect('/dashboard');
-  }
-
-  if (authLoading || !isAuthenticated) {
+  if (authLoading || !isAuthenticated || !isProMember) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin" />

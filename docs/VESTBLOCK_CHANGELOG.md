@@ -2,6 +2,39 @@
 
 ## 2026-04-26 Operations Upgrade
 
+## 2026-04-26 Admin Detail And Reliability Pass
+
+## Files Changed
+
+- `app/admin-panel/page.tsx`
+- `app/admin-panel/reports/[reportId]/page.tsx`
+- `app/admin-panel/users/[userId]/page.tsx`
+- `app/api/admin/dashboard/route.ts`
+- `app/api/admin/reports/[reportId]/route.ts`
+- `app/api/admin/users/[userId]/route.ts`
+- `app/api/biz-credit/route.ts`
+- `app/api/biz-credit/[id]/regenerate/route.ts`
+- `app/tools/business-credit/page.tsx`
+- `app/tools/grants/page.tsx`
+- `app/tools/my-dispute-letters/page.tsx`
+
+## Features Added
+
+- Admin credit report detail page with report metadata, signed file access, analysis data, generated letters, email events, and manual review notes.
+- Admin user detail page with profile, subscription, reports, payments, leads, and email activity.
+- Admin dashboard links now open internal admin detail views.
+- User management table now includes a direct user detail action.
+- Admin report status saves keep the current status when only notes are changed.
+- Admin detail APIs use safe query fallbacks so missing emails or file paths do not create invalid Supabase filters.
+- Pro-only tools now redirect from client effects instead of triggering navigation during prerender.
+- Business credit JSON catalog imports now use the default JSON import pattern expected by Next.js.
+
+## Verification
+
+- `npm run build` passed with local dummy env values.
+- The previous `location is not defined` prerender errors on pro-only tools are resolved.
+- The previous JSON named-export build warning for the business credit catalog is resolved.
+
 ## Files Changed
 
 - `app/admin-panel/page.tsx`
@@ -101,7 +134,6 @@ It adds:
 ## Next Recommended Tasks
 
 - Regenerate Supabase types.
-- Add admin detail pages.
 - Gate debug routes.
 - Add cron for stuck report statuses.
 - Add abandoned checkout and upload reminder automations.

@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { BizAnswers } from '@/lib/bizcredit/match';
 import { buildRoadmap } from '@/lib/bizcredit/match';
 import { roadmapHtml } from '@/lib/bizcredit/letter';
-import { catalog } from '@/data/biz_credit_catalog.json';
+import catalog from '@/data/biz_credit_catalog.json';
 // lazy pdf (same renderer you already use)
 const toPdf = async (html: string) => {
   try {

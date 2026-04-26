@@ -106,6 +106,8 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Alerts / Notifications
 - Recent activity
 - Payments and funding leads
+- Individual report detail pages at `/admin-panel/reports/[reportId]`
+- Individual user detail pages at `/admin-panel/users/[userId]`
 
 ## Email Integration
 
@@ -136,7 +138,6 @@ Risk fixed: `create-order` was logging PayPal credential values. This has been r
 
 - Regenerate `types/supabase.ts` from the live Supabase schema.
 - Consolidate credit analysis into the central workflow module.
-- Add admin detail pages for individual reports/users.
 - Gate debug routes behind admin access.
 - Normalize env var names across server Supabase helpers.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.

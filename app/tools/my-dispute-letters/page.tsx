@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { redirect, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,9 @@ export default function MyDisputeLettersPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [isLoadingLetters, setIsLoadingLetters] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin =
+    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
 
   useEffect(() => {
     if (authLoading) return;
@@ -95,11 +97,11 @@ export default function MyDisputeLettersPage() {
   }, [user, authLoading, isAuthenticated, router, supabase, toast]);
 
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
+    if (authLoading || !isAuthenticated) return;
+    if (!isProMember) {
+      router.push('/credit-upload');
     }
-  }, [user]);
+  }, [authLoading, isAuthenticated, isProMember, router]);
 
   async function getSignedPdfUrl(
     letterId: string,
@@ -195,15 +197,7 @@ export default function MyDisputeLettersPage() {
     }
   }
 
-  const isProMember = userProfile?.is_subscribed || isAdmin;
-
-  if (!isProMember) {
-    router.push('/credit-upload');
-
-    // redirect('/dashboard');
-  }
-
-  if (authLoading || (isAuthenticated && isLoadingLetters)) {
+  if (authLoading || !isAuthenticated || !isProMember || isLoadingLetters) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* <Navigation /> */}

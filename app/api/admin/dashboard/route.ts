@@ -156,7 +156,7 @@ export async function GET() {
         ),
       errorMessage: report.error_message,
       adminNotes: report.admin_notes,
-      analysisUrl: `/credit-dashboard/${report.id}`,
+      analysisUrl: `/admin-panel/reports/${report.id}`,
     };
   });
 

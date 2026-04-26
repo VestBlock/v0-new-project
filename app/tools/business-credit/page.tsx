@@ -110,7 +110,9 @@ export default function BusinessCreditPage() {
   // history
   const [history, setHistory] = useState<RoadmapRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin =
+    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
 
   /* -------- Auth gate & initial load -------- */
 
@@ -146,18 +148,11 @@ export default function BusinessCreditPage() {
   }, [authLoading, isAuthenticated, router, supabase, user]);
 
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
+    if (authLoading || !isAuthenticated) return;
+    if (!isProMember) {
+      router.push('/credit-upload');
     }
-  }, [user]);
-
-  const isProMember = userProfile?.is_subscribed || isAdmin;
-
-  if (!isProMember) {
-    router.push('/credit-upload');
-    // redirect('/dashboard');
-  }
+  }, [authLoading, isAuthenticated, isProMember, router]);
 
   async function fetchSavedAnswers(supabase: any, userId: string) {
     const { data } = await supabase
@@ -337,6 +332,14 @@ export default function BusinessCreditPage() {
   };
 
   /* -------- UI -------- */
+
+  if (authLoading || !isAuthenticated || !isProMember) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-cyan-500" />
+      </main>
+    );
+  }
 
   const StepsList = ({
     title,

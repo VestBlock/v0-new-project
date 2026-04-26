@@ -1,4 +1,4 @@
-import { catalog } from '@/data/biz_credit_catalog.json';
+import catalog from '@/data/biz_credit_catalog.json';
 import { htmlToPdfBuffer } from '@/lib/letters/render';
 import { Roadmap } from '@/lib/bizcredit/match';
 import { NextRequest, NextResponse } from 'next/server';
