@@ -1,5 +1,7 @@
 import { testOpenAIConnection } from "@/lib/openai-service"
 
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   try {
     console.log("[Test OpenAI API] Testing OpenAI connection")

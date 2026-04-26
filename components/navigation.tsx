@@ -30,7 +30,6 @@ import React from 'react';
 
 export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
-  console.debug('🚀 ~ Navigation ~ user:', userProfile);
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = React.useState(false);
 

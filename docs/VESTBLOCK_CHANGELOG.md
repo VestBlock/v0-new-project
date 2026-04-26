@@ -6,6 +6,24 @@
 
 ## 2026-04-26 Supabase Restore And Storage Hardening
 
+## 2026-04-26 Production Hardening Pass
+
+## Files Changed
+
+- `middleware.ts`
+- `app/api/test-openai/route.ts`
+- `app/api/test-openai-simple/route.ts`
+- `app/api/test-streaming/route.ts`
+- `app/credit-upload/page.tsx`
+- `components/navigation.tsx`
+
+## Features Added
+
+- Protected diagnostic pages and setup/test APIs behind authenticated admin access.
+- Prevented OpenAI test APIs from running during static build collection.
+- Removed noisy navigation and credit upload debug logs from production-rendered pages.
+- Updated Vercel Production Postgres env vars to the new VestBlock Supabase database.
+
 ## Files Changed
 
 - `db/migrations/021-harden-storage-buckets.sql`

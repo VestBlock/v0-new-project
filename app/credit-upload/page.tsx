@@ -49,8 +49,6 @@ function CreditUploadContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user, userProfile, isAuthenticated, fetchUserProfile } = useAuth();
-  console.log('🚀 ~ CreditUploadPage ~ userProfile:', userProfile);
-  console.log('🚀 ~ CreditUploadPage ~ user:', user);
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get('token');
@@ -80,7 +78,6 @@ function CreditUploadContent() {
   const handleCheckout = useCallback(async () => {
     setLoading(true);
     try {
-      console.debug('🚀 ~ DashboardPage ~ user:', user?.id);
       const res = await fetch('/api/create-order', {
         method: 'POST',
         body: JSON.stringify({
@@ -90,7 +87,6 @@ function CreditUploadContent() {
           'Content-Type': 'application/json',
         },
       });
-      console.debug('🚀 ~ PricingSection ~ res:', res);
       if (!res.ok) {
         const errText = await res.text();
         console.error('Create-order failed:', errText);
@@ -98,7 +94,6 @@ function CreditUploadContent() {
       }
 
       const json = await res.json();
-      console.log('PayPal create response:', json);
 
       if (!json.success) {
         console.error('PayPal API error:', json.error);
@@ -112,7 +107,6 @@ function CreditUploadContent() {
       }
 
       const approveLink = links.find((l: any) => l.rel === 'approve')?.href;
-      console.log('Approve link:', approveLink);
       if (!approveLink) {
         throw new Error('PayPal approval link not found.');
       }
