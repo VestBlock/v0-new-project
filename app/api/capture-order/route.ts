@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
 import { generatePaypalAccessToken } from '../create-order/route';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createAdminClient } from '@/lib/supabase/admin';
+import { sendNewPaidCustomerAlert } from '@/lib/email/sendEmail';
+import { logEvent } from '@/lib/system/logEvent';
 
 export async function POST(req: Request) {
   const { orderID, userId } = await req.json();
@@ -25,15 +22,45 @@ export async function POST(req: Request) {
     { headers: { Authorization: `Bearer ${token?.access_token}` } }
   );
 
-  console.debug('🚀 ~ POST ~ capture:', capture);
   // 2) Update Supabase immediately
   const status = capture.purchase_units[0].payments.captures[0].status;
-  console.debug('🚀 ~ POST ~ status:', status);
   if (status === 'COMPLETED') {
+    const supabase = createAdminClient();
     await supabase
       .from('user_profiles')
       .update({ is_subscribed: true })
       .eq('id', userId);
+
+    const amount =
+      capture.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '75';
+    const transactionId =
+      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+
+    await supabase.from('payments').insert({
+      user_id: userId,
+      amount,
+      status: 'completed',
+      payment_method: 'paypal',
+      paypal_transaction_id: transactionId,
+    });
+
+    await Promise.all([
+      sendNewPaidCustomerAlert({
+        userId,
+        userEmail: authUser?.user?.email,
+        amount,
+        provider: 'PayPal',
+        transactionId,
+      }),
+      logEvent({
+        eventType: 'payment_completed',
+        actorUserId: userId,
+        entityType: 'payment',
+        entityId: transactionId,
+        metadata: { provider: 'PayPal', amount },
+      }),
+    ]);
   }
 
   return NextResponse.json({ success: true, capture });

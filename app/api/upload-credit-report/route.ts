@@ -3,10 +3,20 @@ export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
 
 import type { NegativeItem } from '@/lib/extract-negative-items';
-import UploadNotificationEmail from '@/components/email-template';
+import {
+  attachAnalysisResult,
+  attachDisputeLetters,
+  attachExtractedText,
+  markCreditReportFailed,
+  updateCreditReportStatus,
+} from '@/lib/workflows/creditRepairWorkflow';
+import {
+  sendAdminAlertEmail,
+  sendUserCreditReportReceivedEmail,
+} from '@/lib/email/sendEmail';
+import { logEvent } from '@/lib/system/logEvent';
 
 // Server-side Supabase client with service role key (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -19,8 +29,6 @@ const supabaseAdmin = createClient(
     },
   }
 );
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 const BUREAUS = ['Experian', 'Equifax', 'TransUnion'] as const;
 type Bureau = (typeof BUREAUS)[number];
@@ -171,30 +179,75 @@ export async function POST(request: NextRequest) {
     );
     console.log('Full upload data:', uploadData);
 
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const userEmail = email || authUser?.user?.email || null;
+    let reportId: string | null = null;
+
     if (uploadData) {
-      // Insert a row in credit_reports
-      await supabaseAdmin.from('credit_reports').insert({
-        user_id: userId,
-        file_name: fileName,
-        file_path: uploadData.path,
-        // uploaded_at defaults automatically
-      });
+      const { data: reportRecord, error: reportInsertError } =
+        await supabaseAdmin
+          .from('credit_reports')
+          .insert({
+            user_id: userId,
+            user_email: userEmail,
+            file_name: fileName,
+            file_path: uploadData.path,
+            status: 'uploaded',
+            email_alert_sent: false,
+          })
+          .select('id')
+          .single();
+
+      if (reportInsertError) {
+        console.warn(
+          'Extended credit_reports insert failed, retrying with legacy columns:',
+          reportInsertError.message
+        );
+        const { data: legacyReport, error: legacyInsertError } =
+          await supabaseAdmin
+            .from('credit_reports')
+            .insert({
+              user_id: userId,
+              file_name: fileName,
+              file_path: uploadData.path,
+            })
+            .select('id')
+            .single();
+
+        if (legacyInsertError) {
+          console.error('Credit report record insert failed:', legacyInsertError);
+        } else {
+          reportId = legacyReport?.id ?? null;
+        }
+      } else {
+        reportId = reportRecord?.id ?? null;
+      }
     }
 
-    const { data, error: ResendError } = await resend.emails.send({
-      from: process.env.RESEND_EMAIL!,
-      to: email,
-      subject: 'You got a new credit report!',
-      react: UploadNotificationEmail({
-        firstName: username || '',
-        fileName: fileName,
-        adminPanelUrl: 'https://www.vestblock.io',
+    await Promise.all([
+      sendAdminAlertEmail({
+        userEmail,
+        fileName: file.name,
+        uploadDate: new Date().toISOString(),
+        userId,
+        reportId,
       }),
+      sendUserCreditReportReceivedEmail({
+        userEmail,
+        userId,
+        fileName: file.name,
+      }),
+    ]);
+    await logEvent({
+      eventType: 'credit_report_uploaded',
+      actorUserId: userId,
+      entityType: 'credit_report',
+      entityId: reportId,
+      metadata: { fileName: file.name, filePath: uploadData.path, userEmail },
     });
-    console.debug('🚀 ~ POST ~ data:', data, ResendError);
 
-    if (ResendError) {
-      return Response.json({ ResendError });
+    if (reportId) {
+      await updateCreditReportStatus(reportId, 'extracting_text');
     }
 
     try {
@@ -206,6 +259,11 @@ export async function POST(request: NextRequest) {
           : await ocrImageToText(fileBuffer); // TODO: add OCR fallback for images if/when needed
 
       console.log('🚀 ~ POST ~ reportText:', reportText);
+      if (reportId && reportText) {
+        await attachExtractedText(reportId, reportText);
+        await updateCreditReportStatus(reportId, 'analyzing');
+      }
+
       // 2) extract negative items via OpenAI
       const items = reportText
         ? await extractNegativeItemsFromText(reportText)
@@ -243,6 +301,7 @@ export async function POST(request: NextRequest) {
       const dateISO = new Date().toISOString().slice(0, 10);
 
       // 3) create letters (HTML + PDF) and store rows
+      let generatedLetters = 0;
       for (const key of Object.keys(grouped)) {
         const [bureau, letterType] = key.split('::') as [Bureau, string];
         const bucket = grouped[key];
@@ -295,9 +354,30 @@ export async function POST(request: NextRequest) {
           });
 
         if (insErr) throw insErr;
+        generatedLetters += 1;
+      }
+
+      if (reportId) {
+        await attachDisputeLetters(reportId, {
+          generated_count: generatedLetters,
+          negative_item_count: items.length,
+          generated_at: new Date().toISOString(),
+        });
+        await attachAnalysisResult(
+          reportId,
+          {
+            negative_items: items,
+            grouped_letters: Object.keys(grouped),
+            generated_letter_count: generatedLetters,
+          },
+          { userId, userEmail }
+        );
       }
     } catch (letterErr) {
-      throw letterErr;
+      console.error('Credit analysis/dispute generation failed:', letterErr);
+      if (reportId) {
+        await markCreditReportFailed(reportId, letterErr, { userId, userEmail });
+      }
     }
 
     // NO DATABASE OPERATIONS - Just file upload to storage

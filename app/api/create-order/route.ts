@@ -1,15 +1,11 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-// import { getSupabaseClient } from '@/lib/supabase/client';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const generatePaypalAccessToken = async () => {
-  console.log(
-    '🚀 ~ generatePaypalAccessToken ~ keys:',
-    process.env.PAYPAL_CLIENT_ID,
-    process.env.PAYPAL_CLIENT_SECRET
-  );
+  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+    throw new Error('PayPal credentials are not configured.');
+  }
 
   const response = await axios({
     url: 'https://api-m.sandbox.paypal.com/v1/oauth2/token',
@@ -24,30 +20,17 @@ export const generatePaypalAccessToken = async () => {
     },
   });
 
-  console.log('🚀 ~ generatePaypalAccessToken ~ response:', response);
   return response.data;
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
-
-export async function POST(req: Request, res: NextApiResponse) {
+export async function POST(req: Request) {
   const { userId } = await req.json();
-  // const supabase = getSupabaseClient();
-  console.debug('🚀 ~ POST ~ userId:', userId);
-  // console.debug('🚀 ~ handler ~ req:', req);
-  //   if (req.method !== 'POST') return res.status(405).end();
 
   const getData = await generatePaypalAccessToken();
-  // console.debug('🚀 ~ POST ~ getData:', getData);
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.WEB_HOST_URL ||
+    'https://www.vestblock.io/credit-upload';
 
   const orderData = {
     intent: 'CAPTURE',
@@ -62,8 +45,8 @@ export async function POST(req: Request, res: NextApiResponse) {
     application_context: {
       user_action: 'PAY_NOW',
       brand_name: 'VestBlock',
-      return_url: process.env.WEB_HOST_URL,
-      cancel_url: process.env.WEB_HOST_URL,
+      return_url: siteUrl,
+      cancel_url: siteUrl,
     },
   };
 
@@ -77,27 +60,21 @@ export async function POST(req: Request, res: NextApiResponse) {
     },
   });
 
-  console.debug('🚀 ~ POST ~ response:', response?.data);
-  console.debug('🚀 ~ POST ~ response?.data:', response?.data?.id);
+  if (userId) {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ paypal_order_id: response?.data?.id })
+      .eq('id', userId);
 
-  // const ress = await supabase
-  //   .from('user_profiles')
-  //   .update({ paypal_order_id: response?.data?.id })
-  //   .eq('id', userId);
-  const { data: updatedData, error } = await supabase
-    .from('user_profiles')
-    .update({ paypal_order_id: response?.data?.id })
-    .eq('id', userId)
-    .select();
-
-  console.debug('Supabase linkOrder result:', { updatedData, error });
-  // console.debug('🚀 ~ POST ~ res:', ress);
+    if (error) {
+      console.warn('Unable to link PayPal order to profile:', error.message);
+    }
+  }
 
   return NextResponse.json({
     success: true,
     data: response?.data,
     message: 'Order Id Created',
   });
-
-  // return res.status(200).json({ success: true, data: response?.data || {} });
 }
