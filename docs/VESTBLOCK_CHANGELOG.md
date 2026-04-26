@@ -4,6 +4,26 @@
 
 ## 2026-04-26 Admin Detail And Reliability Pass
 
+## 2026-04-26 Supabase Restore And Storage Hardening
+
+## Files Changed
+
+- `db/migrations/021-harden-storage-buckets.sql`
+
+## Database Work Completed
+
+- Connected to the new VestBlock Supabase project in `us-east-2`.
+- Restored the legacy cluster backup into the new project.
+- Applied `db/migrations/020-vestblock-ops-automation.sql`.
+- Confirmed restored app tables, auth users, credit reports, analysis jobs, dispute letters, roadmaps, and storage buckets.
+- Confirmed `contact@vestblock.io` exists as an admin profile and matches an auth user.
+- Set private financial storage buckets to private.
+- Added owner-scoped storage policies for credit reports and dispute letters.
+
+## Remaining Vercel Step
+
+- Replace Production `SUPABASE_SERVICE_ROLE_KEY` with the new VestBlock Supabase service-role key, then redeploy.
+
 ## Files Changed
 
 - `app/admin-panel/page.tsx`
