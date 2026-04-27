@@ -1,5 +1,37 @@
 # VestBlock Changelog
 
+## 2026-04-27 Failed Payment Automation
+
+## Files Changed
+
+- `app/api/capture-order/route.ts`
+- `app/api/paypal-webhook/route.ts`
+- `app/api/process-payment/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `lib/payments/paymentAutomation.ts`
+- `lib/admin/tasks.ts`
+- `lib/email/sendEmail.ts`
+- `lib/system/logEvent.ts`
+- `.agents/skills/vestblock/email-alert-automation.md`
+- `.agents/skills/vestblock/user-lifecycle-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added shared failed-payment automation for admin alerts, `payment_failed` activity logging, and `payment_failure` admin tasks.
+- Added admin payment failure email event `admin_payment_failed`.
+- Wrapped PayPal capture failures so unsuccessful or errored captures are visible to operators.
+- Added failed-payment handling for PayPal webhook record failures and explicit denied/voided PayPal webhook events.
+- Added failed-payment handling for the internal payment processing route when payment records cannot be written.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Payment Completion Automation
 
 ## Files Changed

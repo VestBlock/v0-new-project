@@ -296,6 +296,38 @@ export async function createPaidCustomerOnboardingTask(input: {
   });
 }
 
+export async function createPaymentFailureTask(input: {
+  paymentId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  amount?: string | number | null;
+  provider?: string | null;
+  transactionId?: string | null;
+  errorMessage?: string | null;
+  source?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Review failed payment',
+    description:
+      'A payment attempt failed or could not be recorded. Review the provider response, customer account, and checkout path before following up.',
+    taskType: 'payment_failure',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'payment',
+    entityId: input.paymentId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      amount: input.amount,
+      provider: input.provider,
+      transactionId: input.transactionId,
+      errorMessage: input.errorMessage,
+      source: input.source,
+      nextAction: 'Check payment provider status and contact customer if needed.',
+    },
+  });
+}
+
 export async function createLeadFollowupTask(input: {
   leadId: string;
   leadType?: string | null;

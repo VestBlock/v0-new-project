@@ -133,7 +133,7 @@ Required env vars:
 
 PayPal is present through `/api/create-order`, `/api/capture-order`, `/api/paypal-webhook`, and `@paypal/paypal-server-sdk`.
 
-Payment completion automation now runs through `lib/payments/paymentAutomation.ts`, creating admin alerts, paid-customer onboarding tasks, and `payment_completed` activity logs.
+Payment automation now runs through `lib/payments/paymentAutomation.ts`, creating admin alerts, paid-customer onboarding tasks, failed-payment tasks, and `payment_completed` / `payment_failed` activity logs.
 
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 

@@ -9,6 +9,7 @@ type EmailEventType =
   | 'admin_analysis_completed'
   | 'credit_analysis_failed'
   | 'new_paid_customer'
+  | 'admin_payment_failed'
   | 'admin_new_lead'
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
@@ -286,6 +287,36 @@ export async function sendNewPaidCustomerAlert(details: {
       <strong>Amount:</strong> ${escapeHtml(String(details.amount || 'Unknown'))}<br />
       <strong>Provider:</strong> ${escapeHtml(details.provider || 'PayPal')}<br />
       <strong>Transaction:</strong> ${escapeHtml(details.transactionId || 'Unknown')}</p>
+    `
+    ),
+  });
+}
+
+export async function sendPaymentFailureAlert(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  amount?: string | number | null;
+  provider?: string;
+  transactionId?: string | null;
+  source?: string | null;
+  errorMessage?: string | null;
+}) {
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'VestBlock Payment Needs Review',
+    eventType: 'admin_payment_failed',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Payment needs review',
+      `
+      <p>A payment attempt failed or could not be recorded. Review the checkout/provider status before following up.</p>
+      <p><strong>User:</strong> ${escapeHtml(details.userEmail || details.userId || 'Unknown')}<br />
+      <strong>Amount:</strong> ${escapeHtml(String(details.amount || 'Unknown'))}<br />
+      <strong>Provider:</strong> ${escapeHtml(details.provider || 'PayPal')}<br />
+      <strong>Transaction/order:</strong> ${escapeHtml(details.transactionId || 'Unknown')}<br />
+      <strong>Source:</strong> ${escapeHtml(details.source || 'Unknown')}<br />
+      <strong>Error:</strong> ${escapeHtml(details.errorMessage || 'Unknown error')}</p>
     `
     ),
   });

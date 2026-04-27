@@ -1,6 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { runPaymentCompletedAutomation } from "@/lib/payments/paymentAutomation"
+import {
+  runPaymentCompletedAutomation,
+  runPaymentFailedAutomation,
+} from "@/lib/payments/paymentAutomation"
+
+const failedPaypalEvents = new Set([
+  "PAYMENT.CAPTURE.DENIED",
+  "CHECKOUT.ORDER.VOIDED",
+])
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +25,7 @@ export async function POST(req: NextRequest) {
       const payment = event.resource
       const payerEmail = payment.payer?.email_address
       const amount = payment.amount?.value
+      const transactionId = payment.id
 
       if (payerEmail && amount === "75.00") {
         const supabase = createAdminClient()
@@ -60,13 +69,47 @@ export async function POST(req: NextRequest) {
               userEmail: userProfile.email || payerEmail,
               amount,
               provider: "PayPal",
-              transactionId: payment.id,
+              transactionId,
               source: "paypal-webhook",
               metadata: { eventId: event.id },
             })
+          } else {
+            await runPaymentFailedAutomation({
+              userId,
+              userEmail: userProfile.email || payerEmail,
+              amount,
+              provider: "PayPal",
+              transactionId,
+              source: "paypal-webhook",
+              errorMessage: paymentError?.message || "Unable to record PayPal payment.",
+              metadata: { eventId: event.id },
+            })
           }
+        } else {
+          await runPaymentFailedAutomation({
+            userEmail: payerEmail,
+            amount,
+            provider: "PayPal",
+            transactionId,
+            source: "paypal-webhook",
+            errorMessage: userError?.message || "No VestBlock user profile found for payer email.",
+            metadata: { eventId: event.id },
+          })
         }
       }
+    }
+
+    if (failedPaypalEvents.has(event.event_type)) {
+      const payment = event.resource
+      await runPaymentFailedAutomation({
+        userEmail: payment?.payer?.email_address,
+        amount: payment?.amount?.value,
+        provider: "PayPal",
+        transactionId: payment?.id || event.id,
+        source: "paypal-webhook",
+        errorMessage: `PayPal webhook event ${event.event_type}.`,
+        metadata: { eventId: event.id },
+      })
     }
 
     return NextResponse.json({ received: true })

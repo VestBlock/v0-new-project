@@ -36,6 +36,7 @@ const automationEventTypes = new Set([
   'email_sent',
   'email_failed',
   'payment_completed',
+  'payment_failed',
 ]);
 
 const lifecycleEmailTypes = new Set([

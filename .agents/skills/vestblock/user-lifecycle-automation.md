@@ -30,7 +30,7 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - On completion: results ready email.
 - On paid signup: onboarding email.
 - On payment completed: run shared payment automation, alert admin, log `payment_completed`, and create a paid-customer onboarding task.
-- On failed payment: payment support email.
+- On failed payment: run shared payment automation, alert admin, log `payment_failed`, and create a payment review task before any customer-facing follow-up.
 - After inactivity: reactivation with a checklist.
 
 ## Implemented Automation

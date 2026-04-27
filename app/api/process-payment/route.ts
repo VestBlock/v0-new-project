@@ -1,12 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { runPaymentCompletedAutomation } from "@/lib/payments/paymentAutomation"
+import {
+  runPaymentCompletedAutomation,
+  runPaymentFailedAutomation,
+} from "@/lib/payments/paymentAutomation"
 
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
+  let amount: string | number | null = null
+  let userId: string | null = null
+  let reportId: string | null = null
+
   try {
-    const { amount, userId, reportId } = await req.json()
+    const body = await req.json()
+    amount = body.amount
+    userId = body.userId
+    reportId = body.reportId
 
     if (!amount || !userId) {
       return NextResponse.json({ error: "Amount and userId are required" }, { status: 400 })
@@ -29,6 +39,15 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("Error recording payment:", error)
+      await runPaymentFailedAutomation({
+        userId,
+        amount,
+        provider: "PayPal",
+        transactionId: reportId || undefined,
+        source: "process-payment",
+        errorMessage: error.message,
+        metadata: { reportId: reportId || null },
+      })
       return NextResponse.json({ error: "Failed to record payment" }, { status: 500 })
     }
 
@@ -57,6 +76,15 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error("Payment processing error:", error)
+    await runPaymentFailedAutomation({
+      userId,
+      amount,
+      provider: "PayPal",
+      transactionId: reportId || undefined,
+      source: "process-payment",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      metadata: { reportId: reportId || null },
+    })
     return NextResponse.json(
       {
         error: "Failed to process payment",
