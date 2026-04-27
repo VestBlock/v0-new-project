@@ -5,8 +5,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server" // Adjust path if needed
 // import { get } from "@vercel/blob"; // Removed Vercel Blob import
-import { openai } from "@ai-sdk/openai" // Vercel AI SDK
-import { generateObject } from "ai" // Vercel AI SDK
+import OpenAI from "openai"
 import { z } from "zod"
 // Import your Zod schemas (AiResponseSchema, etc.) and extractTextFromServerFile
 // For brevity, assuming they are defined elsewhere and imported.
@@ -46,6 +45,11 @@ const SideHustleRecommendationSchema = z.object({
 })
 const DetailedAnalysisSchema = z.object({ roadmap: RoadmapSchema.nullable() /* ... other fields ... */ })
 const AiResponseSchema = z.object({ summary: z.string().min(1), detailedAnalysis: DetailedAnalysisSchema /* ... */ })
+type BackgroundAiResponse = z.infer<typeof AiResponseSchema> & {
+  creditCardRecommendations?: unknown
+  sideHustleRecommendations?: unknown
+  letterContent?: string
+}
 // --- End Zod Schemas ---
 async function extractTextFromServerFile(file: File): Promise<{ text: string; metadata: any }> {
   /* ... your impl ... */ return { text: "", metadata: {} }
@@ -53,6 +57,10 @@ async function extractTextFromServerFile(file: File): Promise<{ text: string; me
 
 export const runtime = "nodejs" // Background functions are typically Node.js
 export const maxDuration = 60 // Adjusted for Hobby plan limit
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 // This POST handler would be invoked by your trigger (cron, webhook, or programmatically)
 // It could also fetch a batch of PENDING jobs if triggered by cron.
@@ -172,16 +180,29 @@ export async function POST(req: NextRequest) {
     const currentAiSchema = AiResponseSchema
 
     console.log(`[BG Analyzer] Calling OpenAI for job ${jobId}`)
-    const aiResult = await generateObject({
-      model: openai("gpt-4o"),
-      schema: currentAiSchema,
-      prompt: userPromptForObjectGeneration,
-      system: systemPromptContent,
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: `${systemPromptContent}\n\nReturn only valid JSON.` },
+        { role: "user", content: userPromptForObjectGeneration },
+      ],
       temperature: 0.3,
-      maxTokens: 4000,
+      max_tokens: 4000,
     })
 
-    const aiData = aiResult.object
+    const rawAiContent = completion.choices[0]?.message?.content
+    if (!rawAiContent) {
+      throw new Error("OpenAI returned an empty analysis response.")
+    }
+
+    const parsedJson = JSON.parse(rawAiContent)
+    const parsedAiData = currentAiSchema.passthrough().safeParse(parsedJson)
+    if (!parsedAiData.success) {
+      throw new Error(`OpenAI analysis response did not match the expected shape: ${parsedAiData.error.message}`)
+    }
+
+    const aiData = parsedAiData.data as BackgroundAiResponse
     console.log(`[BG Analyzer] AI generation successful for job ${jobId}`)
 
     // --- 4. Store Results & Update Job to COMPLETED ---
@@ -194,7 +215,7 @@ export async function POST(req: NextRequest) {
         credit_card_recommendations_json: aiData.creditCardRecommendations,
         side_hustle_recommendations_json: aiData.sideHustleRecommendations,
         letter_content_text: aiData.letterContent,
-        raw_ai_response_json: process.env.NODE_ENV === "development" ? aiResult : undefined,
+        raw_ai_response_json: process.env.NODE_ENV === "development" ? { raw: rawAiContent } : undefined,
       })
       .select("id")
       .single()

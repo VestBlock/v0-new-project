@@ -1,5 +1,29 @@
 # VestBlock Changelog
 
+## 2026-04-27 AI SDK Security Cleanup
+
+## Files Changed
+
+- `app/api/chat-with-analysis/route.ts`
+- `app/api/background-analyzer/route.ts`
+- `lib/openai-service.ts`
+- `package.json`
+- `pnpm-lock.yaml`
+- `package-lock.json`
+
+## Features Added
+
+- Removed the direct vulnerable `ai` package dependency after replacing its two server-route usages with the existing OpenAI SDK pattern.
+- Removed the now-unused `@ai-sdk/openai` server provider package.
+- Kept `@ai-sdk/react` pinned for existing client chat hook compatibility.
+- Converted `/api/chat-with-analysis` to stream text from the OpenAI SDK directly.
+- Converted `/api/background-analyzer` to use OpenAI JSON mode with Zod validation instead of `generateObject`.
+- Declared pnpm as the project package manager and removed `package-lock.json` so Vercel/GitHub/local installs use one lockfile source of truth.
+
+## Verification
+
+- `pnpm audit` reports zero vulnerabilities.
+
 ## 2026-04-27 Runtime Framework Upgrade
 
 ## Files Changed
@@ -45,8 +69,7 @@
 
 ## Known Remaining Security Work
 
-- `pnpm audit` still reports the direct `ai@4.3.19` low-severity advisory. Upgrading it requires a major Vercel AI SDK route migration because existing chat routes use older `streamText` response helpers.
-- `npm audit` still reports the Next nested PostCSS advisory from `package-lock.json`; production Vercel builds use `pnpm-lock.yaml`, where Next resolves PostCSS `8.5.12`.
+- Superseded by the AI SDK security cleanup above. The production pnpm audit is clean.
 
 ## 2026-04-27 Dependency Security Patch
 
