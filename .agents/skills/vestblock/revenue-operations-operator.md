@@ -17,6 +17,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Paid-user status should be visible to admins and reflected in user access.
 - Payment completion should trigger `sendNewPaidCustomerAlert()` when configured.
 - Failed payment or abandoned checkout automation should avoid repeated emails in a short window.
+- PayPal order creation should log `checkout_started`; lifecycle cron should create `abandoned_checkout` tasks for stale unpaid orders.
 
 ## Useful Improvements
 
@@ -25,6 +26,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Add admin filters for paid users and recent payments.
 - Add onboarding email after successful upgrade.
 - Add payment status badge in user detail pages.
+- Tune abandoned checkout timing and follow-up copy once real conversion data exists.
 
 ## QA Checklist
 

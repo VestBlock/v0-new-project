@@ -35,14 +35,17 @@ const automationEventTypes = new Set([
   'lead_followup_needed',
   'email_sent',
   'email_failed',
+  'checkout_started',
   'payment_completed',
   'payment_failed',
+  'abandoned_checkout',
 ]);
 
 const lifecycleEmailTypes = new Set([
   'user_upload_reminder',
   'user_paid_upload_reminder',
   'admin_lead_followup',
+  'admin_abandoned_checkout',
 ]);
 
 export async function GET() {

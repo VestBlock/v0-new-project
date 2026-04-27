@@ -328,6 +328,32 @@ export async function createPaymentFailureTask(input: {
   });
 }
 
+export async function createAbandonedCheckoutTask(input: {
+  checkoutId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  ageHours?: number | null;
+  source?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Follow up on abandoned checkout',
+    description:
+      'A PayPal order was created but the user has not completed payment. Review the account and decide whether a helpful follow-up is appropriate.',
+    taskType: 'abandoned_checkout',
+    priority: 'normal',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'checkout',
+    entityId: input.checkoutId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      ageHours: input.ageHours,
+      source: input.source,
+      nextAction: 'Review checkout status and follow up if the user still needs help.',
+    },
+  });
+}
+
 export async function createLeadFollowupTask(input: {
   leadId: string;
   leadType?: string | null;

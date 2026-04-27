@@ -10,6 +10,7 @@ type EmailEventType =
   | 'credit_analysis_failed'
   | 'new_paid_customer'
   | 'admin_payment_failed'
+  | 'admin_abandoned_checkout'
   | 'admin_new_lead'
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
@@ -317,6 +318,32 @@ export async function sendPaymentFailureAlert(details: {
       <strong>Transaction/order:</strong> ${escapeHtml(details.transactionId || 'Unknown')}<br />
       <strong>Source:</strong> ${escapeHtml(details.source || 'Unknown')}<br />
       <strong>Error:</strong> ${escapeHtml(details.errorMessage || 'Unknown error')}</p>
+    `
+    ),
+  });
+}
+
+export async function sendAdminAbandonedCheckoutEmail(details: {
+  checkoutId: string;
+  userEmail?: string | null;
+  userId?: string | null;
+  ageHours?: number | null;
+}) {
+  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'VestBlock Checkout Needs Follow-Up',
+    eventType: 'admin_abandoned_checkout',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Checkout follow-up needed',
+      `
+      <p>A PayPal order was created but no completed payment has been recorded yet.</p>
+      <p><strong>User:</strong> ${escapeHtml(details.userEmail || details.userId || 'Unknown')}<br />
+      <strong>Checkout/order ID:</strong> ${escapeHtml(details.checkoutId)}<br />
+      <strong>Age:</strong> ${escapeHtml(String(details.ageHours || 'Unknown'))} hours</p>
+      <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
     `
     ),
   });

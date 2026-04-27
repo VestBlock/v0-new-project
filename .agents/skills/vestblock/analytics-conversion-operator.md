@@ -20,6 +20,7 @@ Use this skill when adding analytics, conversion tracking, funnel diagnostics, o
 - `credit_analysis_completed`
 - `dispute_letters_generated`
 - `checkout_started`
+- `abandoned_checkout`
 - `payment_completed`
 - `funding_lead_submitted`
 - `admin_followup_completed`

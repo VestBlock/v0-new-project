@@ -1,5 +1,36 @@
 # VestBlock Changelog
 
+## 2026-04-27 Abandoned Checkout Automation
+
+## Files Changed
+
+- `app/api/create-order/route.ts`
+- `app/api/cron/lifecycle-monitor/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `lib/admin/tasks.ts`
+- `lib/email/sendEmail.ts`
+- `lib/system/logEvent.ts`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `.agents/skills/vestblock/analytics-conversion-operator.md`
+- `.agents/skills/vestblock/email-alert-automation.md`
+- `.agents/skills/vestblock/user-lifecycle-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added `checkout_started` logging when PayPal order creation succeeds.
+- Added abandoned checkout detection to the lifecycle cron for unpaid PayPal orders older than the follow-up window.
+- Added `abandoned_checkout` admin activity logging, `abandoned_checkout` admin tasks, and `admin_abandoned_checkout` email alerts.
+- Added checkout/abandoned checkout events to the admin automation feed.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Failed Payment Automation
 
 ## Files Changed

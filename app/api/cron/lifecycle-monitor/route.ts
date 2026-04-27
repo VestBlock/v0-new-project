@@ -3,11 +3,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import {
+  createAbandonedCheckoutTask,
   createLeadFollowupTask,
   createPaidCustomerNoUploadTask,
   createSignupNoUploadTask,
 } from '@/lib/admin/tasks';
 import {
+  sendAdminAbandonedCheckoutEmail,
   sendAdminLeadFollowupEmail,
   sendPaidCustomerUploadReminderEmail,
   sendUserUploadReminderEmail,
@@ -19,6 +21,7 @@ import { logEvent } from '@/lib/system/logEvent';
 const signupNoUploadAfterHours = 48;
 const paidNoUploadAfterHours = 24;
 const leadFollowupAfterHours = 24;
+const abandonedCheckoutAfterHours = 4;
 
 type ProfileRow = {
   id: string;
@@ -27,6 +30,7 @@ type ProfileRow = {
   is_subscribed?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
+  paypal_order_id?: string | null;
 };
 
 type ReportRow = {
@@ -57,7 +61,8 @@ type LeadRow = {
 type LifecycleEmailType =
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
-  | 'admin_lead_followup';
+  | 'admin_lead_followup'
+  | 'admin_abandoned_checkout';
 
 async function safeRows<T>(
   query: PromiseLike<{ data: T[] | null; error: any }>,
@@ -154,7 +159,7 @@ export async function GET(request: Request) {
     safeRows<ProfileRow>(
       supabase
         .from('user_profiles')
-        .select('id,email,full_name,is_subscribed,created_at,updated_at')
+        .select('id,email,full_name,is_subscribed,paypal_order_id,created_at,updated_at')
         .order('created_at', { ascending: false })
         .limit(500),
       'user_profiles'
@@ -189,6 +194,12 @@ export async function GET(request: Request) {
     reports.map((report) => report.user_id).filter(Boolean) as string[]
   );
   const paidByUser = latestPaymentByUser(payments);
+  const completedPaymentUserIds = new Set(
+    payments
+      .filter((payment) => String(payment.status || '').toLowerCase() === 'completed')
+      .map((payment) => payment.user_id)
+      .filter(Boolean) as string[]
+  );
 
   const userTaskResults = await Promise.all(
     profiles.map(async (profile) => {
@@ -328,7 +339,62 @@ export async function GET(request: Request) {
     })
   );
 
-  const taskResults = [...userTaskResults, ...leadTaskResults].filter(Boolean) as Array<{
+  const abandonedCheckoutResults = await Promise.all(
+    profiles.map(async (profile) => {
+      const checkoutId = profile.paypal_order_id;
+      const userId = profile.id;
+
+      if (!checkoutId || profile.is_subscribed || completedPaymentUserIds.has(userId)) {
+        return null;
+      }
+
+      const checkoutAgeHours = ageHours(profile.updated_at || profile.created_at);
+      if ((checkoutAgeHours ?? 0) < abandonedCheckoutAfterHours) return null;
+
+      const [result, emailResult] = await Promise.all([
+        createAbandonedCheckoutTask({
+          checkoutId,
+          userId,
+          userEmail: profile.email,
+          ageHours: checkoutAgeHours,
+          source: 'lifecycle-monitor',
+        }),
+        sendLifecycleEmailOnce({
+          eventType: 'admin_abandoned_checkout',
+          userId,
+          userEmail: profile.email,
+          send: () =>
+            sendAdminAbandonedCheckoutEmail({
+              checkoutId,
+              userId,
+              userEmail: profile.email,
+              ageHours: checkoutAgeHours,
+            }),
+        }),
+      ]);
+
+      if (result.ok && !result.duplicate) {
+        await logEvent({
+          eventType: 'abandoned_checkout',
+          actorUserId: userId,
+          entityType: 'checkout',
+          entityId: checkoutId,
+          metadata: {
+            ageHours: checkoutAgeHours,
+            emailReminder: emailResult,
+          },
+        });
+      }
+
+      return { ...result, emailResult };
+    })
+  );
+
+  const taskResults = [
+    ...userTaskResults,
+    ...leadTaskResults,
+    ...abandonedCheckoutResults,
+  ].filter(Boolean) as Array<{
     ok?: boolean;
     duplicate?: boolean;
     emailResult?: { skipped?: boolean; reason?: string };
@@ -345,6 +411,7 @@ export async function GET(request: Request) {
     candidates: {
       usersWithoutUploads: profiles.filter((profile) => !reportUserIds.has(profile.id)).length,
       newLeads: leads.length,
+      abandonedCheckouts: abandonedCheckoutResults.filter(Boolean).length,
     },
     tasksCreated: taskResults.filter((result) => result.ok && !result.duplicate).length,
     duplicateTasks: taskResults.filter((result) => result.duplicate).length,

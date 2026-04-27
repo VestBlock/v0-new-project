@@ -28,6 +28,7 @@ Legacy fallback:
 - `credit_analysis_failed`
 - `new_paid_customer`
 - `admin_payment_failed`
+- `admin_abandoned_checkout`
 - `admin_new_lead`
 - `user_upload_reminder`
 - `user_paid_upload_reminder`

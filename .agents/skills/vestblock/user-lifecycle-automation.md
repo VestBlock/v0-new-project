@@ -31,6 +31,7 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - On paid signup: onboarding email.
 - On payment completed: run shared payment automation, alert admin, log `payment_completed`, and create a paid-customer onboarding task.
 - On failed payment: run shared payment automation, alert admin, log `payment_failed`, and create a payment review task before any customer-facing follow-up.
+- On abandoned checkout: alert admin, log `abandoned_checkout`, and create an admin task before customer-facing follow-up.
 - After inactivity: reactivation with a checklist.
 
 ## Implemented Automation
@@ -40,6 +41,7 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - It creates `signup_no_upload` admin tasks for users older than 48 hours with no credit report.
 - It creates `paid_customer_no_upload` high-priority admin tasks for paid users older than 24 hours with no credit report.
 - It creates `lead_followup` admin tasks for new leads older than 24 hours.
+- It creates `abandoned_checkout` admin tasks for stale unpaid PayPal orders.
 - It logs lifecycle signals in `admin_activity` without emailing users directly.
 - `lib/payments/paymentAutomation.ts` handles immediate payment completion follow-up from PayPal capture, PayPal webhook, and internal payment processing routes.
 

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
+import { logEvent } from '@/lib/system/logEvent';
 
 export async function POST(req: Request) {
   const { userId } = await req.json();
@@ -45,11 +46,24 @@ export async function POST(req: Request) {
     const { error } = await supabase
       .from('user_profiles')
       .update({ paypal_order_id: response?.data?.id })
-      .eq('id', userId);
+      .or(`id.eq.${userId},user_id.eq.${userId}`);
 
     if (error) {
       console.warn('Unable to link PayPal order to profile:', error.message);
     }
+
+    await logEvent({
+      eventType: 'checkout_started',
+      actorUserId: userId,
+      entityType: 'checkout',
+      entityId: response?.data?.id,
+      metadata: {
+        provider: 'PayPal',
+        amount: '75',
+        status: response?.data?.status,
+        source: 'create-order',
+      },
+    });
   }
 
   return NextResponse.json({
