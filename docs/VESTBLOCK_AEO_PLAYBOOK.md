@@ -7,6 +7,10 @@ VestBlock should publish practical answer-focused content that helps users under
 Use `lib/aeo/topics.ts` as the starter topic registry. The first public
 implementation now lives at `/learn` and `/learn/[slug]`.
 
+Search discovery is handled through `app/sitemap.ts` and `app/robots.ts`.
+Keep those files curated: include public learning, offer, and tool pages; exclude
+admin, API, account, diagnostic, setup, test, and user-specific report routes.
+
 ## Topic Clusters
 
 - AI credit repair

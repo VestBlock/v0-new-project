@@ -1,5 +1,26 @@
 # VestBlock Changelog
 
+## 2026-04-27 Sitemap And Robots
+
+## Files Changed
+
+- `app/sitemap.ts`
+- `app/robots.ts`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+
+## Features Added
+
+- Added a curated public sitemap for the home page, learning center, AEO topic pages, and public conversion/tool routes.
+- Added robots rules that allow public content while excluding admin, API, account, diagnostic, setup, test, and user-specific report routes.
+- Documented sitemap/robots maintenance rules in the AEO playbook.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values and generated `/robots.txt` plus `/sitemap.xml`.
+
 ## 2026-04-27 AEO Learning Center Starter
 
 ## Files Changed
