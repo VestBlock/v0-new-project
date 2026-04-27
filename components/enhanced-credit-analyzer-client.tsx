@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { extractTextWithFallback } from "@/lib/pdf-extraction-service"
-import { AnalysisResultClientView } from "@/components/analysis-result-client-view"
 
 export function EnhancedCreditAnalyzerClient() {
   const [file, setFile] = useState<File | null>(null)
@@ -50,8 +49,8 @@ export function EnhancedCreditAnalyzerClient() {
     setExtractedText(null)
 
     try {
-      const text = await extractTextWithFallback(file)
-      setExtractedText(text)
+      const result = await extractTextWithFallback(file)
+      setExtractedText(result.text)
       toast({
         title: "Extraction Successful",
         description: "File content has been extracted.",
@@ -105,7 +104,9 @@ export function EnhancedCreditAnalyzerClient() {
             <CardTitle>Extracted Text</CardTitle>
           </CardHeader>
           <CardContent>
-            <AnalysisResultClientView analysis={{ extracted_text: extractedText }} />
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted p-4 text-sm whitespace-pre-wrap">
+              {extractedText}
+            </pre>
           </CardContent>
         </Card>
       )}

@@ -36,7 +36,10 @@ import { useToast } from '@/hooks/use-toast';
 
 import { Database } from '@/types/supabase';
 
-type DisputeLetterRow = Database['public']['Tables']['dispute_letters']['Row'];
+type DisputeLetterRow = Database['public']['Tables']['dispute_letters']['Row'] & {
+  bureau?: string | null;
+  num_items?: number | null;
+};
 
 export default function MyDisputeLettersPage() {
   const {

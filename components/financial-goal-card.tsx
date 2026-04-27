@@ -25,8 +25,8 @@ export function FinancialGoalCard({ goal, className = "" }: FinancialGoalCardPro
     )
   }
 
-  const iconToDisplay = goal.icon ? (
-    React.cloneElement(goal.icon, {
+  const iconToDisplay = React.isValidElement(goal.icon) ? (
+    React.cloneElement(goal.icon as React.ReactElement<{ className?: string }>, {
       className: "h-8 w-8 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.7)] flex-shrink-0",
     })
   ) : (

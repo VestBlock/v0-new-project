@@ -220,7 +220,10 @@ export default function UserHubPage() {
     }
   }
 
-  const handleAskAboutRoadmapStep = (stepTitle: string, stepDescription: string, subSteps?: any) => {
+  const handleAskAboutRoadmapStep = (step: RoadmapStepData) => {
+    const stepTitle = step.title
+    const stepDescription = step.description
+    const subSteps = step.subSteps
     const subStepsText = subSteps
       ? `\nSub-steps: ${Array.isArray(subSteps) ? subSteps.join(", ") : JSON.stringify(subSteps)}`
       : ""

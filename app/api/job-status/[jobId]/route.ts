@@ -34,11 +34,14 @@ async function triggerAiAnalysis(
     // For now, we'll let the AI try, but the prompt might need to be robust.
   }
 
-  const prompt = getComprehensiveAnalysisPrompt(
-    job.extracted_text,
-    job.financial_goal_title || undefined,
-    job.is_likely_credit_report,
-  )
+  const prompt = getComprehensiveAnalysisPrompt({
+    extractedText: job.extracted_text,
+    userFinancialGoal: job.financial_goal_title || undefined,
+    userContext:
+      job.is_likely_credit_report === false
+        ? "The uploaded document was flagged as not clearly matching a standard credit report. Be careful not to fabricate missing credit report details."
+        : undefined,
+  })
 
   try {
     const completion = await openai.chat.completions.create({

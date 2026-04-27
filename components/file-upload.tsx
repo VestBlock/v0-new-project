@@ -94,14 +94,12 @@ export function FileUpload({
       const { data, error } = await supabase.storage.from(bucket).upload(filePath, file, {
         cacheControl: "3600",
         upsert: false,
-        onUploadProgress: (progress) => {
-          setProgress(Math.round((progress.loaded / progress.total) * 100))
-        },
       })
 
       if (error) {
         throw error
       }
+      setProgress(100)
 
       // Get public URL
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path)
@@ -307,7 +305,7 @@ export function FileUpload({
               ) : (
                 <Button
                   onClick={handleUpload}
-                  disabled={isUploading || uploadStatus === "processing" || uploadStatus === "success"}
+                  disabled={isUploading || uploadStatus === "processing"}
                   className={`w-full ${uploadStatus === "error" ? "bg-red-500 hover:bg-red-600" : "bg-cyan-500 hover:bg-cyan-600"}`}
                 >
                   {uploadStatus === "error" ? "Try Again" : isUploading ? `Uploading (${progress}%)` : "Upload"}

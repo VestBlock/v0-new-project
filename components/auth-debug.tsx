@@ -41,7 +41,7 @@ export function AuthDebug() {
       )
 
       // Check localStorage
-      const localStorageItems = {}
+      const localStorageItems: Record<string, string | null> = {}
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         if (key) {

@@ -8,20 +8,23 @@ import { Progress } from "@/components/ui/progress"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ChevronDown, ChevronRight, CheckCircle, Circle, MessageCircle, Star, Clock, Target } from "lucide-react"
 
-interface RoadmapStep {
-  id: string
+export interface RoadmapStep {
+  id?: string
   title: string
   description: string
-  priority: "high" | "medium" | "low"
-  category: string
-  completed: boolean
-  estimatedTime: string
-  actionItems: string[]
-  expectedOutcome: string
+  priority?: "high" | "medium" | "low" | "High" | "Medium" | "Low" | string
+  category?: string
+  completed?: boolean
+  estimatedTime?: string
+  duration?: string
+  actionItems?: string[]
+  subSteps?: string[] | { [key: string]: string }
+  expectedOutcome?: string
 }
 
 interface InteractiveRoadmapProps {
   roadmapSteps?: RoadmapStep[]
+  roadmapData?: { steps?: RoadmapStep[] }
   onAskAboutStep?: (step: RoadmapStep) => void
 }
 
@@ -125,12 +128,32 @@ const defaultSteps: RoadmapStep[] = [
   },
 ]
 
-export function InteractiveRoadmap({ roadmapSteps, onAskAboutStep }: InteractiveRoadmapProps) {
+function normalizeStep(step: RoadmapStep, index: number): RoadmapStep {
+  const subStepItems = Array.isArray(step.subSteps)
+    ? step.subSteps
+    : step.subSteps
+      ? Object.values(step.subSteps)
+      : undefined
+
+  return {
+    ...step,
+    id: step.id || `step-${index + 1}`,
+    priority: String(step.priority || "medium").toLowerCase(),
+    category: step.category || "Credit Repair",
+    completed: Boolean(step.completed),
+    estimatedTime: step.estimatedTime || step.duration || "Next 30 days",
+    actionItems: step.actionItems || subStepItems || [],
+    expectedOutcome: step.expectedOutcome || "Clearer next steps and improved credit readiness.",
+  }
+}
+
+export function InteractiveRoadmap({ roadmapSteps, roadmapData, onAskAboutStep }: InteractiveRoadmapProps) {
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set())
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
 
   // Use provided steps or fall back to default steps
-  const steps = roadmapSteps && roadmapSteps.length > 0 ? roadmapSteps : defaultSteps
+  const providedSteps = roadmapSteps || roadmapData?.steps
+  const steps = providedSteps && providedSteps.length > 0 ? providedSteps.map(normalizeStep) : defaultSteps
 
   const toggleStep = (stepId: string) => {
     const newExpanded = new Set(expandedSteps)
@@ -152,7 +175,7 @@ export function InteractiveRoadmap({ roadmapSteps, onAskAboutStep }: Interactive
     setCompletedSteps(newCompleted)
   }
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority?: string) => {
     switch (priority) {
       case "high":
         return "bg-red-100 text-red-800 border-red-200"
@@ -229,16 +252,17 @@ export function InteractiveRoadmap({ roadmapSteps, onAskAboutStep }: Interactive
       {/* Roadmap Steps */}
       <div className="space-y-4">
         {steps.map((step, index) => {
-          const isExpanded = expandedSteps.has(step.id)
-          const isCompleted = completedSteps.has(step.id) || step.completed
+          const stepId = step.id || `step-${index + 1}`
+          const isExpanded = expandedSteps.has(stepId)
+          const isCompleted = completedSteps.has(stepId) || step.completed
 
           return (
-            <Card key={step.id} className={`transition-all ${isCompleted ? "bg-green-50 border-green-200" : ""}`}>
+            <Card key={stepId} className={`transition-all ${isCompleted ? "bg-green-50 border-green-200" : ""}`}>
               <Collapsible>
                 <CollapsibleTrigger asChild>
                   <CardHeader
                     className="cursor-pointer hover:bg-accent/50 transition-colors"
-                    onClick={() => toggleStep(step.id)}
+                    onClick={() => toggleStep(stepId)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -247,7 +271,7 @@ export function InteractiveRoadmap({ roadmapSteps, onAskAboutStep }: Interactive
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation()
-                            toggleCompletion(step.id)
+                            toggleCompletion(stepId)
                           }}
                           className="p-0 h-auto"
                         >
@@ -352,3 +376,5 @@ export function InteractiveRoadmap({ roadmapSteps, onAskAboutStep }: Interactive
     </div>
   )
 }
+
+export default InteractiveRoadmap

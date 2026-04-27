@@ -1,5 +1,44 @@
 # VestBlock Changelog
 
+## 2026-04-27 Type Safety Stabilization
+
+## Files Changed
+
+- `app/api/job-status/[jobId]/route.ts`
+- `app/api/side-hustle-chat/route.ts`
+- `app/user-hub/page.tsx`
+- `app/tools/my-dispute-letters/page.tsx`
+- `components/chat-interface.tsx`
+- `components/interactive-roadmap.tsx`
+- `components/analysis-result-client-view.tsx`
+- `components/credit-cards-tab.tsx`
+- `components/side-hustles-tab.tsx`
+- `components/enhanced-credit-analyzer-client.tsx`
+- `components/file-upload.tsx`
+- `components/financial-goal-card.tsx`
+- `components/auth-debug.tsx`
+- `components/ui/alert.tsx`
+- `components/ui/badge.tsx`
+- `components/ui/calendar.tsx`
+- `components/ui/chart.tsx`
+- `components/ui/toast.tsx`
+- `lib/credit-report-extractor.ts`
+- `lib/semantic-chunking.ts`
+
+## Features Added
+
+- Cleared the repo-wide TypeScript check so future credit workflow and dashboard refactors can catch real regressions.
+- Made `ChatInterface` work in both standalone mode and controlled dashboard chat mode.
+- Hardened job status AI prompt handling and side-hustle OpenAI configuration errors.
+- Made roadmap, recommendation, alert, badge, toast, calendar, chart, upload, and diagnostic UI helpers compatible with the current dependency versions.
+- Preserved existing runtime behavior while tightening types around report extraction and semantic chunking.
+
+## Verification
+
+- `pnpm exec tsc --noEmit` passed.
+- `pnpm audit` reports zero vulnerabilities.
+- `pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 AI SDK Security Cleanup
 
 ## Files Changed

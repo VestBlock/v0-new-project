@@ -42,7 +42,7 @@ const DEFAULT_OPTIONS: ChunkingOptions = {
  */
 export function identifyCreditReportSections(text: string): DocumentSection[] {
   // Common section headers in credit reports
-  const sectionPatterns = [
+  const sectionPatterns: Array<{ type: SectionType; pattern: RegExp; confidence: number }> = [
     { type: "header", pattern: /^.{0,500}(credit\s+report|credit\s+file|credit\s+profile)/i, confidence: 0.9 },
     {
       type: "personal",
@@ -200,6 +200,7 @@ function splitSectionIntoChunks(
       metadata: {
         ...section.metadata,
         title: `${section.metadata?.title || type} (part ${chunks.length + 1})`,
+        confidence: section.metadata?.confidence ?? 0.5,
       },
     })
 

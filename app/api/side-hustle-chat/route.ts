@@ -46,6 +46,9 @@ Always be encouraging but realistic about income potential and time investment.`
 
     // Call the OpenAI API
     const openai = getOpenAIClient()
+    if (!openai) {
+      return NextResponse.json({ error: "OpenAI client is not configured" }, { status: 500 })
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",

@@ -137,7 +137,7 @@ function extractCreditScore(text: string): { score: number | null; confidence: n
 }
 
 function extractBureauInfo(text: string): { bureau: string | null; reportDate: string | null } {
-  const result = { bureau: null, reportDate: null }
+  const result: { bureau: string | null; reportDate: string | null } = { bureau: null, reportDate: null }
 
   // Extract bureau name
   const bureauMatch = text.match(/(equifax|experian|transunion)/i)

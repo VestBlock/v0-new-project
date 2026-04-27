@@ -18,21 +18,65 @@ interface Message {
   timestamp: Date
 }
 
+interface ExternalMessage {
+  id?: string
+  role: string
+  content?: string
+  createdAt?: Date | string
+}
+
 interface ChatInterfaceProps {
   context?: string
   initialMessage?: string
+  jobId?: string
+  userId?: string
+  initialAnalysisContext?: unknown
+  messages?: ExternalMessage[]
+  input?: string
+  handleInputChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
+  handleSubmit?: (event?: { preventDefault?: () => void }) => void
+  isLoading?: boolean
+  error?: Error | string | null
 }
 
-export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function ChatInterface({
+  context,
+  initialMessage,
+  messages: controlledMessages,
+  input: controlledInput,
+  handleInputChange,
+  handleSubmit,
+  isLoading: controlledIsLoading,
+  error: controlledError,
+}: ChatInterfaceProps) {
+  const isControlled = Boolean(controlledMessages && handleInputChange && handleSubmit)
+  const [internalMessages, setInternalMessages] = useState<Message[]>([])
+  const [internalInput, setInternalInput] = useState("")
+  const [internalIsLoading, setInternalIsLoading] = useState(false)
+  const [internalError, setInternalError] = useState<string | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
 
+  const messages: Message[] = isControlled
+    ? (controlledMessages || [])
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message, index) => ({
+          id: message.id || `message-${index}`,
+          role: message.role as "user" | "assistant",
+          content: message.content || "",
+          timestamp: message.createdAt ? new Date(message.createdAt) : new Date(),
+        }))
+    : internalMessages
+  const input = controlledInput ?? internalInput
+  const isLoading = controlledIsLoading ?? internalIsLoading
+  const error =
+    controlledError instanceof Error
+      ? controlledError.message
+      : controlledError || internalError
+
   // Initialize with welcome message
   useEffect(() => {
+    if (isControlled) return
     const welcomeMessage: Message = {
       id: "welcome",
       role: "assistant",
@@ -41,8 +85,8 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
         `Hello! I'm VestBot, your AI financial advisor. I'm here to help you with credit repair, financial planning, and building wealth. What would you like to discuss today?`,
       timestamp: new Date(),
     }
-    setMessages([welcomeMessage])
-  }, [initialMessage])
+    setInternalMessages([welcomeMessage])
+  }, [initialMessage, isControlled])
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -57,6 +101,11 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return
 
+    if (isControlled && handleSubmit) {
+      handleSubmit({ preventDefault: () => undefined })
+      return
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -64,10 +113,10 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
-    setError(null)
+    setInternalMessages((prev) => [...prev, userMessage])
+    setInternalInput("")
+    setInternalIsLoading(true)
+    setInternalError(null)
 
     try {
       const response = await fetch("/api/chat", {
@@ -98,10 +147,10 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
         timestamp: new Date(),
       }
 
-      setMessages((prev) => [...prev, assistantMessage])
+      setInternalMessages((prev) => [...prev, assistantMessage])
     } catch (error: any) {
       console.error("Chat error:", error)
-      setError(error.message || "Failed to send message. Please try again.")
+      setInternalError(error.message || "Failed to send message. Please try again.")
 
       // Add error message to chat
       const errorMessage: Message = {
@@ -111,9 +160,9 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
           "I apologize, but I'm having trouble responding right now. Please try again in a moment, or contact support if the issue persists.",
         timestamp: new Date(),
       }
-      setMessages((prev) => [...prev, errorMessage])
+      setInternalMessages((prev) => [...prev, errorMessage])
     } finally {
-      setIsLoading(false)
+      setInternalIsLoading(false)
     }
   }
 
@@ -217,7 +266,7 @@ export function ChatInterface({ context, initialMessage }: ChatInterfaceProps) {
           <div className="flex gap-2">
             <Input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange || ((e) => setInternalInput(e.target.value))}
               onKeyPress={handleKeyPress}
               placeholder="Ask VestBot about credit repair, financial planning, or building wealth..."
               disabled={isLoading}

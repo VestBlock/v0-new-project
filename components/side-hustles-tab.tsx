@@ -7,9 +7,9 @@ import { Briefcase, ExternalLink, DollarSign, Clock, BarChart, Zap, Users, Palet
 interface SideHustleRecommendation {
   name: string
   description: string
-  potentialEarnings: string
-  timeCommitment: string
-  difficulty: "easy" | "medium" | "hard" | string
+  potentialEarnings?: string
+  timeCommitment?: string
+  difficulty?: "easy" | "medium" | "hard" | string
   category?: string
   startupCost?: string
   skills?: string[]
@@ -20,9 +20,10 @@ interface SideHustleProps {
   income?: number
   goals?: string
   recommendedHustles?: SideHustleRecommendation[]
+  recommendations?: SideHustleRecommendation[]
 }
 
-export function SideHustlesTab({ income, goals, recommendedHustles }: SideHustleProps) {
+export function SideHustlesTab({ income, goals, recommendedHustles, recommendations }: SideHustleProps) {
   const defaultSideHustles: SideHustleRecommendation[] = [
     {
       name: "Virtual Assistant Services",
@@ -150,8 +151,10 @@ export function SideHustlesTab({ income, goals, recommendedHustles }: SideHustle
 
   let hustlesToDisplay: SideHustleRecommendation[] = []
 
-  if (recommendedHustles && recommendedHustles.length > 0) {
-    hustlesToDisplay = recommendedHustles.map((rh) => ({
+  const providedHustles = recommendations && recommendations.length > 0 ? recommendations : recommendedHustles
+
+  if (providedHustles && providedHustles.length > 0) {
+    hustlesToDisplay = providedHustles.map((rh) => ({
       name: rh.name || "Unnamed Hustle",
       description: rh.description || "No description available.",
       potentialEarnings: rh.potentialEarnings || "Varies",
@@ -168,7 +171,7 @@ export function SideHustlesTab({ income, goals, recommendedHustles }: SideHustle
   }
 
   // Ensure we don't exceed 10 hustles unless specifically provided more
-  if (!recommendedHustles || recommendedHustles.length === 0) {
+  if (!providedHustles || providedHustles.length === 0) {
     hustlesToDisplay = hustlesToDisplay.slice(0, 10)
   }
 
@@ -280,15 +283,15 @@ export function SideHustlesTab({ income, goals, recommendedHustles }: SideHustle
                     <p className="font-medium text-foreground">{hustle.timeCommitment}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <BarChart className="h-5 w-5 text-purple-400 drop-shadow-[0_0_4px_rgba(192,132,252,0.6)]" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Difficulty</p>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${getDifficultyGlow(hustle.difficulty)}`}></div>
-                      <p className={`font-medium text-sm ${getDifficultyClass(hustle.difficulty)}`}>
-                        {hustle.difficulty.charAt(0).toUpperCase() + hustle.difficulty.slice(1)}
-                      </p>
+	                <div className="flex items-center gap-2">
+	                  <BarChart className="h-5 w-5 text-purple-400 drop-shadow-[0_0_4px_rgba(192,132,252,0.6)]" />
+	                  <div>
+	                    <p className="text-xs text-muted-foreground">Difficulty</p>
+	                    <div className="flex items-center gap-2">
+	                      <div className={`h-2 w-2 rounded-full ${getDifficultyGlow(hustle.difficulty || "medium")}`}></div>
+	                      <p className={`font-medium text-sm ${getDifficultyClass(hustle.difficulty || "medium")}`}>
+	                        {(hustle.difficulty || "medium").charAt(0).toUpperCase() + (hustle.difficulty || "medium").slice(1)}
+	                      </p>
                     </div>
                   </div>
                 </div>

@@ -6,8 +6,8 @@ import { CreditCard, Star, ExternalLink, ShieldCheck } from "lucide-react"
 interface CreditCardRecommendation {
   name: string
   description: string
-  bestFor: string
-  minimumCredit: string
+  bestFor?: string
+  minimumCredit?: string
   features?: string[]
   annualFee?: string
   category?: string
@@ -18,9 +18,10 @@ interface CreditCardRecommendation {
 interface CreditCardProps {
   creditScore?: number | null
   recommendedCards?: CreditCardRecommendation[]
+  recommendations?: CreditCardRecommendation[]
 }
 
-export function CreditCardsTab({ creditScore, recommendedCards }: CreditCardProps) {
+export function CreditCardsTab({ creditScore, recommendedCards, recommendations }: CreditCardProps) {
   const defaultCreditCards: CreditCardRecommendation[] = [
     {
       name: "Kikoff Credit Builder",
@@ -110,8 +111,10 @@ export function CreditCardsTab({ creditScore, recommendedCards }: CreditCardProp
 
   let cardsToDisplay: CreditCardRecommendation[] = []
 
-  if (recommendedCards && recommendedCards.length > 0) {
-    cardsToDisplay = recommendedCards.map((rc) => ({
+  const providedCards = recommendations && recommendations.length > 0 ? recommendations : recommendedCards
+
+  if (providedCards && providedCards.length > 0) {
+    cardsToDisplay = providedCards.map((rc) => ({
       name: rc.name || "Unnamed Card",
       description: rc.description || "No description available.",
       bestFor: rc.bestFor || "General Use",
@@ -125,8 +128,9 @@ export function CreditCardsTab({ creditScore, recommendedCards }: CreditCardProp
     }))
   } else if (creditScore !== undefined && creditScore !== null) {
     cardsToDisplay = defaultCreditCards.filter((card) => {
-      if (card.minimumCredit === "No Credit Check" || card.minimumCredit === "Limited/No History") return true
-      const scoreMatch = card.minimumCredit.match(/\d+/)
+      const minimumCredit = card.minimumCredit || ""
+      if (minimumCredit === "No Credit Check" || minimumCredit === "Limited/No History") return true
+      const scoreMatch = minimumCredit.match(/\d+/)
       if (scoreMatch) {
         return Number.parseInt(scoreMatch[0]) <= creditScore
       }
@@ -143,21 +147,23 @@ export function CreditCardsTab({ creditScore, recommendedCards }: CreditCardProp
   }
 
   // Ensure we don't exceed 10 cards unless specifically provided more
-  if (!recommendedCards || recommendedCards.length === 0) {
+  if (!providedCards || providedCards.length === 0) {
     cardsToDisplay = cardsToDisplay.slice(0, 10)
   }
 
   const sortedCards = [...cardsToDisplay].sort((a, b) => {
     if (a.featured && !b.featured) return -1
     if (!a.featured && b.featured) return 1
+    const minimumCreditA = a.minimumCredit || ""
+    const minimumCreditB = b.minimumCredit || ""
     const scoreA =
-      a.minimumCredit === "No Credit Check" || a.minimumCredit === "Limited/No History"
+      minimumCreditA === "No Credit Check" || minimumCreditA === "Limited/No History"
         ? 0
-        : Number.parseInt(a.minimumCredit.match(/\d+/)?.[0] || "999")
+        : Number.parseInt(minimumCreditA.match(/\d+/)?.[0] || "999")
     const scoreB =
-      b.minimumCredit === "No Credit Check" || b.minimumCredit === "Limited/No History"
+      minimumCreditB === "No Credit Check" || minimumCreditB === "Limited/No History"
         ? 0
-        : Number.parseInt(b.minimumCredit.match(/\d+/)?.[0] || "999")
+        : Number.parseInt(minimumCreditB.match(/\d+/)?.[0] || "999")
     return scoreA - scoreB
   })
 

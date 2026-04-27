@@ -449,3 +449,5 @@ export default function AnalysisResultClientView({
     </div>
   );
 }
+
+export { AnalysisResultClientView }
