@@ -18,11 +18,11 @@ export const vestblockProducts: Record<VestBlockProductType, VestBlockProduct> =
   },
   funding_strategy_review: {
     type: 'funding_strategy_review',
-    label: 'Business Credit Card Funding Strategy Review',
-    amount: '297',
+    label: 'Business Funding Readiness Plan',
+    amount: '300',
     defaultReturnPath: '/funding/credit-card-strategy',
     description:
-      'One-time strategy review for business credit card funding readiness and application planning.',
+      'One-time readiness plan for business funding eligibility, credit cleanup, and application preparation.',
   },
 };
 

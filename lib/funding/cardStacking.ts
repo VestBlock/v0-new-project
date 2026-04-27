@@ -129,13 +129,13 @@ export function evaluateCardFundingReadiness(
     return {
       score,
       tier: 'strong_candidate',
-      label: 'Strong candidate for strategy review',
+      label: 'Strong candidate for funding review',
       summary:
-        'This profile appears ready for a structured card funding strategy review, subject to document and credit report verification.',
+        'This profile appears ready to explore business funding options, subject to document review, lender terms, and current credit report verification.',
       strengths,
       risks,
       nextSteps: [
-        'Complete the paid strategy review.',
+        'Compare funding options and submit only after reviewing terms.',
         'Verify current credit report details and business documents.',
         'Build an application sequence with consent before any application is submitted.',
         ...nextSteps,
@@ -149,11 +149,11 @@ export function evaluateCardFundingReadiness(
       tier: 'review_ready',
       label: 'Review-ready with preparation',
       summary:
-        'This profile may be worth reviewing, but the plan should address credit, utilization, documentation, or repayment risks first.',
+        'This profile may qualify with careful lender selection, but the plan should address credit, utilization, documentation, or repayment risks first.',
       strengths,
       risks,
       nextSteps: [
-        'Complete the strategy review if you want a guided readiness plan.',
+        'Use the $300 readiness plan if you want help improving eligibility before applying.',
         'Resolve the highest-risk items before submitting applications.',
         'Confirm all costs, APRs, fees, inquiries, and repayment obligations before applying.',
         ...nextSteps,
@@ -166,13 +166,13 @@ export function evaluateCardFundingReadiness(
     tier: 'needs_prep',
     label: 'Needs prep before card funding',
     summary:
-      'This profile should focus on readiness work before a credit card funding sequence. Applying too early could create avoidable inquiries, fees, or utilization risk.',
+      'This profile should focus on eligibility work before a business funding sequence. Applying too early could create avoidable inquiries, fees, or utilization risk.',
     strengths,
     risks,
     nextSteps: [
       'Start with credit cleanup, utilization reduction, and business setup readiness.',
       'Organize EIN, banking, revenue records, and use-of-funds documentation.',
-      'Return for a funding strategy review after the prep items are stronger.',
+      'Use the $300 readiness plan if you want VestBlock to help organize the prep work.',
       ...nextSteps,
     ],
   };

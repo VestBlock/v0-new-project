@@ -6,6 +6,7 @@ Use this skill when working on business funding leads, partner links, referral f
 
 - Leads table: `leads`
 - Public routes: `/funding`, `/real-estate-funding`, `/sell`
+- Free funding checker: `/funding#free-eligibility-check`
 - Card funding strategy route: `/funding/credit-card-strategy`
 - Business setup route: `/business-setup`
 - Spanish partner route: `/es/vestblock`
@@ -38,9 +39,9 @@ Track:
 - After inserting a row into `leads`, call `runNewLeadAutomation()` with the new lead ID, source path, contact fields, and concise deal summary.
 - For card stacking requests, save a `funding_strategy_requests` row first, then call `runFundingStrategySubmittedAutomation()`.
 - Use readiness tiers:
-  - `needs_prep`: do not push payment; explain prep steps.
-  - `review_ready`: allow the $297 strategy review with risk notes.
-  - `strong_candidate`: allow the $297 strategy review and prioritize admin follow-up.
+  - `needs_prep`: explain why they are not funding-ready and route them to the $300 readiness plan.
+  - `review_ready`: explain the cleanup items and allow the $300 readiness plan.
+  - `strong_candidate`: route to funding partners or optional $300 strategy support, and prioritize admin follow-up.
 - PayPal checkout must pass `productType: "funding_strategy_review"` and the `requestId`.
 - Funding strategy payments must update `funding_strategy_requests.payment_status = 'paid'` and must not set `user_profiles.is_subscribed` unless the product is `vestblock_pro`.
 - Use shared Resend/email-event logging helpers instead of route-local Resend calls.

@@ -2104,8 +2104,8 @@ export default function AdminPanelPage() {
                     </p>
                   </div>
                   <div className="rounded-md border p-3">
-                    <p className="text-sm text-muted-foreground">Review price</p>
-                    <p className="text-2xl font-bold">$297 + 10%</p>
+                    <p className="text-sm text-muted-foreground">Plan price</p>
+                    <p className="text-2xl font-bold">$300 + 10%</p>
                   </div>
                 </div>
 

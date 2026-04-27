@@ -1,5 +1,37 @@
 # VestBlock Changelog
 
+## 2026-04-27 Free Funding Eligibility Checker
+
+## Files Changed
+
+- `app/funding/page.tsx`
+- `components/funding-eligibility-checker.tsx`
+- `app/funding/credit-card-strategy/page.tsx`
+- `app/api/funding-strategy/route.ts`
+- `app/admin-panel/page.tsx`
+- `lib/funding/cardStacking.ts`
+- `lib/payments/products.ts`
+- `.agents/skills/vestblock/funding-lead-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a free instant business funding eligibility checker to `/funding`.
+- Repositioned the funding journey as free eligibility check first, then the `$300` Business Funding Readiness Plan when the customer needs help becoming eligible.
+- Updated the protected funding workflow so every saved request can enter checkout for the `$300` plan, including `needs_prep` profiles.
+- Kept the `10%` success fee language tied only to approved, accepted, and available card funding.
+- Updated admin pricing language and automation docs to match the new offer.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warnings only.
+- `corepack pnpm build` passed with local placeholder production env values.
+- Local built-app smoke checks returned `200` for `/funding` and `/funding/credit-card-strategy`.
+- Deploy and live smoke verification pending at commit time.
+
 ## 2026-04-27 Funding And Real Estate Form Enhancements
 
 ## Files Changed
@@ -18,7 +50,7 @@
 
 ## Features Added
 
-- Updated card funding offer to `$297` upfront plus a `10%` success fee after approved card funding is accepted and available.
+- Updated card funding offer to `$300` upfront plus a `10%` success fee after approved card funding is accepted and available.
 - Added customer consent capture for the funding strategy success fee.
 - Added admin visibility for success-fee consent on Funding Strategy requests.
 - Enhanced real estate funding forms with requested loan amount, liquidity, borrowing entity, funding goal, DSCR value/expense fields, hard-money contract status, contractor/scope readiness, and deal notes.
@@ -68,8 +100,8 @@
 
 - Added `/funding/credit-card-strategy` as a logged-in customer workflow for business credit card funding readiness.
 - Added a compliance-safe readiness scorer for credit range, utilization, inquiries, EIN, business banking, business age, revenue, and use of funds.
-- Added the paid offer `Business Credit Card Funding Strategy Review` at `$297`.
-- Added PayPal product support so VestBlock Pro and funding strategy reviews can use the same checkout/capture routes without turning every payment into a subscription.
+- Added the paid offer `Business Funding Readiness Plan` at `$300`.
+- Added PayPal product support so VestBlock Pro and funding readiness plans can use the same checkout/capture routes without turning every payment into a subscription.
 - Added funding strategy automation that sends admin lead alerts, creates admin tasks, and logs `funding_strategy_submitted` / `funding_strategy_paid` events.
 - Added an admin Funding Strategy tab with readiness score, customer contact, payment status, admin notes, and manual status updates.
 - Wired the existing `/funding` lead form into a real `/api/funding-lead` route instead of local-only form logging.

@@ -396,10 +396,10 @@ export async function createFundingStrategyReviewTask(input: {
 }) {
   return createAdminTask({
     title: input.paid
-      ? 'Complete paid card funding strategy review'
+      ? 'Complete paid funding readiness plan'
       : 'Review card funding strategy request',
     description:
-      'A customer submitted a business credit card funding strategy request. Review credit readiness, business setup, consent, and whether the plan should move to a paid strategy session or preparation work.',
+      'A customer submitted a business credit card funding strategy request. Review credit readiness, business setup, consent, and whether the plan should focus on applications or eligibility prep.',
     taskType: input.paid
       ? 'paid_funding_strategy_review'
       : 'funding_strategy_review',
@@ -415,8 +415,8 @@ export async function createFundingStrategyReviewTask(input: {
       readinessTier: input.readinessTier,
       paid: Boolean(input.paid),
       nextAction: input.paid
-        ? 'Prepare the strategy review, verify documents, and contact the customer.'
-        : 'Review readiness score and decide whether to invite payment or recommend prep work.',
+        ? 'Prepare the readiness plan, verify documents, and contact the customer.'
+        : 'Review readiness score and decide whether to route toward partner funding or prep work.',
     },
   });
 }

@@ -134,7 +134,7 @@ export default function CreditCardStrategyPage() {
         toast({
           title: 'Payment received',
           description:
-            'Your funding strategy review is paid and queued for admin review.',
+            'Your funding readiness plan is paid and queued for admin review.',
         });
         window.history.replaceState({}, '', '/funding/credit-card-strategy');
       })
@@ -191,9 +191,10 @@ export default function CreditCardStrategyPage() {
       setCanCheckout(Boolean(data.canCheckout));
       toast({
         title: 'Readiness review created',
-        description: data.canCheckout
-          ? 'You can now purchase the strategy review.'
-          : 'The readiness plan recommends prep before card funding.',
+        description:
+          data.readiness?.tier === 'needs_prep'
+            ? 'You can now join the $300 readiness plan to work on eligibility.'
+            : 'You can now purchase the funding strategy plan.',
       });
     } catch (error) {
       toast({
@@ -267,18 +268,18 @@ export default function CreditCardStrategyPage() {
           <div className="space-y-5">
             <Badge className="w-fit">Business funding strategy</Badge>
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Credit card stacking strategy review
+              Business funding readiness plan
             </h1>
             <p className="text-lg text-muted-foreground">
-              Get a structured readiness review before you pursue business
-              credit card funding. VestBlock checks credit range, utilization,
-              inquiries, business setup, revenue story, and use-of-funds clarity
-              so you know what to fix before applications.
+              If the free checker shows you are not funding-ready yet, this is
+              the $300 plan that helps organize the credit, business setup,
+              documentation, use-of-funds, and application-prep work before you
+              pursue business funding.
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md border p-4">
-                <p className="text-sm text-muted-foreground">Review price</p>
-                <p className="text-2xl font-bold">$297</p>
+                <p className="text-sm text-muted-foreground">Plan price</p>
+                <p className="text-2xl font-bold">$300</p>
               </div>
               <div className="rounded-md border p-4">
                 <p className="text-sm text-muted-foreground">Success fee</p>
@@ -298,8 +299,8 @@ export default function CreditCardStrategyPage() {
               This service organizes strategy and readiness. It does not
               guarantee approvals, credit limits, rates, or funding. No
               application should be submitted until you review the lender terms,
-              fees, inquiries, and repayment obligations. The $297 review is due
-              upfront; a 10% success fee is only owed after card funding is
+              fees, inquiries, and repayment obligations. The $300 readiness plan
+              is due upfront; a 10% success fee is only owed after card funding is
               approved, accepted, and made available to you.
             </AlertDescription>
           </Alert>
@@ -310,8 +311,8 @@ export default function CreditCardStrategyPage() {
             <CardHeader>
               <CardTitle>Readiness assessment</CardTitle>
               <CardDescription>
-                Submit your profile, generate a readiness score, and unlock the
-                paid review only when the profile is ready enough to evaluate.
+                Submit your profile, generate a readiness score, and start the
+                $300 plan if VestBlock needs to help you become funding-ready.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -524,7 +525,7 @@ export default function CreditCardStrategyPage() {
                     ],
                     [
                       'consentSuccessFee',
-                      'I understand VestBlock charges $297 for the review and a 10% success fee only after approved card funding is accepted and available.',
+                      'I understand VestBlock charges $300 for the readiness plan and a 10% success fee only after approved card funding is accepted and available.',
                     ],
                   ].map(([name, label]) => (
                     <label key={name} className="flex items-start gap-2 text-sm">
@@ -560,14 +561,16 @@ export default function CreditCardStrategyPage() {
               <CardHeader>
                 <CardTitle>Strategy output</CardTitle>
                 <CardDescription>
-                  Your score decides whether the paid review is the next step or
-                  prep work should happen first.
+                  Your score shows whether you may be ready to apply now or
+                  should use the paid plan to improve eligibility first.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!readiness ? (
                   <p className="text-sm text-muted-foreground">
-                    Submit the assessment to create a saved admin-visible request.
+                    Use the free checker first if you just want an instant result.
+                    Submit here when you are ready to save the request and start
+                    the paid readiness workflow.
                   </p>
                 ) : (
                   <>
@@ -584,10 +587,10 @@ export default function CreditCardStrategyPage() {
                     {paymentComplete && (
                       <Alert>
                         <CheckCircle2 className="h-4 w-4" />
-                        <AlertTitle>Paid review queued</AlertTitle>
+                        <AlertTitle>Paid plan queued</AlertTitle>
                         <AlertDescription>
-                          VestBlock has logged this as a paid funding strategy
-                          review for admin follow-up.
+                          VestBlock has logged this as a paid funding readiness
+                          plan for admin follow-up.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -615,30 +618,18 @@ export default function CreditCardStrategyPage() {
                         ))}
                       </ul>
                     </div>
-                    {canCheckout ? (
-                      <Button
-                        className="w-full"
-                        onClick={startCheckout}
-                        disabled={checkoutLoading}
-                      >
-                        {checkoutLoading ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <CreditCard className="mr-2 h-4 w-4" />
-                        )}
-                        Pay $297 For Strategy Review
-                      </Button>
-                    ) : (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Prep recommended first</AlertTitle>
-                        <AlertDescription>
-                          This profile should improve readiness before buying a
-                          card funding review. Focus on the listed next steps,
-                          then resubmit.
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                    <Button
+                      className="w-full"
+                      onClick={startCheckout}
+                      disabled={checkoutLoading || !canCheckout}
+                    >
+                      {checkoutLoading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="mr-2 h-4 w-4" />
+                      )}
+                      Pay $300 For Readiness Plan
+                    </Button>
                   </>
                 )}
               </CardContent>

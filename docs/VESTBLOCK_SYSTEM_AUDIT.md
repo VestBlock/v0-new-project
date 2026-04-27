@@ -61,7 +61,7 @@ Important operating routes include:
 - `/api/create-order`
 - `/api/capture-order`
 - `/api/funding-lead` added for the public business funding form
-- `/api/funding-strategy` added for card funding readiness and paid review intake
+- `/api/funding-strategy` added for card funding readiness and paid readiness-plan intake
 - `/api/webhook`
 - `/api/paypal-webhook`
 - `/api/process-payment`
@@ -118,7 +118,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Alerts / Notifications
 - Recent activity
 - Payments and funding leads
-- Credit card funding strategy review requests
+- Credit card funding strategy and readiness plan requests
 - Funding lead status controls
 - Funding strategy status and admin notes controls
 - Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
@@ -167,7 +167,7 @@ The direct capture route and both PayPal webhook paths check `payments.paypal_tr
 Payment products now live in `lib/payments/products.ts`:
 
 - `vestblock_pro` remains the `$75` Pro product and sets `user_profiles.is_subscribed`.
-- `funding_strategy_review` is the `$297` Business Credit Card Funding Strategy Review and records payment against `funding_strategy_requests` without granting Pro access.
+- `funding_strategy_review` is the `$300` Business Funding Readiness Plan and records payment against `funding_strategy_requests` without granting Pro access.
 
 The card funding workflow uses `lib/funding/cardStacking.ts` for readiness scoring and `lib/funding/fundingStrategyAutomation.ts` for admin alert/task/event automation.
 
@@ -192,5 +192,5 @@ Risk fixed: upload and PayPal webhook routes no longer log raw report text, extr
 - Remove legacy database setup/debug routes once they are no longer needed for recovery work.
 - Regenerate Supabase types and remove legacy env fallbacks once deployment settings are fully standardized.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.
-- Add customer-facing document checklist upload for paid funding strategy reviews.
+- Add customer-facing document checklist upload for paid funding readiness plans.
 - Add partner outcome tracking for business funding, card stacking, Bank Breezy Spanish leads, and real estate funding leads.

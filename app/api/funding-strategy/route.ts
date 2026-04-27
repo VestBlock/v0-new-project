@@ -104,7 +104,7 @@ export async function POST(req: Request) {
     useOfFunds: input.useOfFunds,
   };
   const readiness = evaluateCardFundingReadiness(answers);
-  const canCheckout = readiness.tier !== 'needs_prep';
+  const canCheckout = true;
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       consent_terms_review: input.consentTermsReview,
       consent_success_fee: input.consentSuccessFee,
       success_fee_rate: 0.1,
-      status: canCheckout ? 'awaiting_payment' : 'needs_prep',
+      status: 'awaiting_payment',
       payment_status: 'unpaid',
     })
     .select('*')
@@ -162,7 +162,10 @@ export async function POST(req: Request) {
     readinessTier: readiness.tier,
     summary: readiness.summary,
     metadata: {
-      canCheckout,
+      planPurpose:
+        readiness.tier === 'needs_prep'
+          ? 'eligibility_builder'
+          : 'funding_strategy',
       requestedFundingAmount: data.requested_funding_amount,
       businessStage: data.business_stage,
     },
@@ -173,6 +176,6 @@ export async function POST(req: Request) {
     request: data,
     readiness,
     canCheckout,
-    checkoutAmount: canCheckout ? 297 : null,
+    checkoutAmount: 300,
   });
 }

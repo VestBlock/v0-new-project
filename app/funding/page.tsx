@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { FundingEligibilityChecker } from "@/components/funding-eligibility-checker"
 import {
   DollarSign,
   CheckCircle,
@@ -23,9 +24,7 @@ import {
   Phone,
 } from "lucide-react"
 
-export default function FundingPage()
-
-{
+export default function FundingPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -100,25 +99,30 @@ export default function FundingPage()
       
       <section className="pt-24 pb-16 px-4">
         <div className="container mx-auto text-center">
-          <h1 className="text-4xl md:text-6xl font-bold gradient-text mb-6">Business Funding Solutions</h1>
+          <h1 className="text-4xl md:text-6xl font-bold gradient-text mb-6">Check Business Funding Eligibility Free</h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Access capital for your business through our trusted lending partners. From startup funding to expansion
-            capital, we connect you with the right financial solutions.
+            See whether your business looks funding-ready before you pay for anything. If you need help getting
+            eligible, VestBlock can organize the credit, business setup, and documentation work through the $300 plan.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
-              <Link href="/funding/credit-card-strategy">
+              <a href="#free-eligibility-check">
                 <DollarSign className="mr-2 h-5 w-5" />
-                Start Strategy Review
-              </Link>
+                Check Eligibility Free
+              </a>
             </Button>
             <Button size="lg" variant="outline" asChild>
               <Link href="/funding/credit-card-strategy">
                 <Phone className="mr-2 h-5 w-5" />
-                Check Readiness
+                Join $300 Readiness Plan
               </Link>
             </Button>
           </div>
+        </div>
+      </section>
+      <section id="free-eligibility-check" className="py-12 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <FundingEligibilityChecker />
         </div>
       </section>
       <section className="py-16 bg-muted/50">
@@ -293,11 +297,11 @@ export default function FundingPage()
           <Card className="border-2 border-emerald-500/20">
             <CardHeader>
               <Badge className="w-fit bg-emerald-600 text-white">VestBlock Service</Badge>
-              <CardTitle className="text-2xl">Business Credit Card Funding Strategy Review</CardTitle>
+              <CardTitle className="text-2xl">Business Funding Readiness Plan</CardTitle>
               <CardDescription className="text-base">
-                A $297 readiness review for business owners considering credit card stacking, plus a 10% success fee
-                only after approved funding is accepted and available. VestBlock scores your credit range,
-                utilization, inquiries, business setup, use of funds, and prep gaps before you pursue applications.
+                A $300 plan for business owners who need help becoming eligible before they pursue funding, plus a
+                10% success fee only after approved funding is accepted and available. VestBlock helps organize credit,
+                business setup, documentation, use of funds, and application sequencing.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -311,13 +315,13 @@ export default function FundingPage()
                   <div className="text-muted-foreground">No funding guarantees or hidden application promises.</div>
                 </div>
                 <div className="rounded-lg border p-4">
-                  <div className="font-medium">$297 Review</div>
+                  <div className="font-medium">$300 Readiness Plan</div>
                   <div className="text-muted-foreground">Then 10% after accepted card funding is available.</div>
                 </div>
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>
                 <Link href="/funding/credit-card-strategy">
-                  Start Credit Card Funding Strategy
+                  Join Business Funding Readiness Plan
                   <CreditCard className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -325,7 +329,7 @@ export default function FundingPage()
           </Card>
         </div>
       </section>
-      <section className="py-16 bg-muted/50">
+      <section id="funding-application" className="py-16 bg-muted/50">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">

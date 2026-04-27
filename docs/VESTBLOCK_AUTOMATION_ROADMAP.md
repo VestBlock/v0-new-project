@@ -42,8 +42,9 @@ Email failures must be logged to `email_events` and must not break uploads or an
 
 - Centralize funding, real estate, and business credit leads in `leads`.
 - Route the public `/funding` form into `/api/funding-lead` so business funding interest creates a real lead row, admin email alert, follow-up task, and `lead_created` event.
-- Use `/funding/credit-card-strategy` for business credit card stacking readiness. The workflow creates `funding_strategy_requests`, scores readiness, blocks weak profiles from paying too early, and queues paid reviews for admin follow-up.
-- Charge `$297` for the `funding_strategy_review` product through the shared PayPal order/capture routes.
+- Use `/funding` for the free instant business funding eligibility checker, then route people who need help becoming eligible into `/funding/credit-card-strategy`.
+- Use `/funding/credit-card-strategy` for the paid business funding readiness plan. The workflow creates `funding_strategy_requests`, scores readiness, captures consent, and queues paid plan requests for admin follow-up.
+- Charge `$300` for the `funding_strategy_review` product through the shared PayPal order/capture routes.
 - Keep funding strategy payments separate from VestBlock Pro subscription payments with `payments.product_type` and `metadata_json`.
 - Alert admin when a funding lead is submitted.
 - Track source route, lead type, status, contact info, and notes.
