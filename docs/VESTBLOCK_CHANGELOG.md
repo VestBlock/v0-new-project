@@ -1,5 +1,26 @@
 # VestBlock Changelog
 
+## 2026-04-27 Dependency Security Patch
+
+## Files Changed
+
+- `package.json`
+- `package-lock.json`
+- `pnpm-lock.yaml`
+
+## Features Added
+
+- Upgraded Next.js from `14.2.16` to `14.2.35` to remove the critical Next.js 14 middleware authorization advisory and several older Next.js 14 advisories.
+- Upgraded Axios to `^1.15.2`.
+- Upgraded direct PostCSS to `^8.5.12`.
+- Added npm/pnpm overrides for patched transitive packages, including `follow-redirects`, `picomatch`, `glob`, `minimatch`, `brace-expansion`, `yaml`, `jsondiffpatch`, and `mdast-util-to-hast`.
+- Synced both npm and pnpm lockfiles because the repo contains both and Vercel builds with pnpm.
+
+## Known Remaining Security Work
+
+- `npm audit` now reports only the remaining Next.js major-version advisories tied to Next 14 and its bundled PostCSS; clearing those requires a controlled Next 15/16 plus React upgrade.
+- `pnpm audit` also reports a low AI SDK advisory that requires upgrading the `ai` package across a major version.
+
 ## 2026-04-27 Lifecycle Follow-Up Monitor
 
 ## Files Changed
