@@ -1,5 +1,32 @@
 # VestBlock Changelog
 
+## 2026-04-27 PayPal Environment Configuration
+
+## Files Changed
+
+- `lib/paypal/config.ts`
+- `lib/paypal/accessToken.ts`
+- `app/api/create-order/route.ts`
+- `app/api/capture-order/route.ts`
+- `app/api/webhook/route.ts`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `.agents/skills/vestblock/vercel-supabase-release-operator.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a shared PayPal API configuration helper.
+- Replaced route-level hardcoded PayPal sandbox API URLs with `getPaypalApiUrl()`.
+- Added support for `PAYPAL_ENV=live` or `PAYPAL_MODE=live` to switch production traffic from PayPal sandbox to PayPal live.
+- Kept sandbox as the default so development and staging remain safe unless explicitly switched.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Legacy PayPal Webhook Automation
 
 ## Files Changed
@@ -795,7 +822,13 @@
 - `OPENAI_API_KEY`
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_WEBHOOK_ID`
 - `CRON_SECRET`
+
+Optional payment environment:
+
+- `PAYPAL_ENV=sandbox` for test payments
+- `PAYPAL_ENV=live` for real PayPal payments
 
 Optional legacy compatibility:
 

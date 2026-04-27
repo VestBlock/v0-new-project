@@ -8,12 +8,14 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - PayPal capture: `/api/capture-order`
 - Webhook route: `/api/paypal-webhook`
 - Legacy webhook route: `/api/webhook`
+- PayPal API environment helper: `lib/paypal/config.ts`
 - User subscription fields: `user_profiles.is_subscribed`, `paypal_order_id`
 - Admin visibility: `/admin-panel` payments and paid users
 
 ## Operating Rules
 
 - Never log PayPal secrets or full payment payloads.
+- Never hardcode PayPal sandbox/live URLs in routes; use `getPaypalApiUrl()`.
 - Store enough payment metadata to reconcile customers without storing sensitive card data.
 - Paid-user status should be visible to admins and reflected in user access.
 - Payment completion should trigger `sendNewPaidCustomerAlert()` when configured.
@@ -21,6 +23,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - PayPal order creation should log `checkout_started`; lifecycle cron should create `abandoned_checkout` tasks for stale unpaid orders.
 - All PayPal completion paths should use `lib/payments/paymentAutomation.ts`; do not add route-local one-off payment emails.
 - Check `payments.paypal_transaction_id` before inserting payment rows so repeated provider webhooks do not duplicate payment records or paid-customer alerts.
+- Keep `PAYPAL_ENV=sandbox` until live PayPal credentials and `PAYPAL_WEBHOOK_ID` are installed in Vercel.
 
 ## Useful Improvements
 

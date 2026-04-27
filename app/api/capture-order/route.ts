@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
+import { getPaypalApiUrl } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   runPaymentCompletedAutomation,
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
     // 1) Capture payment
     const token = await generatePaypalAccessToken();
     const { data: capture } = await axios.post(
-      `https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderID}/capture`,
+      getPaypalApiUrl(`/v2/checkout/orders/${orderID}/capture`),
       {},
       { headers: { Authorization: `Bearer ${token?.access_token}` } }
     );

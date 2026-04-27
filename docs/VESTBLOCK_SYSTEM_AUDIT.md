@@ -136,6 +136,8 @@ PayPal is present through `/api/create-order`, `/api/capture-order`, `/api/webho
 
 Payment automation now runs through `lib/payments/paymentAutomation.ts` and the lifecycle monitor, creating admin alerts, paid-customer onboarding tasks, failed-payment tasks, abandoned-checkout tasks, and `checkout_started` / `payment_completed` / `payment_failed` / `abandoned_checkout` activity logs. Both PayPal webhook routes now use the shared automation path for successful captures and failed payment events.
 
+PayPal API URLs are centralized in `lib/paypal/config.ts`. The default environment is sandbox; set `PAYPAL_ENV=live` or `PAYPAL_MODE=live` in Vercel only when the live PayPal app credentials and webhook ID are configured.
+
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 
 Risk fixed: upload and PayPal webhook routes no longer log raw report text, extracted credit items, profile rows, webhook payloads, PayPal headers, or PayPal secrets.

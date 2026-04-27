@@ -16,6 +16,8 @@ Use this skill when changing VestBlock production env vars, Supabase project con
 - `NEXT_PUBLIC_SITE_URL`
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_WEBHOOK_ID`
+- `PAYPAL_ENV`
 
 ## Supabase Safety
 
@@ -45,4 +47,5 @@ Use this skill when changing VestBlock production env vars, Supabase project con
 
 - Do not print secrets.
 - Do not overwrite PayPal production keys without confirmation.
+- Keep `PAYPAL_ENV=sandbox` for test credentials; use `PAYPAL_ENV=live` only with live PayPal credentials and live webhook ID.
 - Do not delete the old project until the upgraded app has been live and verified.

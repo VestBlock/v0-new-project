@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getPaypalApiUrl } from '@/lib/paypal/config';
 
 export async function generatePaypalAccessToken() {
   if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
@@ -6,7 +7,7 @@ export async function generatePaypalAccessToken() {
   }
 
   const response = await axios({
-    url: 'https://api-m.sandbox.paypal.com/v1/oauth2/token',
+    url: getPaypalApiUrl('/v1/oauth2/token'),
     method: 'post',
     data: 'grant_type=client_credentials',
     auth: {

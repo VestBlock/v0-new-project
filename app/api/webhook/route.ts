@@ -7,6 +7,7 @@ import {
   runPaymentFailedAutomation,
 } from '@/lib/payments/paymentAutomation';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
+import { getPaypalApiUrl } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const failedPaypalEvents = new Set([
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     }
 
     const verifyRes = await axios.post(
-      'https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature',
+      getPaypalApiUrl('/v1/notifications/verify-webhook-signature'),
       {
         auth_algo: authAlgo,
         cert_url: certUrl,
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       if (orderId) {
         const getData = await generatePaypalAccessToken();
         const { data: captureData } = await axios.post(
-          `https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderId}/capture`,
+          getPaypalApiUrl(`/v2/checkout/orders/${orderId}/capture`),
           {},
           { headers: { Authorization: `Bearer ${getData.access_token}` } }
         );

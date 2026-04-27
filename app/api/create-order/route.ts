@@ -2,6 +2,7 @@ import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
+import { getPaypalApiUrl } from '@/lib/paypal/config';
 import { logEvent } from '@/lib/system/logEvent';
 
 export async function POST(req: Request) {
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
   };
 
   const response = await axios({
-    url: 'https://api-m.sandbox.paypal.com/v2/checkout/orders',
+    url: getPaypalApiUrl('/v2/checkout/orders'),
     method: 'post',
     data: JSON.stringify(orderData),
     headers: {
