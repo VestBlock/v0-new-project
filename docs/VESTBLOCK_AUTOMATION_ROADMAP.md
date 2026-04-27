@@ -4,6 +4,14 @@
 
 Make VestBlock operate like a SaaS platform: every upload, payment, analysis, alert, and admin action should be visible, logged, and easy to automate.
 
+## Service Routing Automation
+
+- Use `/services` as the plain-language directory for all VestBlock offers.
+- Use `lib/services/serviceDirectory.ts` as the customer-facing service routing catalog.
+- Keep the service directory aligned with the admin content catalog in `lib/content/marketingServices.ts`.
+- Every service should have a primary action, a pricing path, an operator workflow, and a compliance guardrail.
+- Future: add service-click tracking, lead-source attribution, and admin conversion metrics by service key.
+
 ## Credit Report Upload Automation
 
 - Create a `credit_reports` record for every uploaded file.

@@ -1,5 +1,35 @@
 # VestBlock Changelog
 
+## 2026-04-27 Service Directory And Skill Upgrade
+
+## Files Changed
+
+- `app/services/page.tsx`
+- `lib/services/serviceDirectory.ts`
+- `components/service-cards.tsx`
+- `components/navigation.tsx`
+- `app/sitemap.ts`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added `/services` as a single client-facing hub for every major VestBlock service.
+- Added a reusable service directory covering credit analysis, business funding, business setup, grants, Spanish funding, real estate funding, property seller leads, and the AI assistant.
+- Updated homepage service cards to pull from the shared service directory instead of a smaller hardcoded service list.
+- Simplified top navigation by adding `Services` and keeping the main menu focused on the highest-intent paths.
+- Added `/services` to the sitemap.
+- Installed additional Codex skills for future platform work: `playwright`, `security-best-practices`, `security-threat-model`, `sentry`, `vercel-deploy`, and `pdf`.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warnings only.
+- `corepack pnpm build` passed with local placeholder production env values.
+- Local built-app smoke checks returned `200` for `/services`, confirmed homepage service cards render, and confirmed `/services` appears in `sitemap.xml`.
+- Deploy and live smoke verification pending.
+
 ## 2026-04-27 Free Funding Eligibility Checker
 
 ## Files Changed

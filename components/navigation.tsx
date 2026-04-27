@@ -35,11 +35,11 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/learn', label: 'Learn' },
+    { href: '/services', label: 'Services' },
     { href: '/funding', label: 'Funding' },
-    { href: '/business-setup', label: 'Business Setup' },
-    { href: '/ai-assistant', label: 'AI Assistant' },
     { href: '/credit-upload', label: 'Credit Tools' },
+    { href: '/business-setup', label: 'Business Setup' },
+    { href: '/learn', label: 'Learn' },
     { href: '/sell', label: 'Sell Property' },
   ];
 

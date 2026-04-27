@@ -1,129 +1,137 @@
-"use client"
+'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { DollarSign, Bot, CreditCard, ArrowRight, MessageSquare, Calendar, FileText, Building2 } from "lucide-react"
-import Link from "next/link"
-import { motion } from "framer-motion"
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bot,
+  Briefcase,
+  Building2,
+  CreditCard,
+  FileText,
+  Home,
+  Landmark,
+} from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { getFeaturedServiceDirectoryItems } from '@/lib/services/serviceDirectory';
+
+const iconByService: Record<string, typeof CreditCard> = {
+  credit_analysis: CreditCard,
+  business_funding: Briefcase,
+  business_setup: BadgeCheck,
+  grants: FileText,
+  spanish_funding: Landmark,
+  real_estate_funding: Building2,
+  sell_property: Home,
+  ai_assistant: Bot,
+};
+
+const stageLabel = {
+  free_check: 'Free first step',
+  paid_plan: 'Paid plan',
+  lead_followup: 'Lead follow-up',
+  member_tool: 'Member tool',
+};
 
 export function ServiceCards() {
-  const services = [
-    {
-      title: "Business Funding",
-      description: "Working capital, equipment financing, and expansion funding for your business.",
-      features: [
-        "Multiple funding options",
-        "Quick approval process",
-        "Spanish support available"
-      ],
-      icon: DollarSign,
-      cta: "Apply for Funding",
-      href: "/funding",
-      primary: true
-    },
-    {
-      title: "AI Assistant + Booking",
-      description: "AI that answers questions, captures leads, and books appointments automatically.",
-      features: [
-        "24/7 lead capture",
-        "Appointment booking",
-        "Installs on your website fast"
-      ],
-      icon: Bot,
-      cta: "Try Demo",
-      ctaSecondary: "Request Setup",
-      href: "/ai-assistant",
-      primary: true
-    },
-    {
-      title: "Credit Tools",
-      description: "Credit analyzer, improvement roadmap, and dispute letter generator.",
-      features: [
-        "AI credit analysis",
-        "Personalized roadmap",
-        "Dispute letter templates"
-      ],
-      icon: CreditCard,
-      cta: "Analyze My Credit",
-      href: "/credit-upload",
-      primary: false
-    },
-    {
-      title: "Real Estate Funding",
-      description: "DSCR loans for rentals or hard money for fix & flip projects.",
-      features: [
-        "DSCR loans",
-        "Hard money / fix & flip",
-        "Fast closings"
-      ],
-      icon: Building2,
-      cta: "Apply Now",
-      href: "/real-estate-funding",
-      primary: false
-    }
-  ]
+  const services = getFeaturedServiceDirectoryItems(6);
 
   return (
-    <section className="py-20 px-4">
+    <section className="px-4 py-20">
       <div className="container mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">How We Help Your Business Grow</h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Powerful solutions to help you get funded, automate your leads, and build better credit.
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <h2 className="mb-4 text-3xl font-bold md:text-4xl">
+            Choose The Right VestBlock Service
+          </h2>
+          <p className="text-xl text-muted-foreground">
+            Start with the path that matches your goal: credit repair, business
+            funding, business setup, grants, Spanish funding, or real estate.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-          {services.map((service, index) => (
-            <motion.div
-              key={service.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              viewport={{ once: true }}
-            >
-              <Card className={`h-full bg-card/80 backdrop-blur border-2 hover:border-cyan-500/50 transition-all duration-300 ${service.primary ? 'border-cyan-500/30' : ''}`}>
-                <CardHeader>
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${service.primary ? 'bg-cyan-500/20' : 'bg-muted'}`}>
-                    <service.icon className={`h-6 w-6 ${service.primary ? 'text-cyan-500' : 'text-muted-foreground'}`} />
-                  </div>
-                  <CardTitle className="text-xl">{service.title}</CardTitle>
-                  <CardDescription className="text-base">{service.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 mb-6">
-                    {service.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex flex-col gap-2">
+        <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {services.map((service, index) => {
+            const Icon = iconByService[service.key] ?? Landmark;
+            const isPrimary =
+              service.key === 'business_funding' || service.key === 'credit_analysis';
+
+            return (
+              <motion.div
+                key={service.key}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: index * 0.05 }}
+                viewport={{ once: true }}
+              >
+                <Card
+                  className={`flex h-full flex-col border-2 bg-card/80 backdrop-blur transition-colors hover:border-cyan-500/50 ${
+                    isPrimary ? 'border-cyan-500/30' : 'border-transparent'
+                  }`}
+                >
+                  <CardHeader>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div
+                        className={`flex h-11 w-11 items-center justify-center rounded-md ${
+                          isPrimary ? 'bg-cyan-500/20 text-cyan-600' : 'bg-muted'
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <Badge variant="outline">{stageLabel[service.serviceStage]}</Badge>
+                    </div>
+                    <CardTitle className="text-xl">{service.shortTitle}</CardTitle>
+                    <CardDescription className="text-base">
+                      {service.summary}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col gap-4">
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="font-medium">Best for</p>
+                        <p className="text-muted-foreground">{service.bestFor}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Pricing path</p>
+                        <p className="text-muted-foreground">{service.priceNote}</p>
+                      </div>
+                    </div>
                     <Button
-                      className={service.primary ? "bg-cyan-500 hover:bg-cyan-600 w-full" : "w-full"}
-                      variant={service.primary ? "default" : "outline"}
+                      className={
+                        isPrimary ? 'mt-auto bg-cyan-500 hover:bg-cyan-600' : 'mt-auto'
+                      }
+                      variant={isPrimary ? 'default' : 'outline'}
                       asChild
                     >
-                      <Link href={service.href}>
-                        {service.cta}
+                      <Link href={service.route}>
+                        {service.primaryCta}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
-                    {service.ctaSecondary && (
-                      <Button variant="ghost" className="w-full" asChild>
-                        <Link href={`${service.href}#request-setup`}>
-                          {service.ctaSecondary}
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="mt-8 text-center">
+          <Button asChild variant="ghost">
+            <Link href="/services">
+              Compare all VestBlock services
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </div>
     </section>
-  )
+  );
 }
