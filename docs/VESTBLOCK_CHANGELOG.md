@@ -1,5 +1,25 @@
 # VestBlock Changelog
 
+## 2026-04-27 Edge-Safe Diagnostic Middleware
+
+## Files Changed
+
+- `middleware.ts`
+
+## Features Added
+
+- Removed Supabase SSR/client package imports from middleware so the Edge Runtime no longer pulls in Node-only Supabase internals.
+- Kept diagnostic pages and diagnostic setup/test APIs protected with Edge-safe Supabase Auth REST checks.
+- Narrowed the middleware matcher to only the protected diagnostic/admin-test surfaces instead of matching nearly every request.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values.
+- The previous Supabase Edge Runtime warning is no longer emitted by the local production build.
+
 ## 2026-04-27 Sitemap And Robots
 
 ## Files Changed
