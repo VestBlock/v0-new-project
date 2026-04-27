@@ -1,5 +1,24 @@
 # VestBlock Changelog
 
+## 2026-04-27 Admin Dashboard Search And Filters
+
+## Files Changed
+
+- `app/admin-panel/page.tsx`
+
+## Features Added
+
+- Added dashboard search and filter controls for credit reports, users, alerts, admin tasks, recent activity, payments, and funding leads.
+- Added filtered result counts so admins can see how much of the operational queue is currently visible.
+- Kept filtering client-side against the existing protected admin dashboard payload to avoid database/schema risk.
+
+## Verification
+
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values.
+- `corepack pnpm run lint` remains blocked by Next's deprecated interactive lint setup prompt.
+
 ## 2026-04-27 Credit Workflow Operator Actions
 
 ## Files Changed

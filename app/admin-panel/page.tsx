@@ -13,6 +13,7 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Search,
   ShieldAlert,
   Users,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -148,6 +150,15 @@ function priorityVariant(priority: string) {
   return 'secondary';
 }
 
+function searchable(values: Array<unknown>, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return values
+    .filter((value) => value !== null && value !== undefined)
+    .some((value) => String(value).toLowerCase().includes(normalized));
+}
+
 export default function AdminPanelPage() {
   const { user, userProfile, isAuthenticated, isLoading: authLoading } =
     useAuth();
@@ -160,6 +171,17 @@ export default function AdminPanelPage() {
   const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [savingReportId, setSavingReportId] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [reportSearch, setReportSearch] = useState('');
+  const [reportStatusFilter, setReportStatusFilter] = useState('all');
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [taskStatusFilter, setTaskStatusFilter] = useState('open_work');
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState('all');
+  const [alertSearch, setAlertSearch] = useState('');
+  const [alertStatusFilter, setAlertStatusFilter] = useState('all');
+  const [activitySearch, setActivitySearch] = useState('');
+  const [paymentLeadSearch, setPaymentLeadSearch] = useState('');
 
   const isAdminEmail =
     user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -236,6 +258,161 @@ export default function AdminPanelPage() {
       },
     ];
   }, [dashboard]);
+
+  const filteredReports = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.creditReports.filter((report) => {
+      const statusMatches =
+        reportStatusFilter === 'all' || report.status === reportStatusFilter;
+      return (
+        statusMatches &&
+        searchable(
+          [
+            report.userName,
+            report.userEmail,
+            report.fileName,
+            report.status,
+            report.errorMessage,
+            report.adminNotes,
+          ],
+          reportSearch
+        )
+      );
+    });
+  }, [dashboard, reportSearch, reportStatusFilter]);
+
+  const filteredUsers = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.users.filter((profile) => {
+      const roleMatches = userRoleFilter === 'all' || profile.role === userRoleFilter;
+      return (
+        roleMatches &&
+        searchable(
+          [
+            profile.fullName,
+            profile.email,
+            profile.role,
+            profile.subscriptionStatus,
+            profile.id,
+          ],
+          userSearch
+        )
+      );
+    });
+  }, [dashboard, userSearch, userRoleFilter]);
+
+  const filteredTasks = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.tasks.filter((task) => {
+      const statusMatches =
+        taskStatusFilter === 'all' ||
+        (taskStatusFilter === 'open_work'
+          ? ['open', 'in_progress', 'waiting'].includes(task.status)
+          : task.status === taskStatusFilter);
+      const priorityMatches =
+        taskPriorityFilter === 'all' || task.priority === taskPriorityFilter;
+      return (
+        statusMatches &&
+        priorityMatches &&
+        searchable(
+          [
+            task.title,
+            task.description,
+            task.task_type,
+            task.status,
+            task.priority,
+            task.user_email,
+            task.entity_type,
+            task.entity_id,
+          ],
+          taskSearch
+        )
+      );
+    });
+  }, [dashboard, taskSearch, taskStatusFilter, taskPriorityFilter]);
+
+  const filteredActivity = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.recentActivity.filter((activity) =>
+      searchable(
+        [activity.label, activity.type, activity.createdAt, activity.href],
+        activitySearch
+      )
+    );
+  }, [dashboard, activitySearch]);
+
+  const filteredEmailEvents = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.alerts.emailEvents.filter((event) => {
+      const statusMatches =
+        alertStatusFilter === 'all' || event.status === alertStatusFilter;
+      return (
+        statusMatches &&
+        searchable(
+          [
+            event.subject,
+            event.user_email,
+            event.event_type,
+            event.status,
+            event.error_message,
+          ],
+          alertSearch
+        )
+      );
+    });
+  }, [dashboard, alertSearch, alertStatusFilter]);
+
+  const filteredSystemErrors = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.alerts.systemErrors.filter((item) =>
+      searchable(
+        [
+          item.subject,
+          item.fileName,
+          item.event_type,
+          item.error_message,
+          item.errorMessage,
+          item.status,
+        ],
+        alertSearch
+      )
+    );
+  }, [dashboard, alertSearch]);
+
+  const filteredPayments = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.payments.filter((payment) =>
+      searchable(
+        [
+          payment.id,
+          payment.user_id,
+          payment.status,
+          payment.amount,
+          payment.payment_method,
+          payment.paypal_transaction_id,
+        ],
+        paymentLeadSearch
+      )
+    );
+  }, [dashboard, paymentLeadSearch]);
+
+  const filteredLeads = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.leads.filter((lead) =>
+      searchable(
+        [lead.id, lead.lead_type, lead.status, lead.name, lead.email],
+        paymentLeadSearch
+      )
+    );
+  }, [dashboard, paymentLeadSearch]);
 
   const updateReportStatus = async (reportId: string, currentStatus: string) => {
     setSavingReportId(reportId);
@@ -368,105 +545,134 @@ export default function AdminPanelPage() {
                   and manual review actions.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Uploaded</TableHead>
-                      <TableHead>File</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Letters</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Manual Update</TableHead>
-                      <TableHead>Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dashboard.creditReports.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell>
-                          <div className="font-medium">
-                            {report.userName || report.userEmail || 'Unknown user'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {report.userEmail}
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {formatDate(report.uploadedAt)}
-                        </TableCell>
-                        <TableCell className="max-w-[220px] truncate">
-                          {report.fileName}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusVariant(report.status)}>
-                            {report.status}
-                          </Badge>
-                          {report.errorMessage && (
-                            <div className="mt-1 max-w-[220px] text-xs text-destructive">
-                              {report.errorMessage}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {report.disputeLettersGenerated ? 'Generated' : 'Pending'}
-                        </TableCell>
-                        <TableCell>{report.emailAlertSent ? 'Sent' : 'Not sent'}</TableCell>
-                        <TableCell className="min-w-[260px] space-y-2">
-                          <Select
-                            value={statusDrafts[report.id] || report.status}
-                            onValueChange={(value) =>
-                              setStatusDrafts((current) => ({
-                                ...current,
-                                [report.id]: value,
-                              }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {statuses.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {status}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Textarea
-                            value={noteDrafts[report.id] ?? report.adminNotes ?? ''}
-                            onChange={(event) =>
-                              setNoteDrafts((current) => ({
-                                ...current,
-                                [report.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Admin notes"
-                            rows={2}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              updateReportStatus(report.id, report.status)
-                            }
-                            disabled={savingReportId === report.id}
-                          >
-                            {savingReportId === report.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            Save
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={report.analysisUrl}>Open</Link>
-                          </Button>
-                        </TableCell>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={reportSearch}
+                      onChange={(event) => setReportSearch(event.target.value)}
+                      placeholder="Search reports by user, email, file, notes, or error"
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={reportStatusFilter} onValueChange={setReportStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {statuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredReports.length} of {dashboard.creditReports.length} reports.
+                </p>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead>File</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Letters</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Manual Update</TableHead>
+                        <TableHead>Details</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredReports.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell>
+                            <div className="font-medium">
+                              {report.userName || report.userEmail || 'Unknown user'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {report.userEmail}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {formatDate(report.uploadedAt)}
+                          </TableCell>
+                          <TableCell className="max-w-[220px] truncate">
+                            {report.fileName}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariant(report.status)}>
+                              {report.status}
+                            </Badge>
+                            {report.errorMessage && (
+                              <div className="mt-1 max-w-[220px] text-xs text-destructive">
+                                {report.errorMessage}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {report.disputeLettersGenerated ? 'Generated' : 'Pending'}
+                          </TableCell>
+                          <TableCell>{report.emailAlertSent ? 'Sent' : 'Not sent'}</TableCell>
+                          <TableCell className="min-w-[260px] space-y-2">
+                            <Select
+                              value={statusDrafts[report.id] || report.status}
+                              onValueChange={(value) =>
+                                setStatusDrafts((current) => ({
+                                  ...current,
+                                  [report.id]: value,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {statuses.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Textarea
+                              value={noteDrafts[report.id] ?? report.adminNotes ?? ''}
+                              onChange={(event) =>
+                                setNoteDrafts((current) => ({
+                                  ...current,
+                                  [report.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="Admin notes"
+                              rows={2}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                updateReportStatus(report.id, report.status)
+                              }
+                              disabled={savingReportId === report.id}
+                            >
+                              {savingReportId === report.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
+                              Save
+                            </Button>
+                          </TableCell>
+                          <TableCell>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={report.analysisUrl}>Open</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -480,54 +686,103 @@ export default function AdminPanelPage() {
                   activity.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Subscription</TableHead>
-                      <TableHead>Uploads</TableHead>
-                      <TableHead>Analyses</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Last Activity</TableHead>
-                      <TableHead>Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dashboard.users.map((profile) => (
-                      <TableRow key={profile.id}>
-                        <TableCell>
-                          <div className="font-medium">
-                            {profile.fullName || profile.email || 'Unknown user'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {profile.email}
-                          </div>
-                        </TableCell>
-                        <TableCell>{profile.role}</TableCell>
-                        <TableCell>{profile.subscriptionStatus}</TableCell>
-                        <TableCell>{profile.uploads}</TableCell>
-                        <TableCell>{profile.analyses}</TableCell>
-                        <TableCell>{formatDate(profile.createdAt)}</TableCell>
-                        <TableCell>{formatDate(profile.lastActivity)}</TableCell>
-                        <TableCell>
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/admin-panel/users/${profile.id}`}>
-                              Open
-                            </Link>
-                          </Button>
-                        </TableCell>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={userSearch}
+                      onChange={(event) => setUserSearch(event.target.value)}
+                      placeholder="Search users by name, email, role, or status"
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All roles</SelectItem>
+                      <SelectItem value="admin">admin</SelectItem>
+                      <SelectItem value="user">user</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredUsers.length} of {dashboard.users.length} users.
+                </p>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Subscription</TableHead>
+                        <TableHead>Uploads</TableHead>
+                        <TableHead>Analyses</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Last Activity</TableHead>
+                        <TableHead>Details</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsers.map((profile) => (
+                        <TableRow key={profile.id}>
+                          <TableCell>
+                            <div className="font-medium">
+                              {profile.fullName || profile.email || 'Unknown user'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {profile.email}
+                            </div>
+                          </TableCell>
+                          <TableCell>{profile.role}</TableCell>
+                          <TableCell>{profile.subscriptionStatus}</TableCell>
+                          <TableCell>{profile.uploads}</TableCell>
+                          <TableCell>{profile.analyses}</TableCell>
+                          <TableCell>{formatDate(profile.createdAt)}</TableCell>
+                          <TableCell>{formatDate(profile.lastActivity)}</TableCell>
+                          <TableCell>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/admin-panel/users/${profile.id}`}>
+                                Open
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="alerts">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={alertSearch}
+                    onChange={(event) => setAlertSearch(event.target.value)}
+                    placeholder="Search alerts by subject, email, event, or error"
+                    className="pl-9"
+                  />
+                </div>
+                <Select value={alertStatusFilter} onValueChange={setAlertStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All email statuses</SelectItem>
+                    <SelectItem value="sent">sent</SelectItem>
+                    <SelectItem value="failed">failed</SelectItem>
+                    <SelectItem value="skipped">skipped</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -539,7 +794,10 @@ export default function AdminPanelPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {dashboard.alerts.emailEvents.slice(0, 20).map((event) => (
+                  <p className="text-xs text-muted-foreground">
+                    Showing {filteredEmailEvents.length} of {dashboard.alerts.emailEvents.length} email events.
+                  </p>
+                  {filteredEmailEvents.slice(0, 20).map((event) => (
                     <div key={event.id} className="rounded-md border p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{event.subject}</p>
@@ -573,12 +831,15 @@ export default function AdminPanelPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {dashboard.alerts.systemErrors.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Showing {filteredSystemErrors.length} of {dashboard.alerts.systemErrors.length} system errors.
+                  </p>
+                  {filteredSystemErrors.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No recent system errors.
                     </p>
                   ) : (
-                    dashboard.alerts.systemErrors.map((item, index) => (
+                    filteredSystemErrors.map((item, index) => (
                       <div
                         key={item.id || index}
                         className="rounded-md border border-destructive/30 p-3"
@@ -597,6 +858,7 @@ export default function AdminPanelPage() {
                   )}
                 </CardContent>
               </Card>
+              </div>
             </div>
           </TabsContent>
 
@@ -609,106 +871,148 @@ export default function AdminPanelPage() {
                   leads, report reviews, and support actions.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                {dashboard.tasks.length === 0 ? (
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={taskSearch}
+                      onChange={(event) => setTaskSearch(event.target.value)}
+                      placeholder="Search tasks by title, type, user, or related item"
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={taskStatusFilter} onValueChange={setTaskStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open_work">Open work</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {taskStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={taskPriorityFilter} onValueChange={setTaskPriorityFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All priorities</SelectItem>
+                      <SelectItem value="urgent">urgent</SelectItem>
+                      <SelectItem value="high">high</SelectItem>
+                      <SelectItem value="normal">normal</SelectItem>
+                      <SelectItem value="low">low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredTasks.length} of {dashboard.tasks.length} tasks.
+                </p>
+                {filteredTasks.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No admin tasks found.
                   </p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Task</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead>Due</TableHead>
-                        <TableHead>Related</TableHead>
-                        <TableHead>Update</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {dashboard.tasks.map((task) => (
-                        <TableRow key={task.id}>
-                          <TableCell className="min-w-[260px]">
-                            <div className="font-medium">{task.title}</div>
-                            {task.description && (
-                              <div className="mt-1 max-w-[360px] text-xs text-muted-foreground">
-                                {task.description}
-                              </div>
-                            )}
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {task.task_type}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={priorityVariant(task.priority)}>
-                              {task.priority}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant(task.status)}>
-                              {task.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{task.user_email || 'Unassigned'}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {formatDate(task.due_at)}
-                          </TableCell>
-                          <TableCell>
-                            {task.entity_type === 'credit_report' && task.entity_id ? (
-                              <Button asChild size="sm" variant="outline">
-                                <Link href={`/admin-panel/reports/${task.entity_id}`}>
-                                  Open
-                                </Link>
-                              </Button>
-                            ) : task.user_email || task.entity_type ? (
-                              <span className="text-sm text-muted-foreground">
-                                {task.entity_type || task.user_email}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">None</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="min-w-[200px]">
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={taskStatusDrafts[task.id] || task.status}
-                                onValueChange={(value) =>
-                                  setTaskStatusDrafts((current) => ({
-                                    ...current,
-                                    [task.id]: value,
-                                  }))
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {taskStatuses.map((status) => (
-                                    <SelectItem key={status} value={status}>
-                                      {status}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                size="sm"
-                                onClick={() => updateTaskStatus(task.id, task.status)}
-                                disabled={savingTaskId === task.id}
-                              >
-                                {savingTaskId === task.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  'Save'
-                                )}
-                              </Button>
-                            </div>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Task</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>User</TableHead>
+                          <TableHead>Due</TableHead>
+                          <TableHead>Related</TableHead>
+                          <TableHead>Update</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTasks.map((task) => (
+                          <TableRow key={task.id}>
+                            <TableCell className="min-w-[260px]">
+                              <div className="font-medium">{task.title}</div>
+                              {task.description && (
+                                <div className="mt-1 max-w-[360px] text-xs text-muted-foreground">
+                                  {task.description}
+                                </div>
+                              )}
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {task.task_type}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={priorityVariant(task.priority)}>
+                                {task.priority}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant(task.status)}>
+                                {task.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{task.user_email || 'Unassigned'}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {formatDate(task.due_at)}
+                            </TableCell>
+                            <TableCell>
+                              {task.entity_type === 'credit_report' && task.entity_id ? (
+                                <Button asChild size="sm" variant="outline">
+                                  <Link href={`/admin-panel/reports/${task.entity_id}`}>
+                                    Open
+                                  </Link>
+                                </Button>
+                              ) : task.user_email || task.entity_type ? (
+                                <span className="text-sm text-muted-foreground">
+                                  {task.entity_type || task.user_email}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">None</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="min-w-[200px]">
+                              <div className="flex items-center gap-2">
+                                <Select
+                                  value={taskStatusDrafts[task.id] || task.status}
+                                  onValueChange={(value) =>
+                                    setTaskStatusDrafts((current) => ({
+                                      ...current,
+                                      [task.id]: value,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {taskStatuses.map((status) => (
+                                      <SelectItem key={status} value={status}>
+                                        {status}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateTaskStatus(task.id, task.status)}
+                                  disabled={savingTaskId === task.id}
+                                >
+                                  {savingTaskId === task.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Save'
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -724,7 +1028,19 @@ export default function AdminPanelPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {dashboard.recentActivity.map((activity) => (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={activitySearch}
+                    onChange={(event) => setActivitySearch(event.target.value)}
+                    placeholder="Search activity by label, type, or destination"
+                    className="pl-9"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredActivity.length} of {dashboard.recentActivity.length} activity items.
+                </p>
+                {filteredActivity.map((activity) => (
                   <div
                     key={activity.id}
                     className="flex flex-col gap-1 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
@@ -759,15 +1075,27 @@ export default function AdminPanelPage() {
                   Completed customers, payment events, and funding lead activity.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Payments</h3>
-                  {dashboard.payments.length === 0 ? (
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={paymentLeadSearch}
+                    onChange={(event) => setPaymentLeadSearch(event.target.value)}
+                    placeholder="Search payments and leads by email, name, status, amount, or transaction"
+                    className="pl-9"
+                  />
+                </div>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">
+                      Payments ({filteredPayments.length}/{dashboard.payments.length})
+                    </h3>
+                    {filteredPayments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No payment records found.
                     </p>
                   ) : (
-                    dashboard.payments.map((payment) => (
+                    filteredPayments.map((payment) => (
                       <div key={payment.id} className="rounded-md border p-3">
                         <p className="font-medium">
                           {payment.status} {payment.amount ? `$${payment.amount}` : ''}
@@ -779,15 +1107,17 @@ export default function AdminPanelPage() {
                       </div>
                     ))
                   )}
-                </div>
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Funding Leads</h3>
-                  {dashboard.leads.length === 0 ? (
+                  </div>
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">
+                      Funding Leads ({filteredLeads.length}/{dashboard.leads.length})
+                    </h3>
+                    {filteredLeads.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No lead records found.
                     </p>
                   ) : (
-                    dashboard.leads.map((lead) => (
+                    filteredLeads.map((lead) => (
                       <div key={lead.id} className="rounded-md border p-3">
                         <p className="font-medium">
                           {lead.name || lead.email || lead.lead_type}
@@ -798,6 +1128,7 @@ export default function AdminPanelPage() {
                       </div>
                     ))
                   )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
