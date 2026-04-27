@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Loader2,
   Mail,
+  RefreshCw,
   Send,
   Save,
 } from 'lucide-react';
@@ -462,6 +463,19 @@ export default function AdminReportDetailPage({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => runReportAction('rerun_analysis')}
+                  disabled={Boolean(runningAction)}
+                >
+                  {runningAction === 'rerun_analysis' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Rerun analysis
+                </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start"

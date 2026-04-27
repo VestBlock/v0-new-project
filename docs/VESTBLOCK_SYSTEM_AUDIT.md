@@ -82,7 +82,10 @@ Current flow:
 6. API generates dispute-letter PDFs into `dispute-letters`.
 7. API creates `dispute_letters` rows.
 
-Added workflow module: `lib/workflows/creditRepairWorkflow.ts`.
+Added workflow modules:
+
+- `lib/workflows/creditRepairWorkflow.ts` for report records, status changes, email triggers, task creation, and logging.
+- `lib/workflows/processCreditReportAnalysis.ts` for OCR/text extraction, negative item analysis, dispute letter generation, analysis attachment, and rerun-safe processing from stored uploads.
 
 Standard statuses:
 
@@ -110,6 +113,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Admin task queue
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`
+- Rerun analysis action for stored credit report files
 
 ## Email Integration
 

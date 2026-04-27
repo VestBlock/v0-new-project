@@ -1,5 +1,28 @@
 # VestBlock Changelog
 
+## 2026-04-27 Credit Analysis Rerun Workflow
+
+## Files Changed
+
+- `lib/workflows/processCreditReportAnalysis.ts`
+- `app/api/upload-credit-report/route.ts`
+- `app/api/admin/reports/[reportId]/actions/route.ts`
+- `app/admin-panel/reports/[reportId]/page.tsx`
+
+## Features Added
+
+- Moved extraction, negative item analysis, dispute letter generation, workflow status updates, and completion email triggers into a reusable workflow processor.
+- Updated credit report upload processing to use the shared workflow processor instead of keeping analysis logic inline in the upload route.
+- Added a protected admin `rerun_analysis` action that downloads the stored report from Supabase Storage and reprocesses it.
+- Added a Rerun analysis button to the admin report detail operator actions panel.
+- Creates a follow-up admin task after a successful rerun so the operator can review outputs before customer follow-up.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Customer Credit Workflow Status
 
 ## Files Changed

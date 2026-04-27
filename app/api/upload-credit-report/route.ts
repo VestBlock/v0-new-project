@@ -4,15 +4,8 @@ export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-import type { NegativeItem } from '@/lib/extract-negative-items';
-import {
-  attachAnalysisResult,
-  attachDisputeLetters,
-  attachExtractedText,
-  createCreditReportRecord,
-  markCreditReportFailed,
-  updateCreditReportStatus,
-} from '@/lib/workflows/creditRepairWorkflow';
+import { createCreditReportRecord } from '@/lib/workflows/creditRepairWorkflow';
+import { processCreditReportAnalysis } from '@/lib/workflows/processCreditReportAnalysis';
 
 // Server-side Supabase client with service role key (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -25,9 +18,6 @@ const supabaseAdmin = createClient(
     },
   }
 );
-
-const BUREAUS = ['Experian', 'Equifax', 'TransUnion'] as const;
-type Bureau = (typeof BUREAUS)[number];
 
 export async function GET() {
   try {
@@ -74,17 +64,6 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const [{ htmlToPdfBuffer }, extractMod, { letterHtml }] = await Promise.all(
-      [
-        import('@/lib/letters/render'), // safe renderer (must be lazy)
-        import('@/lib/extract-negative-items'), // has pdf-parse / sharp / tesseract
-        import('@/lib/letters/templates'), // string-only letter template
-      ]
-    );
-
-    const { extractNegativeItemsFromText, extractTextFromPdf, ocrImageToText } =
-      extractMod;
-
     // Get the form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -176,138 +155,19 @@ export async function POST(request: NextRequest) {
       filePath: uploadData.path,
     });
 
-    if (reportId) {
-      await updateCreditReportStatus(reportId, 'extracting_text');
-    }
-
     try {
-      // 1) get the original bytes we already loaded
-      //    (we still have fileBuffer/uint8Array from above)
-      const reportText =
-        file.type === 'application/pdf'
-          ? await extractTextFromPdf(fileBuffer)
-          : await ocrImageToText(fileBuffer); // TODO: add OCR fallback for images if/when needed
-
-      if (reportId && reportText) {
-        await attachExtractedText(reportId, reportText);
-        await updateCreditReportStatus(reportId, 'analyzing');
-      }
-
-      // 2) extract negative items via OpenAI
-      const items = reportText
-        ? await extractNegativeItemsFromText(reportText)
-        : [];
-
-      // Group items by bureau + letter type
-      const grouped: Record<string, NegativeItem[]> = {};
-      for (const it of items) {
-        for (const bureau of it.bureaus) {
-          const key = `${bureau}::${it.suggested_letter_type}`;
-          if (!grouped[key]) grouped[key] = [];
-          grouped[key].push(it);
-        }
-      }
-
-      // Get name/address from your sources (user_metadata or user_profiles)
-      // Replace with your actual profile fetch if you have a table:
-      const { data: profileRow } = await supabaseAdmin
-        .from('user_profiles')
-        .select(
-          'full_name,address_street,address_city,address_state,address_zip'
-        )
-        .eq('id', userId)
-        .maybeSingle();
-
-      const fullName = profileRow?.full_name || username || 'Your Name';
-      const addressLine1 = profileRow?.address_street || 'Address Street';
-      const city = profileRow?.address_city || 'City';
-      const state = profileRow?.address_state || 'ST';
-      const zip = profileRow?.address_zip || '00000';
-
-      const dateISO = new Date().toISOString().slice(0, 10);
-
-      // 3) create letters (HTML + PDF) and store rows
-      let generatedLetters = 0;
-      for (const key of Object.keys(grouped)) {
-        const [bureau, letterType] = key.split('::') as [Bureau, string];
-        const bucket = grouped[key];
-
-        const html = letterHtml({
-          fullName,
-          addressLine1,
-          city,
-          state,
-          zip,
-          bureau,
-          letterType: letterType as any,
-          items: bucket,
-          dateISO,
-        });
-        const pdfBuf = await htmlToPdfBuffer(html);
-
-        const pdfPath = `user_${userId}/${bureau}/${Date.now()}_${letterType.replace(
-          /\s+/g,
-          '_'
-        )}.pdf`;
-        const upPdf = await supabaseAdmin.storage
-          .from('dispute-letters')
-          .upload(pdfPath, pdfBuf, {
-            contentType: 'application/pdf',
-            upsert: false,
-          });
-
-        if (upPdf.error) throw upPdf.error;
-
-        const accountName =
-          bucket.length <= 1
-            ? bucket[0]?.creditor || bucket[0]?.account_type || 'Account'
-            : 'Multiple Accounts';
-
-        const { error: insErr } = await supabaseAdmin
-          .from('dispute_letters')
-          .insert({
-            user_id: userId,
-            source_report_path: uploadData.path,
-            bureau,
-            letter_type: letterType,
-            items: bucket,
-            num_items: bucket.length,
-            html,
-            pdf_path: pdfPath,
-            status: 'Ready',
-            account_name: accountName,
-            version: 1,
-          });
-
-        if (insErr) throw insErr;
-        generatedLetters += 1;
-      }
-
-      if (reportId) {
-        await attachDisputeLetters(reportId, {
-          generated_count: generatedLetters,
-          negative_item_count: items.length,
-          generated_at: new Date().toISOString(),
-        });
-        await attachAnalysisResult(
-          reportId,
-          {
-            negative_items: items,
-            grouped_letters: Object.keys(grouped),
-            generated_letter_count: generatedLetters,
-          },
-          { userId, userEmail }
-        );
-      }
+      await processCreditReportAnalysis({
+        reportId,
+        userId,
+        userEmail,
+        username,
+        fileBuffer,
+        fileType: file.type,
+        sourceReportPath: uploadData.path,
+      });
     } catch (letterErr) {
       console.error('Credit analysis/dispute generation failed:', letterErr);
-      if (reportId) {
-        await markCreditReportFailed(reportId, letterErr, { userId, userEmail });
-      }
     }
-
-    // NO DATABASE OPERATIONS - Just file upload to storage
-    // This eliminates all database-related errors
 
     return NextResponse.json({
       success: true,

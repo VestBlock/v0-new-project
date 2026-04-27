@@ -9,17 +9,32 @@ import {
 } from '@/lib/email/sendEmail';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
+import { processCreditReportAnalysis } from '@/lib/workflows/processCreditReportAnalysis';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const actions = [
   'resend_upload_confirmation',
   'resend_analysis_completed',
   'create_followup_task',
+  'rerun_analysis',
 ] as const;
 
 type AdminReportAction = (typeof actions)[number];
 
 function isReportAction(value: unknown): value is AdminReportAction {
   return actions.includes(value as AdminReportAction);
+}
+
+function inferFileType(fileName?: string | null, filePath?: string | null) {
+  const source = `${fileName || ''} ${filePath || ''}`.toLowerCase();
+  if (source.includes('.pdf')) return 'application/pdf';
+  if (source.includes('.png')) return 'image/png';
+  if (source.includes('.jpg') || source.includes('.jpeg')) return 'image/jpeg';
+  if (source.includes('.webp')) return 'image/webp';
+  return 'application/pdf';
 }
 
 export async function POST(
@@ -59,13 +74,15 @@ export async function POST(
   }
 
   let userEmail = report.user_email;
-  if (!userEmail && report.user_id) {
+  let userName: string | null = null;
+  if (report.user_id) {
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('email')
+      .select('email,full_name')
       .or(`id.eq.${report.user_id},user_id.eq.${report.user_id}`)
       .maybeSingle();
-    userEmail = profile?.email ?? null;
+    userEmail = userEmail || profile?.email || null;
+    userName = profile?.full_name || null;
   }
 
   if (action === 'resend_upload_confirmation') {
@@ -118,6 +135,65 @@ export async function POST(
       metadata: {
         source: 'admin_report_detail',
         reportStatus: report.status,
+      },
+    });
+  }
+
+  if (action === 'rerun_analysis') {
+    if (!report.user_id) {
+      return NextResponse.json(
+        { error: 'Report is missing a user_id.' },
+        { status: 400 }
+      );
+    }
+
+    if (!report.file_path) {
+      return NextResponse.json(
+        { error: 'Report is missing a stored file path.' },
+        { status: 400 }
+      );
+    }
+
+    const { data: storedFile, error: downloadError } = await supabase.storage
+      .from('credit-reports')
+      .download(report.file_path);
+
+    if (downloadError || !storedFile) {
+      return NextResponse.json(
+        {
+          error:
+            downloadError?.message ||
+            'Unable to download the stored credit report.',
+        },
+        { status: 500 }
+      );
+    }
+
+    const result = await processCreditReportAnalysis({
+      reportId,
+      userId: report.user_id,
+      userEmail,
+      username: userName,
+      fileBuffer: await storedFile.arrayBuffer(),
+      fileType:
+        storedFile.type || inferFileType(report.file_name, report.file_path),
+      sourceReportPath: report.file_path,
+    });
+
+    await createAdminTask({
+      title: 'Review rerun credit analysis',
+      description:
+        'A credit analysis rerun completed. Review generated outputs and confirm the customer follow-up.',
+      taskType: 'credit_report_rerun_review',
+      priority: 'normal',
+      userId: report.user_id,
+      userEmail,
+      entityType: 'credit_report',
+      entityId: reportId,
+      createdBy: adminCheck.user?.id,
+      metadata: {
+        source: 'admin_report_detail',
+        result,
       },
     });
   }
