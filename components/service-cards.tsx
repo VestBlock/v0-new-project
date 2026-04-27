@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   BadgeCheck,
+  BadgeDollarSign,
   Bot,
   Briefcase,
   Building2,
@@ -28,6 +29,7 @@ const iconByService: Record<string, typeof CreditCard> = {
   credit_analysis: CreditCard,
   business_funding: Briefcase,
   business_setup: BadgeCheck,
+  financial_growth_services: BadgeDollarSign,
   grants: FileText,
   spanish_funding: Landmark,
   real_estate_funding: Building2,

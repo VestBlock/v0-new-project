@@ -8,6 +8,9 @@ Make VestBlock operate like a SaaS platform: every upload, payment, analysis, al
 
 - Use `/services` as the plain-language directory for all VestBlock offers.
 - Use `lib/services/serviceDirectory.ts` as the customer-facing service routing catalog.
+- Use `/services/financial-growth` for monetized financial prep packages that do not require immediate checkout.
+- Use `lib/services/financialSkillsets.ts` as the source of truth for package names, pricing, deliverables, upsell paths, and compliance guardrails.
+- Route financial package requests through `/api/service-interest`, saving them as `business_funding` leads with package metadata and admin follow-up automation.
 - Keep the service directory aligned with the admin content catalog in `lib/content/marketingServices.ts`.
 - Every service should have a primary action, a pricing path, an operator workflow, and a compliance guardrail.
 - Future: add service-click tracking, lead-source attribution, and admin conversion metrics by service key.

@@ -44,6 +44,8 @@ import {
   Home,
   Building2,
   Bot,
+  Briefcase,
+  CreditCard,
   Calendar,
   Filter
 } from "lucide-react"
@@ -53,7 +55,7 @@ interface Lead {
   id: string
   created_at: string
   updated_at: string
-  lead_type: 'sell_house' | 'real_estate' | 'ai_assistant'
+  lead_type: 'sell_house' | 'real_estate' | 'ai_assistant' | 'business_funding' | 'credit_card_funding_strategy'
   status: 'new' | 'contacted' | 'qualified' | 'closed'
   name: string | null
   email: string | null
@@ -66,13 +68,17 @@ interface Lead {
 const LEAD_TYPE_LABELS: Record<string, string> = {
   sell_house: 'Sell House',
   real_estate: 'Real Estate Funding',
-  ai_assistant: 'AI Assistant'
+  ai_assistant: 'AI Assistant',
+  business_funding: 'Business Funding',
+  credit_card_funding_strategy: 'Card Funding Strategy',
 }
 
 const LEAD_TYPE_ICONS: Record<string, any> = {
   sell_house: Home,
   real_estate: Building2,
-  ai_assistant: Bot
+  ai_assistant: Bot,
+  business_funding: Briefcase,
+  credit_card_funding_strategy: CreditCard,
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -357,6 +363,8 @@ export default function AdminLeadsPage() {
                         <SelectItem value="all">All Types</SelectItem>
                         <SelectItem value="sell_house">Sell House</SelectItem>
                         <SelectItem value="real_estate">Real Estate Funding</SelectItem>
+                        <SelectItem value="business_funding">Business Funding</SelectItem>
+                        <SelectItem value="credit_card_funding_strategy">Card Funding Strategy</SelectItem>
                         <SelectItem value="ai_assistant">AI Assistant</SelectItem>
                       </SelectContent>
                     </Select>
@@ -558,6 +566,8 @@ export default function AdminLeadsPage() {
                 <h3 className="font-semibold mb-3">
                   {selectedLead.lead_type === 'sell_house' && 'Property Details'}
                   {selectedLead.lead_type === 'real_estate' && 'Loan Details'}
+                  {selectedLead.lead_type === 'business_funding' && 'Funding / Financial Service Details'}
+                  {selectedLead.lead_type === 'credit_card_funding_strategy' && 'Card Funding Strategy Details'}
                   {selectedLead.lead_type === 'ai_assistant' && 'Business Details'}
                 </h3>
                 <div className="bg-muted/50 p-4 rounded-lg space-y-4">
@@ -671,6 +681,75 @@ export default function AdminLeadsPage() {
                       </div>
                       {selectedLead.form_data.notes && (
                         <div>
+                          <Label className="text-muted-foreground">Notes</Label>
+                          <p className="font-medium">{selectedLead.form_data.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(selectedLead.lead_type === 'business_funding' ||
+                    selectedLead.lead_type === 'credit_card_funding_strategy') && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-muted-foreground">Package / Service</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.packageTitle ||
+                            selectedLead.form_data.serviceCategory ||
+                            selectedLead.form_data.business_type ||
+                            '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Package Price</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.packagePrice ||
+                            selectedLead.form_data.funding_amount ||
+                            '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Business Name</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.businessName || '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Primary Goal</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.primaryGoal ||
+                            selectedLead.form_data.message ||
+                            '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Monthly Revenue</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.monthlyRevenueRange || '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Credit Score</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.creditScoreRange ||
+                            selectedLead.form_data.credit_score ||
+                            '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Timeline</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.timeline || '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Compliance Note</Label>
+                        <p className="font-medium">
+                          {selectedLead.form_data.complianceNote || '-'}
+                        </p>
+                      </div>
+                      {selectedLead.form_data.notes && (
+                        <div className="col-span-2">
                           <Label className="text-muted-foreground">Notes</Label>
                           <p className="font-medium">{selectedLead.form_data.notes}</p>
                         </div>

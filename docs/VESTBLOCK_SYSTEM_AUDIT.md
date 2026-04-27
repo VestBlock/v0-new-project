@@ -6,7 +6,7 @@ VestBlock is a Next.js 14 App Router project. Routes live in `app/`, API handler
 
 ## Current App Structure
 
-- Public routes: `/`, `/services`, `/funding`, `/funding/credit-card-strategy`, `/business-setup`, `/es/vestblock`, `/resources/[slug]`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
+- Public routes: `/`, `/services`, `/services/financial-growth`, `/funding`, `/funding/credit-card-strategy`, `/business-setup`, `/es/vestblock`, `/resources/[slug]`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
 - User routes: `/dashboard`, `/credit-upload`, `/credit-dashboard/[reportId]`, `/analysis/results/[jobId]`, `/profile`, `/user-hub`, `/tools/business-credit`, `/tools/grants`, `/tools/my-dispute-letters`, `/super-dispute`.
 - Admin routes: `/admin-panel`, `/admin/leads`, `/admin/test`.
 - Debug/test routes: multiple credit report, upload, OpenAI, streaming, database, and auth debug pages remain in `app/`, but are protected by admin-only middleware.
@@ -61,6 +61,7 @@ Important operating routes include:
 - `/api/create-order`
 - `/api/capture-order`
 - `/api/funding-lead` added for the public business funding form
+- `/api/service-interest` added for monetized financial package requests
 - `/api/funding-strategy` added for card funding readiness and paid readiness-plan intake
 - `/api/webhook`
 - `/api/paypal-webhook`
@@ -135,6 +136,7 @@ VestBlock now has a dashboard-backed content operations foundation:
 
 - `lib/content/marketingServices.ts` defines the service catalog and compliance notes used by generators.
 - `lib/services/serviceDirectory.ts` defines the client-facing service routing catalog used by `/services` and homepage service cards.
+- `lib/services/financialSkillsets.ts` defines monetized financial prep packages, prices, deliverables, upsell paths, and compliance notes.
 - `lib/content/contentGenerator.ts` uses `OPENAI_API_KEY` and optional `OPENAI_CONTENT_MODEL` to create SEO pages, social posts, and campaigns.
 - `/api/admin/content` requires admin access, writes generated drafts to `content_assets`, and logs `content_generated` / `content_published` events.
 - `/admin-panel` includes a Content tab where admins can type the desired post/page style, choose service, language, audience, platform, and post type, then generate drafts.

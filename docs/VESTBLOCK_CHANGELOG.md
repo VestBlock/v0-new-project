@@ -1,5 +1,39 @@
 # VestBlock Changelog
 
+## 2026-04-27 Financial Growth Service Packages
+
+## Files Changed
+
+- `app/services/financial-growth/page.tsx`
+- `app/api/service-interest/route.ts`
+- `components/financial-service-interest-form.tsx`
+- `lib/services/financialSkillsets.ts`
+- `lib/services/serviceDirectory.ts`
+- `components/service-cards.tsx`
+- `app/services/page.tsx`
+- `app/admin/leads/page.tsx`
+- `app/sitemap.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+
+## Features Added
+
+- Added `/services/financial-growth` as a monetized service page for paid financial prep packages.
+- Added six sellable packages: Funding Readiness Snapshot `$149`, Business Credit Builder Sprint `$499`, Grant Application Prep Review `$249`, Debt And Utilization Paydown Plan `$199`, Cash Flow And Bank Statement Review `$199`, and Real Estate Deal Funding Review `$300`.
+- Added `/api/service-interest` so package requests create real lead rows and trigger existing lead automation.
+- Added a reusable financial package catalog in `lib/services/financialSkillsets.ts`.
+- Added Financial Growth Services to the main service directory, homepage service cards, `/services`, and sitemap.
+- Updated the admin lead manager to recognize `business_funding` and `credit_card_funding_strategy` lead types and show package, price, goal, revenue, credit, timeline, and compliance details.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed.
+- Local built smoke passed: `/services/financial-growth` returned `200`, page copy rendered the package offers, `/api/service-interest` rejected an empty payload with `400`, and `sitemap.xml` includes `/services/financial-growth`.
+- Production deploy and live smoke are pending for this change.
+
 ## 2026-04-27 Service Directory And Skill Upgrade
 
 ## Files Changed
