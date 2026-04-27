@@ -17,6 +17,7 @@ Make VestBlock operate like a SaaS platform: every upload, payment, analysis, al
 - Show new reports, failed analyses, email failures, paid customers, and leads in `/admin-panel`.
 - Use `admin_activity` as the durable event stream.
 - Run scheduled checks for stuck credit report statuses and create admin tasks before customers are left waiting.
+- Use the `/admin-panel` Automation tab to confirm cron readiness, lifecycle email totals, configured env vars, and recent automation events.
 
 ## Email Notification Automation
 
@@ -68,6 +69,7 @@ Implemented lifecycle task automation:
 - Sends lifecycle reminder emails through Resend and records them in `email_events`.
 - Checks existing `email_events` rows before sending so the cron can run repeatedly without duplicate reminders.
 - Logs `signup_no_upload`, `paid_customer_no_upload`, and `lead_followup_needed` events to `admin_activity`.
+- `/admin-panel` now includes an Automation tab for Vercel cron schedules, readiness checks, lifecycle email counts, and recent automation activity.
 
 ## Failed Payment And Abandoned Checkout
 

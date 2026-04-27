@@ -28,6 +28,21 @@ function countBy<T extends Record<string, any>>(
   return rows.filter((row) => String(row[key] || '').toLowerCase() === value.toLowerCase()).length;
 }
 
+const automationEventTypes = new Set([
+  'credit_analysis_stalled',
+  'signup_no_upload',
+  'paid_customer_no_upload',
+  'lead_followup_needed',
+  'email_sent',
+  'email_failed',
+]);
+
+const lifecycleEmailTypes = new Set([
+  'user_upload_reminder',
+  'user_paid_upload_reminder',
+  'admin_lead_followup',
+]);
+
 export async function GET() {
   const adminCheck = await checkAdminAccess();
 
@@ -265,6 +280,28 @@ export async function GET() {
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
     .slice(0, 30);
 
+  const automationActivity = adminActivity
+    .filter((activity) => automationEventTypes.has(String(activity.action_type)))
+    .map((activity) => ({
+      id: activity.id,
+      type: activity.action_type,
+      entityType: activity.entity_type,
+      entityId: activity.entity_id,
+      metadata: activity.metadata_json,
+      createdAt: activity.created_at,
+      href:
+        activity.entity_type === 'credit_report' && activity.entity_id
+          ? `/admin-panel/reports/${activity.entity_id}`
+          : activity.entity_type === 'user' && activity.entity_id
+            ? `/admin-panel/users/${activity.entity_id}`
+            : undefined,
+    }))
+    .slice(0, 40);
+
+  const lifecycleEmailEvents = emailEvents.filter((event) =>
+    lifecycleEmailTypes.has(String(event.event_type))
+  );
+
   return NextResponse.json({
     overview: {
       totalUsers: users.length,
@@ -295,6 +332,39 @@ export async function GET() {
     payments,
     leads,
     tasks,
+    automation: {
+      env: {
+        cronSecretConfigured: Boolean(process.env.CRON_SECRET),
+        resendConfigured: Boolean(process.env.RESEND_API_KEY),
+        adminAlertEmailConfigured: Boolean(
+          process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL
+        ),
+        fromEmailConfigured: Boolean(process.env.FROM_EMAIL || process.env.RESEND_EMAIL),
+        siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL || process.env.WEB_HOST_URL),
+      },
+      crons: [
+        {
+          label: 'Credit repair stalled report monitor',
+          path: '/api/cron/credit-repair-monitor',
+          schedule: '0 14 * * *',
+          purpose: 'Creates admin tasks for reports stuck in processing statuses.',
+        },
+        {
+          label: 'Lifecycle reminder monitor',
+          path: '/api/cron/lifecycle-monitor',
+          schedule: '0 15 * * *',
+          purpose:
+            'Creates lifecycle tasks and sends upload reminders, paid onboarding reminders, and lead follow-up alerts.',
+        },
+      ],
+      lifecycleEmails: {
+        total: lifecycleEmailEvents.length,
+        sent: lifecycleEmailEvents.filter((event) => event.status === 'sent').length,
+        skipped: lifecycleEmailEvents.filter((event) => event.status === 'skipped').length,
+        failed: lifecycleEmailEvents.filter((event) => event.status === 'failed').length,
+      },
+      recentAutomationActivity: automationActivity,
+    },
     recentActivity,
   });
 }

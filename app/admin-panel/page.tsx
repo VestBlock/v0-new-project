@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Bell,
   CheckCircle2,
+  Clock3,
   ClipboardList,
   CreditCard,
   FileText,
@@ -15,6 +16,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -99,6 +101,36 @@ type AdminDashboard = {
   }>;
   payments: Array<any>;
   leads: Array<any>;
+  automation: {
+    env: {
+      cronSecretConfigured: boolean;
+      resendConfigured: boolean;
+      adminAlertEmailConfigured: boolean;
+      fromEmailConfigured: boolean;
+      siteUrlConfigured: boolean;
+    };
+    crons: Array<{
+      label: string;
+      path: string;
+      schedule: string;
+      purpose: string;
+    }>;
+    lifecycleEmails: {
+      total: number;
+      sent: number;
+      skipped: number;
+      failed: number;
+    };
+    recentAutomationActivity: Array<{
+      id: string;
+      type: string;
+      entityType?: string | null;
+      entityId?: string | null;
+      metadata?: Record<string, unknown> | null;
+      createdAt?: string | null;
+      href?: string;
+    }>;
+  };
   tasks: Array<{
     id: string;
     title: string;
@@ -128,6 +160,14 @@ const statuses = [
 ];
 
 const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
+
+const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
+  cronSecretConfigured: 'CRON_SECRET',
+  resendConfigured: 'RESEND_API_KEY',
+  adminAlertEmailConfigured: 'ADMIN_ALERT_EMAIL',
+  fromEmailConfigured: 'FROM_EMAIL',
+  siteUrlConfigured: 'NEXT_PUBLIC_SITE_URL',
+};
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown';
@@ -532,6 +572,7 @@ export default function AdminPanelPage() {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="automation">Automation</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
           </TabsList>
@@ -1016,6 +1057,143 @@ export default function AdminPanelPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="automation">
+            <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                      Automation Readiness
+                    </CardTitle>
+                    <CardDescription>
+                      Environment checks for scheduled jobs and email alerts.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {Object.entries(dashboard.automation.env).map(
+                      ([key, configured]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between gap-3 rounded-md border p-3"
+                        >
+                          <span className="text-sm font-medium">
+                            {envLabels[key as keyof AdminDashboard['automation']['env']]}
+                          </span>
+                          <Badge variant={configured ? 'default' : 'destructive'}>
+                            {configured ? 'configured' : 'missing'}
+                          </Badge>
+                        </div>
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock3 className="h-5 w-5 text-cyan-600" />
+                      Scheduled Jobs
+                    </CardTitle>
+                    <CardDescription>
+                      Vercel cron jobs currently expected by VestBlock.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 md:grid-cols-2">
+                    {dashboard.automation.crons.map((cron) => (
+                      <div key={cron.path} className="rounded-md border p-4">
+                        <p className="font-medium">{cron.label}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {cron.purpose}
+                        </p>
+                        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                          <p>
+                            <span className="font-medium text-foreground">Path:</span>{' '}
+                            {cron.path}
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">Schedule:</span>{' '}
+                            {cron.schedule}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Lifecycle Emails</CardTitle>
+                    <CardDescription>
+                      Reminder email events recorded by automation.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3">
+                    {[
+                      ['Total', dashboard.automation.lifecycleEmails.total],
+                      ['Sent', dashboard.automation.lifecycleEmails.sent],
+                      ['Skipped', dashboard.automation.lifecycleEmails.skipped],
+                      ['Failed', dashboard.automation.lifecycleEmails.failed],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border p-3">
+                        <p className="text-xs text-muted-foreground">{label}</p>
+                        <p className="text-2xl font-bold">{value}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Recent Automation Activity</CardTitle>
+                    <CardDescription>
+                      Cron-generated activity and email automation events.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {dashboard.automation.recentAutomationActivity.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No recent automation events found.
+                      </p>
+                    ) : (
+                      dashboard.automation.recentAutomationActivity.map((event) => (
+                        <div
+                          key={event.id}
+                          className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                        >
+                          <div>
+                            <p className="font-medium">{event.type}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {event.entityType || 'system'}
+                              {event.entityId ? ` - ${event.entityId}` : ''}
+                            </p>
+                            {event.metadata && (
+                              <p className="mt-1 max-w-xl truncate text-xs text-muted-foreground">
+                                {JSON.stringify(event.metadata)}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="whitespace-nowrap text-sm text-muted-foreground">
+                              {formatDate(event.createdAt)}
+                            </span>
+                            {event.href && (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={event.href}>Open</Link>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="activity">

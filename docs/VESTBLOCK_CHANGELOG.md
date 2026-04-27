@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 Admin Automation Dashboard
+
+## Files Changed
+
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added automation readiness data to the protected admin dashboard API without exposing secret values.
+- Added expected Vercel cron schedules for credit repair and lifecycle monitors to the admin dashboard payload.
+- Added lifecycle email counters for sent, skipped, failed, and total reminder events.
+- Added an Automation tab in `/admin-panel` for env readiness, cron schedules, lifecycle email counts, and recent automation activity.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Lifecycle Reminder Emails
 
 ## Files Changed
