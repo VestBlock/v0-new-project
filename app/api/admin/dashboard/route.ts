@@ -122,7 +122,7 @@ export async function GET() {
       safeRows<any>(
         supabase
           .from('leads')
-          .select('id,lead_type,status,name,email,created_at,updated_at')
+          .select('id,lead_type,status,name,email,phone,notes,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(100),
         'leads'
@@ -263,6 +263,12 @@ export async function GET() {
       type: activity.action_type,
       label: `${activity.action_type} ${activity.entity_type || ''}`.trim(),
       createdAt: activity.created_at,
+      href:
+        activity.entity_type === 'credit_report' && activity.entity_id
+          ? `/admin-panel/reports/${activity.entity_id}`
+          : activity.entity_type === 'user' && activity.entity_id
+            ? `/admin-panel/users/${activity.entity_id}`
+            : undefined,
     })),
     ...tasks.slice(0, 20).map((task) => ({
       id: `task-${task.id}`,
@@ -272,6 +278,8 @@ export async function GET() {
       href:
         task.entity_type === 'credit_report' && task.entity_id
           ? `/admin-panel/reports/${task.entity_id}`
+          : task.entity_type === 'lead'
+            ? '/admin/leads'
           : task.user_id
             ? `/admin-panel/users/${task.user_id}`
             : undefined,

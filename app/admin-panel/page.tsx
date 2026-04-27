@@ -100,7 +100,17 @@ type AdminDashboard = {
     href?: string;
   }>;
   payments: Array<any>;
-  leads: Array<any>;
+  leads: Array<{
+    id: string;
+    lead_type?: string | null;
+    status?: string | null;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notes?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
   automation: {
     env: {
       cronSecretConfigured: boolean;
@@ -160,6 +170,20 @@ const statuses = [
 ];
 
 const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
+const leadStatuses = ['new', 'contacted', 'qualified', 'closed'];
+
+const leadStatusLabels: Record<string, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  closed: 'Closed',
+};
+
+const leadTypeLabels: Record<string, string> = {
+  sell_house: 'Sell House',
+  real_estate: 'Real Estate Funding',
+  ai_assistant: 'AI Assistant',
+};
 
 const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
   cronSecretConfigured: 'CRON_SECRET',
@@ -209,8 +233,10 @@ export default function AdminPanelPage() {
   const [statusDrafts, setStatusDrafts] = useState<Record<string, string>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
+  const [leadStatusDrafts, setLeadStatusDrafts] = useState<Record<string, string>>({});
   const [savingReportId, setSavingReportId] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [reportSearch, setReportSearch] = useState('');
   const [reportStatusFilter, setReportStatusFilter] = useState('all');
   const [userSearch, setUserSearch] = useState('');
@@ -448,7 +474,7 @@ export default function AdminPanelPage() {
 
     return dashboard.leads.filter((lead) =>
       searchable(
-        [lead.id, lead.lead_type, lead.status, lead.name, lead.email],
+        [lead.id, lead.lead_type, lead.status, lead.name, lead.email, lead.phone, lead.notes],
         paymentLeadSearch
       )
     );
@@ -500,6 +526,29 @@ export default function AdminPanelPage() {
       setError(err instanceof Error ? err.message : 'Unable to update task.');
     } finally {
       setSavingTaskId(null);
+    }
+  };
+
+  const updateLeadStatus = async (leadId: string, currentStatus?: string | null) => {
+    setSavingLeadId(leadId);
+    try {
+      const response = await fetch('/api/admin/leads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: leadId,
+          status: leadStatusDrafts[leadId] || currentStatus || 'new',
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update lead.');
+      }
+      await loadDashboard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update lead.');
+    } finally {
+      setSavingLeadId(null);
     }
   };
 
@@ -1287,25 +1336,79 @@ export default function AdminPanelPage() {
                   )}
                   </div>
                   <div className="space-y-3">
-                    <h3 className="font-semibold">
-                      Funding Leads ({filteredLeads.length}/{dashboard.leads.length})
-                    </h3>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="font-semibold">
+                        Funding Leads ({filteredLeads.length}/{dashboard.leads.length})
+                      </h3>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/leads">Open Lead Manager</Link>
+                      </Button>
+                    </div>
                     {filteredLeads.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No lead records found.
-                    </p>
-                  ) : (
-                    filteredLeads.map((lead) => (
-                      <div key={lead.id} className="rounded-md border p-3">
-                        <p className="font-medium">
-                          {lead.name || lead.email || lead.lead_type}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {lead.lead_type} - {lead.status}
-                        </p>
-                      </div>
-                    ))
-                  )}
+                      <p className="text-sm text-muted-foreground">
+                        No lead records found.
+                      </p>
+                    ) : (
+                      filteredLeads.map((lead) => (
+                        <div key={lead.id} className="rounded-md border p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="font-medium">
+                                {lead.name || lead.email || leadTypeLabels[lead.lead_type || ''] || 'Funding lead'}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {lead.email || 'No email'}{lead.phone ? ` - ${lead.phone}` : ''}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {leadTypeLabels[lead.lead_type || ''] || lead.lead_type || 'Lead'} - submitted{' '}
+                                {formatDate(lead.created_at)}
+                              </p>
+                              {lead.notes && (
+                                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                                  {lead.notes}
+                                </p>
+                              )}
+                            </div>
+                            <Badge variant={statusVariant(lead.status || 'new')}>
+                              {leadStatusLabels[lead.status || 'new'] || lead.status || 'New'}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <Select
+                              value={leadStatusDrafts[lead.id] || lead.status || 'new'}
+                              onValueChange={(value) =>
+                                setLeadStatusDrafts((current) => ({
+                                  ...current,
+                                  [lead.id]: value,
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="sm:w-[180px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {leadStatuses.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {leadStatusLabels[status]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              onClick={() => updateLeadStatus(lead.id, lead.status)}
+                              disabled={savingLeadId === lead.id}
+                            >
+                              {savingLeadId === lead.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Save Status'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </CardContent>

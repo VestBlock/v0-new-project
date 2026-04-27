@@ -2,53 +2,84 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
+import { checkAdminAccess } from '@/lib/auth/admin';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { logEvent } from '@/lib/system/logEvent';
 
-// Server-side Supabase client with service role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+const leadStatuses = ['new', 'contacted', 'qualified', 'closed'];
+
+function configuredAdminEmails() {
+  return [process.env.ADMIN_ALERT_EMAIL, process.env.NEXT_PUBLIC_ADMIN_EMAIL]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function cleanLeadSearch(value: string) {
+  return value.replace(/[,%()]/g, ' ').trim();
+}
+
+async function isAdminUser(user: User, supabaseAdmin: ReturnType<typeof createAdminClient>) {
+  const email = user.email?.toLowerCase();
+  if (email && configuredAdminEmails().includes(email)) {
+    return true;
   }
-);
 
-// Admin email for authorization
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'contact@vestblock.io';
+  const { data: profile } = await supabaseAdmin
+    .from('user_profiles')
+    .select('role')
+    .or(`id.eq.${user.id},user_id.eq.${user.id},email.eq.${user.email}`)
+    .maybeSingle();
+
+  return profile?.role === 'admin';
+}
+
+async function requireLeadAdmin(request: NextRequest) {
+  const supabaseAdmin = createAdminClient();
+  const authHeader = request.headers.get('authorization');
+
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
+
+    if (!authError && user) {
+      const isAdmin = await isAdminUser(user, supabaseAdmin);
+
+      return {
+        supabaseAdmin,
+        user,
+        response: isAdmin
+          ? null
+          : NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+      };
+    }
+  }
+
+  const adminCheck = await checkAdminAccess();
+
+  if (!adminCheck.isAdmin) {
+    return {
+      supabaseAdmin,
+      user: adminCheck.user,
+      response: NextResponse.json(
+        { error: 'Admin access required.' },
+        { status: adminCheck.user ? 403 : 401 }
+      ),
+    };
+  }
+
+  return { supabaseAdmin, user: adminCheck.user, response: null };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // Get auth token from header
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.split(' ')[1];
-
-    // Verify the user
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if admin
-    if (user.email !== ADMIN_EMAIL) {
-      // Also check user_profiles for admin role
-      const { data: profile } = await supabaseAdmin
-        .from('user_profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const { supabaseAdmin, response } = await requireLeadAdmin(request);
+    if (response) return response;
 
     // Parse query params
     const { searchParams } = new URL(request.url);
@@ -85,7 +116,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      const cleanedSearch = cleanLeadSearch(search);
+      if (cleanedSearch) {
+        query = query.or(
+          `name.ilike.%${cleanedSearch}%,email.ilike.%${cleanedSearch}%,phone.ilike.%${cleanedSearch}%`
+        );
+      }
     }
 
     // Apply pagination
@@ -118,30 +154,8 @@ export async function GET(request: NextRequest) {
 // Update lead status
 export async function PATCH(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if admin
-    if (user.email !== ADMIN_EMAIL) {
-      const { data: profile } = await supabaseAdmin
-        .from('user_profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const { supabaseAdmin, user, response } = await requireLeadAdmin(request);
+    if (response) return response;
 
     const { id, status, notes } = await request.json();
 
@@ -149,7 +163,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const updateData: any = { status };
+    if (!leadStatuses.includes(status)) {
+      return NextResponse.json({ error: 'Invalid lead status.' }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+
     if (notes !== undefined) {
       updateData.notes = notes;
     }
@@ -165,6 +187,20 @@ export async function PATCH(request: NextRequest) {
       console.error('Update error:', error);
       return NextResponse.json({ error: 'Failed to update lead' }, { status: 500 });
     }
+
+    await logEvent({
+      eventType: 'admin_action',
+      actorUserId: user?.id,
+      entityType: 'lead',
+      entityId: id,
+      metadata: {
+        action: 'lead_updated',
+        status,
+        notesUpdated: notes !== undefined,
+        leadType: data.lead_type,
+        leadEmail: data.email,
+      },
+    });
 
     return NextResponse.json({ success: true, lead: data });
 

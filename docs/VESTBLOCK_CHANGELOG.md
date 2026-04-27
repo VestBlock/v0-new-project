@@ -1,5 +1,30 @@
 # VestBlock Changelog
 
+## 2026-04-27 Lead Operations Upgrade
+
+## Files Changed
+
+- `app/api/admin/leads/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Updated `/api/admin/leads` to support both bearer-token admin access from `/admin/leads` and cookie-based admin access from `/admin-panel`.
+- Added server-side lead status validation for `new`, `contacted`, `qualified`, and `closed`.
+- Added admin activity logging when an operator updates a lead.
+- Expanded the admin dashboard lead payload with phone and notes fields.
+- Added funding lead status controls directly inside the `/admin-panel` Payments and Leads tab.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Admin Automation Dashboard
 
 ## Files Changed

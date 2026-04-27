@@ -62,7 +62,7 @@ Important operating routes include:
 - `/api/process-payment`
 - `/api/admin/dashboard` added
 - `/api/admin/credit-reports/status` added
-- `/api/admin/leads`
+- `/api/admin/leads` supports lead listing and status updates for admin operators
 - `/api/real-estate-lead`
 - `/api/sell-lead`
 - `/api/biz-credit/**`
@@ -110,6 +110,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Alerts / Notifications
 - Recent activity
 - Payments and funding leads
+- Funding lead status controls
 - Admin task queue
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`

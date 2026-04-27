@@ -41,7 +41,9 @@ Email failures must be logged to `email_events` and must not break uploads or an
 - Centralize funding, real estate, and business credit leads in `leads`.
 - Alert admin when a funding lead is submitted.
 - Track source route, lead type, status, contact info, and notes.
-- Future: partner referral tracking and follow-up task generation.
+- Let admins update lead status from either `/admin/leads` or the main `/admin-panel`.
+- Log lead status updates to `admin_activity` for operator accountability.
+- Future: partner referral tracking, outcome tracking, and automatic nurture sequences by lead type.
 
 ## AEO And Content Automation
 
