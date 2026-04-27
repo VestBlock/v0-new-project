@@ -1,5 +1,29 @@
 # VestBlock Changelog
 
+## 2026-04-27 AEO Learning Center Starter
+
+## Files Changed
+
+- `lib/aeo/topics.ts`
+- `app/learn/page.tsx`
+- `app/learn/[slug]/page.tsx`
+- `components/navigation.tsx`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+
+## Features Added
+
+- Expanded the AEO topic registry with customer-facing descriptions, audiences, takeaways, next steps, FAQs, and related offer paths.
+- Added a public `/learn` hub for credit repair, dispute, business credit, funding, and credit builder topics.
+- Added static `/learn/[slug]` guide pages with metadata, FAQ schema, related guides, compliance-safe disclaimers, and tool CTAs.
+- Added a top navigation link to the learning center.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values and generated `/learn` plus 16 static topic pages.
+
 ## 2026-04-27 ESLint CLI Migration
 
 ## Files Changed

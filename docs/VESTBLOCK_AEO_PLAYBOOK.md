@@ -4,7 +4,8 @@
 
 VestBlock should publish practical answer-focused content that helps users understand credit repair, dispute rights, business credit, and funding readiness, then routes them into a real product action.
 
-Use `lib/aeo/topics.ts` as the starter topic registry.
+Use `lib/aeo/topics.ts` as the starter topic registry. The first public
+implementation now lives at `/learn` and `/learn/[slug]`.
 
 ## Topic Clusters
 
@@ -34,13 +35,18 @@ Use `lib/aeo/topics.ts` as the starter topic registry.
 
 ## Suggested Landing Pages
 
-- `/credit-repair/ai-credit-analysis`
-- `/credit-repair/dispute-letter-generator`
-- `/credit-repair/609-letter`
-- `/credit-repair/method-of-verification`
-- `/business-credit/ein-credit`
-- `/funding/funding-readiness`
-- `/grants/small-business-grants`
+- `/learn/ai-credit-repair`
+- `/learn/credit-dispute-letters`
+- `/learn/609-letters`
+- `/learn/method-of-verification`
+- `/learn/business-credit`
+- `/learn/funding-readiness`
+- `/learn/grants-for-small-businesses`
+
+Future deeper landing pages can still use category paths such as
+`/credit-repair/ai-credit-analysis`, but the `/learn` family should stay the
+first safe content layer until search data shows which topics deserve deeper
+pages.
 
 ## FAQ Schema Ideas
 
@@ -50,6 +56,9 @@ Use `lib/aeo/topics.ts` as the starter topic registry.
 - What is debt validation?
 - How does credit utilization affect approval odds?
 - What do lenders look for before funding?
+
+Each `/learn/[slug]` page includes FAQPage JSON-LD generated from
+`lib/aeo/topics.ts`. Keep answers short, plain, and compliant.
 
 ## Comparison Pages
 
@@ -71,6 +80,10 @@ Use `lib/aeo/topics.ts` as the starter topic registry.
 - Do not generate thin pages that only swap keywords.
 - Use examples, checklists, definitions, next steps, and internal links.
 - Every page should answer a real question and connect to a VestBlock workflow.
+- Each topic needs a distinct audience, overview, takeaways, action steps, and
+  FAQs before it goes public.
+- Avoid internal wording like "workflow surface", "entity", "signal", or
+  "programmatic content buildout" on customer-facing pages.
 
 ## Offer Connection
 

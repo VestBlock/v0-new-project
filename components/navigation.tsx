@@ -35,6 +35,7 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
+    { href: '/learn', label: 'Learn' },
     { href: '/funding', label: 'Funding' },
     { href: '/ai-assistant', label: 'AI Assistant' },
     { href: '/credit-upload', label: 'Credit Tools' },
