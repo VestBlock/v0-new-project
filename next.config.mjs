@@ -1,3 +1,8 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -9,19 +14,16 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  reactStrictMode: true, // Recommended for highlighting potential problems
-  experimental: {
-    esmExternals: 'loose', // helps when any ESM sneaks in
-    // ✅ valid on Next 14.x
-    serverComponentsExternalPackages: [
-      'pdfjs-dist',
-      'sharp',
-      'tesseract.js',
-      '@react-pdf/renderer',
-    ],
-  },
+  reactStrictMode: true,
+  outputFileTracingRoot: __dirname,
+  serverExternalPackages: [
+    'pdfjs-dist',
+    'sharp',
+    'tesseract.js',
+    '@react-pdf/renderer',
+  ],
   webpack: (config, { dev }) => {
-    if (dev) config.devtool = 'source-map'; // avoid eval-* (prevents pdf.js crash)
+    if (dev) config.devtool = 'source-map';
     return config;
   },
 };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createChatCompletion } from "@/lib/openai-service"
+import { createChatCompletion, type OpenAIChatMessage } from "@/lib/openai-service"
 
 export async function POST(req: Request) {
   try {
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     }
 
     // Format messages for OpenAI
-    const messages = [
+    const messages: OpenAIChatMessage[] = [
       {
         role: "system",
         content:

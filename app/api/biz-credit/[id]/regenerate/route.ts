@@ -17,10 +17,10 @@ const admin = createClient(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
 
     const { data: row, error } = await admin

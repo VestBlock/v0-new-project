@@ -12,9 +12,10 @@ const supabaseAdmin = createClient(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { userId } = await req.json();
     if (!userId)
       return NextResponse.json({ error: 'userId required' }, { status: 400 });
@@ -25,7 +26,7 @@ export async function POST(
       .select(
         'id, user_id, bureau, letter_type, items, num_items, html, pdf_path, version'
       )
-      .eq('id', params.id)
+      .eq('id', id)
       .maybeSingle();
 
     if (error || !orig)

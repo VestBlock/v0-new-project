@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { generatePaypalAccessToken } from '../create-order/route';
+import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendNewPaidCustomerAlert } from '@/lib/email/sendEmail';
 import { logEvent } from '@/lib/system/logEvent';

@@ -32,8 +32,9 @@ function buildOrFilter(filters: Array<string | false | null | undefined>) {
 
 export async function GET(
   _request: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId: routeUserId } = await params;
   const adminCheck = await checkAdminAccess();
 
   if (!adminCheck.isAdmin) {
@@ -48,12 +49,12 @@ export async function GET(
     supabase
       .from('user_profiles')
       .select('*')
-      .or(`id.eq.${params.userId},user_id.eq.${params.userId}`)
+      .or(`id.eq.${routeUserId},user_id.eq.${routeUserId}`)
       .maybeSingle(),
     'user_profiles'
   );
   const userEmail = profile?.email || '';
-  const userId = profile?.user_id || profile?.id || params.userId;
+  const userId = profile?.user_id || profile?.id || routeUserId;
   const emailFilter = buildOrFilter([
     userId && `user_id.eq.${userId}`,
     userEmail && `user_email.eq.${userEmail}`,

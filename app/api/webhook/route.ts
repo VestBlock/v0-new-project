@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
-import { generatePaypalAccessToken } from '../create-order/route';
+import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 
 // Supabase Admin client (service-role key)
 const supabase = createClient(

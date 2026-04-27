@@ -18,21 +18,26 @@ function getSupabaseConfig() {
 }
 
 export function getSupabaseServerSingleton() {
-  const cookieStore = cookies();
+  const cookieStorePromise = cookies();
   const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
 
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get: (name: string) => cookieStore.get(name)?.value,
-      set: (name: string, value: string, options: CookieOptions) => {
+      get: async (name: string) => {
+        const cookieStore = await cookieStorePromise;
+        return cookieStore.get(name)?.value;
+      },
+      set: async (name: string, value: string, options: CookieOptions) => {
         try {
+          const cookieStore = await cookieStorePromise;
           cookieStore.set({ name, value, ...options });
         } catch {
           // Server Components can read cookies but cannot always write them.
         }
       },
-      remove: (name: string, options: CookieOptions) => {
+      remove: async (name: string, options: CookieOptions) => {
         try {
+          const cookieStore = await cookieStorePromise;
           cookieStore.set({ name, value: '', ...options });
         } catch {
           // Server Components can read cookies but cannot always write them.

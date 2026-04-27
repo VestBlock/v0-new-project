@@ -1,7 +1,6 @@
 // Using the new openai-service.ts for direct fetch calls
-import { createChatCompletion } from "@/lib/openai-service"
+import { createChatCompletion, type OpenAIChatMessage } from "@/lib/openai-service"
 import { VESTBOT_SYSTEM_PROMPT } from "@/lib/openai-server" // Still useful for the base system prompt
-import type { CoreMessage } from "ai"
 
 export const dynamic = "force-dynamic" // Ensures fresh execution
 
@@ -65,7 +64,7 @@ export async function POST(req: Request) {
     systemPrompt +=
       "\n\nIMPORTANT: Base your answers PRIMARILY on the provided credit report text and its initial AI analysis if available. If the user asks a question that cannot be answered from this context, state that clearly. Do not invent information not present in these contexts. Be helpful and empathetic."
 
-    const allMessages: CoreMessage[] = [{ role: "system", content: systemPrompt }]
+    const allMessages: OpenAIChatMessage[] = [{ role: "system", content: systemPrompt }]
 
     // Filter out any potentially problematic messages from client
     if (Array.isArray(clientMessages)) {

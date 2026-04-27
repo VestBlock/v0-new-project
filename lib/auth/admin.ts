@@ -18,7 +18,7 @@ function configuredAdminEmails() {
 }
 
 export async function getServerUser() {
-  const cookieStore = cookies();
+  const cookieStorePromise = cookies();
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const anonKey =
@@ -30,18 +30,21 @@ export async function getServerUser() {
 
   const supabase = createServerClient(supabaseUrl, anonKey, {
     cookies: {
-      get(name: string) {
+      async get(name: string) {
+        const cookieStore = await cookieStorePromise;
         return cookieStore.get(name)?.value;
       },
-      set(name: string, value: string, options: CookieOptions) {
+      async set(name: string, value: string, options: CookieOptions) {
         try {
+          const cookieStore = await cookieStorePromise;
           cookieStore.set({ name, value, ...options });
         } catch {
           // Server Components can read cookies but cannot always write them.
         }
       },
-      remove(name: string, options: CookieOptions) {
+      async remove(name: string, options: CookieOptions) {
         try {
+          const cookieStore = await cookieStorePromise;
           cookieStore.set({ name, value: '', ...options });
         } catch {
           // Server Components can read cookies but cannot always write them.

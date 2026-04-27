@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
@@ -63,8 +63,9 @@ function JsonPreview({ value }: { value: unknown }) {
 export default function AdminReportDetailPage({
   params,
 }: {
-  params: { reportId: string };
+  params: Promise<{ reportId: string }>;
 }) {
+  const { reportId } = use(params);
   const { user, userProfile, isAuthenticated, isLoading: authLoading } =
     useAuth();
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function AdminReportDetailPage({
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/admin/reports/${params.reportId}`, {
+      const response = await fetch(`/api/admin/reports/${reportId}`, {
         cache: 'no-store',
       });
       const result = await response.json();
@@ -103,7 +104,7 @@ export default function AdminReportDetailPage({
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated) {
-      router.push(`/login?redirect=/admin-panel/reports/${params.reportId}`);
+      router.push(`/login?redirect=/admin-panel/reports/${reportId}`);
       return;
     }
     if (!isAdmin) {
@@ -112,7 +113,7 @@ export default function AdminReportDetailPage({
       return;
     }
     loadReport();
-  }, [authLoading, isAuthenticated, isAdmin, params.reportId, router]);
+  }, [authLoading, isAuthenticated, isAdmin, reportId, router]);
 
   const saveStatus = async () => {
     setSaving(true);
@@ -122,7 +123,7 @@ export default function AdminReportDetailPage({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reportId: params.reportId,
+          reportId,
           status,
           adminNotes,
         }),

@@ -34,5 +34,5 @@ Tailor your responses to help them achieve this goal. When relevant, recommend:
     messages: messages,
   })
 
-  return result.toAIStreamResponse()
+  return result.toDataStreamResponse()
 }

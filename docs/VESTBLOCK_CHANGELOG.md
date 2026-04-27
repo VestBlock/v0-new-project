@@ -1,5 +1,53 @@
 # VestBlock Changelog
 
+## 2026-04-27 Runtime Framework Upgrade
+
+## Files Changed
+
+- `package.json`
+- `package-lock.json`
+- `pnpm-lock.yaml`
+- `next.config.mjs`
+- `lib/supabase/server.ts`
+- `lib/auth/admin.ts`
+- `lib/openai-service.ts`
+- `lib/paypal/accessToken.ts`
+- `app/admin-panel/reports/[reportId]/page.tsx`
+- `app/admin-panel/users/[userId]/page.tsx`
+- `app/api/admin/reports/[reportId]/route.ts`
+- `app/api/admin/users/[userId]/route.ts`
+- `app/api/biz-credit/[id]/regenerate/route.ts`
+- `app/api/capture-order/route.ts`
+- `app/api/chat-direct/route.ts`
+- `app/api/chat-with-analysis/route.ts`
+- `app/api/create-order/route.ts`
+- `app/api/dispute-letters/[id]/pdf/route.ts`
+- `app/api/dispute-letters/[id]/regenerate/route.ts`
+- `app/api/generate-letter/route.ts`
+- `app/api/job-status/route.ts`
+- `app/api/job-status/[jobId]/route.ts`
+- `app/api/webhook/route.ts`
+- `app/credit-dashboard/[reportId]/page.tsx`
+
+## Features Added
+
+- Upgraded the production framework runtime to Next.js `15.5.15`.
+- Upgraded React and React DOM to `19.2.5`.
+- Upgraded React type packages for React 19 compatibility.
+- Moved Next server package externalization from the deprecated experimental key to `serverExternalPackages`.
+- Set an explicit `outputFileTracingRoot` so local builds do not infer the wrong workspace root when parent folders contain lockfiles.
+- Added a pnpm override for Next's nested PostCSS dependency so production pnpm installs resolve to patched PostCSS `8.5.12`.
+- Updated dynamic admin/report routes for Next 15 async route params.
+- Updated Supabase server auth cookie access for Next 15's async `cookies()` API.
+- Moved shared PayPal access-token generation out of route modules and into `lib/paypal/accessToken.ts`.
+- Pinned `@ai-sdk/react` to the Vercel AI SDK generation used by the existing chat UI and updated the chat streaming route response helper.
+- Added `supports-color` to satisfy Axios/debug's optional server build import and reduce noisy build warnings.
+
+## Known Remaining Security Work
+
+- `pnpm audit` still reports the direct `ai@4.3.19` low-severity advisory. Upgrading it requires a major Vercel AI SDK route migration because existing chat routes use older `streamText` response helpers.
+- `npm audit` still reports the Next nested PostCSS advisory from `package-lock.json`; production Vercel builds use `pnpm-lock.yaml`, where Next resolves PostCSS `8.5.12`.
+
 ## 2026-04-27 Dependency Security Patch
 
 ## Files Changed

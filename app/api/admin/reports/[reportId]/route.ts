@@ -32,8 +32,9 @@ function buildOrFilter(filters: Array<string | false | null | undefined>) {
 
 export async function GET(
   _request: Request,
-  { params }: { params: { reportId: string } }
+  { params }: { params: Promise<{ reportId: string }> }
 ) {
+  const { reportId } = await params;
   const adminCheck = await checkAdminAccess();
 
   if (!adminCheck.isAdmin) {
@@ -45,7 +46,7 @@ export async function GET(
 
   const supabase = createAdminClient();
   const report = await safeMaybeSingle<any>(
-    supabase.from('credit_reports').select('*').eq('id', params.reportId).maybeSingle(),
+    supabase.from('credit_reports').select('*').eq('id', reportId).maybeSingle(),
     'credit_reports'
   );
 
@@ -79,7 +80,7 @@ export async function GET(
     userEmail && `user_email.eq.${userEmail}`,
   ]);
   const activityFilter = buildOrFilter([
-    `entity_id.eq.${params.reportId}`,
+    `entity_id.eq.${reportId}`,
     userId && `actor_user_id.eq.${userId}`,
   ]);
 

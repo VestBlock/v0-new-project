@@ -13,9 +13,10 @@ const supabaseAdmin = createClient(
 // GET /api/dispute-letters/:id/pdf?userId=...&download=1
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const userId =
       req.nextUrl.searchParams.get('userId') ||
       req.headers.get('x-user-id') ||
@@ -29,7 +30,7 @@ export async function GET(
     const { data: row, error } = await supabaseAdmin
       .from('dispute_letters')
       .select('user_id, pdf_path, created_at, bureau, letter_type')
-      .eq('id', params.id)
+      .eq('id', id)
       .maybeSingle();
 
     if (error || !row)

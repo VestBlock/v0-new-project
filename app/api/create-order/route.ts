@@ -1,27 +1,7 @@
 import axios from 'axios';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-
-export const generatePaypalAccessToken = async () => {
-  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-    throw new Error('PayPal credentials are not configured.');
-  }
-
-  const response = await axios({
-    url: 'https://api-m.sandbox.paypal.com/v1/oauth2/token',
-    method: 'post',
-    data: 'grant_type=client_credentials',
-    auth: {
-      username: process.env.PAYPAL_CLIENT_ID as string,
-      password: process.env.PAYPAL_CLIENT_SECRET as string,
-    },
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  });
-
-  return response.data;
-};
+import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 
 export async function POST(req: Request) {
   const { userId } = await req.json();

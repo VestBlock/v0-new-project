@@ -18,9 +18,9 @@ interface FullRoadmapData extends RoadmapData {
 }
 
 interface PageProps {
-  params: {
+  params: Promise<{
     reportId: string
-  }
+  }>
 }
 
 async function getCreditDashboardData(
@@ -96,7 +96,7 @@ export default async function CreditDashboardPage({ params }: PageProps) {
     )
   }
 
-  const { reportId } = params
+  const { reportId } = await params
   const { report, roadmap, error } = await getCreditDashboardData(reportId, user.id)
 
   if (error && !report) {

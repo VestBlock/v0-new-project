@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { createChatCompletion } from "@/lib/openai-service" // Assuming this is your OpenAI service
+import { createChatCompletion, type OpenAIChatMessage } from "@/lib/openai-service" // Assuming this is your OpenAI service
 import type { Database, RoadmapData } from "@/types/supabase" // Import RoadmapData
 
 export const runtime = "nodejs" // or 'edge' if your OpenAI and Supabase libs support it
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       `[API /analyze-report] Stage 1: Auto-analyzing credit report for user: ${userIdFromRequest}, Text length: ${reportText.length}`,
     )
 
-    const initialSystemMessage = {
+    const initialSystemMessage: OpenAIChatMessage = {
       role: "system",
       content: `You are a credit report analysis expert. Analyze the provided credit report thoroughly.
       Your analysis should be comprehensive, covering:
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       7.  Actionable Recommendations: Provide specific, actionable steps the user can take to improve their credit based on THIS report.
       Structure your response clearly with headings for each section (e.g., "## Overall Summary", "## Negative Items"). Be factual and base everything on the provided text. If information is not present for a section, explicitly state that.`,
     }
-    const initialUserMessage = {
+    const initialUserMessage: OpenAIChatMessage = {
       role: "user",
       content: `Please analyze the following credit report based on my question.\n\nCredit Report Text:\n"""${reportText}"""\n\nMy Question: """${question}"""`,
     }
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     console.log(`[API /analyze-report] Stage 2: Generating personalized roadmap for report ID: ${reportRecordId}`)
 
     const roadmapPrompt = getRoadmapGenerationPrompt(analysisText)
-    const roadmapMessages = [
+    const roadmapMessages: OpenAIChatMessage[] = [
       {
         role: "system",
         content:
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       { role: "user", content: roadmapPrompt },
     ]
 
-    const roadmapAiResponse = await createChatCompletion(roadmapMessages, true, {
+    const roadmapAiResponse = await createChatCompletion(roadmapMessages, false, {
       temperature: 0.3,
       response_format: { type: "json_object" },
     }) // Request JSON output

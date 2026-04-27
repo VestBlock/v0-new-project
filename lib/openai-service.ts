@@ -3,14 +3,14 @@
  * This service provides functions to interact with OpenAI API without using the SDK
  */
 
-type Message = {
+export type OpenAIChatMessage = {
   role: "system" | "user" | "assistant"
   content: string
 }
 
 type CompletionRequest = {
   model: string
-  messages: Message[]
+  messages: OpenAIChatMessage[]
   stream?: boolean
   temperature?: number
   max_tokens?: number
@@ -37,10 +37,21 @@ type CompletionResponse = {
  * Creates a chat completion using the OpenAI API
  */
 export async function createChatCompletion(
-  messages: Message[],
+  messages: OpenAIChatMessage[],
+  stream: true,
+  options?: Partial<CompletionRequest & { timeout?: number }>,
+): Promise<Response>
+export async function createChatCompletion(
+  messages: OpenAIChatMessage[],
+  stream?: false,
+  options?: Partial<CompletionRequest & { timeout?: number }>,
+): Promise<CompletionResponse>
+export async function createChatCompletion(
+  messages: OpenAIChatMessage[],
   stream = false,
   options: Partial<CompletionRequest & { timeout?: number }> = {}, // Allow overriding model, temperature, timeout etc.
 ): Promise<Response | CompletionResponse> {
+  const requestTimeout = options.timeout ?? 55000
   try {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
@@ -48,10 +59,10 @@ export async function createChatCompletion(
       throw new Error("OpenAI API key is not configured")
     }
 
-    const { timeout = 55000, ...restOfOptions } = options // Default timeout 55 seconds, slightly less than 60s maxDuration
+    const { timeout: _timeout, ...restOfOptions } = options
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeout)
 
     const requestBody: CompletionRequest = {
       model: restOfOptions.model || "gpt-4o",
@@ -99,10 +110,9 @@ export async function createChatCompletion(
     const data = await response.json()
     return data as CompletionResponse
   } catch (error) {
-    const { timeout } = options
     if (error instanceof Error && error.name === "AbortError") {
-      console.error("[OpenAI Service] OpenAI request timed out after", timeout, "ms")
-      throw new Error(`OpenAI request timed out after ${timeout / 1000} seconds.`)
+      console.error("[OpenAI Service] OpenAI request timed out after", requestTimeout, "ms")
+      throw new Error(`OpenAI request timed out after ${requestTimeout / 1000} seconds.`)
     }
     console.error(
       "[OpenAI Service] Error in createChatCompletion:",

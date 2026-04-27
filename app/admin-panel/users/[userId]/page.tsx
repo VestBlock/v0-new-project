@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
@@ -37,8 +37,9 @@ function formatDate(value?: string | null) {
 export default function AdminUserDetailPage({
   params,
 }: {
-  params: { userId: string };
+  params: Promise<{ userId: string }>;
 }) {
+  const { userId } = use(params);
   const { user, userProfile, isAuthenticated, isLoading: authLoading } =
     useAuth();
   const router = useRouter();
@@ -55,7 +56,7 @@ export default function AdminUserDetailPage({
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(`/api/admin/users/${params.userId}`, {
+        const response = await fetch(`/api/admin/users/${userId}`, {
           cache: 'no-store',
         });
         const result = await response.json();
@@ -72,7 +73,7 @@ export default function AdminUserDetailPage({
 
     if (authLoading) return;
     if (!isAuthenticated) {
-      router.push(`/login?redirect=/admin-panel/users/${params.userId}`);
+      router.push(`/login?redirect=/admin-panel/users/${userId}`);
       return;
     }
     if (!isAdmin) {
@@ -81,7 +82,7 @@ export default function AdminUserDetailPage({
       return;
     }
     loadUser();
-  }, [authLoading, isAuthenticated, isAdmin, params.userId, router]);
+  }, [authLoading, isAuthenticated, isAdmin, userId, router]);
 
   if (authLoading || loading) {
     return (
@@ -125,7 +126,7 @@ export default function AdminUserDetailPage({
           <h1 className="text-3xl font-bold tracking-tight">
             {profile?.full_name || profile?.email || 'User Detail'}
           </h1>
-          <p className="text-muted-foreground">{profile?.email || params.userId}</p>
+          <p className="text-muted-foreground">{profile?.email || userId}</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
