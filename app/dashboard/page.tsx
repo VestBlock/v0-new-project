@@ -14,12 +14,34 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Rocket, ShieldCheck, Star, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  FileText,
+  Loader2,
+  Rocket,
+  ShieldCheck,
+  Star,
+  UploadCloud,
+} from 'lucide-react';
 import { InteractiveRoadmap } from '@/components/interactive-roadmap';
 import { CreditCardsTab } from '@/components/credit-cards-tab';
 import { SideHustlesTab } from '@/components/side-hustles-tab';
 import { CreditScoreTab } from '@/components/credit-score-tab';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CreditReportStatusCard } from '@/components/credit-report-status-card';
+
+type DashboardCreditReport = {
+  id: string;
+  file_name?: string | null;
+  name?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  uploaded_at?: string | null;
+  completed_at?: string | null;
+  analysis_json?: unknown;
+  analysis_result?: unknown;
+  dispute_letters_json?: unknown;
+};
 
 export default function DashboardPage() {
   const { user, userProfile, fetchUserProfile } = useAuth();
@@ -29,6 +51,11 @@ export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [creditReports, setCreditReports] = useState<DashboardCreditReport[]>(
+    []
+  );
+  const [reportsError, setReportsError] = useState('');
 
   useEffect(() => {
     if (!token || !user) return;
@@ -106,6 +133,46 @@ export default function DashboardPage() {
 
   const isProMember = userProfile?.is_subscribed || isAdmin;
 
+  useEffect(() => {
+    if (!user) return;
+
+    let isMounted = true;
+    const userId = user.id;
+    const supabase = getSupabaseClient();
+
+    async function loadCreditReports() {
+      setReportsLoading(true);
+      setReportsError('');
+
+      const { data, error } = await supabase
+        .from('credit_reports')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.warn('[dashboard] credit report load failed:', error.message);
+        setReportsError(
+          'Credit report status is temporarily unavailable. Your uploads are still stored securely.'
+        );
+        setCreditReports([]);
+      } else {
+        setCreditReports((data || []) as DashboardCreditReport[]);
+      }
+
+      setReportsLoading(false);
+    }
+
+    loadCreditReports();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
   if (!userProfile || paymentLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -163,6 +230,71 @@ export default function DashboardPage() {
           </div>
         </Alert>
       )}
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-2xl font-semibold tracking-tight">
+              Credit Repair Workflow
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Track uploads, analysis status, and generated dispute outputs.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/credit-upload')}
+            className="w-full sm:w-auto"
+          >
+            <UploadCloud className="h-4 w-4" />
+            Upload Report
+          </Button>
+        </div>
+
+        {reportsLoading ? (
+          <Card>
+            <CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading your recent credit reports...
+            </CardContent>
+          </Card>
+        ) : reportsError ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Report Status Unavailable</AlertTitle>
+            <AlertDescription>{reportsError}</AlertDescription>
+          </Alert>
+        ) : creditReports.length > 0 ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {creditReports.map((report) => (
+              <CreditReportStatusCard
+                key={report.id}
+                report={report}
+                compact
+              />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <FileText className="h-5 w-5 text-primary" />
+                No Credit Reports Yet
+              </CardTitle>
+              <CardDescription>
+                Upload a report to start the credit analysis, dispute letter,
+                and admin alert workflow.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => router.push('/credit-upload')}>
+                <UploadCloud className="h-4 w-4" />
+                Upload First Report
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </section>
 
       <Tabs defaultValue="roadmap" className="space-y-4">
         <TabsList>

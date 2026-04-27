@@ -20,8 +20,10 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   FileCheck,
+  LayoutDashboard,
   Loader2,
   Rocket,
   Shield,
@@ -43,6 +45,7 @@ function CreditUploadContent() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
+  const [uploadedReportId, setUploadedReportId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
 
@@ -220,6 +223,7 @@ function CreditUploadContent() {
       setUploadProgress(100);
       setUploadedFileName(result.fileName);
       setUploadedFilePath(result.filePath);
+      setUploadedReportId(result.reportId || null);
       setSuccess(true);
 
       toast({
@@ -250,6 +254,7 @@ function CreditUploadContent() {
     setUploadProgress(0);
     setUploadedFileName(null);
     setUploadedFilePath(null);
+    setUploadedReportId(null);
     setError('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -450,17 +455,30 @@ function CreditUploadContent() {
                       </ul>
                     </div>
 
-                    <div className="flex gap-3">
-                      {/* <Button
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {uploadedReportId && (
+                        <Button
+                          onClick={() =>
+                            router.push(`/credit-dashboard/${uploadedReportId}`)
+                          }
+                          className="sm:col-span-1"
+                        >
+                          View Status
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
                         onClick={() => router.push('/dashboard')}
-                        className="flex-1"
+                        variant="outline"
+                        className="bg-transparent"
                       >
-                        Go to Dashboard
-                      </Button> */}
+                        <LayoutDashboard className="h-4 w-4" />
+                        Dashboard
+                      </Button>
                       <Button
                         onClick={handleNewUpload}
                         variant="outline"
-                        className="flex-1 bg-transparent"
+                        className="bg-transparent"
                       >
                         Upload Another Report
                       </Button>

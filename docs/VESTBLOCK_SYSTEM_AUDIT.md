@@ -142,6 +142,7 @@ Risk fixed: upload and PayPal webhook routes no longer log raw report text, extr
 
 - Regenerate `types/supabase.ts` from the live Supabase schema.
 - Consolidate credit analysis into the central workflow module.
+- Continue moving customer credit-report status displays to the shared `lib/workflows/creditReportStatus.ts` model.
 - Remove legacy database setup/debug routes once they are no longer needed for recovery work.
 - Regenerate Supabase types and remove legacy env fallbacks once deployment settings are fully standardized.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.

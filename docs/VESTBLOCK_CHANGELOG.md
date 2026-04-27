@@ -1,5 +1,29 @@
 # VestBlock Changelog
 
+## 2026-04-27 Customer Credit Workflow Status
+
+## Files Changed
+
+- `lib/workflows/creditReportStatus.ts`
+- `components/credit-report-status-card.tsx`
+- `app/dashboard/page.tsx`
+- `app/credit-upload/page.tsx`
+- `app/credit-dashboard/[reportId]/page.tsx`
+
+## Features Added
+
+- Added a shared customer-facing status model for credit report workflow states.
+- Added a reusable credit report status card with progress, next-step guidance, letter counts, and contextual actions.
+- Added a Credit Repair Workflow section to `/dashboard` that lists the user's recent reports from Supabase.
+- Updated upload success state with direct links to report status, dashboard, and another upload.
+- Updated `/credit-dashboard/[reportId]` to read newer workflow fields such as `status`, `analysis_json`, `dispute_letters_json`, and `uploaded_at`.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Edge-Safe Diagnostic Middleware
 
 ## Files Changed
