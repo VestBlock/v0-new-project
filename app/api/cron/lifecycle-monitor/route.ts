@@ -7,6 +7,11 @@ import {
   createPaidCustomerNoUploadTask,
   createSignupNoUploadTask,
 } from '@/lib/admin/tasks';
+import {
+  sendAdminLeadFollowupEmail,
+  sendPaidCustomerUploadReminderEmail,
+  sendUserUploadReminderEmail,
+} from '@/lib/email/sendEmail';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isCronAuthorized } from '@/lib/system/cronAuth';
 import { logEvent } from '@/lib/system/logEvent';
@@ -49,6 +54,11 @@ type LeadRow = {
   updated_at?: string | null;
 };
 
+type LifecycleEmailType =
+  | 'user_upload_reminder'
+  | 'user_paid_upload_reminder'
+  | 'admin_lead_followup';
+
 async function safeRows<T>(
   query: PromiseLike<{ data: T[] | null; error: any }>,
   label: string
@@ -88,6 +98,49 @@ function latestPaymentByUser(payments: PaymentRow[]) {
     });
 
   return byUser;
+}
+
+async function hasLifecycleEmailEvent(input: {
+  eventType: LifecycleEmailType;
+  userId?: string | null;
+  userEmail?: string | null;
+}) {
+  if (!input.userId && !input.userEmail) return false;
+
+  try {
+    const supabase = createAdminClient();
+    let query = supabase
+      .from('email_events')
+      .select('id,status')
+      .eq('event_type', input.eventType)
+      .in('status', ['sent', 'skipped'])
+      .limit(1);
+
+    if (input.userId) {
+      query = query.eq('user_id', input.userId);
+    } else if (input.userEmail) {
+      query = query.eq('user_email', input.userEmail);
+    }
+
+    const { data, error } = await query.maybeSingle();
+    if (error) return false;
+    return Boolean(data?.id);
+  } catch {
+    return false;
+  }
+}
+
+async function sendLifecycleEmailOnce(input: {
+  eventType: LifecycleEmailType;
+  userId?: string | null;
+  userEmail?: string | null;
+  send: () => Promise<unknown>;
+}) {
+  const alreadySent = await hasLifecycleEmailEvent(input);
+  if (alreadySent) return { skipped: true, reason: 'existing_email_event' };
+
+  await input.send();
+  return { skipped: false };
 }
 
 export async function GET(request: Request) {
@@ -152,14 +205,27 @@ export async function GET(request: Request) {
         isPaid &&
         (paidAgeHours ?? profileAgeHours ?? 0) >= paidNoUploadAfterHours
       ) {
-        const result = await createPaidCustomerNoUploadTask({
-          userId,
-          userEmail: profile.email,
-          amount: latestPayment?.amount,
-          paymentId: latestPayment?.paypal_transaction_id || latestPayment?.id,
-          paidAt,
-          ageHours: paidAgeHours ?? profileAgeHours,
-        });
+        const [result, emailResult] = await Promise.all([
+          createPaidCustomerNoUploadTask({
+            userId,
+            userEmail: profile.email,
+            amount: latestPayment?.amount,
+            paymentId: latestPayment?.paypal_transaction_id || latestPayment?.id,
+            paidAt,
+            ageHours: paidAgeHours ?? profileAgeHours,
+          }),
+          sendLifecycleEmailOnce({
+            eventType: 'user_paid_upload_reminder',
+            userId,
+            userEmail: profile.email,
+            send: () =>
+              sendPaidCustomerUploadReminderEmail({
+                userId,
+                userEmail: profile.email,
+                amount: latestPayment?.amount,
+              }),
+          }),
+        ]);
 
         if (result.ok && !result.duplicate) {
           await logEvent({
@@ -167,20 +233,36 @@ export async function GET(request: Request) {
             actorUserId: userId,
             entityType: 'user',
             entityId: userId,
-            metadata: { ageHours: paidAgeHours ?? profileAgeHours },
+            metadata: {
+              ageHours: paidAgeHours ?? profileAgeHours,
+              emailReminder: emailResult,
+            },
           });
         }
 
-        return result;
+        return { ...result, emailResult };
       }
 
       if ((profileAgeHours ?? 0) >= signupNoUploadAfterHours) {
-        const result = await createSignupNoUploadTask({
-          userId,
-          userEmail: profile.email,
-          fullName: profile.full_name,
-          ageHours: profileAgeHours,
-        });
+        const [result, emailResult] = await Promise.all([
+          createSignupNoUploadTask({
+            userId,
+            userEmail: profile.email,
+            fullName: profile.full_name,
+            ageHours: profileAgeHours,
+          }),
+          sendLifecycleEmailOnce({
+            eventType: 'user_upload_reminder',
+            userId,
+            userEmail: profile.email,
+            send: () =>
+              sendUserUploadReminderEmail({
+                userId,
+                userEmail: profile.email,
+                fullName: profile.full_name,
+              }),
+          }),
+        ]);
 
         if (result.ok && !result.duplicate) {
           await logEvent({
@@ -188,11 +270,14 @@ export async function GET(request: Request) {
             actorUserId: userId,
             entityType: 'user',
             entityId: userId,
-            metadata: { ageHours: profileAgeHours },
+            metadata: {
+              ageHours: profileAgeHours,
+              emailReminder: emailResult,
+            },
           });
         }
 
-        return result;
+        return { ...result, emailResult };
       }
 
       return null;
@@ -204,13 +289,27 @@ export async function GET(request: Request) {
       const createdAgeHours = ageHours(lead.created_at);
       if ((createdAgeHours ?? 0) < leadFollowupAfterHours) return null;
 
-      const result = await createLeadFollowupTask({
-        leadId: lead.id,
-        leadType: lead.lead_type,
-        name: lead.name,
-        email: lead.email,
-        ageHours: createdAgeHours,
-      });
+      const [result, emailResult] = await Promise.all([
+        createLeadFollowupTask({
+          leadId: lead.id,
+          leadType: lead.lead_type,
+          name: lead.name,
+          email: lead.email,
+          ageHours: createdAgeHours,
+        }),
+        sendLifecycleEmailOnce({
+          eventType: 'admin_lead_followup',
+          userEmail: lead.email || lead.id,
+          send: () =>
+            sendAdminLeadFollowupEmail({
+              leadId: lead.id,
+              leadType: lead.lead_type,
+              name: lead.name,
+              email: lead.email,
+              ageHours: createdAgeHours,
+            }),
+        }),
+      ]);
 
       if (result.ok && !result.duplicate) {
         await logEvent({
@@ -220,17 +319,19 @@ export async function GET(request: Request) {
           metadata: {
             leadType: lead.lead_type,
             ageHours: createdAgeHours,
+            emailReminder: emailResult,
           },
         });
       }
 
-      return result;
+      return { ...result, emailResult };
     })
   );
 
   const taskResults = [...userTaskResults, ...leadTaskResults].filter(Boolean) as Array<{
     ok?: boolean;
     duplicate?: boolean;
+    emailResult?: { skipped?: boolean; reason?: string };
   }>;
 
   return NextResponse.json({
@@ -247,5 +348,11 @@ export async function GET(request: Request) {
     },
     tasksCreated: taskResults.filter((result) => result.ok && !result.duplicate).length,
     duplicateTasks: taskResults.filter((result) => result.duplicate).length,
+    lifecycleEmailsAttempted: taskResults.filter(
+      (result) => result.emailResult && !result.emailResult.skipped
+    ).length,
+    lifecycleEmailsSkipped: taskResults.filter(
+      (result) => result.emailResult?.skipped
+    ).length,
   });
 }

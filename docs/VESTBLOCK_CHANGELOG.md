@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 Lifecycle Reminder Emails
+
+## Files Changed
+
+- `app/api/cron/lifecycle-monitor/route.ts`
+- `lib/email/sendEmail.ts`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+
+## Features Added
+
+- Added user upload reminder email for signups older than 48 hours with no credit report.
+- Added paid customer upload/onboarding reminder email for paid users older than 24 hours with no report.
+- Added admin lead follow-up alert email for new leads older than 24 hours.
+- Added `email_events` duplicate checks so scheduled lifecycle reminders can run repeatedly without sending duplicate reminders.
+- Added lifecycle email attempted/skipped counts to the cron response.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Credit Analysis Rerun Workflow
 
 ## Files Changed

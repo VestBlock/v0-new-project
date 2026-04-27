@@ -8,7 +8,10 @@ type EmailEventType =
   | 'user_analysis_completed'
   | 'admin_analysis_completed'
   | 'credit_analysis_failed'
-  | 'new_paid_customer';
+  | 'new_paid_customer'
+  | 'user_upload_reminder'
+  | 'user_paid_upload_reminder'
+  | 'admin_lead_followup';
 
 type SendEmailInput = {
   to?: string | null;
@@ -282,6 +285,86 @@ export async function sendNewPaidCustomerAlert(details: {
       <strong>Amount:</strong> ${escapeHtml(String(details.amount || 'Unknown'))}<br />
       <strong>Provider:</strong> ${escapeHtml(details.provider || 'PayPal')}<br />
       <strong>Transaction:</strong> ${escapeHtml(details.transactionId || 'Unknown')}</p>
+    `
+    ),
+  });
+}
+
+export async function sendUserUploadReminderEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  fullName?: string | null;
+}) {
+  const uploadUrl = `${getSiteUrl()}/credit-upload`;
+  const greeting = details.fullName
+    ? `Hi ${escapeHtml(details.fullName)},`
+    : 'Hi,';
+
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Ready for your VestBlock credit analysis?',
+    eventType: 'user_upload_reminder',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Your credit analysis starts with an upload',
+      `
+      <p>${greeting}</p>
+      <p>Your VestBlock account is ready. The next step is uploading a recent credit report so we can start the credit analysis and dispute-letter workflow.</p>
+      <p><a href="${uploadUrl}" style="color:#67e8f9;">Upload your credit report</a></p>
+      <p>If you already uploaded a report, you can ignore this message and check your dashboard for status updates.</p>
+    `
+    ),
+  });
+}
+
+export async function sendPaidCustomerUploadReminderEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  amount?: string | number | null;
+}) {
+  const uploadUrl = `${getSiteUrl()}/credit-upload`;
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Next step: upload your credit report',
+    eventType: 'user_paid_upload_reminder',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Let’s start your VestBlock credit workflow',
+      `
+      <p>Thanks for joining VestBlock. Your next step is to upload your credit report so we can begin analysis and prepare dispute-letter support where appropriate.</p>
+      <p><strong>Payment:</strong> ${escapeHtml(String(details.amount || 'Completed'))}</p>
+      <p><a href="${uploadUrl}" style="color:#67e8f9;">Upload your credit report</a></p>
+      <p>Once uploaded, you will be able to track the report status from your dashboard.</p>
+    `
+    ),
+  });
+}
+
+export async function sendAdminLeadFollowupEmail(details: {
+  leadId: string;
+  leadType?: string | null;
+  name?: string | null;
+  email?: string | null;
+  ageHours?: number | null;
+}) {
+  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'VestBlock Lead Needs Follow-Up',
+    eventType: 'admin_lead_followup',
+    userEmail: details.email,
+    html: shell(
+      'Lead follow-up needed',
+      `
+      <p>A lead is still marked new after the follow-up window.</p>
+      <p><strong>Name:</strong> ${escapeHtml(details.name || 'Unknown')}<br />
+      <strong>Email:</strong> ${escapeHtml(details.email || 'Unknown')}<br />
+      <strong>Lead type:</strong> ${escapeHtml(details.leadType || 'Unknown')}<br />
+      <strong>Lead ID:</strong> ${escapeHtml(details.leadId)}<br />
+      <strong>Age:</strong> ${escapeHtml(String(details.ageHours || 'Unknown'))} hours</p>
+      <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
     `
     ),
   });

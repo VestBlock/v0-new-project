@@ -28,7 +28,10 @@ Events:
 - Analysis completed: user result email and admin completion email.
 - Analysis failed: admin failure alert.
 - Payment completed: admin paid-customer alert.
-- Future: abandoned checkout, upload reminder, reactivation, dispute-letter ready.
+- No upload after signup: user upload reminder.
+- Paid customer with no upload: user paid onboarding/upload reminder.
+- New lead aging past follow-up window: admin lead follow-up alert.
+- Future: abandoned checkout, reactivation, dispute-letter ready.
 
 Email failures must be logged to `email_events` and must not break uploads or analysis.
 
@@ -62,6 +65,8 @@ Implemented lifecycle task automation:
 - Creates `signup_no_upload` admin tasks for users older than 48 hours with no report.
 - Creates `paid_customer_no_upload` high-priority admin tasks for paid users older than 24 hours with no report.
 - Creates `lead_followup` admin tasks for new leads older than 24 hours.
+- Sends lifecycle reminder emails through Resend and records them in `email_events`.
+- Checks existing `email_events` rows before sending so the cron can run repeatedly without duplicate reminders.
 - Logs `signup_no_upload`, `paid_customer_no_upload`, and `lead_followup_needed` events to `admin_activity`.
 
 ## Failed Payment And Abandoned Checkout
