@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { checkAdminAccess } from '@/lib/auth/admin';
+import {
+  buildCreditReportTimeline,
+  summarizeCreditReportOperations,
+} from '@/lib/admin/reportTimeline';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 async function safeMaybeSingle<T>(
@@ -83,8 +87,13 @@ export async function GET(
     `entity_id.eq.${reportId}`,
     userId && `actor_user_id.eq.${userId}`,
   ]);
+  const taskFilter = buildOrFilter([
+    `entity_id.eq.${reportId}`,
+    userId && `user_id.eq.${userId}`,
+    userEmail && `user_email.eq.${userEmail}`,
+  ]);
 
-  const [letters, jobs, emailEvents, activity] = await Promise.all([
+  const [letters, jobs, emailEvents, activity, tasks] = await Promise.all([
     safeRows<any>(
       (
         letterFilter
@@ -123,6 +132,17 @@ export async function GET(
         .limit(50),
       'admin_activity'
     ),
+    safeRows<any>(
+      (
+        taskFilter
+          ? supabase.from('admin_tasks').select('*').or(taskFilter)
+          : supabase.from('admin_tasks').select('*').eq('id', '__none__')
+      )
+        .order('due_at', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(50),
+      'admin_tasks'
+    ),
   ]);
 
   let signedFileUrl: string | null = null;
@@ -140,6 +160,21 @@ export async function GET(
     jobs,
     emailEvents,
     activity,
+    tasks,
+    timeline: buildCreditReportTimeline({
+      report,
+      jobs,
+      letters,
+      emailEvents,
+      activity,
+      tasks,
+    }),
+    operationalSummary: summarizeCreditReportOperations({
+      report,
+      letters,
+      emailEvents,
+      tasks,
+    }),
     signedFileUrl,
   });
 }

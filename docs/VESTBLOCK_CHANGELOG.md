@@ -1,5 +1,26 @@
 # VestBlock Changelog
 
+## 2026-04-27 Credit Report Operator Timeline
+
+## Files Changed
+
+- `app/api/admin/reports/[reportId]/route.ts`
+- `app/admin-panel/reports/[reportId]/page.tsx`
+- `lib/admin/reportTimeline.ts`
+
+## Features Added
+
+- Added a reusable admin timeline builder for credit report operations.
+- Extended the admin report detail API with related admin tasks, a combined workflow timeline, and an operational summary.
+- Upgraded the admin report detail page with next-best-action guidance, workflow health badges, a chronological activity view, and inline admin task status updates.
+
+## Verification
+
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values.
+- `corepack pnpm run lint` is still blocked by Next's deprecated interactive lint setup prompt.
+
 ## 2026-04-27 Type Safety Stabilization
 
 ## Files Changed

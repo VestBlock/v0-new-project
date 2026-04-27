@@ -4,7 +4,16 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
-import { ArrowLeft, ExternalLink, Loader2, Save } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeft,
+  CheckCircle2,
+  ClipboardList,
+  ExternalLink,
+  Loader2,
+  Mail,
+  Save,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +45,8 @@ const statuses = [
   'needs_review',
 ];
 
+const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
+
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown';
   try {
@@ -49,6 +60,19 @@ function statusVariant(status?: string) {
   if (status === 'completed') return 'default';
   if (status === 'failed') return 'destructive';
   return 'secondary';
+}
+
+function priorityVariant(priority?: string) {
+  if (priority === 'urgent' || priority === 'high') return 'destructive';
+  if (priority === 'low') return 'outline';
+  return 'secondary';
+}
+
+function timelineVariant(severity?: string) {
+  if (severity === 'danger') return 'destructive';
+  if (severity === 'success') return 'default';
+  if (severity === 'warning') return 'secondary';
+  return 'outline';
 }
 
 function JsonPreview({ value }: { value: unknown }) {
@@ -74,6 +98,8 @@ export default function AdminReportDetailPage({
   const [adminNotes, setAdminNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
 
   const isAdminEmail =
@@ -140,6 +166,30 @@ export default function AdminReportDetailPage({
     }
   };
 
+  const updateTaskStatus = async (taskId: string, currentStatus: string) => {
+    setSavingTaskId(taskId);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId,
+          status: taskStatusDrafts[taskId] || currentStatus,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to update task.');
+      }
+      await loadReport();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update task.');
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -161,6 +211,7 @@ export default function AdminReportDetailPage({
 
   const report = data.report;
   const profile = data.profile;
+  const summary = data.operationalSummary;
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
@@ -193,6 +244,37 @@ export default function AdminReportDetailPage({
 
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
+            {summary && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-cyan-500" />
+                    Operator Summary
+                  </CardTitle>
+                  <CardDescription>
+                    Current workflow health and the next best admin action.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm font-medium">{summary.nextBestAction}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={summary.hasCompletedAnalysis ? 'default' : 'secondary'}>
+                      Analysis {summary.hasCompletedAnalysis ? 'complete' : 'pending'}
+                    </Badge>
+                    <Badge variant={summary.hasGeneratedLetters ? 'default' : 'secondary'}>
+                      Letters {summary.hasGeneratedLetters ? 'ready' : 'pending'}
+                    </Badge>
+                    <Badge variant={summary.hasOpenTasks ? 'destructive' : 'outline'}>
+                      {summary.hasOpenTasks ? 'Open tasks' : 'No open tasks'}
+                    </Badge>
+                    <Badge variant={summary.hasFailedEmail ? 'destructive' : 'outline'}>
+                      {summary.hasFailedEmail ? 'Email issue' : 'Email healthy'}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>Report</CardTitle>
@@ -228,6 +310,48 @@ export default function AdminReportDetailPage({
                       </a>
                     </Button>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Workflow Timeline</CardTitle>
+                <CardDescription>
+                  Uploads, analysis jobs, letters, email alerts, admin activity,
+                  and task updates in one place.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!data.timeline || data.timeline.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No timeline events found.</p>
+                ) : (
+                  data.timeline.map((event: any) => (
+                    <div key={event.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{event.label}</p>
+                          {event.description && (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {event.description}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={timelineVariant(event.severity)}>
+                          {event.status || event.kind}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span>{event.kind}</span>
+                        <span>{formatDate(event.timestamp)}</span>
+                        {event.href && (
+                          <Link className="font-medium text-cyan-600" href={event.href}>
+                            Open related item
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))
                 )}
               </CardContent>
             </Card>
@@ -326,7 +450,78 @@ export default function AdminReportDetailPage({
 
             <Card>
               <CardHeader>
-                <CardTitle>Email Events</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Admin Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!data.tasks || data.tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tasks found.</p>
+                ) : (
+                  data.tasks.map((task: any) => (
+                    <div key={task.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{task.title}</p>
+                          {task.description && (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={priorityVariant(task.priority)}>
+                          {task.priority}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Due {formatDate(task.due_at)} - {task.task_type}
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Select
+                          value={taskStatusDrafts[task.id] || task.status}
+                          onValueChange={(value) =>
+                            setTaskStatusDrafts((current) => ({
+                              ...current,
+                              [task.id]: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {taskStatuses.map((item) => (
+                              <SelectItem key={item} value={item}>
+                                {item}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          onClick={() => updateTaskStatus(task.id, task.status)}
+                          disabled={savingTaskId === task.id}
+                        >
+                          {savingTaskId === task.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Email Events
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {data.emailEvents.length === 0 ? (
