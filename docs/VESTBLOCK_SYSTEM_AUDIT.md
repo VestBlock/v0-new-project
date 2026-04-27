@@ -115,7 +115,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Funding lead status controls
 - Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
 - Admin task queue
-- Automation readiness checks for cron, email, and PayPal payment configuration
+- Automation readiness checks for cron, email, PayPal payment configuration, and Supabase data source health
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`
 - Rerun analysis action for stored credit report files

@@ -3,13 +3,21 @@ import { checkAdminAccess } from '@/lib/auth/admin';
 import { getPaypalEnvironment } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+type DashboardDataSourceIssue = {
+  source: string;
+  message: string;
+};
+
 async function safeRows<T>(
   query: PromiseLike<{ data: T[] | null; error: any }>,
-  label: string
+  label: string,
+  issues?: DashboardDataSourceIssue[]
 ): Promise<T[]> {
   const { data, error } = await query;
   if (error) {
-    console.warn(`[admin-dashboard] ${label} unavailable:`, error.message);
+    const message = error.message || 'Unknown query error.';
+    console.warn(`[admin-dashboard] ${label} unavailable:`, message);
+    issues?.push({ source: label, message });
     return [];
   }
   return data ?? [];
@@ -49,6 +57,18 @@ const lifecycleEmailTypes = new Set([
   'admin_abandoned_checkout',
 ]);
 
+const dashboardDataSources = [
+  'user_profiles',
+  'credit_reports',
+  'analysis_jobs',
+  'dispute_letters',
+  'payments',
+  'email_events',
+  'admin_activity',
+  'leads',
+  'admin_tasks',
+] as const;
+
 export async function GET() {
   const adminCheck = await checkAdminAccess();
 
@@ -60,6 +80,7 @@ export async function GET() {
   }
 
   const supabase = createAdminClient();
+  const dataSourceIssues: DashboardDataSourceIssue[] = [];
 
   const [users, reports, jobs, letters, payments, emailEvents, adminActivity, leads, tasks] =
     await Promise.all([
@@ -69,7 +90,8 @@ export async function GET() {
           .select('id,user_id,email,full_name,role,is_subscribed,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(250),
-        'user_profiles'
+        'user_profiles',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -79,7 +101,8 @@ export async function GET() {
           )
           .order('created_at', { ascending: false })
           .limit(250),
-        'credit_reports'
+        'credit_reports',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -89,7 +112,8 @@ export async function GET() {
           )
           .order('created_at', { ascending: false })
           .limit(250),
-        'analysis_jobs'
+        'analysis_jobs',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -99,7 +123,8 @@ export async function GET() {
           )
           .order('created_at', { ascending: false })
           .limit(250),
-        'dispute_letters'
+        'dispute_letters',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -107,7 +132,8 @@ export async function GET() {
           .select('id,user_id,amount,status,payment_method,paypal_transaction_id,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(100),
-        'payments'
+        'payments',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -115,7 +141,8 @@ export async function GET() {
           .select('id,user_id,user_email,event_type,subject,status,provider_message_id,error_message,created_at')
           .order('created_at', { ascending: false })
           .limit(100),
-        'email_events'
+        'email_events',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -123,7 +150,8 @@ export async function GET() {
           .select('id,actor_user_id,action_type,entity_type,entity_id,metadata_json,created_at')
           .order('created_at', { ascending: false })
           .limit(100),
-        'admin_activity'
+        'admin_activity',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -131,7 +159,8 @@ export async function GET() {
           .select('id,lead_type,status,name,email,phone,notes,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(100),
-        'leads'
+        'leads',
+        dataSourceIssues
       ),
       safeRows<any>(
         supabase
@@ -142,7 +171,8 @@ export async function GET() {
           .order('due_at', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(100),
-        'admin_tasks'
+        'admin_tasks',
+        dataSourceIssues
       ),
     ]);
 
@@ -321,6 +351,14 @@ export async function GET() {
   const paypalEnvironment = getPaypalEnvironment();
   const paypalReady =
     paypalClientConfigured && paypalSecretConfigured && paypalWebhookConfigured;
+  const dataSourceHealth = dashboardDataSources.map((source) => {
+    const issue = dataSourceIssues.find((item) => item.source === source);
+    return {
+      source,
+      status: issue ? 'unavailable' : 'available',
+      message: issue?.message || null,
+    };
+  });
 
   return NextResponse.json({
     overview: {
@@ -347,6 +385,13 @@ export async function GET() {
       systemErrors: [
         ...emailEvents.filter((event) => event.status === 'failed'),
         ...creditReports.filter((report) => report.status === 'failed'),
+        ...dataSourceIssues.map((issue) => ({
+          id: `source-${issue.source}`,
+          subject: `${issue.source} unavailable`,
+          status: 'failed',
+          event_type: 'data_source_unavailable',
+          error_message: issue.message,
+        })),
       ].slice(0, 30),
     },
     payments,
@@ -374,6 +419,7 @@ export async function GET() {
             : 'Sandbox PayPal mode is configured. Use sandbox buyer accounts for checkout testing.'
           : 'Add PayPal client ID, client secret, and webhook ID in Vercel before relying on payment automation.',
       },
+      dataSources: dataSourceHealth,
       crons: [
         {
           label: 'Credit repair stalled report monitor',

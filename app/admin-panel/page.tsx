@@ -127,6 +127,11 @@ type AdminDashboard = {
       paypalReady: boolean;
       recommendedAction: string;
     };
+    dataSources: Array<{
+      source: string;
+      status: 'available' | 'unavailable';
+      message?: string | null;
+    }>;
     crons: Array<{
       label: string;
       path: string;
@@ -1253,7 +1258,7 @@ export default function AdminPanelPage() {
                 </Card>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Lifecycle Emails</CardTitle>
@@ -1271,6 +1276,39 @@ export default function AdminPanelPage() {
                       <div key={label} className="rounded-md border p-3">
                         <p className="text-xs text-muted-foreground">{label}</p>
                         <p className="text-2xl font-bold">{value}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Data Source Health</CardTitle>
+                    <CardDescription>
+                      Expected Supabase tables used by admin operations.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {dashboard.automation.dataSources.map((source) => (
+                      <div
+                        key={source.source}
+                        className="flex items-start justify-between gap-3 rounded-md border p-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{source.source}</p>
+                          {source.message && (
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                              {source.message}
+                            </p>
+                          )}
+                        </div>
+                        <Badge
+                          variant={
+                            source.status === 'available' ? 'default' : 'destructive'
+                          }
+                        >
+                          {source.status}
+                        </Badge>
                       </div>
                     ))}
                   </CardContent>

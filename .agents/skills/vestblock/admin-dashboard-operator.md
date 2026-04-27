@@ -31,6 +31,7 @@ Never trust client-only role checks for sensitive data. Server API routes must v
 - Tasks
 - Activity
 - Payments / Leads
+- Automation readiness for cron, email, PayPal, and data source health
 
 ## Task Queue
 
@@ -65,3 +66,5 @@ Prefer deriving metrics from:
 - `leads`
 - `admin_activity`
 - `admin_tasks`
+
+If an expected table is missing or a dashboard query fails, surface it in the Automation tab's Data Source Health panel instead of quietly showing zero data.

@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 Admin Data Source Health
+
+## Files Changed
+
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `.agents/skills/vestblock/admin-dashboard-operator.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added admin API tracking for expected Supabase dashboard tables.
+- Added Data Source Health to the `/admin-panel` Automation tab so missing tables or query failures are visible to operators.
+- Added data-source query failures to the admin system errors feed without exposing secrets.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Admin Payment Readiness Panel
 
 ## Files Changed
