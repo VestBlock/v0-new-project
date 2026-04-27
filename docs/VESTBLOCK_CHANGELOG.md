@@ -32,7 +32,8 @@
 - `corepack pnpm lint` passed with existing warning-only output.
 - `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed.
 - Local built smoke passed: `/services/financial-growth` returned `200`, page copy rendered the package offers, `/api/service-interest` rejected an empty payload with `400`, and `sitemap.xml` includes `/services/financial-growth`.
-- Production deploy and live smoke are pending for this change.
+- Production deploy `dpl_Ekm98AnBtupdncYtVoxJtotuPYhZ` passed and aliased to production.
+- Live smoke on `https://www.vestblock.io/services/financial-growth` passed: route returned `200`, package copy rendered, `/api/service-interest` rejected an empty payload with `400`, and `sitemap.xml` includes `/services/financial-growth`.
 
 ## 2026-04-27 Service Directory And Skill Upgrade
 
