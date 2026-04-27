@@ -29,10 +29,12 @@ Events:
 - Analysis completed: user result email and admin completion email.
 - Analysis failed: admin failure alert.
 - Payment completed: admin paid-customer alert.
+- Payment failed or could not be recorded: admin review alert.
+- Abandoned checkout: admin follow-up alert.
 - No upload after signup: user upload reminder.
 - Paid customer with no upload: user paid onboarding/upload reminder.
 - New lead aging past follow-up window: admin lead follow-up alert.
-- Future: abandoned checkout, reactivation, dispute-letter ready.
+- Future: reactivation and dispute-letter ready.
 
 Email failures must be logged to `email_events` and must not break uploads or analysis.
 
@@ -76,9 +78,10 @@ Implemented lifecycle task automation:
 
 ## Failed Payment And Abandoned Checkout
 
-Payments exist through PayPal. Next steps:
+Payments exist through PayPal.
 
 - Payment completion routes use `lib/payments/paymentAutomation.ts` to alert admin, log `payment_completed`, and create a `paid_customer_onboarding` task.
+- Both `/api/paypal-webhook` and the legacy `/api/webhook` route use shared payment automation for successful and failed PayPal events.
 - Failed payment paths use the same module to alert admin, log `payment_failed`, and create a `payment_failure` task.
 - PayPal order creation logs `checkout_started` and stores the order ID on `user_profiles.paypal_order_id`.
 - The daily lifecycle monitor creates `abandoned_checkout` tasks and admin alerts for stale unpaid PayPal orders.

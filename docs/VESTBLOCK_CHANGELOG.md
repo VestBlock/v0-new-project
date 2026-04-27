@@ -1,5 +1,28 @@
 # VestBlock Changelog
 
+## 2026-04-27 Legacy PayPal Webhook Automation
+
+## Files Changed
+
+- `app/api/webhook/route.ts`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Updated the legacy `/api/webhook` PayPal route to use the shared Supabase admin client instead of a module-level service-role client.
+- Wired legacy PayPal capture completion through `lib/payments/paymentAutomation.ts` for paid-customer admin alerts, onboarding tasks, and `payment_completed` logs.
+- Added failed-payment automation for missing PayPal order IDs, missing matching profiles, payment insert failures, subscription update failures, denied captures, voided orders, and handler exceptions.
+- Added duplicate transaction checks so repeated PayPal webhooks do not create duplicate `payments` rows or repeat paid-customer automation.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Abandoned Checkout Automation
 
 ## Files Changed

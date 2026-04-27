@@ -58,6 +58,7 @@ Important operating routes include:
 - `/api/generate-pdf`
 - `/api/create-order`
 - `/api/capture-order`
+- `/api/webhook`
 - `/api/paypal-webhook`
 - `/api/process-payment`
 - `/api/admin/dashboard` added
@@ -131,9 +132,9 @@ Required env vars:
 
 ## Payment Integration
 
-PayPal is present through `/api/create-order`, `/api/capture-order`, `/api/paypal-webhook`, and `@paypal/paypal-server-sdk`.
+PayPal is present through `/api/create-order`, `/api/capture-order`, `/api/webhook`, `/api/paypal-webhook`, and `@paypal/paypal-server-sdk`.
 
-Payment automation now runs through `lib/payments/paymentAutomation.ts` and the lifecycle monitor, creating admin alerts, paid-customer onboarding tasks, failed-payment tasks, abandoned-checkout tasks, and `checkout_started` / `payment_completed` / `payment_failed` / `abandoned_checkout` activity logs.
+Payment automation now runs through `lib/payments/paymentAutomation.ts` and the lifecycle monitor, creating admin alerts, paid-customer onboarding tasks, failed-payment tasks, abandoned-checkout tasks, and `checkout_started` / `payment_completed` / `payment_failed` / `abandoned_checkout` activity logs. Both PayPal webhook routes now use the shared automation path for successful captures and failed payment events.
 
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 

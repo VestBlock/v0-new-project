@@ -7,6 +7,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - PayPal order creation: `/api/create-order`
 - PayPal capture: `/api/capture-order`
 - Webhook route: `/api/paypal-webhook`
+- Legacy webhook route: `/api/webhook`
 - User subscription fields: `user_profiles.is_subscribed`, `paypal_order_id`
 - Admin visibility: `/admin-panel` payments and paid users
 
@@ -18,6 +19,8 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Payment completion should trigger `sendNewPaidCustomerAlert()` when configured.
 - Failed payment or abandoned checkout automation should avoid repeated emails in a short window.
 - PayPal order creation should log `checkout_started`; lifecycle cron should create `abandoned_checkout` tasks for stale unpaid orders.
+- All PayPal completion paths should use `lib/payments/paymentAutomation.ts`; do not add route-local one-off payment emails.
+- Check `payments.paypal_transaction_id` before inserting payment rows so repeated provider webhooks do not duplicate payment records or paid-customer alerts.
 
 ## Useful Improvements
 
@@ -32,6 +35,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 
 - Checkout button creates PayPal order.
 - Capture endpoint updates subscription state.
+- Both webhook routes record completed captures or create failure tasks.
 - Admin dashboard paid-user count changes after capture.
 - User sees paid tools after refresh.
 - Admin alert fires without breaking checkout if email fails.
