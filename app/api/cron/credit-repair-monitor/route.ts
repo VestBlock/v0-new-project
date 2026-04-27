@@ -62,7 +62,7 @@ export async function GET(request: Request) {
   const { data: reports, error } = await supabase
     .from('credit_reports')
     .select(
-      'id,user_id,user_email,file_name,status,created_at,updated_at,uploaded_at'
+      'id,user_id,user_email,file_name,status,updated_at,uploaded_at'
     )
     .in('status', monitoredStatuses)
     .order('updated_at', { ascending: true, nullsFirst: false })
