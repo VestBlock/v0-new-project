@@ -1,5 +1,61 @@
 # VestBlock Changelog
 
+## 2026-04-27 Business Credit Card Funding Strategy Workflow
+
+## Files Changed
+
+- `app/funding/credit-card-strategy/page.tsx`
+- `app/funding/page.tsx`
+- `app/admin-panel/page.tsx`
+- `app/api/funding-strategy/route.ts`
+- `app/api/funding-lead/route.ts`
+- `app/api/admin/funding-strategy/route.ts`
+- `app/api/create-order/route.ts`
+- `app/api/capture-order/route.ts`
+- `app/api/webhook/route.ts`
+- `app/api/paypal-webhook/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/sitemap.ts`
+- `lib/funding/cardStacking.ts`
+- `lib/funding/fundingStrategyAutomation.ts`
+- `lib/payments/products.ts`
+- `lib/admin/tasks.ts`
+- `lib/system/logEvent.ts`
+- `db/migrations/025-create-funding-strategy-requests.sql`
+- `.agents/skills/vestblock/funding-lead-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added `/funding/credit-card-strategy` as a logged-in customer workflow for business credit card funding readiness.
+- Added a compliance-safe readiness scorer for credit range, utilization, inquiries, EIN, business banking, business age, revenue, and use of funds.
+- Added the paid offer `Business Credit Card Funding Strategy Review` at `$297`.
+- Added PayPal product support so VestBlock Pro and funding strategy reviews can use the same checkout/capture routes without turning every payment into a subscription.
+- Added funding strategy automation that sends admin lead alerts, creates admin tasks, and logs `funding_strategy_submitted` / `funding_strategy_paid` events.
+- Added an admin Funding Strategy tab with readiness score, customer contact, payment status, admin notes, and manual status updates.
+- Wired the existing `/funding` lead form into a real `/api/funding-lead` route instead of local-only form logging.
+- Updated PayPal webhook handlers so funding strategy payments are recorded as the funding product and do not incorrectly grant Pro subscription access.
+- Added sitemap coverage for `/funding/credit-card-strategy`.
+
+## Env Vars Required
+
+- Existing payment vars: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, and `PAYPAL_ENV=live` when taking live payments.
+- Existing platform vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ADMIN_ALERT_EMAIL`, `FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`, `OPENAI_API_KEY`.
+
+## Database Changes Required
+
+- `db/migrations/025-create-funding-strategy-requests.sql` was applied to the live VestBlock Supabase project on 2026-04-27.
+- Migration creates/updates `payments`, creates/updates `leads`, adds `user_profiles.paypal_order_product`, and creates `funding_strategy_requests` with RLS.
+
+## Verification
+
+- `corepack pnpm lint` passes with existing warnings only.
+- `npx tsc --noEmit` passed.
+- `corepack pnpm build` passed with local placeholder production env values.
+- Supabase verification confirmed `funding_strategy_requests` exists with `0` rows, `leads` exists with `0` rows, and `payments` includes `product_type`, `metadata_json`, and `paypal_transaction_id`.
+- Built-app smoke checks passed for `/funding`, `/funding/credit-card-strategy`, `/sitemap.xml`, `/api/funding-strategy` returning `401` unauthenticated, and `/api/admin/funding-strategy` returning `401` unauthenticated.
+
 ## 2026-04-27 Content Operations Dashboard
 
 ## Files Changed

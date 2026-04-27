@@ -8,6 +8,8 @@ import {
 } from '@/lib/payments/paymentAutomation';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { getPaypalApiUrl } from '@/lib/paypal/config';
+import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
+import { logEvent } from '@/lib/system/logEvent';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const failedPaypalEvents = new Set([
@@ -170,6 +172,11 @@ export async function POST(request: Request) {
 
       if (captureStatus === 'COMPLETED' && orderId) {
         const supabase = createAdminClient();
+        const { data: fundingRequest } = await supabase
+          .from('funding_strategy_requests')
+          .select('id,user_id,user_email,business_name,readiness_score,readiness_tier')
+          .eq('paypal_order_id', orderId)
+          .maybeSingle();
         const { data: userProfile, error: userError } = await supabase
           .from('user_profiles')
           .select('id,user_id,email')
@@ -193,6 +200,9 @@ export async function POST(request: Request) {
 
         const userId = userProfile.user_id || userProfile.id;
         const paymentAmount = amount ? Number.parseFloat(amount) : null;
+        const productType = fundingRequest?.id
+          ? 'funding_strategy_review'
+          : 'vestblock_pro';
         let paymentRecord: { id: string } | null = null;
         let duplicatePayment = false;
 
@@ -236,6 +246,14 @@ export async function POST(request: Request) {
                 status: 'completed',
                 payment_method: 'paypal',
                 paypal_transaction_id: transactionId,
+                product_type: productType,
+                metadata_json: {
+                  eventId,
+                  eventType,
+                  orderId,
+                  requestId: fundingRequest?.id,
+                  productType,
+                },
               })
               .select('id')
               .single();
@@ -257,10 +275,13 @@ export async function POST(request: Request) {
 
         paymentRecord = insertedPayment;
 
-        const { error: subscriptionError } = await supabase
-          .from('user_profiles')
-          .update({ is_subscribed: true })
-          .or(`id.eq.${userId},user_id.eq.${userId}`);
+        const { error: subscriptionError } =
+          productType === 'vestblock_pro'
+            ? await supabase
+                .from('user_profiles')
+                .update({ is_subscribed: true, paypal_order_product: productType })
+                .or(`id.eq.${userId},user_id.eq.${userId}`)
+            : { error: null };
 
         if (subscriptionError) {
           await logPaymentFailure({
@@ -278,6 +299,60 @@ export async function POST(request: Request) {
           return new Response('DB update failed', { status: 500 });
         }
 
+        if (productType === 'funding_strategy_review' && fundingRequest?.id) {
+          const { error: requestUpdateError } = await supabase
+            .from('funding_strategy_requests')
+            .update({
+              payment_status: 'paid',
+              status: 'paid',
+              payment_id: paymentRecord?.id,
+              paid_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', fundingRequest.id);
+
+          if (requestUpdateError) {
+            await logPaymentFailure({
+              eventId,
+              eventType,
+              orderId,
+              transactionId,
+              amount,
+              userId,
+              userEmail: userProfile.email,
+              errorMessage:
+                requestUpdateError.message ||
+                'Unable to update funding strategy payment status.',
+            });
+            return new Response('Funding request update failed', { status: 500 });
+          }
+
+          await Promise.allSettled([
+            createFundingStrategyReviewTask({
+              requestId: fundingRequest.id,
+              userId,
+              userEmail: fundingRequest.user_email || userProfile.email,
+              businessName: fundingRequest.business_name,
+              readinessScore: fundingRequest.readiness_score,
+              readinessTier: fundingRequest.readiness_tier,
+              paid: true,
+            }),
+            logEvent({
+              eventType: 'funding_strategy_paid',
+              actorUserId: userId,
+              entityType: 'funding_strategy_request',
+              entityId: fundingRequest.id,
+              metadata: {
+                paymentId: paymentRecord?.id,
+                transactionId,
+                orderId,
+                amount,
+                source: 'webhook',
+              },
+            }),
+          ]);
+        }
+
         if (!duplicatePayment) {
           await runPaymentCompletedAutomation({
             paymentId: paymentRecord?.id || transactionId,
@@ -291,6 +366,8 @@ export async function POST(request: Request) {
               eventId,
               eventType,
               orderId,
+              requestId: fundingRequest?.id,
+              productType,
             },
           });
         }

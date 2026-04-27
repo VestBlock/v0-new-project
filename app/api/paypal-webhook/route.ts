@@ -3,6 +3,8 @@ import {
   runPaymentCompletedAutomation,
   runPaymentFailedAutomation,
 } from '@/lib/payments/paymentAutomation';
+import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
+import { logEvent } from '@/lib/system/logEvent';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const failedPaypalEvents = new Set([
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
       const payerEmail = payment?.payer?.email_address;
       const amount = payment?.amount?.value;
       const transactionId = payment?.id || null;
+      const orderId = payment?.supplementary_data?.related_ids?.order_id || null;
 
       if (!payerEmail || !transactionId || !amount) {
         await logPaymentFailure({
@@ -96,11 +99,24 @@ export async function POST(req: NextRequest) {
 
       const userId = userProfile.user_id || userProfile.id;
       const userEmail = userProfile.email || payerEmail;
+      const { data: fundingRequest } = orderId
+        ? await supabase
+            .from('funding_strategy_requests')
+            .select('id,user_id,user_email,business_name,readiness_score,readiness_tier')
+            .eq('paypal_order_id', orderId)
+            .maybeSingle()
+        : { data: null };
+      const productType = fundingRequest?.id
+        ? 'funding_strategy_review'
+        : 'vestblock_pro';
 
-      const { error: subscriptionError } = await supabase
-        .from('user_profiles')
-        .update({ is_subscribed: true })
-        .or(`id.eq.${userId},user_id.eq.${userId}`);
+      const { error: subscriptionError } =
+        productType === 'vestblock_pro'
+          ? await supabase
+              .from('user_profiles')
+              .update({ is_subscribed: true, paypal_order_product: productType })
+              .or(`id.eq.${userId},user_id.eq.${userId}`)
+          : { error: null };
 
       if (subscriptionError) {
         await logPaymentFailure({
@@ -152,6 +168,14 @@ export async function POST(req: NextRequest) {
           status: 'completed',
           payment_method: 'paypal',
           paypal_transaction_id: transactionId,
+          product_type: productType,
+          metadata_json: {
+            eventId,
+            eventType,
+            orderId,
+            requestId: fundingRequest?.id,
+            productType,
+          },
         })
         .select('id')
         .single();
@@ -173,6 +197,46 @@ export async function POST(req: NextRequest) {
         paymentId: paymentRecord?.id || transactionId,
       });
 
+      if (productType === 'funding_strategy_review' && fundingRequest?.id) {
+        const { error: requestUpdateError } = await supabase
+          .from('funding_strategy_requests')
+          .update({
+            payment_status: 'paid',
+            status: 'paid',
+            payment_id: paymentRecord?.id,
+            paid_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', fundingRequest.id);
+
+        if (!requestUpdateError) {
+          await Promise.allSettled([
+            createFundingStrategyReviewTask({
+              requestId: fundingRequest.id,
+              userId,
+              userEmail: fundingRequest.user_email || userEmail,
+              businessName: fundingRequest.business_name,
+              readinessScore: fundingRequest.readiness_score,
+              readinessTier: fundingRequest.readiness_tier,
+              paid: true,
+            }),
+            logEvent({
+              eventType: 'funding_strategy_paid',
+              actorUserId: userId,
+              entityType: 'funding_strategy_request',
+              entityId: fundingRequest.id,
+              metadata: {
+                paymentId: paymentRecord?.id,
+                transactionId,
+                orderId,
+                amount,
+                source: 'paypal-webhook',
+              },
+            }),
+          ]);
+        }
+      }
+
       await runPaymentCompletedAutomation({
         paymentId: paymentRecord?.id || transactionId,
         userId,
@@ -181,7 +245,7 @@ export async function POST(req: NextRequest) {
         provider: 'PayPal',
         transactionId,
         source: 'paypal-webhook',
-        metadata: { eventId, eventType },
+        metadata: { eventId, eventType, orderId, requestId: fundingRequest?.id, productType },
       });
     }
 

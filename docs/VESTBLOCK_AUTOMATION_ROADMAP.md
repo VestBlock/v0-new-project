@@ -41,12 +41,17 @@ Email failures must be logged to `email_events` and must not break uploads or an
 ## Lead And Funding Opportunity Automation
 
 - Centralize funding, real estate, and business credit leads in `leads`.
+- Route the public `/funding` form into `/api/funding-lead` so business funding interest creates a real lead row, admin email alert, follow-up task, and `lead_created` event.
+- Use `/funding/credit-card-strategy` for business credit card stacking readiness. The workflow creates `funding_strategy_requests`, scores readiness, blocks weak profiles from paying too early, and queues paid reviews for admin follow-up.
+- Charge `$297` for the `funding_strategy_review` product through the shared PayPal order/capture routes.
+- Keep funding strategy payments separate from VestBlock Pro subscription payments with `payments.product_type` and `metadata_json`.
 - Alert admin when a funding lead is submitted.
 - Track source route, lead type, status, contact info, and notes.
 - Let admins update lead status from either `/admin/leads` or the main `/admin-panel`.
 - Log lead status updates to `admin_activity` for operator accountability.
 - Use `lib/leads/leadAutomation.ts` after lead creation to send immediate admin alerts, create follow-up tasks, and log `lead_created` events.
-- Future: partner referral tracking, outcome tracking, and automatic nurture sequences by lead type.
+- Use `lib/funding/fundingStrategyAutomation.ts` after strategy request creation/payment to send admin alerts, create funding review tasks, and log durable events.
+- Future: partner referral tracking, outcome tracking, application consent workflows, document upload checklists, and automatic nurture sequences by lead type.
 
 ## AEO And Content Automation
 

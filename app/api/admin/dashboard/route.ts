@@ -42,6 +42,9 @@ const automationEventTypes = new Set([
   'signup_no_upload',
   'paid_customer_no_upload',
   'lead_followup_needed',
+  'funding_strategy_submitted',
+  'funding_strategy_paid',
+  'funding_strategy_status_updated',
   'email_sent',
   'email_failed',
   'checkout_started',
@@ -68,6 +71,7 @@ const dashboardDataSources = [
   'leads',
   'admin_tasks',
   'content_assets',
+  'funding_strategy_requests',
 ] as const;
 
 export async function GET() {
@@ -94,6 +98,7 @@ export async function GET() {
     leads,
     tasks,
     contentAssets,
+    fundingStrategyRequests,
   ] =
     await Promise.all([
       safeRows<any>(
@@ -141,7 +146,7 @@ export async function GET() {
       safeRows<any>(
         supabase
           .from('payments')
-          .select('id,user_id,amount,status,payment_method,paypal_transaction_id,created_at,updated_at')
+          .select('id,user_id,amount,status,payment_method,paypal_transaction_id,product_type,metadata_json,created_at,updated_at')
           .order('created_at', { ascending: false })
           .limit(100),
         'payments',
@@ -195,6 +200,17 @@ export async function GET() {
           .order('created_at', { ascending: false })
           .limit(100),
         'content_assets',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('funding_strategy_requests')
+          .select(
+            'id,user_id,user_email,full_name,phone,business_name,business_stage,business_age_months,monthly_revenue,personal_credit_score,current_utilization,recent_inquiries,has_ein,has_business_bank,has_business_credit_card,requested_funding_amount,use_of_funds,readiness_score,readiness_tier,readiness_summary,strengths_json,risks_json,next_steps_json,consent_hard_inquiries,consent_no_guarantee,consent_terms_review,status,payment_status,paypal_order_id,payment_id,admin_notes,created_at,updated_at,paid_at'
+          )
+          .order('created_at', { ascending: false })
+          .limit(100),
+        'funding_strategy_requests',
         dataSourceIssues
       ),
     ]);
@@ -317,6 +333,15 @@ export async function GET() {
       label: `Payment ${payment.status} ${payment.amount ? `$${payment.amount}` : ''}`,
       createdAt: payment.created_at,
     })),
+    ...fundingStrategyRequests.slice(0, 20).map((request) => ({
+      id: `funding-strategy-${request.id}`,
+      type: 'funding_strategy_request',
+      label: `Funding strategy ${request.status}: ${
+        request.business_name || request.user_email || request.id
+      }`,
+      createdAt: request.updated_at || request.created_at,
+      href: '/admin-panel',
+    })),
     ...adminActivity.slice(0, 20).map((activity) => ({
       id: `activity-${activity.id}`,
       type: activity.action_type,
@@ -412,6 +437,10 @@ export async function GET() {
       totalPaidUsers: users.filter((user) => Boolean(user.is_subscribed)).length,
       totalCompletedPayments: countBy(payments, 'status', 'completed'),
       totalFundingLeads: leads.length,
+      totalFundingStrategyRequests: fundingStrategyRequests.length,
+      totalPaidFundingStrategyRequests: fundingStrategyRequests.filter(
+        (request) => request.payment_status === 'paid'
+      ).length,
       totalOpenTasks: tasks.filter((task) =>
         ['open', 'in_progress', 'waiting'].includes(String(task.status))
       ).length,
@@ -440,6 +469,7 @@ export async function GET() {
     },
     payments,
     leads,
+    fundingStrategyRequests,
     tasks,
     content: {
       assets: contentAssets,

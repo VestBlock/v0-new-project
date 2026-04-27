@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -54,7 +55,16 @@ export default function FundingPage()
     setIsSubmitting(true)
 
     try {
-      console.log("Form submitted:", formData)
+      const response = await fetch("/api/funding-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to submit funding lead.")
+      }
 
       toast({
         title: "Application Submitted!",
@@ -75,7 +85,10 @@ export default function FundingPage()
       console.error("Error submitting form:", error)
       toast({
         title: "Submission Error",
-        description: "There was an error submitting your application. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "There was an error submitting your application. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -93,13 +106,17 @@ export default function FundingPage()
             capital, we connect you with the right financial solutions.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white">
-              <DollarSign className="mr-2 h-5 w-5" />
-              Get Funding Now
+            <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
+              <Link href="/funding/credit-card-strategy">
+                <DollarSign className="mr-2 h-5 w-5" />
+                Start Strategy Review
+              </Link>
             </Button>
-            <Button size="lg" variant="outline">
-              <Phone className="mr-2 h-5 w-5" />
-              Speak with Expert
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/funding/credit-card-strategy">
+                <Phone className="mr-2 h-5 w-5" />
+                Check Readiness
+              </Link>
             </Button>
           </div>
         </div>
@@ -273,6 +290,38 @@ export default function FundingPage()
               </CardContent>
             </Card>
           </div>
+          <Card className="border-2 border-emerald-500/20">
+            <CardHeader>
+              <Badge className="w-fit bg-emerald-600 text-white">VestBlock Service</Badge>
+              <CardTitle className="text-2xl">Business Credit Card Funding Strategy Review</CardTitle>
+              <CardDescription className="text-base">
+                A $297 readiness review for business owners considering credit card stacking. VestBlock scores your
+                credit range, utilization, inquiries, business setup, use of funds, and prep gaps before you pursue applications.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="rounded-lg border p-4">
+                  <div className="font-medium">Automated Intake</div>
+                  <div className="text-muted-foreground">Creates a readiness score and admin task.</div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="font-medium">Compliance-Safe</div>
+                  <div className="text-muted-foreground">No funding guarantees or hidden application promises.</div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="font-medium">$297 Review</div>
+                  <div className="text-muted-foreground">Pay only after the profile is ready enough to evaluate.</div>
+                </div>
+              </div>
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>
+                <Link href="/funding/credit-card-strategy">
+                  Start Credit Card Funding Strategy
+                  <CreditCard className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
       <section className="py-16 bg-muted/50">

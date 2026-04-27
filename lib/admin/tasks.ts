@@ -384,3 +384,39 @@ export async function createLeadFollowupTask(input: {
     },
   });
 }
+
+export async function createFundingStrategyReviewTask(input: {
+  requestId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  businessName?: string | null;
+  readinessScore?: number | null;
+  readinessTier?: string | null;
+  paid?: boolean;
+}) {
+  return createAdminTask({
+    title: input.paid
+      ? 'Complete paid card funding strategy review'
+      : 'Review card funding strategy request',
+    description:
+      'A customer submitted a business credit card funding strategy request. Review credit readiness, business setup, consent, and whether the plan should move to a paid strategy session or preparation work.',
+    taskType: input.paid
+      ? 'paid_funding_strategy_review'
+      : 'funding_strategy_review',
+    priority: input.paid ? 'urgent' : 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'funding_strategy_request',
+    entityId: input.requestId,
+    dueAt: input.paid ? adminTaskDueDates.now() : adminTaskDueDates.days(1),
+    metadata: {
+      businessName: input.businessName,
+      readinessScore: input.readinessScore,
+      readinessTier: input.readinessTier,
+      paid: Boolean(input.paid),
+      nextAction: input.paid
+        ? 'Prepare the strategy review, verify documents, and contact the customer.'
+        : 'Review readiness score and decide whether to invite payment or recommend prep work.',
+    },
+  });
+}

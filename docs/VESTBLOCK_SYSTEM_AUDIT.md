@@ -6,7 +6,7 @@ VestBlock is a Next.js 14 App Router project. Routes live in `app/`, API handler
 
 ## Current App Structure
 
-- Public routes: `/`, `/funding`, `/business-setup`, `/es/vestblock`, `/resources/[slug]`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
+- Public routes: `/`, `/funding`, `/funding/credit-card-strategy`, `/business-setup`, `/es/vestblock`, `/resources/[slug]`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
 - User routes: `/dashboard`, `/credit-upload`, `/credit-dashboard/[reportId]`, `/analysis/results/[jobId]`, `/profile`, `/user-hub`, `/tools/business-credit`, `/tools/grants`, `/tools/my-dispute-letters`, `/super-dispute`.
 - Admin routes: `/admin-panel`, `/admin/leads`, `/admin/test`.
 - Debug/test routes: multiple credit report, upload, OpenAI, streaming, database, and auth debug pages remain in `app/`, but are protected by admin-only middleware.
@@ -41,6 +41,7 @@ Fixed: `lib/supabase/server.ts` no longer logs cookies/session details and now p
 - `analysis_results`
 - `payments`
 - `leads`
+- `funding_strategy_requests` added by migration `025-create-funding-strategy-requests.sql`
 - `email_events` added by migration `020-vestblock-ops-automation.sql`
 - `admin_activity` added by migration `020-vestblock-ops-automation.sql`
 - `admin_tasks` added by migration `022-create-admin-tasks.sql`
@@ -59,12 +60,15 @@ Important operating routes include:
 - `/api/generate-pdf`
 - `/api/create-order`
 - `/api/capture-order`
+- `/api/funding-lead` added for the public business funding form
+- `/api/funding-strategy` added for card funding readiness and paid review intake
 - `/api/webhook`
 - `/api/paypal-webhook`
 - `/api/process-payment`
 - `/api/admin/dashboard` added
 - `/api/admin/credit-reports/status` added
 - `/api/admin/content` added for protected SEO, social post, and campaign generation plus content status updates
+- `/api/admin/funding-strategy` added for admin status/notes updates on card funding strategy requests
 - `/api/admin/leads` supports lead listing and status updates for admin operators
 - `/api/real-estate-lead`
 - `/api/sell-lead`
@@ -114,7 +118,9 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Alerts / Notifications
 - Recent activity
 - Payments and funding leads
+- Credit card funding strategy review requests
 - Funding lead status controls
+- Funding strategy status and admin notes controls
 - Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
 - Admin task queue
 - Content operations tab for SEO pages, social posts, campaign drafts, and manual publishing status
@@ -158,6 +164,13 @@ The direct capture route and both PayPal webhook paths check `payments.paypal_tr
 
 `/api/admin/dashboard` exposes non-secret PayPal readiness metadata for `/admin-panel`, including sandbox/live mode and whether the client ID, client secret, and webhook ID are configured.
 
+Payment products now live in `lib/payments/products.ts`:
+
+- `vestblock_pro` remains the `$75` Pro product and sets `user_profiles.is_subscribed`.
+- `funding_strategy_review` is the `$297` Business Credit Card Funding Strategy Review and records payment against `funding_strategy_requests` without granting Pro access.
+
+The card funding workflow uses `lib/funding/cardStacking.ts` for readiness scoring and `lib/funding/fundingStrategyAutomation.ts` for admin alert/task/event automation.
+
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 
 Risk fixed: upload and PayPal webhook routes no longer log raw report text, extracted credit items, profile rows, webhook payloads, PayPal headers, or PayPal secrets.
@@ -169,6 +182,7 @@ Risk fixed: upload and PayPal webhook routes no longer log raw report text, extr
 - Raw SQL and legacy database setup APIs are admin-gated and disabled unless explicit env flags are enabled.
 - Supabase schema/type definitions do not fully match later migrations.
 - Several routes rely on service-role Supabase access and need careful production env setup.
+- Local builds fail without build-time env vars because older routes instantiate OpenAI/Supabase clients at module import. Vercel must have `OPENAI_API_KEY`, Supabase URL, anon key, and service-role key configured before deployment builds.
 
 ## Recommended Next Improvements
 
@@ -178,3 +192,5 @@ Risk fixed: upload and PayPal webhook routes no longer log raw report text, extr
 - Remove legacy database setup/debug routes once they are no longer needed for recovery work.
 - Regenerate Supabase types and remove legacy env fallbacks once deployment settings are fully standardized.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.
+- Add customer-facing document checklist upload for paid funding strategy reviews.
+- Add partner outcome tracking for business funding, card stacking, Bank Breezy Spanish leads, and real estate funding leads.

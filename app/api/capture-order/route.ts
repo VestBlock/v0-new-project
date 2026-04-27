@@ -3,19 +3,26 @@ import axios from 'axios';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { getPaypalApiUrl } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
+import { getVestBlockProduct } from '@/lib/payments/products';
 import {
   runPaymentCompletedAutomation,
   runPaymentFailedAutomation,
 } from '@/lib/payments/paymentAutomation';
+import { logEvent } from '@/lib/system/logEvent';
 
 export async function POST(req: Request) {
   let orderID: string | null = null;
   let userId: string | null = null;
+  let requestId: string | null = null;
+  let requestedProductType: string | null = null;
 
   try {
     const body = await req.json();
     orderID = body.orderID;
     userId = body.userId;
+    requestId = body.requestId || null;
+    requestedProductType = body.productType || null;
 
     if (!orderID || !userId) {
       return NextResponse.json(
@@ -38,6 +45,24 @@ export async function POST(req: Request) {
       capture.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '75';
     const transactionId =
       capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
+    const supabase = createAdminClient();
+
+    const { data: fundingRequest } = await supabase
+      .from('funding_strategy_requests')
+      .select(
+        'id,user_id,user_email,business_name,readiness_score,readiness_tier,paypal_order_id'
+      )
+      .or(
+        requestId
+          ? `id.eq.${requestId},paypal_order_id.eq.${orderID}`
+          : `paypal_order_id.eq.${orderID}`
+      )
+      .maybeSingle();
+    const product =
+      fundingRequest?.id || requestedProductType === 'funding_strategy_review'
+        ? getVestBlockProduct('funding_strategy_review')
+        : getVestBlockProduct(requestedProductType);
+    requestId = requestId || fundingRequest?.id || null;
 
     if (status !== 'COMPLETED') {
       await runPaymentFailedAutomation({
@@ -47,7 +72,7 @@ export async function POST(req: Request) {
         transactionId,
         source: 'capture-order',
         errorMessage: `PayPal capture status was ${status || 'unknown'}.`,
-        metadata: { orderID },
+        metadata: { orderID, productType: product.type, requestId },
       });
 
       return NextResponse.json(
@@ -56,33 +81,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
     const { data: authUser } = await supabase.auth.admin.getUserById(userId);
     const userEmail = authUser?.user?.email;
 
-    const { error: subscriptionError } = await supabase
-      .from('user_profiles')
-      .update({ is_subscribed: true })
-      .or(`id.eq.${userId},user_id.eq.${userId}`);
+    if (product.type === 'vestblock_pro') {
+      const { error: subscriptionError } = await supabase
+        .from('user_profiles')
+        .update({ is_subscribed: true, paypal_order_product: product.type })
+        .or(`id.eq.${userId},user_id.eq.${userId}`);
 
-    if (subscriptionError) {
-      await runPaymentFailedAutomation({
-        userId,
-        userEmail,
-        amount,
-        provider: 'PayPal',
-        transactionId,
-        source: 'capture-order',
-        errorMessage:
-          subscriptionError.message ||
-          'Unable to update VestBlock subscription status.',
-        metadata: { orderID },
-      });
+      if (subscriptionError) {
+        await runPaymentFailedAutomation({
+          userId,
+          userEmail,
+          amount,
+          provider: 'PayPal',
+          transactionId,
+          source: 'capture-order',
+          errorMessage:
+            subscriptionError.message ||
+            'Unable to update VestBlock subscription status.',
+          metadata: { orderID, productType: product.type, requestId },
+        });
 
-      return NextResponse.json(
-        { success: false, error: 'Payment captured, but subscription update failed.' },
-        { status: 500 }
-      );
+        return NextResponse.json(
+          { success: false, error: 'Payment captured, but subscription update failed.' },
+          { status: 500 }
+        );
+      }
     }
 
     const { data: existingPayment, error: existingPaymentError } = await supabase
@@ -101,7 +127,7 @@ export async function POST(req: Request) {
         source: 'capture-order',
         errorMessage:
           existingPaymentError.message || 'Unable to check existing PayPal payment.',
-        metadata: { orderID },
+        metadata: { orderID, productType: product.type, requestId },
       });
 
       return NextResponse.json(
@@ -121,6 +147,13 @@ export async function POST(req: Request) {
           status: 'completed',
           payment_method: 'paypal',
           paypal_transaction_id: transactionId,
+          product_type: product.type,
+          metadata_json: {
+            orderID,
+            requestId,
+            productType: product.type,
+            productLabel: product.label,
+          },
         })
         .select('id')
         .single();
@@ -134,7 +167,7 @@ export async function POST(req: Request) {
           transactionId,
           source: 'capture-order',
           errorMessage: paymentError.message || 'Unable to record PayPal payment.',
-          metadata: { orderID },
+          metadata: { orderID, productType: product.type, requestId },
         });
 
         return NextResponse.json(
@@ -153,13 +186,79 @@ export async function POST(req: Request) {
         provider: 'PayPal',
         transactionId,
         source: 'capture-order',
-        metadata: { orderID },
+        metadata: { orderID, productType: product.type, requestId },
       });
+    }
+
+    if (product.type === 'funding_strategy_review' && requestId) {
+      const { data: updatedRequest, error: requestUpdateError } = await supabase
+        .from('funding_strategy_requests')
+        .update({
+          payment_status: 'paid',
+          status: 'paid',
+          payment_id: paymentId,
+          paypal_order_id: orderID,
+          paid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requestId)
+        .eq('user_id', userId)
+        .select(
+          'id,user_id,user_email,business_name,readiness_score,readiness_tier'
+        )
+        .maybeSingle();
+
+      if (requestUpdateError) {
+        await runPaymentFailedAutomation({
+          userId,
+          userEmail,
+          amount,
+          provider: 'PayPal',
+          transactionId,
+          source: 'capture-order',
+          errorMessage:
+            requestUpdateError.message ||
+            'Unable to update funding strategy payment status.',
+          metadata: { orderID, productType: product.type, requestId, paymentId },
+        });
+
+        return NextResponse.json(
+          { success: false, error: 'Payment captured, but strategy request update failed.' },
+          { status: 500 }
+        );
+      }
+
+      await Promise.allSettled([
+        createFundingStrategyReviewTask({
+          requestId,
+          userId,
+          userEmail: updatedRequest?.user_email || userEmail,
+          businessName: updatedRequest?.business_name,
+          readinessScore: updatedRequest?.readiness_score,
+          readinessTier: updatedRequest?.readiness_tier,
+          paid: true,
+        }),
+        logEvent({
+          eventType: 'funding_strategy_paid',
+          actorUserId: userId,
+          entityType: 'funding_strategy_request',
+          entityId: requestId,
+          metadata: {
+            paymentId,
+            transactionId,
+            orderID,
+            amount,
+            productType: product.type,
+          },
+        }),
+      ]);
     }
 
     return NextResponse.json({
       success: true,
       duplicate: Boolean(existingPayment?.id),
+      productType: product.type,
+      requestId,
       capture,
     });
   } catch (error) {
@@ -172,7 +271,7 @@ export async function POST(req: Request) {
       transactionId: orderID,
       source: 'capture-order',
       errorMessage: message,
-      metadata: { orderID },
+      metadata: { orderID, productType: requestedProductType, requestId },
     });
 
     return NextResponse.json(

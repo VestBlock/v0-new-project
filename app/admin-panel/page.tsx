@@ -11,6 +11,7 @@ import {
   Clock3,
   ClipboardList,
   CreditCard,
+  DollarSign,
   FileText,
   Globe2,
   Loader2,
@@ -63,6 +64,8 @@ type AdminDashboard = {
     totalPaidUsers: number;
     totalCompletedPayments: number;
     totalFundingLeads: number;
+    totalFundingStrategyRequests: number;
+    totalPaidFundingStrategyRequests: number;
     totalOpenTasks: number;
     totalContentAssets: number;
     totalPublishedContent: number;
@@ -106,6 +109,39 @@ type AdminDashboard = {
     href?: string;
   }>;
   payments: Array<any>;
+  fundingStrategyRequests: Array<{
+    id: string;
+    user_id?: string | null;
+    user_email?: string | null;
+    full_name?: string | null;
+    phone?: string | null;
+    business_name?: string | null;
+    business_stage?: string | null;
+    business_age_months?: number | null;
+    monthly_revenue?: number | null;
+    personal_credit_score?: string | null;
+    current_utilization?: string | null;
+    recent_inquiries?: string | null;
+    has_ein?: boolean | null;
+    has_business_bank?: boolean | null;
+    has_business_credit_card?: boolean | null;
+    requested_funding_amount?: number | null;
+    use_of_funds?: string | null;
+    readiness_score?: number | null;
+    readiness_tier?: string | null;
+    readiness_summary?: string | null;
+    strengths_json?: string[] | null;
+    risks_json?: string[] | null;
+    next_steps_json?: string[] | null;
+    status: string;
+    payment_status: string;
+    paypal_order_id?: string | null;
+    payment_id?: string | null;
+    admin_notes?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+    paid_at?: string | null;
+  }>;
   leads: Array<{
     id: string;
     lead_type?: string | null;
@@ -228,6 +264,15 @@ const statuses = [
 
 const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
 const leadStatuses = ['new', 'contacted', 'qualified', 'closed'];
+const fundingStrategyStatuses = [
+  'submitted',
+  'awaiting_payment',
+  'paid',
+  'in_review',
+  'strategy_ready',
+  'needs_prep',
+  'closed',
+];
 const contentStatuses = ['draft', 'ready', 'published', 'archived'];
 const contentTypes = [
   { value: 'seo_page', label: 'SEO page' },
@@ -246,6 +291,8 @@ const leadTypeLabels: Record<string, string> = {
   sell_house: 'Sell House',
   real_estate: 'Real Estate Funding',
   ai_assistant: 'AI Assistant',
+  business_funding: 'Business Funding',
+  credit_card_funding_strategy: 'Card Funding Strategy',
 };
 
 const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
@@ -308,9 +355,12 @@ export default function AdminPanelPage() {
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [leadStatusDrafts, setLeadStatusDrafts] = useState<Record<string, string>>({});
+  const [fundingStrategyStatusDrafts, setFundingStrategyStatusDrafts] = useState<Record<string, string>>({});
+  const [fundingStrategyNoteDrafts, setFundingStrategyNoteDrafts] = useState<Record<string, string>>({});
   const [savingReportId, setSavingReportId] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
+  const [savingFundingStrategyId, setSavingFundingStrategyId] = useState<string | null>(null);
   const [reportSearch, setReportSearch] = useState('');
   const [reportStatusFilter, setReportStatusFilter] = useState('all');
   const [userSearch, setUserSearch] = useState('');
@@ -322,6 +372,8 @@ export default function AdminPanelPage() {
   const [alertStatusFilter, setAlertStatusFilter] = useState('all');
   const [activitySearch, setActivitySearch] = useState('');
   const [paymentLeadSearch, setPaymentLeadSearch] = useState('');
+  const [fundingStrategySearch, setFundingStrategySearch] = useState('');
+  const [fundingStrategyStatusFilter, setFundingStrategyStatusFilter] = useState('active');
   const [contentSearch, setContentSearch] = useState('');
   const [contentStatusFilter, setContentStatusFilter] = useState('active');
   const [contentTypeFilter, setContentTypeFilter] = useState('all');
@@ -402,6 +454,11 @@ export default function AdminPanelPage() {
           dashboard.overview.totalPaidUsers ||
           dashboard.overview.totalCompletedPayments,
         icon: CreditCard,
+      },
+      {
+        label: 'Funding Reviews',
+        value: dashboard.overview.totalFundingStrategyRequests,
+        icon: DollarSign,
       },
       {
         label: 'Open Tasks',
@@ -554,6 +611,7 @@ export default function AdminPanelPage() {
           payment.amount,
           payment.payment_method,
           payment.paypal_transaction_id,
+          payment.product_type,
         ],
         paymentLeadSearch
       )
@@ -570,6 +628,39 @@ export default function AdminPanelPage() {
       )
     );
   }, [dashboard, paymentLeadSearch]);
+
+  const filteredFundingStrategyRequests = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.fundingStrategyRequests.filter((request) => {
+      const statusMatches =
+        fundingStrategyStatusFilter === 'all' ||
+        (fundingStrategyStatusFilter === 'active'
+          ? !['closed', 'strategy_ready'].includes(request.status)
+          : request.status === fundingStrategyStatusFilter);
+
+      return (
+        statusMatches &&
+        searchable(
+          [
+            request.id,
+            request.user_email,
+            request.full_name,
+            request.phone,
+            request.business_name,
+            request.business_stage,
+            request.readiness_tier,
+            request.readiness_score,
+            request.status,
+            request.payment_status,
+            request.admin_notes,
+            request.use_of_funds,
+          ],
+          fundingStrategySearch
+        )
+      );
+    });
+  }, [dashboard, fundingStrategySearch, fundingStrategyStatusFilter]);
 
   const filteredContentAssets = useMemo(() => {
     if (!dashboard) return [];
@@ -674,6 +765,38 @@ export default function AdminPanelPage() {
       setError(err instanceof Error ? err.message : 'Unable to update lead.');
     } finally {
       setSavingLeadId(null);
+    }
+  };
+
+  const updateFundingStrategyRequest = async (
+    requestId: string,
+    currentStatus: string
+  ) => {
+    setSavingFundingStrategyId(requestId);
+    try {
+      const response = await fetch('/api/admin/funding-strategy', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: requestId,
+          status: fundingStrategyStatusDrafts[requestId] || currentStatus,
+          adminNotes: fundingStrategyNoteDrafts[requestId],
+          createFollowupTask: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update funding strategy request.');
+      }
+      await loadDashboard();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to update funding strategy request.'
+      );
+    } finally {
+      setSavingFundingStrategyId(null);
     }
   };
 
@@ -800,6 +923,7 @@ export default function AdminPanelPage() {
             <TabsTrigger value="content">Content</TabsTrigger>
             <TabsTrigger value="automation">Automation</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="funding-strategy">Funding Strategy</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
           </TabsList>
 
@@ -1925,6 +2049,196 @@ export default function AdminPanelPage() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="funding-strategy">
+            <Card>
+              <CardHeader>
+                <CardTitle>Credit Card Funding Strategy</CardTitle>
+                <CardDescription>
+                  Paid review requests, readiness scoring, consents, payment status,
+                  and admin follow-up actions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={fundingStrategySearch}
+                      onChange={(event) => setFundingStrategySearch(event.target.value)}
+                      placeholder="Search strategy requests by customer, business, tier, status, or use of funds"
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select
+                    value={fundingStrategyStatusFilter}
+                    onValueChange={setFundingStrategyStatusFilter}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active work</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {fundingStrategyStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm text-muted-foreground">Total requests</p>
+                    <p className="text-2xl font-bold">
+                      {dashboard.overview.totalFundingStrategyRequests}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm text-muted-foreground">Paid reviews</p>
+                    <p className="text-2xl font-bold">
+                      {dashboard.overview.totalPaidFundingStrategyRequests}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm text-muted-foreground">Review price</p>
+                    <p className="text-2xl font-bold">$297</p>
+                  </div>
+                </div>
+
+                {filteredFundingStrategyRequests.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No funding strategy requests found.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredFundingStrategyRequests.map((request) => (
+                      <div key={request.id} className="rounded-md border p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold">
+                                {request.business_name ||
+                                  request.full_name ||
+                                  request.user_email ||
+                                  'Funding strategy request'}
+                              </p>
+                              <Badge variant={statusVariant(request.status)}>
+                                {request.status}
+                              </Badge>
+                              <Badge
+                                variant={
+                                  request.payment_status === 'paid'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                              >
+                                {request.payment_status}
+                              </Badge>
+                              <Badge variant="outline">
+                                Score {request.readiness_score ?? 0}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {request.user_email || 'No email'}
+                              {request.phone ? ` - ${request.phone}` : ''} - submitted{' '}
+                              {formatDate(request.created_at)}
+                            </p>
+                            <p className="text-sm">
+                              {request.readiness_summary || 'No readiness summary saved.'}
+                            </p>
+                            <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                              <span>
+                                Credit: {request.personal_credit_score || 'unknown'}
+                              </span>
+                              <span>
+                                Utilization: {request.current_utilization || 'unknown'}
+                              </span>
+                              <span>
+                                Inquiries: {request.recent_inquiries || 'unknown'}
+                              </span>
+                              <span>
+                                EIN: {request.has_ein ? 'yes' : 'no'}
+                              </span>
+                              <span>
+                                Business bank: {request.has_business_bank ? 'yes' : 'no'}
+                              </span>
+                              <span>
+                                Funding ask: $
+                                {Number(request.requested_funding_amount || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            {request.use_of_funds && (
+                              <p className="line-clamp-3 text-xs text-muted-foreground">
+                                Use of funds: {request.use_of_funds}
+                              </p>
+                            )}
+                          </div>
+                          <div className="min-w-[240px] space-y-2">
+                            <Select
+                              value={
+                                fundingStrategyStatusDrafts[request.id] ||
+                                request.status ||
+                                'submitted'
+                              }
+                              onValueChange={(value) =>
+                                setFundingStrategyStatusDrafts((current) => ({
+                                  ...current,
+                                  [request.id]: value,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {fundingStrategyStatuses.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Textarea
+                              value={
+                                fundingStrategyNoteDrafts[request.id] ??
+                                request.admin_notes ??
+                                ''
+                              }
+                              onChange={(event) =>
+                                setFundingStrategyNoteDrafts((current) => ({
+                                  ...current,
+                                  [request.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="Admin notes"
+                              rows={3}
+                            />
+                            <Button
+                              className="w-full"
+                              size="sm"
+                              onClick={() =>
+                                updateFundingStrategyRequest(request.id, request.status)
+                              }
+                              disabled={savingFundingStrategyId === request.id}
+                            >
+                              {savingFundingStrategyId === request.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Save Review Status'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="payments">
             <Card>
               <CardHeader>
@@ -1960,6 +2274,7 @@ export default function AdminPanelPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {payment.payment_method || 'PayPal'} -{' '}
+                          {payment.product_type || 'vestblock_pro'} -{' '}
                           {formatDate(payment.created_at)}
                         </p>
                       </div>
