@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 ESLint CLI Migration
+
+## Files Changed
+
+- `package.json`
+- `pnpm-lock.yaml`
+- `eslint.config.mjs`
+
+## Features Added
+
+- Replaced the deprecated interactive `next lint` script with the repeatable ESLint CLI.
+- Added a Next-compatible flat ESLint config for the current Next 15 runtime.
+- Pinned ESLint packages to compatible versions and narrowed the `minimatch` override for ESLint's legacy config helper.
+- Kept inherited cleanup findings as warnings so lint is useful now without blocking production upgrades.
+
+## Verification
+
+- `corepack pnpm run lint` passes with warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Admin Dashboard Search And Filters
 
 ## Files Changed

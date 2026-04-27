@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint .",
     "start": "next start"
   },
   "dependencies": {
@@ -86,9 +86,12 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.15",
     "postcss": "^8.5.12",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
@@ -100,6 +103,9 @@
     "jsondiffpatch": "^0.7.2",
     "mdast-util-to-hast": "^13.2.1",
     "minimatch": "^9.0.6",
+    "@eslint/eslintrc": {
+      "minimatch": "^3.1.5"
+    },
     "next@15.5.15": {
       "postcss": "^8.5.12"
     },
@@ -112,9 +118,10 @@
       "follow-redirects": "^1.16.0",
       "glob": "^10.5.0",
       "jsondiffpatch": "^0.7.2",
-      "mdast-util-to-hast": "^13.2.1",
-      "minimatch": "^9.0.6",
-      "next>postcss": "^8.5.12",
+    "mdast-util-to-hast": "^13.2.1",
+    "minimatch": "^9.0.6",
+    "@eslint/eslintrc>minimatch": "^3.1.5",
+    "next>postcss": "^8.5.12",
       "picomatch": "^2.3.2",
       "yaml": "^2.8.3"
     }
