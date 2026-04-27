@@ -29,6 +29,7 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - On upload: received confirmation.
 - On completion: results ready email.
 - On paid signup: onboarding email.
+- On payment completed: run shared payment automation, alert admin, log `payment_completed`, and create a paid-customer onboarding task.
 - On failed payment: payment support email.
 - After inactivity: reactivation with a checklist.
 
@@ -40,6 +41,7 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - It creates `paid_customer_no_upload` high-priority admin tasks for paid users older than 24 hours with no credit report.
 - It creates `lead_followup` admin tasks for new leads older than 24 hours.
 - It logs lifecycle signals in `admin_activity` without emailing users directly.
+- `lib/payments/paymentAutomation.ts` handles immediate payment completion follow-up from PayPal capture, PayPal webhook, and internal payment processing routes.
 
 ## Data Sources
 
@@ -53,7 +55,11 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 ## Key Files
 
 - `app/api/cron/lifecycle-monitor/route.ts`
+- `app/api/capture-order/route.ts`
+- `app/api/paypal-webhook/route.ts`
+- `app/api/process-payment/route.ts`
 - `lib/admin/tasks.ts`
+- `lib/payments/paymentAutomation.ts`
 - `lib/system/cronAuth.ts`
 - `lib/system/logEvent.ts`
 - `vercel.json`

@@ -268,6 +268,34 @@ export async function createPaidCustomerNoUploadTask(input: {
   });
 }
 
+export async function createPaidCustomerOnboardingTask(input: {
+  paymentId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  amount?: string | number | null;
+  provider?: string | null;
+  transactionId?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Onboard new paid customer',
+    description:
+      'A payment completed. Confirm the customer can access the dashboard, upload their credit report, and understands the next step.',
+    taskType: 'paid_customer_onboarding',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'payment',
+    entityId: input.paymentId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      amount: input.amount,
+      provider: input.provider,
+      transactionId: input.transactionId,
+      nextAction: 'Confirm subscription access and prompt credit report upload.',
+    },
+  });
+}
+
 export async function createLeadFollowupTask(input: {
   leadId: string;
   leadType?: string | null;

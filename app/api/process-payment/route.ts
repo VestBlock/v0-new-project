@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseServer } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { runPaymentCompletedAutomation } from "@/lib/payments/paymentAutomation"
 
 export const runtime = "nodejs"
 
@@ -11,10 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Amount and userId are required" }, { status: 400 })
     }
 
-    // In a real implementation, you would integrate with PayPal SDK here
-    // For now, we'll simulate a successful payment
-
-    const supabase = getSupabaseServer()
+    const supabase = createAdminClient()
 
     // Record the payment in the database
     const { data, error } = await supabase
@@ -33,6 +31,24 @@ export async function POST(req: NextRequest) {
       console.error("Error recording payment:", error)
       return NextResponse.json({ error: "Failed to record payment" }, { status: 500 })
     }
+
+    await supabase
+      .from("user_profiles")
+      .update({ is_subscribed: true })
+      .or(`id.eq.${userId},user_id.eq.${userId}`)
+
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId)
+
+    await runPaymentCompletedAutomation({
+      paymentId: data.id,
+      userId,
+      userEmail: authUser?.user?.email,
+      amount,
+      provider: "PayPal",
+      transactionId: data.id,
+      source: "process-payment",
+      metadata: { reportId: reportId || null },
+    })
 
     return NextResponse.json({
       success: true,

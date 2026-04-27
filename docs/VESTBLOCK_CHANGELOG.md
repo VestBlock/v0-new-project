@@ -1,5 +1,33 @@
 # VestBlock Changelog
 
+## 2026-04-27 Payment Completion Automation
+
+## Files Changed
+
+- `app/api/capture-order/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/api/paypal-webhook/route.ts`
+- `app/api/process-payment/route.ts`
+- `lib/payments/paymentAutomation.ts`
+- `lib/admin/tasks.ts`
+- `.agents/skills/vestblock/user-lifecycle-automation.md`
+- `.agents/skills/vestblock/email-alert-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added shared payment completion automation for admin paid-customer alerts, `payment_completed` logging, and onboarding task creation.
+- Wired PayPal capture, PayPal webhook, and existing internal payment processing route through the same automation.
+- Added `paid_customer_onboarding` admin tasks so new paid customers are followed up immediately.
+- Updated payment routes to use the Supabase service-role admin client for server-side payment writes.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Immediate Lead Intake Automation
 
 ## Files Changed

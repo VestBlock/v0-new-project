@@ -78,6 +78,7 @@ Implemented lifecycle task automation:
 
 Payments exist through PayPal. Next steps:
 
+- Payment completion routes use `lib/payments/paymentAutomation.ts` to alert admin, log `payment_completed`, and create a `paid_customer_onboarding` task.
 - Store attempted checkout/order IDs.
 - Alert admin on failed capture.
 - Send abandoned checkout email after a safe delay.
@@ -93,6 +94,7 @@ Future task types:
 - Review new credit report uploads.
 - Follow up after completed credit analysis.
 - Follow up with paid customer.
+- Onboard new paid customer.
 - Call funding lead.
 - Review report marked `needs_review`.
 - Check failed email.

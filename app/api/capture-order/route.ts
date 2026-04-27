@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendNewPaidCustomerAlert } from '@/lib/email/sendEmail';
-import { logEvent } from '@/lib/system/logEvent';
+import { runPaymentCompletedAutomation } from '@/lib/payments/paymentAutomation';
 
 export async function POST(req: Request) {
   const { orderID, userId } = await req.json();
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
     await supabase
       .from('user_profiles')
       .update({ is_subscribed: true })
-      .eq('id', userId);
+      .or(`id.eq.${userId},user_id.eq.${userId}`);
 
     const amount =
       capture.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '75';
@@ -37,30 +36,27 @@ export async function POST(req: Request) {
       capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
     const { data: authUser } = await supabase.auth.admin.getUserById(userId);
 
-    await supabase.from('payments').insert({
-      user_id: userId,
-      amount,
-      status: 'completed',
-      payment_method: 'paypal',
-      paypal_transaction_id: transactionId,
-    });
-
-    await Promise.all([
-      sendNewPaidCustomerAlert({
-        userId,
-        userEmail: authUser?.user?.email,
+    const { data: payment } = await supabase
+      .from('payments')
+      .insert({
+        user_id: userId,
         amount,
-        provider: 'PayPal',
-        transactionId,
-      }),
-      logEvent({
-        eventType: 'payment_completed',
-        actorUserId: userId,
-        entityType: 'payment',
-        entityId: transactionId,
-        metadata: { provider: 'PayPal', amount },
-      }),
-    ]);
+        status: 'completed',
+        payment_method: 'paypal',
+        paypal_transaction_id: transactionId,
+      })
+      .select('id')
+      .single();
+
+    await runPaymentCompletedAutomation({
+      paymentId: payment?.id || transactionId,
+      userId,
+      userEmail: authUser?.user?.email,
+      amount,
+      provider: 'PayPal',
+      transactionId,
+      source: 'capture-order',
+    });
   }
 
   return NextResponse.json({ success: true, capture });

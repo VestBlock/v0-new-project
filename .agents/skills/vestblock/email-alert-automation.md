@@ -27,6 +27,10 @@ Legacy fallback:
 - `admin_analysis_completed`
 - `credit_analysis_failed`
 - `new_paid_customer`
+- `admin_new_lead`
+- `user_upload_reminder`
+- `user_paid_upload_reminder`
+- `admin_lead_followup`
 
 ## Rules
 
@@ -42,5 +46,6 @@ Legacy fallback:
 - Upload reminder.
 - Stuck analysis admin alert.
 - Dispute letters ready.
+- Payment completion admin alert.
 - Funding lead received.
 - Inactive user reactivation.
