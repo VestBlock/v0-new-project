@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Loader2,
   Mail,
+  Send,
   Save,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -98,6 +99,7 @@ export default function AdminReportDetailPage({
   const [adminNotes, setAdminNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [runningAction, setRunningAction] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -187,6 +189,29 @@ export default function AdminReportDetailPage({
       setError(err instanceof Error ? err.message : 'Unable to update task.');
     } finally {
       setSavingTaskId(null);
+    }
+  };
+
+  const runReportAction = async (action: string) => {
+    setRunningAction(action);
+    setError('');
+    try {
+      const response = await fetch(`/api/admin/reports/${reportId}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to run report action.');
+      }
+      await loadReport();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to run report action.'
+      );
+    } finally {
+      setRunningAction(null);
     }
   };
 
@@ -425,6 +450,56 @@ export default function AdminReportDetailPage({
                     <Save className="mr-2 h-4 w-4" />
                   )}
                   Save review
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Operator Actions</CardTitle>
+                <CardDescription>
+                  Recover common workflow gaps without leaving this report.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => runReportAction('resend_upload_confirmation')}
+                  disabled={Boolean(runningAction)}
+                >
+                  {runningAction === 'resend_upload_confirmation' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  Resend upload emails
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => runReportAction('resend_analysis_completed')}
+                  disabled={Boolean(runningAction)}
+                >
+                  {runningAction === 'resend_analysis_completed' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="mr-2 h-4 w-4" />
+                  )}
+                  Resend analysis-ready emails
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => runReportAction('create_followup_task')}
+                  disabled={Boolean(runningAction)}
+                >
+                  {runningAction === 'create_followup_task' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                  )}
+                  Create follow-up task
                 </Button>
               </CardContent>
             </Card>

@@ -1,5 +1,26 @@
 # VestBlock Changelog
 
+## 2026-04-27 Credit Workflow Operator Actions
+
+## Files Changed
+
+- `app/api/upload-credit-report/route.ts`
+- `app/api/admin/reports/[reportId]/actions/route.ts`
+- `app/admin-panel/reports/[reportId]/page.tsx`
+
+## Features Added
+
+- Centralized credit report upload bookkeeping through `createCreditReportRecord()` so report creation, email alerts, admin tasks, and activity logging use the same workflow path.
+- Added protected admin report actions for resending upload emails, resending analysis-ready emails, and creating manual follow-up tasks.
+- Added an Operator Actions panel on the admin report detail page.
+
+## Verification
+
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm audit --json` reports zero vulnerabilities.
+- `corepack pnpm run build` passed with local dummy production env values.
+- `corepack pnpm run lint` remains blocked by Next's deprecated interactive lint setup prompt.
+
 ## 2026-04-27 Credit Report Operator Timeline
 
 ## Files Changed

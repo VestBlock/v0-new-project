@@ -5,19 +5,14 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 import type { NegativeItem } from '@/lib/extract-negative-items';
-import { createCreditReportReviewTask } from '@/lib/admin/tasks';
 import {
   attachAnalysisResult,
   attachDisputeLetters,
   attachExtractedText,
+  createCreditReportRecord,
   markCreditReportFailed,
   updateCreditReportStatus,
 } from '@/lib/workflows/creditRepairWorkflow';
-import {
-  sendAdminAlertEmail,
-  sendUserCreditReportReceivedEmail,
-} from '@/lib/email/sendEmail';
-import { logEvent } from '@/lib/system/logEvent';
 
 // Server-side Supabase client with service role key (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -174,77 +169,11 @@ export async function POST(request: NextRequest) {
 
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
     const userEmail = email || authUser?.user?.email || null;
-    let reportId: string | null = null;
-
-    if (uploadData) {
-      const { data: reportRecord, error: reportInsertError } =
-        await supabaseAdmin
-          .from('credit_reports')
-          .insert({
-            user_id: userId,
-            user_email: userEmail,
-            file_name: fileName,
-            file_path: uploadData.path,
-            status: 'uploaded',
-            email_alert_sent: false,
-          })
-          .select('id')
-          .single();
-
-      if (reportInsertError) {
-        console.warn(
-          'Extended credit_reports insert failed, retrying with legacy columns:',
-          reportInsertError.message
-        );
-        const { data: legacyReport, error: legacyInsertError } =
-          await supabaseAdmin
-            .from('credit_reports')
-            .insert({
-              user_id: userId,
-              file_name: fileName,
-              file_path: uploadData.path,
-            })
-            .select('id')
-            .single();
-
-        if (legacyInsertError) {
-          console.error('Credit report record insert failed:', legacyInsertError);
-        } else {
-          reportId = legacyReport?.id ?? null;
-        }
-      } else {
-        reportId = reportRecord?.id ?? null;
-      }
-    }
-
-    await Promise.all([
-      sendAdminAlertEmail({
-        userEmail,
-        fileName: file.name,
-        uploadDate: new Date().toISOString(),
-        userId,
-        reportId,
-      }),
-      sendUserCreditReportReceivedEmail({
-        userEmail,
-        userId,
-        fileName: file.name,
-      }),
-      reportId
-        ? createCreditReportReviewTask({
-            reportId,
-            userId,
-            userEmail,
-            fileName: file.name,
-          })
-        : Promise.resolve(),
-    ]);
-    await logEvent({
-      eventType: 'credit_report_uploaded',
-      actorUserId: userId,
-      entityType: 'credit_report',
-      entityId: reportId,
-      metadata: { fileName: file.name, filePath: uploadData.path, userEmail },
+    const reportId = await createCreditReportRecord({
+      userId,
+      userEmail,
+      fileName: file.name,
+      filePath: uploadData.path,
     });
 
     if (reportId) {
@@ -382,6 +311,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      reportId,
       filePath: uploadData.path,
       fileName: file.name,
       bucket: 'credit-reports',
