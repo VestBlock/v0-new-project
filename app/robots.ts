@@ -20,6 +20,8 @@ export default function robots(): MetadataRoute.Robots {
           '/learn',
           '/credit-upload',
           '/funding',
+          '/business-setup',
+          '/es',
           '/tools',
           '/super-dispute',
           '/real-estate-funding',

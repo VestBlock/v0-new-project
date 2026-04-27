@@ -34,7 +34,8 @@ admin, API, account, diagnostic, setup, test, and user-specific report routes.
 
 - Credit repair pages should link to `/credit-upload`, `/super-dispute`, and `/dashboard`.
 - Business credit pages should link to `/tools/business-credit` and `/funding`.
-- Grant and funding pages should link to `/funding` and relevant lead forms.
+- Grant and funding pages should link to `/funding`, `/business-setup`, and relevant lead forms.
+- Spanish business funding pages should link to `/es/vestblock`, `/business-setup`, and the approved Bank Breezy Spanish URL.
 - Comparison pages should link to Pro features only when the offer is relevant.
 
 ## Suggested Landing Pages
@@ -46,6 +47,28 @@ admin, API, account, diagnostic, setup, test, and user-specific report routes.
 - `/learn/business-credit`
 - `/learn/funding-readiness`
 - `/learn/grants-for-small-businesses`
+- `/business-setup`
+- `/es/vestblock`
+
+## Spanish Business Funding SEO
+
+The Spanish business funding entry point is `/es/vestblock`. It should serve
+Spanish-speaking business owners who need a clear path before they apply for
+funding: business identity, EIN, banking, documents, credit readiness, revenue
+records, and use of funds.
+
+Use the Bank Breezy Spanish partner link only where it is relevant:
+`https://Bankbreezy.com/es/Vestblock`.
+
+Spanish SEO rules:
+
+- Keep the language natural and owner-focused, not machine translated.
+- Avoid guarantees around funding, grants, approvals, terms, or timelines.
+- Explain what to prepare before applying.
+- Link back to VestBlock tools for business credit and grants when helpful.
+- Keep `/es/vestblock` in the sitemap and allow `/es` in robots.
+- Do not mass-generate Spanish city or industry pages until there is a QA
+  process for duplicated language, compliance, and partner tracking.
 
 Future deeper landing pages can still use category paths such as
 `/credit-repair/ai-credit-analysis`, but the `/learn` family should stay the
@@ -77,6 +100,7 @@ Each `/learn/[slug]` page includes FAQPage JSON-LD generated from
 - Dispute documentation checklist
 - Funding readiness checklist
 - Business credit setup checklist
+- Spanish business funding readiness checklist
 
 ## Quality Rules
 
@@ -98,3 +122,4 @@ Each page should end with a relevant action:
 - Upgrade to Pro for recommendations.
 - Submit a funding lead.
 - Review business credit tools.
+- Review Spanish funding options through the approved partner path.

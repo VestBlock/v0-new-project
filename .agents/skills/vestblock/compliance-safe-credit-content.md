@@ -7,6 +7,7 @@ Use this skill when writing or reviewing credit repair, funding, dispute-letter,
 - Guaranteed deletions.
 - Guaranteed score increases.
 - Guaranteed approvals or funding.
+- Guaranteed grant awards.
 - Claims that VestBlock can remove accurate negative items.
 - Legal advice positioning.
 - Pressure copy that implies users have no control.
@@ -30,6 +31,15 @@ Use this skill when writing or reviewing credit repair, funding, dispute-letter,
 - "Track workflow status."
 - "Improve funding readiness."
 - "Learn which factors may affect approval odds."
+- "Prepare your business documents before applying."
+- "Review funding options that may fit your business stage."
+
+## Business Funding And Grants
+
+- Never describe grants as free money that any business can get.
+- Explain eligibility, documentation, deadlines, business story, and use of funds.
+- For Spanish-speaking owner pages, keep the same compliance standard in Spanish.
+- Partner links should be framed as places to review options, not guaranteed approval paths.
 
 ## Product Copy Rule
 

@@ -343,6 +343,74 @@ export const vestblockAeoTopics: AeoTopic[] = [
     ],
   },
   {
+    slug: 'business-setup-for-funding',
+    title: 'Business Setup For Funding',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/business-setup',
+    metaDescription:
+      'Use a business setup checklist to prepare entity records, banking, documents, credit, and grant readiness before applying for funding.',
+    audience: 'Business owners who want a cleaner funding file before they apply.',
+    overview:
+      'Business setup for funding is the preparation work that makes an application easier to review. It connects entity records, EIN details, banking, bookkeeping, licenses, documents, credit, and use-of-funds planning into one organized file.',
+    keyTakeaways: [
+      'A lender-ready business starts with consistent identity and clean documents.',
+      'Banking and bookkeeping should show how the business earns and uses money.',
+      'Grant and funding applications work better when the use of funds is specific.',
+    ],
+    actionSteps: [
+      'Confirm business entity, EIN, address, phone, and online listings match.',
+      'Organize bank statements, revenue records, licenses, tax documents, and ownership details.',
+      'Review business credit, personal credit exposure, and funding product fit before applying.',
+    ],
+    faqs: [
+      {
+        question: 'What documents should I prepare before business funding?',
+        answer:
+          'Common documents include entity records, EIN details, bank statements, tax records, licenses, ownership details, invoices, contracts, and a clear use-of-funds explanation.',
+      },
+      {
+        question: 'Does setup guarantee approval?',
+        answer:
+          'No. Setup does not guarantee funding, but it can reduce avoidable delays and help you apply with clearer information.',
+      },
+    ],
+  },
+  {
+    slug: 'financiamiento-para-negocios-en-espanol',
+    title: 'Financiamiento Para Negocios En Espanol',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Prepara tu negocio para financiamiento en espanol con VestBlock y conecta con la ruta de Bank Breezy para duenos de negocio.',
+    audience: 'Duenos de negocio que hablan espanol y buscan opciones de financiamiento.',
+    overview:
+      'Antes de aplicar para financiamiento, un dueno de negocio necesita organizar identidad, EIN, cuenta bancaria, documentos, ingresos y uso de fondos. VestBlock ayuda a preparar esos pasos y conecta con la pagina en espanol de Bank Breezy.',
+    keyTakeaways: [
+      'La preparacion ayuda a evitar aplicaciones incompletas.',
+      'El credito personal, credito comercial e ingresos pueden afectar las opciones.',
+      'Ninguna herramienta responsable debe prometer aprobaciones garantizadas.',
+    ],
+    actionSteps: [
+      'Organiza documentos legales, EIN, direccion, telefono y cuenta bancaria comercial.',
+      'Prepara estados bancarios, ingresos y explicacion del uso de fondos.',
+      'Revisa opciones en la ruta en espanol de Bank Breezy cuando tengas la informacion lista.',
+    ],
+    faqs: [
+      {
+        question: 'VestBlock ofrece financiamiento garantizado?',
+        answer:
+          'No. VestBlock ayuda con preparacion y orientacion, pero cada banco, programa o socio revisa sus propios requisitos.',
+      },
+      {
+        question: 'Donde esta la pagina en espanol de Bank Breezy?',
+        answer:
+          'VestBlock enlaza a Bankbreezy.com/es/Vestblock para que duenos de negocio puedan revisar opciones en espanol.',
+      },
+    ],
+  },
+  {
     slug: 'grants-for-small-businesses',
     title: 'Grants For Small Businesses',
     cluster: 'funding',

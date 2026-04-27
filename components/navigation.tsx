@@ -37,6 +37,7 @@ export function Navigation() {
   const mainNavLinks = [
     { href: '/learn', label: 'Learn' },
     { href: '/funding', label: 'Funding' },
+    { href: '/business-setup', label: 'Business Setup' },
     { href: '/ai-assistant', label: 'AI Assistant' },
     { href: '/credit-upload', label: 'Credit Tools' },
     { href: '/sell', label: 'Sell Property' },
@@ -80,7 +81,7 @@ export function Navigation() {
             <span className="font-bold">VestBlock</span>
           </Link>
           {/* Desktop Navigation */}
-          <nav className="hidden items-center space-x-6 text-sm font-medium md:flex">
+          <nav className="hidden items-center space-x-6 text-sm font-medium lg:flex">
             {mainNavLinks.map((link) => (
               <Link
                 key={link.href}
@@ -100,7 +101,7 @@ export function Navigation() {
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">

@@ -1,5 +1,41 @@
 # VestBlock Changelog
 
+## 2026-04-27 Business Setup And Spanish Funding SEO
+
+## Files Changed
+
+- `app/business-setup/page.tsx`
+- `app/es/vestblock/page.tsx`
+- `app/tools/business-credit/page.tsx`
+- `app/tools/grants/page.tsx`
+- `app/sitemap.ts`
+- `app/robots.ts`
+- `components/navigation.tsx`
+- `lib/business-readiness/fundingCompliance.ts`
+- `lib/aeo/topics.ts`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+- `.agents/skills/vestblock/aeo-content-automation.md`
+- `.agents/skills/vestblock/funding-lead-automation.md`
+- `.agents/skills/vestblock/compliance-safe-credit-content.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a public `/business-setup` funding and grant readiness page.
+- Added `/es/vestblock` as a Spanish-speaking business owner SEO and partner path for Bank Breezy.
+- Added shared funding compliance readiness pillars for entity, banking, documents, credit, and grants.
+- Added readiness panels to the member business credit and grants tools.
+- Added new AEO topics for business setup funding and Spanish business funding.
+- Added the new routes to sitemap and robots, plus the public navigation.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+- Built-app smoke checks passed for `/business-setup`, `/es/vestblock`, `/tools/business-credit`, `/tools/grants`, `/sitemap.xml`, and `/robots.txt`.
+- `/api/admin/dashboard` returned `401` without an admin session, as expected.
+
 ## 2026-04-27 PayPal Webhook Payment Dedupe
 
 ## Files Changed

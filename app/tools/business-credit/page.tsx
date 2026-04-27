@@ -2,7 +2,9 @@
 
 import { useAuth } from '@/contexts/auth-context';
 import { getSupabaseClient } from '@/lib/supabase/client';
+import { fundingReadinessPillars } from '@/lib/business-readiness/fundingCompliance';
 import { format } from 'date-fns';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -27,7 +29,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Eye, ListChecks, Loader2, RefreshCw } from 'lucide-react';
+import {
+  Download,
+  Eye,
+  ListChecks,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 
 /* ---------------- Types to match the API ---------------- */
 
@@ -528,6 +537,32 @@ export default function BusinessCreditPage() {
                       Build My Roadmap
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ShieldCheck className="h-4 w-4 text-cyan-500" />
+                    Business setup readiness
+                  </CardTitle>
+                  <CardDescription>
+                    Before applying, organize the pieces lenders and funding
+                    partners usually review.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {fundingReadinessPillars.slice(0, 4).map((pillar) => (
+                    <div key={pillar.id} className="rounded-md border p-3">
+                      <div className="text-sm font-medium">{pillar.title}</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {pillar.summary}
+                      </p>
+                    </div>
+                  ))}
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/business-setup">View setup checklist</Link>
+                  </Button>
                 </CardContent>
               </Card>
 

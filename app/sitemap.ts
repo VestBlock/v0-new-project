@@ -14,6 +14,8 @@ const publicRoutes = [
   { path: '/learn', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/credit-upload', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/funding', priority: 0.85, changeFrequency: 'weekly' },
+  { path: '/business-setup', priority: 0.82, changeFrequency: 'weekly' },
+  { path: '/es/vestblock', priority: 0.84, changeFrequency: 'weekly' },
   { path: '/tools/business-credit', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/tools/grants', priority: 0.75, changeFrequency: 'weekly' },
   { path: '/super-dispute', priority: 0.75, changeFrequency: 'monthly' },

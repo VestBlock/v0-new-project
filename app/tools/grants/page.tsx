@@ -21,8 +21,16 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { fundingReadinessPillars } from '@/lib/business-readiness/fundingCompliance';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { CircleX, Download, ExternalLink, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  CircleX,
+  Download,
+  ExternalLink,
+  Loader2,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
@@ -515,6 +523,39 @@ export default function GrantsPage() {
                     Save now
                   </Button> */}
                 {/* </div> */}
+
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <div className="mb-3">
+                    <h3 className="font-medium">Grant readiness checklist</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Stronger grant searches start with a clear business
+                      profile, proof documents, and a specific use of funds.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {fundingReadinessPillars
+                      .filter((pillar) =>
+                        ['entity', 'licenses', 'grants'].includes(pillar.id)
+                      )
+                      .map((pillar) => (
+                        <div
+                          key={pillar.id}
+                          className="rounded-md border bg-background p-3"
+                        >
+                          <div className="flex gap-2 text-sm font-medium">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500" />
+                            <span>{pillar.title}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {pillar.summary}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                  <Button asChild variant="link" className="mt-2 px-0">
+                    <Link href="/business-setup">Open full setup guide</Link>
+                  </Button>
+                </div>
 
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row gap-3">
