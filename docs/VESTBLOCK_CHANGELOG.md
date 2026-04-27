@@ -10,6 +10,7 @@
 - `app/api/funding-strategy/route.ts`
 - `app/api/funding-lead/route.ts`
 - `app/api/admin/funding-strategy/route.ts`
+- `app/robots.ts`
 - `app/api/create-order/route.ts`
 - `app/api/capture-order/route.ts`
 - `app/api/webhook/route.ts`
@@ -37,6 +38,7 @@
 - Wired the existing `/funding` lead form into a real `/api/funding-lead` route instead of local-only form logging.
 - Updated PayPal webhook handlers so funding strategy payments are recorded as the funding product and do not incorrectly grant Pro subscription access.
 - Added sitemap coverage for `/funding/credit-card-strategy`.
+- Hardened site-origin URL handling so sitemap, robots, email dashboard links, and PayPal return URLs do not inherit an accidental path from `NEXT_PUBLIC_SITE_URL`.
 
 ## Env Vars Required
 

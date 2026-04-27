@@ -1,11 +1,17 @@
 import type { MetadataRoute } from 'next';
 
 function getSiteUrl() {
-  return (
+  const configured = (
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.WEB_HOST_URL ||
     'https://www.vestblock.io'
   ).replace(/\/$/, '');
+
+  try {
+    return new URL(configured).origin;
+  } catch {
+    return 'https://www.vestblock.io';
+  }
 }
 
 export default function robots(): MetadataRoute.Robots {
