@@ -56,6 +56,14 @@ Email failures must be logged to `email_events` and must not break uploads or an
 - Pro upgrade: welcome and next best action.
 - Inactive users: reactivation with education and dashboard link.
 
+Implemented lifecycle task automation:
+
+- Daily `/api/cron/lifecycle-monitor` job protected by `CRON_SECRET`.
+- Creates `signup_no_upload` admin tasks for users older than 48 hours with no report.
+- Creates `paid_customer_no_upload` high-priority admin tasks for paid users older than 24 hours with no report.
+- Creates `lead_followup` admin tasks for new leads older than 24 hours.
+- Logs `signup_no_upload`, `paid_customer_no_upload`, and `lead_followup_needed` events to `admin_activity`.
+
 ## Failed Payment And Abandoned Checkout
 
 Payments exist through PayPal. Next steps:
@@ -90,6 +98,7 @@ Implemented task queue foundation:
 - Duplicate guard so retries do not flood the admin queue with multiple open tasks for the same report and task type.
 - Daily `/api/cron/credit-repair-monitor` job that flags stalled reports in `uploaded`, `extracting_text`, `text_extracted`, or `analyzing`.
 - Stalled report monitor requires `CRON_SECRET` in Vercel and logs `credit_analysis_stalled` events.
+- Daily `/api/cron/lifecycle-monitor` job creates signup, paid-customer, and lead follow-up tasks.
 
 ## Operator Skills Added
 

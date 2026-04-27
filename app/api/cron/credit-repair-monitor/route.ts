@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { createStalledCreditReportTask } from '@/lib/admin/tasks';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isCronAuthorized } from '@/lib/system/cronAuth';
 import { logEvent } from '@/lib/system/logEvent';
 
 const monitoredStatuses = [
@@ -21,17 +22,6 @@ const staleAfterHours: Record<MonitoredStatus, number> = {
   text_extracted: 4,
   analyzing: 4,
 };
-
-function isAuthorized(request: Request) {
-  const expected = process.env.CRON_SECRET;
-
-  if (!expected) {
-    return process.env.NODE_ENV !== 'production';
-  }
-
-  const authHeader = request.headers.get('authorization');
-  return authHeader === `Bearer ${expected}`;
-}
 
 function getAgeHours(row: { updated_at?: string | null; uploaded_at?: string | null; created_at?: string | null }) {
   const timestamp = row.updated_at || row.uploaded_at || row.created_at;
@@ -54,7 +44,7 @@ function isStalled(row: { status?: string | null; updated_at?: string | null; up
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 

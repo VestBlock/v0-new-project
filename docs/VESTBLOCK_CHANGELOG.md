@@ -1,5 +1,28 @@
 # VestBlock Changelog
 
+## 2026-04-27 Lifecycle Follow-Up Monitor
+
+## Files Changed
+
+- `app/api/cron/lifecycle-monitor/route.ts`
+- `app/api/cron/credit-repair-monitor/route.ts`
+- `lib/system/cronAuth.ts`
+- `lib/admin/tasks.ts`
+- `lib/system/logEvent.ts`
+- `vercel.json`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `.agents/skills/vestblock/user-lifecycle-automation.md`
+- `.agents/skills/vestblock/support-retention-operator.md`
+
+## Features Added
+
+- Added protected daily lifecycle cron for follow-up automation.
+- Creates admin tasks for signups older than 48 hours with no credit report upload.
+- Creates high-priority admin tasks for paid customers older than 24 hours with no upload.
+- Creates admin tasks for new leads older than 24 hours without follow-up.
+- Logs lifecycle follow-up events to `admin_activity`.
+- Extracted shared `CRON_SECRET` authorization helper for scheduled routes.
+
 ## 2026-04-26 Credit Workflow Monitor
 
 ## Files Changed

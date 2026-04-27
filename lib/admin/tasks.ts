@@ -213,3 +213,83 @@ export async function createStalledCreditReportTask(input: {
     },
   });
 }
+
+export async function createSignupNoUploadTask(input: {
+  userId: string;
+  userEmail?: string | null;
+  fullName?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Help new user upload a credit report',
+    description:
+      'A user signed up but has not uploaded a credit report yet. Follow up with a simple next-step reminder or check whether onboarding is blocked.',
+    taskType: 'signup_no_upload',
+    priority: 'normal',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'user',
+    entityId: input.userId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      fullName: input.fullName,
+      ageHours: input.ageHours,
+      nextAction: 'Send upload reminder or verify onboarding path.',
+    },
+  });
+}
+
+export async function createPaidCustomerNoUploadTask(input: {
+  userId: string;
+  userEmail?: string | null;
+  amount?: string | number | null;
+  paymentId?: string | null;
+  paidAt?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Onboard paid customer with no report upload',
+    description:
+      'A paid customer does not have a credit report upload yet. Follow up quickly so the customer can reach the credit analysis workflow.',
+    taskType: 'paid_customer_no_upload',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'user',
+    entityId: input.userId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      amount: input.amount,
+      paymentId: input.paymentId,
+      paidAt: input.paidAt,
+      ageHours: input.ageHours,
+      nextAction: 'Send paid onboarding reminder and confirm upload instructions.',
+    },
+  });
+}
+
+export async function createLeadFollowupTask(input: {
+  leadId: string;
+  leadType?: string | null;
+  name?: string | null;
+  email?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Follow up with new lead',
+    description:
+      'A lead is still marked new after the follow-up window. Review the source, contact details, and next sales step.',
+    taskType: 'lead_followup',
+    priority: 'normal',
+    userEmail: input.email,
+    entityType: 'lead',
+    entityId: input.leadId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      leadType: input.leadType,
+      name: input.name,
+      ageHours: input.ageHours,
+      nextAction: 'Contact lead or update lead status.',
+    },
+  });
+}

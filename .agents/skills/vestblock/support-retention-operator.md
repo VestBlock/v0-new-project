@@ -41,6 +41,12 @@ Recommended metadata:
 - Paid customer with no activity: onboarding reminder.
 - Inactive user: education-focused reactivation.
 
+## Implemented Task Automation
+
+- `/api/cron/lifecycle-monitor` creates support tasks for signup-without-upload, paid-customer-without-upload, and new-lead follow-up.
+- The route writes durable admin tasks first; user-facing email reminders should be added only after event dedupe and copy are reviewed.
+- Duplicate task protection lives in `lib/admin/tasks.ts` and uses task type plus entity.
+
 ## Tone
 
 - Helpful, calm, and practical.

@@ -32,6 +32,15 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - On failed payment: payment support email.
 - After inactivity: reactivation with a checklist.
 
+## Implemented Automation
+
+- `/api/cron/lifecycle-monitor` runs daily through Vercel Cron.
+- The route is protected by `CRON_SECRET`.
+- It creates `signup_no_upload` admin tasks for users older than 48 hours with no credit report.
+- It creates `paid_customer_no_upload` high-priority admin tasks for paid users older than 24 hours with no credit report.
+- It creates `lead_followup` admin tasks for new leads older than 24 hours.
+- It logs lifecycle signals in `admin_activity` without emailing users directly.
+
 ## Data Sources
 
 - `user_profiles`
@@ -40,3 +49,11 @@ Use this skill when adding onboarding, upgrade prompts, reminders, abandoned che
 - `payments`
 - `email_events`
 - `admin_activity`
+
+## Key Files
+
+- `app/api/cron/lifecycle-monitor/route.ts`
+- `lib/admin/tasks.ts`
+- `lib/system/cronAuth.ts`
+- `lib/system/logEvent.ts`
+- `vercel.json`
