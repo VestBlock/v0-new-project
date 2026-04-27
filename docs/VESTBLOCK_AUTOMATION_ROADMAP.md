@@ -16,7 +16,7 @@ Make VestBlock operate like a SaaS platform: every upload, payment, analysis, al
 
 - Show new reports, failed analyses, email failures, paid customers, and leads in `/admin-panel`.
 - Use `admin_activity` as the durable event stream.
-- Add future scheduled checks for stuck statuses, such as reports in `extracting_text` for more than 20 minutes.
+- Run scheduled checks for stuck credit report statuses and create admin tasks before customers are left waiting.
 
 ## Email Notification Automation
 
@@ -88,6 +88,8 @@ Implemented task queue foundation:
 - Initial restored-report backlog task for imported credit reports still in `uploaded`.
 - Workflow-created tasks for new uploads, completed analyses, failed analyses, and reports manually marked `needs_review`.
 - Duplicate guard so retries do not flood the admin queue with multiple open tasks for the same report and task type.
+- Daily `/api/cron/credit-repair-monitor` job that flags stalled reports in `uploaded`, `extracting_text`, `text_extracted`, or `analyzing`.
+- Stalled report monitor requires `CRON_SECRET` in Vercel and logs `credit_analysis_stalled` events.
 
 ## Operator Skills Added
 

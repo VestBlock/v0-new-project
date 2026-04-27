@@ -9,23 +9,20 @@ const apiKey = process.env.OPENAI_API_KEY
 if (!apiKey) {
   const errorMessage =
     "OpenAI API key (OPENAI_API_KEY) is not configured in environment variables. OpenAI functionalities will be disabled."
-  console.warn(`[OpenAI Server Lib] ${errorMessage}`)
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[OpenAI Server Lib] ${errorMessage}`)
+  }
   openAIInitializationError = errorMessage
 } else {
   try {
-    console.log("[OpenAI Server Lib] Attempting to initialize OpenAI client...")
     openai = new OpenAI({
       apiKey: apiKey,
-      dangerouslyAllowBrowser: true, // Add this line
     })
-    console.log("[OpenAI Server Lib] OpenAI client initialized successfully (with dangerouslyAllowBrowser: true).")
   } catch (e: any) {
-    // This catch might not even be reached if the constructor itself throws the specific "browser-like" error
-    // before this point, but it's good practice.
     const errorMessage = `[OpenAI Server Lib] Failed to initialize OpenAI client: ${e.message}`
     console.error(errorMessage, e)
     openAIInitializationError = e.message || "Unknown error during OpenAI client initialization."
-    openai = undefined // Ensure openai is undefined on error
+    openai = undefined
   }
 }
 
@@ -38,8 +35,6 @@ export function getOpenAIClient(): OpenAI | undefined {
     return undefined
   }
   if (!openai) {
-    // This case should ideally not be hit if apiKey is present and initialization didn't set an error,
-    // but it's a safeguard.
     console.warn(
       `[OpenAI Server Lib] getOpenAIClient called, but OpenAI client is unexpectedly undefined. Check API key and server logs.`,
     )

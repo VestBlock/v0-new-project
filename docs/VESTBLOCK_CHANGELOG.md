@@ -1,5 +1,28 @@
 # VestBlock Changelog
 
+## 2026-04-26 Credit Workflow Monitor
+
+## Files Changed
+
+- `app/api/cron/credit-repair-monitor/route.ts`
+- `vercel.json`
+- `lib/admin/tasks.ts`
+- `lib/system/logEvent.ts`
+- `lib/openai-server.ts`
+- `next.config.mjs`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `.agents/skills/vestblock/credit-report-workflow.md`
+
+## Features Added
+
+- Added daily Vercel cron for stalled credit repair workflow checks.
+- Added token-protected `/api/cron/credit-repair-monitor` route.
+- Creates high-priority admin tasks when reports remain in `uploaded`, `extracting_text`, `text_extracted`, or `analyzing` longer than expected.
+- Logs `credit_analysis_stalled` events to `admin_activity`.
+- Uses existing admin task duplicate protection to avoid repeat queue spam.
+- Cleaned the server OpenAI client initialization so builds and production logs are quieter.
+- Merged duplicate Next.js `experimental` config keys so all intended settings are active.
+
 ## 2026-04-26 Production Logging Cleanup
 
 ## Files Changed
@@ -211,6 +234,7 @@
 - `OPENAI_API_KEY`
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
+- `CRON_SECRET`
 
 Optional legacy compatibility:
 
@@ -273,5 +297,4 @@ They add:
 
 - Regenerate Supabase types.
 - Remove legacy setup/debug routes after production recovery workflows are no longer needed.
-- Add cron for stuck report statuses.
 - Add abandoned checkout and upload reminder automations.

@@ -11,6 +11,7 @@ const nextConfig = {
   },
   reactStrictMode: true, // Recommended for highlighting potential problems
   experimental: {
+    esmExternals: 'loose', // helps when any ESM sneaks in
     // ✅ valid on Next 14.x
     serverComponentsExternalPackages: [
       'pdfjs-dist',
@@ -23,7 +24,6 @@ const nextConfig = {
     if (dev) config.devtool = 'source-map'; // avoid eval-* (prevents pdf.js crash)
     return config;
   },
-  experimental: { esmExternals: 'loose' }, // helps when any ESM sneaks in
 };
 
 export default nextConfig;

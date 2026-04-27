@@ -184,3 +184,32 @@ export async function createNeedsReviewTask(input: {
     createdBy: input.createdBy,
   });
 }
+
+export async function createStalledCreditReportTask(input: {
+  reportId: string;
+  status?: string | null;
+  userId?: string | null;
+  userEmail?: string | null;
+  fileName?: string | null;
+  ageHours?: number | null;
+  reason?: string | null;
+}) {
+  return createAdminTask({
+    title: 'Review stalled credit report workflow',
+    description:
+      'A credit report has been sitting in a processing status longer than expected. Check extraction, analysis, generated letters, and customer follow-up needs.',
+    taskType: 'credit_report_stalled',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'credit_report',
+    entityId: input.reportId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      status: input.status,
+      fileName: input.fileName,
+      ageHours: input.ageHours,
+      reason: input.reason,
+    },
+  });
+}

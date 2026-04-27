@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export type SystemEventType =
   | 'credit_report_uploaded'
   | 'credit_analysis_started'
+  | 'credit_analysis_stalled'
   | 'credit_analysis_completed'
   | 'credit_analysis_failed'
   | 'email_sent'
