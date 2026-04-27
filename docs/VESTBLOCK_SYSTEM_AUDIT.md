@@ -9,7 +9,7 @@ VestBlock is a Next.js 14 App Router project. Routes live in `app/`, API handler
 - Public routes: `/`, `/funding`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
 - User routes: `/dashboard`, `/credit-upload`, `/credit-dashboard/[reportId]`, `/analysis/results/[jobId]`, `/profile`, `/user-hub`, `/tools/business-credit`, `/tools/grants`, `/tools/my-dispute-letters`, `/super-dispute`.
 - Admin routes: `/admin-panel`, `/admin/leads`, `/admin/test`.
-- Debug/test routes: multiple credit report, upload, OpenAI, streaming, database, and auth debug pages remain in `app/`.
+- Debug/test routes: multiple credit report, upload, OpenAI, streaming, database, and auth debug pages remain in `app/`, but are protected by admin-only middleware.
 
 ## Framework And Routing
 
@@ -43,6 +43,7 @@ Risk: `lib/supabase/server.ts` still contains noisy step/debug logging and uses 
 - `leads`
 - `email_events` added by migration `020-vestblock-ops-automation.sql`
 - `admin_activity` added by migration `020-vestblock-ops-automation.sql`
+- `admin_tasks` added by migration `022-create-admin-tasks.sql`
 
 ## API Routes
 
@@ -106,6 +107,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Alerts / Notifications
 - Recent activity
 - Payments and funding leads
+- Admin task queue
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`
 
@@ -130,7 +132,7 @@ Risk fixed: `create-order` was logging PayPal credential values. This has been r
 
 - `background-analyzer` still contains placeholder schemas and comments from a removed Vercel Blob workflow.
 - `job-status/route.ts` only exports `maxDuration`; the dynamic `job-status/[jobId]` route should be considered the functional route.
-- Some debug/test routes should be gated or removed before production.
+- Raw SQL and legacy database setup APIs are admin-gated and disabled unless explicit env flags are enabled.
 - Supabase schema/type definitions do not fully match later migrations.
 - Several routes rely on service-role Supabase access and need careful production env setup.
 
@@ -138,6 +140,6 @@ Risk fixed: `create-order` was logging PayPal credential values. This has been r
 
 - Regenerate `types/supabase.ts` from the live Supabase schema.
 - Consolidate credit analysis into the central workflow module.
-- Gate debug routes behind admin access.
+- Remove legacy database setup/debug routes once they are no longer needed for recovery work.
 - Normalize env var names across server Supabase helpers.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.

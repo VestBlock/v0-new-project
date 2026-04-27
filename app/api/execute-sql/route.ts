@@ -1,8 +1,25 @@
 import { NextResponse } from "next/server"
+import { checkAdminAccess } from "@/lib/auth/admin"
 import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function POST(request: Request) {
   try {
+    const adminCheck = await checkAdminAccess()
+
+    if (!adminCheck.isAdmin) {
+      return NextResponse.json(
+        { error: "Admin access required." },
+        { status: adminCheck.user ? 403 : 401 },
+      )
+    }
+
+    if (process.env.ENABLE_ADMIN_SQL_CONSOLE !== "true") {
+      return NextResponse.json(
+        { error: "Admin SQL console is disabled." },
+        { status: 404 },
+      )
+    }
+
     const { sql } = await request.json()
 
     if (!sql) {

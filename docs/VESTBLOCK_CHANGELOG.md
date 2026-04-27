@@ -1,5 +1,23 @@
 # VestBlock Changelog
 
+## 2026-04-26 Debug Route Hardening
+
+## Files Changed
+
+- `middleware.ts`
+- `app/api/execute-sql/route.ts`
+- `app/api/run-db-setup/route.ts`
+- `app/api/setup-database/route.ts`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `.agents/skills/vestblock/security-privacy-audit.md`
+
+## Features Added
+
+- Added `/admin/test` and `/api/execute-sql` to admin-only middleware protection.
+- Added route-level admin checks to the SQL console and database setup APIs.
+- Disabled raw SQL execution unless `ENABLE_ADMIN_SQL_CONSOLE=true`.
+- Disabled legacy database setup APIs unless `ENABLE_DATABASE_SETUP_ROUTES=true`.
+
 ## 2026-04-26 Operations Upgrade
 
 ## 2026-04-26 Admin Detail And Reliability Pass
@@ -184,6 +202,11 @@ Optional legacy compatibility:
 - `RESEND_EMAIL`
 - `WEB_HOST_URL`
 
+Optional locked-down diagnostics:
+
+- `ENABLE_ADMIN_SQL_CONSOLE=true`
+- `ENABLE_DATABASE_SETUP_ROUTES=true`
+
 ## Database Changes Required
 
 Run these Supabase migrations in order:
@@ -216,7 +239,7 @@ They add:
 
 - `background-analyzer` still contains placeholder logic and should be refactored before being used as the canonical analysis worker.
 - Supabase generated TypeScript types are stale relative to migrations.
-- Debug routes remain publicly routable unless separately gated.
+- Debug/setup/test routes are middleware-gated for admins; raw SQL and database setup APIs also require explicit env flags before they run.
 - `npm run lint` opens the Next.js ESLint setup prompt because no ESLint config is committed.
 - `npx tsc --noEmit` currently fails on broad pre-existing type errors across unrelated routes/components.
 - `npm run build` requires production-like env vars because some existing API routes instantiate OpenAI/Supabase during build collection.
@@ -231,6 +254,6 @@ They add:
 ## Next Recommended Tasks
 
 - Regenerate Supabase types.
-- Gate debug routes.
+- Remove legacy setup/debug routes after production recovery workflows are no longer needed.
 - Add cron for stuck report statuses.
 - Add abandoned checkout and upload reminder automations.

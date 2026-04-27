@@ -1,10 +1,27 @@
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
+import { checkAdminAccess } from "@/lib/auth/admin"
 import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
+    const adminCheck = await checkAdminAccess()
+
+    if (!adminCheck.isAdmin) {
+      return NextResponse.json(
+        { error: "Admin access required." },
+        { status: adminCheck.user ? 403 : 401 },
+      )
+    }
+
+    if (process.env.ENABLE_DATABASE_SETUP_ROUTES !== "true") {
+      return NextResponse.json(
+        { error: "Database setup routes are disabled." },
+        { status: 404 },
+      )
+    }
+
     const supabase = getSupabaseServer()
 
     // SQL setup script from your existing file

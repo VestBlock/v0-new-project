@@ -18,6 +18,7 @@ Treat these as private:
 - Service-role Supabase client is server-only.
 - Admin APIs call `checkAdminAccess()`.
 - Debug/setup/test routes are admin-protected or removed.
+- Raw SQL/setup APIs also require explicit env flags before execution.
 - Storage buckets for credit reports and letters are private.
 - RLS is enabled for user-owned tables.
 - Users can only access their own reports and letters.
@@ -39,5 +40,14 @@ Include:
 - Risk.
 - Fix.
 - Verification step.
+
+## Locked Diagnostic Flags
+
+Keep these unset in normal production:
+
+- `ENABLE_ADMIN_SQL_CONSOLE`
+- `ENABLE_DATABASE_SETUP_ROUTES`
+
+Only enable temporarily for a specific recovery task, then redeploy with them removed.
 
 If no issue is found, mention residual risks and missing tests.

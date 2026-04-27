@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 const protectedDiagnostics = [
+  "/admin/test",
   "/auth-debug",
   "/credit-report-debug",
   "/credit-report-diagnostic",
@@ -17,6 +18,7 @@ const protectedDiagnostics = [
 ]
 
 const protectedDiagnosticApis = [
+  "/api/execute-sql",
   "/api/run-db-setup",
   "/api/setup-database",
   "/api/test-analysis",
