@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import {
   ArrowRight,
   BadgeCheck,
@@ -22,15 +23,33 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { absoluteUrl } from '@/lib/seo/site';
+import { servicesItemListJsonLd } from '@/lib/seo/structuredData';
 import {
   serviceIntentLabels,
   vestBlockServiceDirectory,
   type VestBlockServiceIntent,
 } from '@/lib/services/serviceDirectory';
 
+export const metadata: Metadata = {
+  title: 'VestBlock Services For Credit Repair, Funding, Grants, and Real Estate',
+  description:
+    'Compare VestBlock services for AI credit analysis, dispute letters, business funding eligibility, credit card stacking readiness, business setup, grants, Spanish funding, real estate funding, and property seller leads.',
+  alternates: {
+    canonical: '/services',
+  },
+  openGraph: {
+    title: 'VestBlock Services',
+    description:
+      'Find the right VestBlock path for credit repair, business funding, grants, business credit, Spanish funding, real estate funding, and financial growth services.',
+    url: absoluteUrl('/services'),
+  },
+};
+
 const iconByService: Record<string, typeof CreditCard> = {
   credit_analysis: CreditCard,
   business_funding: Briefcase,
+  credit_card_stacking: CreditCard,
   business_setup: BadgeCheck,
   financial_growth_services: BadgeDollarSign,
   grants: FileText,
@@ -73,6 +92,12 @@ export default function ServicesPage() {
 
   return (
     <main className="min-h-screen bg-background px-4 py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(servicesItemListJsonLd()),
+        }}
+      />
       <div className="container mx-auto max-w-7xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-5">

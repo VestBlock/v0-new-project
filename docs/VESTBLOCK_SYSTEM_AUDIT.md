@@ -137,9 +137,12 @@ VestBlock now has a dashboard-backed content operations foundation:
 - `lib/content/marketingServices.ts` defines the service catalog and compliance notes used by generators.
 - `lib/services/serviceDirectory.ts` defines the client-facing service routing catalog used by `/services` and homepage service cards.
 - `lib/services/financialSkillsets.ts` defines monetized financial prep packages, prices, deliverables, upsell paths, and compliance notes.
+- `lib/seo/site.ts`, `lib/seo/structuredData.ts`, and `lib/seo/llmFeed.ts` centralize public URL handling, JSON-LD schema, and answer-engine service summaries.
 - `lib/content/contentGenerator.ts` uses `OPENAI_API_KEY` and optional `OPENAI_CONTENT_MODEL` to create SEO pages, social posts, and campaigns.
 - `/api/admin/content` requires admin access, writes generated drafts to `content_assets`, and logs `content_generated` / `content_published` events.
 - `/admin-panel` includes a Content tab where admins can type the desired post/page style, choose service, language, audience, platform, and post type, then generate drafts.
+- `/admin-panel` includes an AEO / LLM tab where admins can review service coverage, content gaps, topic clusters, Spanish content assets, and public crawler surfaces.
+- `/llms.txt` exposes a public AI-crawler map of VestBlock services, paid financial packages, learning pages, and compliance guardrails.
 - Published SEO page assets are available at `/resources/[slug]` and are included in the dynamic sitemap when Supabase exposes published rows.
 
 Required setup: run `db/migrations/024-create-content-assets.sql` in Supabase and keep `OPENAI_API_KEY` configured in Vercel.

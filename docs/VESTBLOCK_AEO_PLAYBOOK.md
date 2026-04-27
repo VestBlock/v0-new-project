@@ -7,13 +7,17 @@ VestBlock should publish practical answer-focused content that helps users under
 Use `lib/aeo/topics.ts` as the starter topic registry. The first public
 implementation now lives at `/learn` and `/learn/[slug]`.
 
-Use `/admin-panel` -> Content for operational content creation. Generated
-drafts are stored in `content_assets`; published SEO pages become public at
-`/resources/[slug]`.
+Use `/admin-panel` -> AEO / LLM for coverage monitoring and `/admin-panel` ->
+Content for operational content creation. Generated drafts are stored in
+`content_assets`; published SEO pages become public at `/resources/[slug]`.
 
-Search discovery is handled through `app/sitemap.ts` and `app/robots.ts`.
-Keep those files curated: include public learning, offer, and tool pages; exclude
-admin, API, account, diagnostic, setup, test, and user-specific report routes.
+Search discovery is handled through `app/sitemap.ts`, `app/robots.ts`, and
+`app/llms.txt/route.ts`. Keep those files curated: include public learning,
+offer, and tool pages; exclude admin, API, account, diagnostic, setup, test,
+and user-specific report routes.
+
+Services without a published SEO page should get one high-quality page before
+generating supporting social posts, comparisons, or niche variants.
 
 ## Topic Clusters
 
@@ -40,6 +44,11 @@ admin, API, account, diagnostic, setup, test, and user-specific report routes.
 - Business credit pages should link to `/tools/business-credit` and `/funding`.
 - Grant and funding pages should link to `/funding`, `/business-setup`, and relevant lead forms.
 - Spanish business funding pages should link to `/es/vestblock`, `/business-setup`, and the approved Bank Breezy Spanish URL.
+- Credit card stacking pages should link to `/funding/credit-card-strategy`,
+  `/funding#free-eligibility-check`, and `/services/financial-growth`.
+- Financial growth service pages should link to `/services/financial-growth`,
+  `/funding`, `/business-setup`, `/tools/business-credit`, `/tools/grants`,
+  and `/real-estate-funding` where relevant.
 - Comparison pages should link to Pro features only when the offer is relevant.
 
 ## Suggested Landing Pages
@@ -53,9 +62,24 @@ admin, API, account, diagnostic, setup, test, and user-specific report routes.
 - `/learn/grants-for-small-businesses`
 - `/business-setup`
 - `/es/vestblock`
+- `/llms.txt`
 - `/resources/[generated-slug]` for admin-approved generated SEO pages
 
 ## Manual Publishing Workflow
+
+1. Open `/admin-panel` and select the AEO / LLM tab.
+2. Review service coverage, topic clusters, LLM discovery surfaces, Spanish
+   content count, and content gaps.
+3. Click Draft SEO Page for a service that needs coverage.
+4. Review the prefilled service, audience, language, and prompt in the Content
+   tab.
+5. Generate the draft, review the language, and edit manually if needed.
+6. Mark content as `ready` when reviewed.
+7. Mark SEO pages as `published` only when the page should be publicly visible.
+8. Copy social posts from the dashboard and post manually until platform API
+   posting is intentionally added.
+
+## Direct Content Generator Workflow
 
 1. Open `/admin-panel` and select the Content tab.
 2. Choose content type: SEO page, social post, or campaign.

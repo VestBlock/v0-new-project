@@ -63,6 +63,26 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     priority: 20,
   },
   {
+    key: 'credit_card_stacking',
+    intent: 'get_business_funding',
+    title: 'Credit Card Stacking Strategy',
+    shortTitle: 'Card Stacking',
+    summary:
+      'Review business credit card funding readiness, document requirements, inquiry risk, utilization impact, and the paid strategy path.',
+    bestFor: 'Business owners considering multiple business credit cards for working capital.',
+    route: '/funding/credit-card-strategy',
+    primaryCta: 'Start Card Funding Strategy',
+    secondaryRoute: '/funding#free-eligibility-check',
+    secondaryCta: 'Check Eligibility First',
+    priceNote: '$300 readiness plan plus 10% after accepted card funding is available',
+    operatorNote:
+      'Creates funding strategy requests, payment readiness records, admin review tasks, and success-fee consent visibility.',
+    trustNote:
+      'No approval, limit, or interest-rate guarantees; customers review terms, hard-inquiry risk, and repayment responsibility.',
+    serviceStage: 'paid_plan',
+    priority: 25,
+  },
+  {
     key: 'business_setup',
     intent: 'prepare_business',
     title: 'Business Setup For Funding And Grants',

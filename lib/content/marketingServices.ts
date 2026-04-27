@@ -4,6 +4,8 @@ export type VestBlockServiceKey =
   | 'business_setup'
   | 'business_credit'
   | 'business_funding'
+  | 'credit_card_stacking'
+  | 'financial_growth_services'
   | 'grants'
   | 'spanish_business_funding'
   | 'real_estate_funding'
@@ -109,6 +111,44 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
       'Do not guarantee approvals or terms.',
       'Keep partner and lead-source language clear.',
       'Encourage reviewing repayment ability.',
+    ],
+  },
+  {
+    key: 'credit_card_stacking',
+    label: 'Credit Card Stacking Strategy',
+    offerPath: '/funding/credit-card-strategy',
+    audience: 'business owners considering multiple business credit cards for working capital',
+    valuePromise:
+      'Review readiness, documents, utilization, inquiry risk, consent, and repayment considerations before a business credit card funding strategy.',
+    proofPoints: [
+      '$300 readiness plan',
+      'Funding strategy request workflow',
+      'Success-fee consent tracking',
+      'Admin review dashboard',
+    ],
+    complianceNotes: [
+      'Do not guarantee card approvals or limits.',
+      'Explain hard-inquiry, utilization, and repayment risks.',
+      'Keep the 10% success fee tied to accepted and available card funding.',
+    ],
+  },
+  {
+    key: 'financial_growth_services',
+    label: 'Financial Growth Services',
+    offerPath: '/services/financial-growth',
+    audience: 'clients who need paid preparation before applying for funding, grants, credit, or real estate financing',
+    valuePromise:
+      'Offer one-time financial prep packages for readiness reviews, business credit setup, grants, debt utilization, cash-flow documents, and real estate deal funding review.',
+    proofPoints: [
+      'Financial service request form',
+      'Business funding lead automation',
+      'Admin package visibility',
+      'Service package catalog',
+    ],
+    complianceNotes: [
+      'Do not promise approvals, funding, grant awards, or credit score outcomes.',
+      'Keep services positioned as preparation, education, and document organization.',
+      'Avoid tax, legal, or investment advice positioning.',
     ],
   },
   {

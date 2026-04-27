@@ -23,6 +23,8 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: '*',
         allow: [
           '/',
+          '/llms.txt',
+          '/services',
           '/learn',
           '/credit-upload',
           '/funding',

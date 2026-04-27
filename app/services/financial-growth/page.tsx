@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -21,6 +22,26 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { financialSkillsetPackages } from '@/lib/services/financialSkillsets';
+import { absoluteUrl } from '@/lib/seo/site';
+import {
+  financialGrowthFaqJsonLd,
+  financialGrowthServiceJsonLd,
+} from '@/lib/seo/structuredData';
+
+export const metadata: Metadata = {
+  title: 'Financial Growth Services For Funding, Credit, Grants, and Real Estate',
+  description:
+    'Paid VestBlock financial prep packages for funding readiness, business credit, grant applications, debt utilization, cash-flow document review, and real estate deal funding review.',
+  alternates: {
+    canonical: '/services/financial-growth',
+  },
+  openGraph: {
+    title: 'VestBlock Financial Growth Services',
+    description:
+      'Request paid financial prep packages for business funding readiness, business credit, grant applications, utilization planning, cash-flow review, and real estate funding readiness.',
+    url: absoluteUrl('/services/financial-growth'),
+  },
+};
 
 const iconByPackage = {
   funding_readiness_snapshot: ClipboardCheck,
@@ -34,6 +55,15 @@ const iconByPackage = {
 export default function FinancialGrowthServicesPage() {
   return (
     <main className="min-h-screen bg-background px-4 py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            financialGrowthServiceJsonLd(),
+            financialGrowthFaqJsonLd(),
+          ]),
+        }}
+      />
       <div className="container mx-auto max-w-7xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-5">

@@ -6,13 +6,61 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from '@/components/ui/toaster';
 import { Navigation } from '@/components/navigation'; // Corrected import
+import {
+  absoluteUrl,
+  getSiteUrl,
+  vestBlockDefaultDescription,
+  vestBlockSiteName,
+} from '@/lib/seo/site';
+import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/structuredData';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'VestBlock - AI-Powered Financial Opportunity Platform',
-  description: 'VestBlock helps entrepreneurs and investors unlock financial opportunities using AI. Upload your credit report, generate dispute letters, improve your approval odds, and discover funding options.',
-  generator: 'v0.dev',
+  metadataBase: new URL(getSiteUrl()),
+  title: {
+    default: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    template: `%s | ${vestBlockSiteName}`,
+  },
+  description: vestBlockDefaultDescription,
+  alternates: {
+    canonical: '/',
+  },
+  applicationName: vestBlockSiteName,
+  authors: [{ name: vestBlockSiteName, url: absoluteUrl('/') }],
+  keywords: [
+    'AI credit repair',
+    'credit dispute letters',
+    'business funding',
+    'credit card stacking',
+    'business credit',
+    'small business grants',
+    'real estate funding',
+    'Spanish business funding',
+  ],
+  openGraph: {
+    type: 'website',
+    siteName: vestBlockSiteName,
+    url: absoluteUrl('/'),
+    title: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    description: vestBlockDefaultDescription,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    description: vestBlockDefaultDescription,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
 };
 
 export default function RootLayout({
@@ -23,6 +71,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify([organizationJsonLd(), websiteJsonLd()]),
+          }}
+        />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             <Navigation />

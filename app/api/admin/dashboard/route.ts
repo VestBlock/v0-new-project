@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { vestblockAeoTopics } from '@/lib/aeo/topics';
 import { checkAdminAccess } from '@/lib/auth/admin';
+import { vestblockMarketingServices } from '@/lib/content/marketingServices';
 import { getPaypalEnvironment } from '@/lib/paypal/config';
+import { vestBlockServiceDirectory } from '@/lib/services/serviceDirectory';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 type DashboardDataSourceIssue = {
@@ -73,6 +76,19 @@ const dashboardDataSources = [
   'content_assets',
   'funding_strategy_requests',
 ] as const;
+
+const serviceContentKeys: Record<string, string> = {
+  credit_analysis: 'ai_credit_analysis',
+  business_funding: 'business_funding',
+  credit_card_stacking: 'credit_card_stacking',
+  business_setup: 'business_setup',
+  financial_growth_services: 'financial_growth_services',
+  grants: 'grants',
+  spanish_funding: 'spanish_business_funding',
+  real_estate_funding: 'real_estate_funding',
+  sell_property: 'sell_property',
+  ai_assistant: 'ai_assistant',
+};
 
 export async function GET() {
   const adminCheck = await checkAdminAccess();
@@ -426,6 +442,52 @@ export async function GET() {
       message: issue?.message || null,
     };
   });
+  const publishedSeoAssets = contentAssets.filter(
+    (asset) => asset.content_type === 'seo_page' && asset.status === 'published'
+  );
+  const aeoServiceCoverage = vestBlockServiceDirectory.map((service) => {
+    const contentServiceKey = serviceContentKeys[service.key] || service.key;
+    const serviceAssets = contentAssets.filter(
+      (asset) => asset.service_key === contentServiceKey
+    );
+    const publishedSeoPages = serviceAssets.filter(
+      (asset) => asset.content_type === 'seo_page' && asset.status === 'published'
+    ).length;
+    const draftAssets = serviceAssets.filter((asset) =>
+      ['draft', 'ready'].includes(String(asset.status))
+    ).length;
+    const socialPosts = serviceAssets.filter(
+      (asset) => asset.content_type === 'social_post'
+    ).length;
+    const hasMarketingBrief = vestblockMarketingServices.some(
+      (marketingService) => marketingService.key === contentServiceKey
+    );
+
+    return {
+      serviceKey: service.key,
+      contentServiceKey,
+      title: service.title,
+      route: service.route.split('#')[0],
+      intent: service.intent,
+      priority: service.priority,
+      stage: service.serviceStage,
+      hasMarketingBrief,
+      publishedSeoPages,
+      draftAssets,
+      socialPosts,
+      recommendedNextContent:
+        publishedSeoPages > 0
+          ? 'Create supporting comparison, FAQ, or social content.'
+          : 'Generate and publish one high-quality service SEO page.',
+    };
+  });
+  const topicClusters = vestblockAeoTopics.reduce<Record<string, number>>(
+    (clusters, topic) => {
+      clusters[topic.cluster] = (clusters[topic.cluster] || 0) + 1;
+      return clusters;
+    },
+    {}
+  );
 
   return NextResponse.json({
     overview: {
@@ -446,6 +508,7 @@ export async function GET() {
       ).length,
       totalContentAssets: contentAssets.length,
       totalPublishedContent: contentByStatus.published,
+      totalAeoTopics: vestblockAeoTopics.length,
     },
     creditReports,
     users: userManagement,
@@ -484,6 +547,26 @@ export async function GET() {
         openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
         model: process.env.OPENAI_CONTENT_MODEL || 'gpt-4o',
       },
+    },
+    aeo: {
+      serviceCount: vestBlockServiceDirectory.length,
+      aeoTopicCount: vestblockAeoTopics.length,
+      topicClusters,
+      publishedSeoPages: publishedSeoAssets.length,
+      spanishContentAssets: contentAssets.filter((asset) => asset.language === 'es')
+        .length,
+      llmSurfaces: [
+        '/llms.txt',
+        '/sitemap.xml',
+        '/robots.txt',
+        '/services',
+        '/learn',
+        '/es/vestblock',
+      ],
+      serviceCoverage: aeoServiceCoverage,
+      contentGaps: aeoServiceCoverage.filter(
+        (service) => service.publishedSeoPages === 0
+      ),
     },
     automation: {
       env: {

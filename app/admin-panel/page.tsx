@@ -69,6 +69,7 @@ type AdminDashboard = {
     totalOpenTasks: number;
     totalContentAssets: number;
     totalPublishedContent: number;
+    totalAeoTopics: number;
   };
   creditReports: Array<{
     id: string;
@@ -252,6 +253,42 @@ type AdminDashboard = {
       model: string;
     };
   };
+  aeo: {
+    serviceCount: number;
+    aeoTopicCount: number;
+    topicClusters: Record<string, number>;
+    publishedSeoPages: number;
+    spanishContentAssets: number;
+    llmSurfaces: string[];
+    serviceCoverage: Array<{
+      serviceKey: string;
+      contentServiceKey: string;
+      title: string;
+      route: string;
+      intent: string;
+      priority: number;
+      stage: string;
+      hasMarketingBrief: boolean;
+      publishedSeoPages: number;
+      draftAssets: number;
+      socialPosts: number;
+      recommendedNextContent: string;
+    }>;
+    contentGaps: Array<{
+      serviceKey: string;
+      contentServiceKey: string;
+      title: string;
+      route: string;
+      intent: string;
+      priority: number;
+      stage: string;
+      hasMarketingBrief: boolean;
+      publishedSeoPages: number;
+      draftAssets: number;
+      socialPosts: number;
+      recommendedNextContent: string;
+    }>;
+  };
 };
 
 const statuses = [
@@ -388,6 +425,7 @@ export default function AdminPanelPage() {
   const [contentPrompt, setContentPrompt] = useState('');
   const [savingContentId, setSavingContentId] = useState<string | null>(null);
   const [generatingContent, setGeneratingContent] = useState(false);
+  const [activeTab, setActiveTab] = useState('reports');
 
   const isAdminEmail =
     user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -471,6 +509,11 @@ export default function AdminPanelPage() {
         label: 'Content Drafts',
         value: dashboard.overview.totalContentAssets,
         icon: Megaphone,
+      },
+      {
+        label: 'AEO Topics',
+        value: dashboard.overview.totalAeoTopics,
+        icon: Globe2,
       },
     ];
   }, [dashboard]);
@@ -832,6 +875,25 @@ export default function AdminPanelPage() {
     }
   };
 
+  const primeAeoContentDraft = (
+    service: AdminDashboard['aeo']['serviceCoverage'][number]
+  ) => {
+    setContentTypeDraft('seo_page');
+    setContentServiceKey(service.contentServiceKey);
+    setContentLanguage(service.contentServiceKey === 'spanish_business_funding' ? 'es' : 'en');
+    setContentPlatform('manual');
+    setContentPostType('service landing page');
+    setContentAudience(
+      service.contentServiceKey === 'spanish_business_funding'
+        ? 'Spanish-speaking business owners looking for funding readiness'
+        : `people looking for ${service.title.toLowerCase()}`
+    );
+    setContentPrompt(
+      `Create a high-quality, compliance-safe SEO page for ${service.title}. Explain who it helps, when to use it, what VestBlock does, what documents or next steps matter, common questions, and a clear CTA to ${service.route}. Avoid guarantees and thin keyword stuffing.`
+    );
+    setActiveTab('content');
+  };
+
   const updateContentStatus = async (assetId: string, status: string) => {
     setSavingContentId(assetId);
     setError('');
@@ -916,12 +978,13 @@ export default function AdminPanelPage() {
           ))}
         </div>
 
-        <Tabs defaultValue="reports" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex h-auto flex-wrap justify-start">
             <TabsTrigger value="reports">Credit Reports</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="aeo">AEO / LLM</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
             <TabsTrigger value="automation">Automation</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -1409,6 +1472,158 @@ export default function AdminPanelPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="aeo">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Service Routes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboard.aeo.serviceCount}</div>
+                    <p className="text-xs text-muted-foreground">Public offers in the service catalog</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">AEO Topics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboard.aeo.aeoTopicCount}</div>
+                    <p className="text-xs text-muted-foreground">Learning pages answer engines can cite</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Published SEO</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboard.aeo.publishedSeoPages}</div>
+                    <p className="text-xs text-muted-foreground">Manual/generated pages live in resources</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Spanish Assets</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboard.aeo.spanishContentAssets}</div>
+                    <p className="text-xs text-muted-foreground">Spanish drafts and published posts</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Content Gaps</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{dashboard.aeo.contentGaps.length}</div>
+                    <p className="text-xs text-muted-foreground">Services without a published SEO asset</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[.85fr_1.15fr]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Globe2 className="h-5 w-5 text-cyan-600" />
+                      LLM Discovery Surfaces
+                    </CardTitle>
+                    <CardDescription>
+                      These public files and hubs help search engines and answer
+                      engines understand VestBlock&apos;s service map.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {dashboard.aeo.llmSurfaces.map((surface) => (
+                      <div
+                        key={surface}
+                        className="flex items-center justify-between gap-3 rounded-md border p-3"
+                      >
+                        <span className="text-sm font-medium">{surface}</span>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={surface}>Open</Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Topic Cluster Coverage</CardTitle>
+                    <CardDescription>
+                      Keep the learning center balanced across credit repair,
+                      funding, business credit, grants, and Spanish funding.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-2">
+                    {Object.entries(dashboard.aeo.topicClusters).map(
+                      ([cluster, count]) => (
+                        <div key={cluster} className="rounded-md border p-3">
+                          <p className="text-sm font-medium">{cluster}</p>
+                          <p className="text-2xl font-bold">{count}</p>
+                        </div>
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Service AEO Coverage</CardTitle>
+                  <CardDescription>
+                    Use this as the content command center. Services with no
+                    published SEO page should get one strong page before thin
+                    supporting posts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {dashboard.aeo.serviceCoverage.map((service) => (
+                    <div key={service.serviceKey} className="rounded-lg border p-4">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{service.title}</h3>
+                            <Badge variant={service.publishedSeoPages > 0 ? 'default' : 'secondary'}>
+                              {service.publishedSeoPages > 0 ? 'covered' : 'needs page'}
+                            </Badge>
+                            <Badge variant="outline">{service.stage}</Badge>
+                            {!service.hasMarketingBrief && (
+                              <Badge variant="destructive">missing brief</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {service.recommendedNextContent}
+                          </p>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span>SEO pages: {service.publishedSeoPages}</span>
+                            <span>Drafts: {service.draftAssets}</span>
+                            <span>Social posts: {service.socialPosts}</span>
+                            <span>Content key: {service.contentServiceKey}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={service.route}>Open Route</Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => primeAeoContentDraft(service)}
+                          >
+                            Draft SEO Page
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="content">

@@ -1,5 +1,50 @@
 # VestBlock Changelog
 
+## 2026-04-27 SEO, AEO, And Admin Visibility Upgrade
+
+## Files Changed
+
+- `app/layout.tsx`
+- `app/llms.txt/route.ts`
+- `app/services/page.tsx`
+- `app/services/financial-growth/page.tsx`
+- `app/funding/layout.tsx`
+- `app/funding/credit-card-strategy/layout.tsx`
+- `app/credit-upload/layout.tsx`
+- `app/real-estate-funding/layout.tsx`
+- `app/tools/business-credit/layout.tsx`
+- `app/tools/grants/layout.tsx`
+- `app/admin-panel/page.tsx`
+- `app/api/admin/dashboard/route.ts`
+- `app/robots.ts`
+- `app/sitemap.ts`
+- `components/service-cards.tsx`
+- `lib/content/marketingServices.ts`
+- `lib/seo/llmFeed.ts`
+- `lib/seo/site.ts`
+- `lib/seo/structuredData.ts`
+- `lib/services/serviceDirectory.ts`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+
+## Features Added
+
+- Added `/llms.txt` as a crawler-friendly answer-engine map for VestBlock services, financial packages, learning pages, and compliance guardrails.
+- Added shared SEO helpers for canonical URLs, site metadata, organization schema, website schema, service item-list schema, financial package offer schema, and FAQ schema.
+- Added stronger route metadata for the service directory, financial growth packages, funding, credit card stacking, credit upload, real estate funding, business credit, and grants.
+- Added credit card stacking as a first-class service directory item and content-generator service so it can be ranked, tracked, and monetized clearly.
+- Added an `/admin-panel` AEO / LLM tab with service coverage, topic cluster counts, LLM discovery surfaces, Spanish content count, content gaps, and one-click draft setup for missing SEO pages.
+- Added AEO coverage metrics to `/api/admin/dashboard` without exposing private data.
+- Added `/llms.txt` to robots and sitemap.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `/llms.txt`.
+- Local built smoke passed: `/llms.txt` includes service and compliance coverage, `/services` and `/services/financial-growth` render JSON-LD metadata, `/robots.txt` allows `/llms.txt` and `/services`, `sitemap.xml` includes `/llms.txt`, and `/api/admin/dashboard` still returns `401` without an admin session.
+
 ## 2026-04-27 Financial Growth Service Packages
 
 ## Files Changed

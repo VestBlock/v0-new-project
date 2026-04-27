@@ -28,6 +28,7 @@ import { getFeaturedServiceDirectoryItems } from '@/lib/services/serviceDirector
 const iconByService: Record<string, typeof CreditCard> = {
   credit_analysis: CreditCard,
   business_funding: Briefcase,
+  credit_card_stacking: CreditCard,
   business_setup: BadgeCheck,
   financial_growth_services: BadgeDollarSign,
   grants: FileText,
@@ -45,7 +46,7 @@ const stageLabel = {
 };
 
 export function ServiceCards() {
-  const services = getFeaturedServiceDirectoryItems(6);
+  const services = getFeaturedServiceDirectoryItems(8);
 
   return (
     <section className="px-4 py-20">

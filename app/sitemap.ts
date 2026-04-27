@@ -20,6 +20,7 @@ function getSiteUrl() {
 
 const publicRoutes = [
   { path: '/', priority: 1, changeFrequency: 'weekly' },
+  { path: '/llms.txt', priority: 0.4, changeFrequency: 'weekly' },
   { path: '/services', priority: 0.92, changeFrequency: 'weekly' },
   { path: '/services/financial-growth', priority: 0.86, changeFrequency: 'weekly' },
   { path: '/learn', priority: 0.85, changeFrequency: 'weekly' },
