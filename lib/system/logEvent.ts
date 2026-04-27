@@ -9,6 +9,7 @@ export type SystemEventType =
   | 'email_sent'
   | 'email_failed'
   | 'payment_completed'
+  | 'lead_created'
   | 'signup_no_upload'
   | 'paid_customer_no_upload'
   | 'lead_followup_needed'

@@ -1,27 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Resend } from "resend"
-import { createClient } from "@supabase/supabase-js"
-
-// Server-side Supabase client with service role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-)
-
-// Lazy initialization to avoid build-time errors
-let resend: Resend | null = null
-function getResend() {
-  if (!resend && process.env.RESEND_API_KEY) {
-    resend = new Resend(process.env.RESEND_API_KEY)
-  }
-  return resend
-}
+import { createAdminClient } from "@/lib/supabase/admin"
+import { runNewLeadAutomation } from "@/lib/leads/leadAutomation"
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,64 +31,14 @@ export async function POST(request: NextRequest) {
       fundsNeeded
     } = data
 
-    // Build email content based on loan type
-    let emailContent = `
-<h2>New Real Estate Funding Lead</h2>
-<p><strong>Loan Type:</strong> ${loanType === 'dscr' ? 'DSCR Loan' : 'Hard Money / Fix & Flip'}</p>
-
-<h3>Borrower Information</h3>
-<ul>
-  <li><strong>Full Name:</strong> ${fullName}</li>
-  <li><strong>Email:</strong> ${email}</li>
-  <li><strong>Phone:</strong> ${phone}</li>
-  <li><strong>Credit Score Range:</strong> ${creditScoreRange || 'Not provided'}</li>
-  ${loanType === 'dscr' ? `<li><strong>Entity:</strong> ${entity}</li>` : ''}
-  ${loanType === 'hard-money' ? `<li><strong>Experience Level:</strong> ${experienceLevel}</li>` : ''}
-</ul>
-`
-
-    if (loanType === 'dscr') {
-      emailContent += `
-<h3>Property Information</h3>
-<ul>
-  <li><strong>Property Address:</strong> ${propertyAddress}</li>
-  <li><strong>Property Type:</strong> ${propertyType}</li>
-  <li><strong>Purchase Price:</strong> ${purchasePrice}</li>
-  <li><strong>Expected Rent (Monthly):</strong> ${expectedRent}</li>
-  <li><strong>Occupancy:</strong> ${occupancy}</li>
-  <li><strong>Down Payment / LTV:</strong> ${downPaymentLtv}</li>
-</ul>
-
-<h3>Timing</h3>
-<ul>
-  <li><strong>Target Closing Date:</strong> ${closingDate}</li>
-  ${notes ? `<li><strong>Notes:</strong> ${notes}</li>` : ''}
-</ul>
-`
-    } else {
-      emailContent += `
-<h3>Deal Information</h3>
-<ul>
-  <li><strong>Property Address:</strong> ${propertyAddress}</li>
-  <li><strong>Purchase Price:</strong> ${purchasePrice}</li>
-  <li><strong>Rehab Budget:</strong> ${rehabBudget}</li>
-  <li><strong>ARV (After Repair Value):</strong> ${arv}</li>
-  <li><strong>Exit Strategy:</strong> ${exitStrategy}</li>
-  <li><strong>Closing Timeline:</strong> ${closingTimeline}</li>
-  <li><strong>Funds Needed:</strong> ${fundsNeeded}</li>
-</ul>
-`
-    }
-
-    emailContent += `
-<hr>
-<p style="color: #666; font-size: 12px;">
-  Submitted from VestBlock Real Estate Funding page at ${new Date().toLocaleString()}
-</p>
-`
+    const supabaseAdmin = createAdminClient()
+    const summary =
+      loanType === 'dscr'
+        ? `DSCR lead for ${propertyAddress || 'unknown property'}; purchase ${purchasePrice || 'unknown'}, rent ${expectedRent || 'unknown'}, closing ${closingDate || 'unknown'}.`
+        : `Hard money lead for ${propertyAddress || 'unknown property'}; purchase ${purchasePrice || 'unknown'}, rehab ${rehabBudget || 'unknown'}, ARV ${arv || 'unknown'}.`
 
     // Save to unified leads table
-    const { error: leadsError } = await supabaseAdmin
+    const { data: lead, error: leadsError } = await supabaseAdmin
       .from('leads')
       .insert({
         lead_type: 'real_estate',
@@ -147,24 +76,23 @@ export async function POST(request: NextRequest) {
           })
         }
       })
+      .select('id')
+      .single()
 
     if (leadsError) {
       console.error('Leads table error:', leadsError)
-      // Continue with email - don't fail the request
-    }
-
-    const resendClient = getResend()
-
-    if (resendClient) {
-      await resendClient.emails.send({
-        from: "VestBlock <noreply@vestblock.io>",
-        to: process.env.LEAD_EMAIL || "leads@vestblock.io",
-        replyTo: email,
-        subject: `[Real Estate Lead] ${loanType === 'dscr' ? 'DSCR' : 'Hard Money'} - ${fullName}`,
-        html: emailContent
-      })
+      // Do not fail the customer request if lead automation storage is unavailable.
     } else {
-      console.log("Resend not configured. Lead data:", data)
+      await runNewLeadAutomation({
+        leadId: lead.id,
+        leadType: 'real_estate',
+        name: fullName,
+        email,
+        phone,
+        sourcePath: '/real-estate-funding',
+        summary,
+        metadata: { loanType, creditScoreRange, propertyAddress },
+      })
     }
 
     return NextResponse.json({ success: true })

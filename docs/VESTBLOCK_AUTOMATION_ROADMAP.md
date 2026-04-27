@@ -43,6 +43,7 @@ Email failures must be logged to `email_events` and must not break uploads or an
 - Track source route, lead type, status, contact info, and notes.
 - Let admins update lead status from either `/admin/leads` or the main `/admin-panel`.
 - Log lead status updates to `admin_activity` for operator accountability.
+- Use `lib/leads/leadAutomation.ts` after lead creation to send immediate admin alerts, create follow-up tasks, and log `lead_created` events.
 - Future: partner referral tracking, outcome tracking, and automatic nurture sequences by lead type.
 
 ## AEO And Content Automation

@@ -274,13 +274,17 @@ export async function createLeadFollowupTask(input: {
   name?: string | null;
   email?: string | null;
   ageHours?: number | null;
+  sourcePath?: string | null;
+  immediate?: boolean;
 }) {
   return createAdminTask({
-    title: 'Follow up with new lead',
+    title: input.immediate ? 'Contact new lead' : 'Follow up with new lead',
     description:
-      'A lead is still marked new after the follow-up window. Review the source, contact details, and next sales step.',
+      input.immediate
+        ? 'A new lead was submitted. Review the source, contact details, and next sales step while intent is fresh.'
+        : 'A lead is still marked new after the follow-up window. Review the source, contact details, and next sales step.',
     taskType: 'lead_followup',
-    priority: 'normal',
+    priority: input.immediate ? 'high' : 'normal',
     userEmail: input.email,
     entityType: 'lead',
     entityId: input.leadId,
@@ -289,6 +293,7 @@ export async function createLeadFollowupTask(input: {
       leadType: input.leadType,
       name: input.name,
       ageHours: input.ageHours,
+      sourcePath: input.sourcePath,
       nextAction: 'Contact lead or update lead status.',
     },
   });

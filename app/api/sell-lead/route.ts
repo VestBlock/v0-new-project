@@ -2,29 +2,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
-
-// Server-side Supabase client with service role key (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
-
-// Lazy-initialize Resend to avoid build-time errors
-let resend: Resend | null = null;
-function getResend() {
-  if (!resend && process.env.RESEND_API_KEY) {
-    resend = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resend;
-}
+import { createAdminClient } from '@/lib/supabase/admin';
+import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 
 // Twilio SMS function
 async function sendSMS(to: string, message: string): Promise<boolean> {
@@ -93,6 +72,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabaseAdmin = createAdminClient();
+
     // 1. Store in Supabase (legacy table)
     const { data: insertedLead, error: dbError } = await supabaseAdmin
       .from('real_estate_leads')
@@ -119,10 +100,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Lead saved to database:', insertedLead.id);
-
     // 2. Also store in unified leads table
-    const { error: leadsError } = await supabaseAdmin
+    const { data: unifiedLead, error: leadsError } = await supabaseAdmin
       .from('leads')
       .insert({
         lead_type: 'sell_house',
@@ -143,69 +122,29 @@ export async function POST(request: NextRequest) {
           reasonForSelling: data.reasonForSelling,
           legacyId: insertedLead.id
         }
-      });
+      })
+      .select('id')
+      .single();
 
     if (leadsError) {
       console.error('Unified leads table error:', leadsError);
       // Don't fail - legacy table insert succeeded
-    }
-
-    // 2. Send Email Notification
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #00BFFF; border-bottom: 2px solid #00BFFF; padding-bottom: 10px;">
-          New House Seller Lead
-        </h1>
-
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h2 style="color: #333; margin-top: 0;">Property Information</h2>
-          <p><strong>Address:</strong> ${data.propertyAddress}</p>
-          <p><strong>City:</strong> ${data.city}</p>
-          <p><strong>State:</strong> ${data.state}</p>
-          ${data.propertyCondition ? `<p><strong>Condition:</strong> ${data.propertyCondition}</p>` : ''}
-          ${data.mortgageBalance ? `<p><strong>Est. Mortgage Balance:</strong> ${data.mortgageBalance}</p>` : ''}
-        </div>
-
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h2 style="color: #333; margin-top: 0;">Seller Information</h2>
-          <p><strong>Name:</strong> ${data.name}</p>
-          <p><strong>Phone:</strong> ${data.phone}</p>
-          ${data.timelineToSell ? `<p><strong>Timeline to Sell:</strong> ${data.timelineToSell}</p>` : ''}
-          ${data.reasonForSelling ? `<p><strong>Reason for Selling:</strong> ${data.reasonForSelling}</p>` : ''}
-        </div>
-
-        <div style="background-color: #00BFFF; color: white; padding: 15px; border-radius: 8px; text-align: center;">
-          <p style="margin: 0; font-weight: bold;">Lead ID: ${insertedLead.id}</p>
-          <p style="margin: 5px 0 0 0; font-size: 14px;">Submitted: ${new Date().toLocaleString()}</p>
-        </div>
-
-        <p style="color: #666; font-size: 12px; margin-top: 20px; text-align: center;">
-          This lead was submitted through vestblock.io/sell
-        </p>
-      </div>
-    `;
-
-    try {
-      const resendClient = getResend();
-      if (resendClient) {
-        const { error: emailError } = await resendClient.emails.send({
-          from: process.env.RESEND_EMAIL || 'noreply@vestblock.io',
-          to: 'contact@vestblock.io',
-          subject: `New House Seller Lead - ${data.propertyAddress}`,
-          html: emailHtml,
-        });
-
-        if (emailError) {
-          console.error('Email send error:', emailError);
-        } else {
-          console.log('Email notification sent successfully');
-        }
-      } else {
-        console.warn('Resend API key not configured, skipping email');
-      }
-    } catch (emailErr) {
-      console.error('Email error:', emailErr);
-      // Don't fail the request if email fails
+    } else {
+      await runNewLeadAutomation({
+        leadId: unifiedLead.id,
+        leadType: 'sell_house',
+        name: data.name,
+        phone: data.phone,
+        sourcePath: '/sell',
+        summary: `${data.propertyAddress}, ${data.city}, ${data.state}; timeline ${data.timelineToSell || 'not specified'}.`,
+        metadata: {
+          legacyId: insertedLead.id,
+          city: data.city,
+          state: data.state,
+          propertyCondition: data.propertyCondition,
+          timelineToSell: data.timelineToSell,
+        },
+      });
     }
 
     // 3. Send SMS Notification

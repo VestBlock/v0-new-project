@@ -65,6 +65,7 @@ Important operating routes include:
 - `/api/admin/leads` supports lead listing and status updates for admin operators
 - `/api/real-estate-lead`
 - `/api/sell-lead`
+- `/api/ai-assistant-request`
 - `/api/biz-credit/**`
 - `/api/grants`
 
@@ -111,6 +112,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Recent activity
 - Payments and funding leads
 - Funding lead status controls
+- Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
 - Admin task queue
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`

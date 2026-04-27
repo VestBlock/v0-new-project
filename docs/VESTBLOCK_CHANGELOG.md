@@ -1,5 +1,34 @@
 # VestBlock Changelog
 
+## 2026-04-27 Immediate Lead Intake Automation
+
+## Files Changed
+
+- `app/api/ai-assistant-request/route.ts`
+- `app/api/real-estate-lead/route.ts`
+- `app/api/sell-lead/route.ts`
+- `lib/leads/leadAutomation.ts`
+- `lib/admin/tasks.ts`
+- `lib/email/sendEmail.ts`
+- `lib/system/logEvent.ts`
+- `.agents/skills/vestblock/funding-lead-automation.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added shared new-lead automation that sends an admin alert email, creates a follow-up admin task, and logs a `lead_created` event.
+- Wired real estate funding, house seller, and AI assistant lead submissions into the shared automation path.
+- Replaced route-local Resend lead notifications with the reusable email event/logger system.
+- Moved lead-route Supabase service-role clients out of module scope so routes do not require service env vars during import.
+- Updated the funding lead operator skill with the new shared automation path.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Lead Operations Upgrade
 
 ## Files Changed

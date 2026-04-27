@@ -9,6 +9,7 @@ type EmailEventType =
   | 'admin_analysis_completed'
   | 'credit_analysis_failed'
   | 'new_paid_customer'
+  | 'admin_new_lead'
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
   | 'admin_lead_followup';
@@ -285,6 +286,42 @@ export async function sendNewPaidCustomerAlert(details: {
       <strong>Amount:</strong> ${escapeHtml(String(details.amount || 'Unknown'))}<br />
       <strong>Provider:</strong> ${escapeHtml(details.provider || 'PayPal')}<br />
       <strong>Transaction:</strong> ${escapeHtml(details.transactionId || 'Unknown')}</p>
+    `
+    ),
+  });
+}
+
+export async function sendNewLeadAlertEmail(details: {
+  leadId?: string | null;
+  leadType?: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  sourcePath?: string | null;
+  summary?: string | null;
+}) {
+  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'New VestBlock Lead Submitted',
+    eventType: 'admin_new_lead',
+    userEmail: details.email,
+    html: shell(
+      'New lead submitted',
+      `
+      <p>A new VestBlock lead was submitted and is ready for follow-up.</p>
+      <p><strong>Name:</strong> ${escapeHtml(details.name || 'Unknown')}<br />
+      <strong>Email:</strong> ${escapeHtml(details.email || 'Unknown')}<br />
+      <strong>Phone:</strong> ${escapeHtml(details.phone || 'Unknown')}<br />
+      <strong>Lead type:</strong> ${escapeHtml(details.leadType || 'Unknown')}<br />
+      <strong>Source:</strong> ${escapeHtml(details.sourcePath || 'Unknown')}<br />
+      <strong>Lead ID:</strong> ${escapeHtml(details.leadId || 'Unknown')}</p>
+      ${
+        details.summary
+          ? `<p><strong>Summary:</strong><br />${escapeHtml(details.summary)}</p>`
+          : ''
+      }
+      <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
     `
     ),
   });
