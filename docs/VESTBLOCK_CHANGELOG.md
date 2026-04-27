@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 PayPal Webhook Payment Dedupe
+
+## Files Changed
+
+- `app/api/paypal-webhook/route.ts`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Updated `/api/paypal-webhook` to check `payments.paypal_transaction_id` before inserting payment records.
+- Added explicit subscription update error handling for PayPal completed capture webhooks.
+- Removed the route-level `$75.00` gate so valid PayPal capture amounts are recorded instead of silently ignored.
+- Prevented repeated PayPal webhook deliveries from duplicating payment rows or repeating paid-customer automation.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Admin Data Source Health
 
 ## Files Changed

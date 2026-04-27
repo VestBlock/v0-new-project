@@ -25,6 +25,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - All PayPal completion paths should use `lib/payments/paymentAutomation.ts`; do not add route-local one-off payment emails.
 - Check `payments.paypal_transaction_id` before inserting payment rows so repeated provider webhooks do not duplicate payment records or paid-customer alerts.
 - Capture routes should update subscription state idempotently, but only run paid-customer automation for a newly recorded payment.
+- Both PayPal webhook routes should update subscription state idempotently and skip paid-customer automation for duplicate transaction IDs.
 - Keep `PAYPAL_ENV=sandbox` until live PayPal credentials and `PAYPAL_WEBHOOK_ID` are installed in Vercel.
 - Admin readiness checks may show whether PayPal env vars are present, but must never expose key values.
 
@@ -42,6 +43,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Checkout button creates PayPal order.
 - Capture endpoint updates subscription state.
 - Both webhook routes record completed captures or create failure tasks.
+- Replayed capture/webhook events should not create duplicate payment rows or repeat paid-customer automation.
 - Automation tab shows PayPal mode and required env readiness without exposing secrets.
 - Admin dashboard paid-user count changes after capture.
 - User sees paid tools after refresh.
