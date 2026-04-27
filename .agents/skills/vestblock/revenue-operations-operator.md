@@ -11,6 +11,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - PayPal API environment helper: `lib/paypal/config.ts`
 - User subscription fields: `user_profiles.is_subscribed`, `paypal_order_id`
 - Admin visibility: `/admin-panel` payments and paid users
+- Admin payment readiness: `/admin-panel` Automation tab, backed by `/api/admin/dashboard`
 
 ## Operating Rules
 
@@ -25,6 +26,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Check `payments.paypal_transaction_id` before inserting payment rows so repeated provider webhooks do not duplicate payment records or paid-customer alerts.
 - Capture routes should update subscription state idempotently, but only run paid-customer automation for a newly recorded payment.
 - Keep `PAYPAL_ENV=sandbox` until live PayPal credentials and `PAYPAL_WEBHOOK_ID` are installed in Vercel.
+- Admin readiness checks may show whether PayPal env vars are present, but must never expose key values.
 
 ## Useful Improvements
 
@@ -40,6 +42,7 @@ Use this skill when improving VestBlock pricing, checkout, paid customer trackin
 - Checkout button creates PayPal order.
 - Capture endpoint updates subscription state.
 - Both webhook routes record completed captures or create failure tasks.
+- Automation tab shows PayPal mode and required env readiness without exposing secrets.
 - Admin dashboard paid-user count changes after capture.
 - User sees paid tools after refresh.
 - Admin alert fires without breaking checkout if email fails.

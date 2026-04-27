@@ -115,6 +115,7 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Funding lead status controls
 - Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
 - Admin task queue
+- Automation readiness checks for cron, email, and PayPal payment configuration
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`
 - Rerun analysis action for stored credit report files
@@ -139,6 +140,8 @@ Payment automation now runs through `lib/payments/paymentAutomation.ts` and the 
 PayPal API URLs are centralized in `lib/paypal/config.ts`. The default environment is sandbox; set `PAYPAL_ENV=live` or `PAYPAL_MODE=live` in Vercel only when the live PayPal app credentials and webhook ID are configured.
 
 The direct capture route checks `payments.paypal_transaction_id` before insert, so repeat capture requests do not duplicate payment records or repeat paid-customer automation.
+
+`/api/admin/dashboard` exposes non-secret PayPal readiness metadata for `/admin-panel`, including sandbox/live mode and whether the client ID, client secret, and webhook ID are configured.
 
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 

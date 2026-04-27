@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 Admin Payment Readiness Panel
+
+## Files Changed
+
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added PayPal readiness metadata to the protected admin dashboard API without exposing secret values.
+- Added a Payment Readiness card to `/admin-panel` showing PayPal environment, client ID status, client secret status, and webhook ID status.
+- Added operator guidance that distinguishes sandbox checkout testing from live PayPal payment readiness.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 Capture Order Payment Dedupe
 
 ## Files Changed

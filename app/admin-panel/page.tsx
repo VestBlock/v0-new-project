@@ -119,6 +119,14 @@ type AdminDashboard = {
       fromEmailConfigured: boolean;
       siteUrlConfigured: boolean;
     };
+    payments: {
+      paypalEnvironment: string;
+      paypalClientConfigured: boolean;
+      paypalSecretConfigured: boolean;
+      paypalWebhookConfigured: boolean;
+      paypalReady: boolean;
+      recommendedAction: string;
+    };
     crons: Array<{
       label: string;
       path: string;
@@ -192,6 +200,17 @@ const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
   fromEmailConfigured: 'FROM_EMAIL',
   siteUrlConfigured: 'NEXT_PUBLIC_SITE_URL',
 };
+
+const paymentEnvLabels: Array<
+  [keyof Pick<
+    AdminDashboard['automation']['payments'],
+    'paypalClientConfigured' | 'paypalSecretConfigured' | 'paypalWebhookConfigured'
+  >, string]
+> = [
+  ['paypalClientConfigured', 'PAYPAL_CLIENT_ID'],
+  ['paypalSecretConfigured', 'PAYPAL_CLIENT_SECRET'],
+  ['paypalWebhookConfigured', 'PAYPAL_WEBHOOK_ID'],
+];
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown';
@@ -1110,7 +1129,7 @@ export default function AdminPanelPage() {
 
           <TabsContent value="automation">
             <div className="space-y-4">
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1137,6 +1156,67 @@ export default function AdminPanelPage() {
                         </div>
                       )
                     )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5 text-cyan-600" />
+                      Payment Readiness
+                    </CardTitle>
+                    <CardDescription>
+                      PayPal mode and required payment automation settings.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+                      <span className="text-sm font-medium">PAYPAL_ENV</span>
+                      <Badge
+                        variant={
+                          dashboard.automation.payments.paypalEnvironment === 'live'
+                            ? 'default'
+                            : 'secondary'
+                        }
+                      >
+                        {dashboard.automation.payments.paypalEnvironment}
+                      </Badge>
+                    </div>
+                    {paymentEnvLabels.map(([key, label]) => {
+                      const configured = dashboard.automation.payments[key];
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between gap-3 rounded-md border p-3"
+                        >
+                          <span className="text-sm font-medium">{label}</span>
+                          <Badge variant={configured ? 'default' : 'destructive'}>
+                            {configured ? 'configured' : 'missing'}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                    <Alert
+                      variant={
+                        dashboard.automation.payments.paypalReady
+                          ? 'default'
+                          : 'destructive'
+                      }
+                    >
+                      {dashboard.automation.payments.paypalReady ? (
+                        <ShieldCheck className="h-4 w-4" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4" />
+                      )}
+                      <AlertTitle>
+                        {dashboard.automation.payments.paypalReady
+                          ? 'PayPal configured'
+                          : 'PayPal setup incomplete'}
+                      </AlertTitle>
+                      <AlertDescription>
+                        {dashboard.automation.payments.recommendedAction}
+                      </AlertDescription>
+                    </Alert>
                   </CardContent>
                 </Card>
 

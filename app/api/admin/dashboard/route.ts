@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { checkAdminAccess } from '@/lib/auth/admin';
+import { getPaypalEnvironment } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 async function safeRows<T>(
@@ -314,6 +315,12 @@ export async function GET() {
   const lifecycleEmailEvents = emailEvents.filter((event) =>
     lifecycleEmailTypes.has(String(event.event_type))
   );
+  const paypalClientConfigured = Boolean(process.env.PAYPAL_CLIENT_ID);
+  const paypalSecretConfigured = Boolean(process.env.PAYPAL_CLIENT_SECRET);
+  const paypalWebhookConfigured = Boolean(process.env.PAYPAL_WEBHOOK_ID);
+  const paypalEnvironment = getPaypalEnvironment();
+  const paypalReady =
+    paypalClientConfigured && paypalSecretConfigured && paypalWebhookConfigured;
 
   return NextResponse.json({
     overview: {
@@ -354,6 +361,18 @@ export async function GET() {
         ),
         fromEmailConfigured: Boolean(process.env.FROM_EMAIL || process.env.RESEND_EMAIL),
         siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL || process.env.WEB_HOST_URL),
+      },
+      payments: {
+        paypalEnvironment,
+        paypalClientConfigured,
+        paypalSecretConfigured,
+        paypalWebhookConfigured,
+        paypalReady,
+        recommendedAction: paypalReady
+          ? paypalEnvironment === 'live'
+            ? 'Live PayPal mode is configured. Confirm the PayPal webhook URL points to this deployment before taking real payments.'
+            : 'Sandbox PayPal mode is configured. Use sandbox buyer accounts for checkout testing.'
+          : 'Add PayPal client ID, client secret, and webhook ID in Vercel before relying on payment automation.',
       },
       crons: [
         {
