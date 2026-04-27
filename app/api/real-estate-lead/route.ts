@@ -39,6 +39,52 @@ export async function POST(request: NextRequest) {
       contractorReady
     } = data
 
+    if (!loanType || !fullName || !email || !phone || !propertyAddress) {
+      return NextResponse.json(
+        { error: 'Missing required lead fields.' },
+        { status: 400 }
+      )
+    }
+
+    if (loanType !== 'dscr' && loanType !== 'hard-money') {
+      return NextResponse.json(
+        { error: 'Invalid real estate funding type.' },
+        { status: 400 }
+      )
+    }
+
+    if (
+      loanType === 'dscr' &&
+      (!entity ||
+        !propertyType ||
+        !purchasePrice ||
+        !expectedRent ||
+        !occupancy ||
+        !downPaymentLtv ||
+        !closingDate)
+    ) {
+      return NextResponse.json(
+        { error: 'Missing required DSCR loan fields.' },
+        { status: 400 }
+      )
+    }
+
+    if (
+      loanType === 'hard-money' &&
+      (!experienceLevel ||
+        !purchasePrice ||
+        !rehabBudget ||
+        !arv ||
+        !exitStrategy ||
+        !closingTimeline ||
+        !fundsNeeded)
+    ) {
+      return NextResponse.json(
+        { error: 'Missing required hard money loan fields.' },
+        { status: 400 }
+      )
+    }
+
     const supabaseAdmin = createAdminClient()
     const summary =
       loanType === 'dscr'
