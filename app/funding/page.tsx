@@ -295,8 +295,9 @@ export default function FundingPage()
               <Badge className="w-fit bg-emerald-600 text-white">VestBlock Service</Badge>
               <CardTitle className="text-2xl">Business Credit Card Funding Strategy Review</CardTitle>
               <CardDescription className="text-base">
-                A $297 readiness review for business owners considering credit card stacking. VestBlock scores your
-                credit range, utilization, inquiries, business setup, use of funds, and prep gaps before you pursue applications.
+                A $297 readiness review for business owners considering credit card stacking, plus a 10% success fee
+                only after approved funding is accepted and available. VestBlock scores your credit range,
+                utilization, inquiries, business setup, use of funds, and prep gaps before you pursue applications.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -311,7 +312,7 @@ export default function FundingPage()
                 </div>
                 <div className="rounded-lg border p-4">
                   <div className="font-medium">$297 Review</div>
-                  <div className="text-muted-foreground">Pay only after the profile is ready enough to evaluate.</div>
+                  <div className="text-muted-foreground">Then 10% after accepted card funding is available.</div>
                 </div>
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>

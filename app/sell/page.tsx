@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -42,6 +43,9 @@ const US_STATES = [
 
 const PROPERTY_CONDITIONS = ["Good", "Needs Repairs", "Major Repairs"]
 const TIMELINES = ["ASAP", "30 days", "60+ days"]
+const PROPERTY_TYPES = ["Single Family", "Duplex / Triplex / Fourplex", "Condo", "Townhome", "Multifamily", "Land", "Other"]
+const OCCUPANCY_STATUS = ["Owner Occupied", "Tenant Occupied", "Vacant", "Unknown"]
+const BEST_TIMES = ["Morning", "Afternoon", "Evening", "Anytime"]
 const SELLING_REASONS = [
   "Foreclosure",
   "Inherited",
@@ -61,10 +65,20 @@ export default function SellPage() {
     city: "",
     state: "",
     name: "",
+    email: "",
     phone: "",
+    propertyType: "",
+    bedrooms: "",
+    bathrooms: "",
     propertyCondition: "",
     timelineToSell: "",
+    estimatedValue: "",
+    askingPrice: "",
     mortgageBalance: "",
+    liensOrTaxes: "",
+    occupancyStatus: "",
+    bestTimeToCall: "",
+    notes: "",
     reasonForSelling: ""
   })
 
@@ -116,10 +130,20 @@ export default function SellPage() {
         city: "",
         state: "",
         name: "",
+        email: "",
         phone: "",
+        propertyType: "",
+        bedrooms: "",
+        bathrooms: "",
         propertyCondition: "",
         timelineToSell: "",
+        estimatedValue: "",
+        askingPrice: "",
         mortgageBalance: "",
+        liensOrTaxes: "",
+        occupancyStatus: "",
+        bestTimeToCall: "",
+        notes: "",
         reasonForSelling: ""
       })
     } catch (error) {
@@ -277,7 +301,7 @@ export default function SellPage() {
                         </div>
                       </div>
 
-                      {/* Name and Phone */}
+                      {/* Name and Contact */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="name" className="text-sm font-medium">
@@ -294,6 +318,22 @@ export default function SellPage() {
                         </div>
 
                         <div className="space-y-2">
+                          <Label htmlFor="email" className="text-sm font-medium">
+                            Email
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={formData.email}
+                            onChange={(e) => handleInputChange("email", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
                           <Label htmlFor="phone" className="text-sm font-medium">
                             Phone Number <span className="text-destructive">*</span>
                           </Label>
@@ -305,6 +345,98 @@ export default function SellPage() {
                             onChange={(e) => handleInputChange("phone", e.target.value)}
                             className="bg-background/50"
                             required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="bestTimeToCall" className="text-sm font-medium">
+                            Best Time to Call
+                          </Label>
+                          <Select
+                            value={formData.bestTimeToCall}
+                            onValueChange={(value) => handleInputChange("bestTimeToCall", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BEST_TIMES.map((time) => (
+                                <SelectItem key={time} value={time}>
+                                  {time}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Property Type and Occupancy */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="propertyType" className="text-sm font-medium">
+                            Property Type
+                          </Label>
+                          <Select
+                            value={formData.propertyType}
+                            onValueChange={(value) => handleInputChange("propertyType", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PROPERTY_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {type}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="occupancyStatus" className="text-sm font-medium">
+                            Occupancy
+                          </Label>
+                          <Select
+                            value={formData.occupancyStatus}
+                            onValueChange={(value) => handleInputChange("occupancyStatus", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Occupancy" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {OCCUPANCY_STATUS.map((status) => (
+                                <SelectItem key={status} value={status}>
+                                  {status}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Property Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="bedrooms" className="text-sm font-medium">
+                            Bedrooms
+                          </Label>
+                          <Input
+                            id="bedrooms"
+                            placeholder="3"
+                            value={formData.bedrooms}
+                            onChange={(e) => handleInputChange("bedrooms", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="bathrooms" className="text-sm font-medium">
+                            Bathrooms
+                          </Label>
+                          <Input
+                            id="bathrooms"
+                            placeholder="2"
+                            value={formData.bathrooms}
+                            onChange={(e) => handleInputChange("bathrooms", e.target.value)}
+                            className="bg-background/50"
                           />
                         </div>
                       </div>
@@ -354,18 +486,59 @@ export default function SellPage() {
                         </div>
                       </div>
 
-                      {/* Mortgage Balance */}
-                      <div className="space-y-2">
-                        <Label htmlFor="mortgageBalance" className="text-sm font-medium">
-                          Estimated Mortgage Balance (Optional)
-                        </Label>
-                        <Input
-                          id="mortgageBalance"
-                          placeholder="$"
-                          value={formData.mortgageBalance}
-                          onChange={(e) => handleInputChange("mortgageBalance", e.target.value)}
-                          className="bg-background/50"
-                        />
+                      {/* Numbers */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="estimatedValue" className="text-sm font-medium">
+                            Estimated Property Value
+                          </Label>
+                          <Input
+                            id="estimatedValue"
+                            placeholder="$"
+                            value={formData.estimatedValue}
+                            onChange={(e) => handleInputChange("estimatedValue", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="askingPrice" className="text-sm font-medium">
+                            Desired Sale Price
+                          </Label>
+                          <Input
+                            id="askingPrice"
+                            placeholder="$"
+                            value={formData.askingPrice}
+                            onChange={(e) => handleInputChange("askingPrice", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="mortgageBalance" className="text-sm font-medium">
+                            Estimated Mortgage Balance
+                          </Label>
+                          <Input
+                            id="mortgageBalance"
+                            placeholder="$"
+                            value={formData.mortgageBalance}
+                            onChange={(e) => handleInputChange("mortgageBalance", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="liensOrTaxes" className="text-sm font-medium">
+                            Liens / Back Taxes / HOA
+                          </Label>
+                          <Input
+                            id="liensOrTaxes"
+                            placeholder="Amount or describe"
+                            value={formData.liensOrTaxes}
+                            onChange={(e) => handleInputChange("liensOrTaxes", e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
                       </div>
 
                       {/* Reason for Selling */}
@@ -388,6 +561,20 @@ export default function SellPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="notes" className="text-sm font-medium">
+                          Anything Else We Should Know?
+                        </Label>
+                        <Textarea
+                          id="notes"
+                          placeholder="Repairs needed, foreclosure date, access notes, tenant details, or your preferred selling structure."
+                          value={formData.notes}
+                          onChange={(e) => handleInputChange("notes", e.target.value)}
+                          className="bg-background/50"
+                          rows={4}
+                        />
                       </div>
 
                       {/* Submit Button */}

@@ -206,7 +206,7 @@ export async function GET() {
         supabase
           .from('funding_strategy_requests')
           .select(
-            'id,user_id,user_email,full_name,phone,business_name,business_stage,business_age_months,monthly_revenue,personal_credit_score,current_utilization,recent_inquiries,has_ein,has_business_bank,has_business_credit_card,requested_funding_amount,use_of_funds,readiness_score,readiness_tier,readiness_summary,strengths_json,risks_json,next_steps_json,consent_hard_inquiries,consent_no_guarantee,consent_terms_review,status,payment_status,paypal_order_id,payment_id,admin_notes,created_at,updated_at,paid_at'
+            'id,user_id,user_email,full_name,phone,business_name,business_stage,business_age_months,monthly_revenue,personal_credit_score,current_utilization,recent_inquiries,has_ein,has_business_bank,has_business_credit_card,requested_funding_amount,use_of_funds,readiness_score,readiness_tier,readiness_summary,strengths_json,risks_json,next_steps_json,consent_hard_inquiries,consent_no_guarantee,consent_terms_review,consent_success_fee,success_fee_rate,status,payment_status,paypal_order_id,payment_id,admin_notes,created_at,updated_at,paid_at'
           )
           .order('created_at', { ascending: false })
           .limit(100),

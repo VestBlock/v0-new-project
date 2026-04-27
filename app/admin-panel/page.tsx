@@ -133,6 +133,8 @@ type AdminDashboard = {
     strengths_json?: string[] | null;
     risks_json?: string[] | null;
     next_steps_json?: string[] | null;
+    consent_success_fee?: boolean | null;
+    success_fee_rate?: number | null;
     status: string;
     payment_status: string;
     paypal_order_id?: string | null;
@@ -2103,7 +2105,7 @@ export default function AdminPanelPage() {
                   </div>
                   <div className="rounded-md border p-3">
                     <p className="text-sm text-muted-foreground">Review price</p>
-                    <p className="text-2xl font-bold">$297</p>
+                    <p className="text-2xl font-bold">$297 + 10%</p>
                   </div>
                 </div>
 
@@ -2167,6 +2169,9 @@ export default function AdminPanelPage() {
                               <span>
                                 Funding ask: $
                                 {Number(request.requested_funding_amount || 0).toLocaleString()}
+                              </span>
+                              <span>
+                                Success fee: {request.consent_success_fee ? 'accepted' : 'missing'}
                               </span>
                             </div>
                             {request.use_of_funds && (

@@ -70,6 +70,7 @@ const initialForm = {
   consentHardInquiries: false,
   consentNoGuarantee: false,
   consentTermsReview: false,
+  consentSuccessFee: false,
 };
 
 function tierVariant(tier?: string) {
@@ -157,7 +158,8 @@ export default function CreditCardStrategyPage() {
       form.useOfFunds.trim().length >= 10 &&
       form.consentHardInquiries &&
       form.consentNoGuarantee &&
-      form.consentTermsReview,
+      form.consentTermsReview &&
+      form.consentSuccessFee,
     [form]
   );
 
@@ -279,8 +281,8 @@ export default function CreditCardStrategyPage() {
                 <p className="text-2xl font-bold">$297</p>
               </div>
               <div className="rounded-md border p-4">
-                <p className="text-sm text-muted-foreground">Workflow</p>
-                <p className="text-2xl font-bold">Automated</p>
+                <p className="text-sm text-muted-foreground">Success fee</p>
+                <p className="text-2xl font-bold">10%</p>
               </div>
               <div className="rounded-md border p-4">
                 <p className="text-sm text-muted-foreground">Admin review</p>
@@ -296,7 +298,9 @@ export default function CreditCardStrategyPage() {
               This service organizes strategy and readiness. It does not
               guarantee approvals, credit limits, rates, or funding. No
               application should be submitted until you review the lender terms,
-              fees, inquiries, and repayment obligations.
+              fees, inquiries, and repayment obligations. The $297 review is due
+              upfront; a 10% success fee is only owed after card funding is
+              approved, accepted, and made available to you.
             </AlertDescription>
           </Alert>
         </section>
@@ -517,6 +521,10 @@ export default function CreditCardStrategyPage() {
                     [
                       'consentTermsReview',
                       'I agree to review lender terms, APRs, fees, and repayment risk before any application.',
+                    ],
+                    [
+                      'consentSuccessFee',
+                      'I understand VestBlock charges $297 for the review and a 10% success fee only after approved card funding is accepted and available.',
                     ],
                   ].map(([name, label]) => (
                     <label key={name} className="flex items-start gap-2 text-sm">

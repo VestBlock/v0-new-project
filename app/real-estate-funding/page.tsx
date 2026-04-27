@@ -31,15 +31,21 @@ export default function RealEstateFundingPage() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [creditScoreRange, setCreditScoreRange] = useState("")
+  const [requestedLoanAmount, setRequestedLoanAmount] = useState("")
+  const [availableLiquidity, setAvailableLiquidity] = useState("")
+  const [vestingOrEntityName, setVestingOrEntityName] = useState("")
+  const [fundingGoal, setFundingGoal] = useState("")
 
   // DSCR specific fields
   const [entity, setEntity] = useState("")
   const [propertyAddress, setPropertyAddress] = useState("")
   const [propertyType, setPropertyType] = useState("")
   const [purchasePrice, setPurchasePrice] = useState("")
+  const [estimatedValue, setEstimatedValue] = useState("")
   const [expectedRent, setExpectedRent] = useState("")
   const [occupancy, setOccupancy] = useState("")
   const [downPaymentLtv, setDownPaymentLtv] = useState("")
+  const [taxesInsuranceHoa, setTaxesInsuranceHoa] = useState("")
   const [closingDate, setClosingDate] = useState("")
   const [notes, setNotes] = useState("")
 
@@ -50,6 +56,8 @@ export default function RealEstateFundingPage() {
   const [exitStrategy, setExitStrategy] = useState("")
   const [closingTimeline, setClosingTimeline] = useState("")
   const [fundsNeeded, setFundsNeeded] = useState("")
+  const [purchaseContractStatus, setPurchaseContractStatus] = useState("")
+  const [contractorReady, setContractorReady] = useState("")
 
   const handlePhoneClick = () => {
     // Track phone click conversion
@@ -81,14 +89,20 @@ export default function RealEstateFundingPage() {
         email,
         phone,
         creditScoreRange,
+        requestedLoanAmount,
+        availableLiquidity,
+        vestingOrEntityName,
+        fundingGoal,
         ...(loanType === "dscr" ? {
           entity,
           propertyAddress,
           propertyType,
           purchasePrice,
+          estimatedValue,
           expectedRent,
           occupancy,
           downPaymentLtv,
+          taxesInsuranceHoa,
           closingDate,
           notes
         } : {
@@ -99,7 +113,10 @@ export default function RealEstateFundingPage() {
           arv,
           exitStrategy,
           closingTimeline,
-          fundsNeeded
+          fundsNeeded,
+          purchaseContractStatus,
+          contractorReady,
+          notes
         })
       }
 
@@ -298,6 +315,53 @@ export default function RealEstateFundingPage() {
                         </div>
                       )}
 
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="requestedLoanAmount">Requested Loan Amount</Label>
+                          <Input
+                            id="requestedLoanAmount"
+                            value={requestedLoanAmount}
+                            onChange={(e) => setRequestedLoanAmount(e.target.value)}
+                            placeholder="$350,000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="availableLiquidity">Available Liquidity</Label>
+                          <Input
+                            id="availableLiquidity"
+                            value={availableLiquidity}
+                            onChange={(e) => setAvailableLiquidity(e.target.value)}
+                            placeholder="Cash/reserves available"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="vestingOrEntityName">Borrowing Entity / Vesting Name</Label>
+                          <Input
+                            id="vestingOrEntityName"
+                            value={vestingOrEntityName}
+                            onChange={(e) => setVestingOrEntityName(e.target.value)}
+                            placeholder="LLC or borrower name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="fundingGoal">Funding Goal</Label>
+                          <Select value={fundingGoal} onValueChange={setFundingGoal}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select goal" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="purchase">Purchase</SelectItem>
+                              <SelectItem value="refinance">Refinance</SelectItem>
+                              <SelectItem value="cash-out-refi">Cash-out refinance</SelectItem>
+                              <SelectItem value="bridge">Bridge / time-sensitive close</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
                       {/* Hard Money specific: Experience */}
                       {loanType === 'hard-money' && (
                         <div className="space-y-2">
@@ -366,6 +430,15 @@ export default function RealEstateFundingPage() {
                           </div>
                           <div className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-2">
+                              <Label htmlFor="estimatedValue">Estimated Current Value</Label>
+                              <Input
+                                id="estimatedValue"
+                                value={estimatedValue}
+                                onChange={(e) => setEstimatedValue(e.target.value)}
+                                placeholder="$550,000"
+                              />
+                            </div>
+                            <div className="space-y-2">
                               <Label htmlFor="expectedRent">Expected Rent (Monthly) *</Label>
                               <Input
                                 id="expectedRent"
@@ -375,6 +448,8 @@ export default function RealEstateFundingPage() {
                                 placeholder="$3,500"
                               />
                             </div>
+                          </div>
+                          <div className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label htmlFor="occupancy">Occupancy *</Label>
                               <Select value={occupancy} onValueChange={setOccupancy}>
@@ -387,15 +462,24 @@ export default function RealEstateFundingPage() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="downPaymentLtv">Down Payment / LTV *</Label>
+                              <Input
+                                id="downPaymentLtv"
+                                value={downPaymentLtv}
+                                onChange={(e) => setDownPaymentLtv(e.target.value)}
+                                required
+                                placeholder="e.g., 25% down or 75% LTV"
+                              />
+                            </div>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="downPaymentLtv">Down Payment / LTV *</Label>
+                            <Label htmlFor="taxesInsuranceHoa">Taxes / Insurance / HOA</Label>
                             <Input
-                              id="downPaymentLtv"
-                              value={downPaymentLtv}
-                              onChange={(e) => setDownPaymentLtv(e.target.value)}
-                              required
-                              placeholder="e.g., 25% down or 75% LTV"
+                              id="taxesInsuranceHoa"
+                              value={taxesInsuranceHoa}
+                              onChange={(e) => setTaxesInsuranceHoa(e.target.value)}
+                              placeholder="Monthly or annual estimate"
                             />
                           </div>
                         </>
@@ -476,6 +560,36 @@ export default function RealEstateFundingPage() {
                               </Select>
                             </div>
                           </div>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="purchaseContractStatus">Purchase Contract Status</Label>
+                              <Select value={purchaseContractStatus} onValueChange={setPurchaseContractStatus}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="under-contract">Under contract</SelectItem>
+                                  <SelectItem value="offer-submitted">Offer submitted</SelectItem>
+                                  <SelectItem value="analyzing-deal">Analyzing deal</SelectItem>
+                                  <SelectItem value="refinance-existing">Refinance existing property</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="contractorReady">Contractor / Scope Ready</Label>
+                              <Select value={contractorReady} onValueChange={setContractorReady}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select readiness" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="scope-and-bid-ready">Scope and bid ready</SelectItem>
+                                  <SelectItem value="contractor-selected">Contractor selected</SelectItem>
+                                  <SelectItem value="needs-scope">Need scope/bid</SelectItem>
+                                  <SelectItem value="not-sure">Not sure yet</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         </>
                       )}
                     </div>
@@ -506,6 +620,22 @@ export default function RealEstateFundingPage() {
                             rows={4}
                           />
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {loanType === 'hard-money' && (
+                    <div>
+                      <h3 className="font-semibold text-lg mb-4">Notes</h3>
+                      <div className="space-y-2">
+                        <Label htmlFor="notes">Additional Deal Notes</Label>
+                        <Textarea
+                          id="notes"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Add seller deadlines, access issues, repair notes, appraisal details, or anything the lender should know."
+                          rows={4}
+                        />
                       </div>
                     </div>
                   )}

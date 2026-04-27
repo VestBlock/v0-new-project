@@ -53,10 +53,20 @@ interface LeadFormData {
   city: string;
   state: string;
   name: string;
+  email?: string;
   phone: string;
+  propertyType?: string;
+  bedrooms?: string;
+  bathrooms?: string;
   propertyCondition?: string;
   timelineToSell?: string;
+  estimatedValue?: string;
+  askingPrice?: string;
   mortgageBalance?: string;
+  liensOrTaxes?: string;
+  occupancyStatus?: string;
+  bestTimeToCall?: string;
+  notes?: string;
   reasonForSelling?: string;
 }
 
@@ -110,18 +120,33 @@ export async function POST(request: NextRequest) {
         phone: data.phone,
         contact_info: {
           name: data.name,
-          phone: data.phone
+          email: data.email,
+          phone: data.phone,
+          bestTimeToCall: data.bestTimeToCall
         },
         form_data: {
           propertyAddress: data.propertyAddress,
           city: data.city,
           state: data.state,
+          propertyType: data.propertyType,
+          bedrooms: data.bedrooms,
+          bathrooms: data.bathrooms,
           propertyCondition: data.propertyCondition,
           timelineToSell: data.timelineToSell,
+          estimatedValue: data.estimatedValue,
+          askingPrice: data.askingPrice,
           mortgageBalance: data.mortgageBalance,
+          liensOrTaxes: data.liensOrTaxes,
+          occupancyStatus: data.occupancyStatus,
+          bestTimeToCall: data.bestTimeToCall,
+          notes: data.notes,
           reasonForSelling: data.reasonForSelling,
           legacyId: insertedLead.id
-        }
+        },
+        email: data.email || null,
+        notes:
+          data.notes ||
+          `${data.propertyAddress}, ${data.city}, ${data.state}; timeline ${data.timelineToSell || 'not specified'}.`,
       })
       .select('id')
       .single();
@@ -134,21 +159,26 @@ export async function POST(request: NextRequest) {
         leadId: unifiedLead.id,
         leadType: 'sell_house',
         name: data.name,
+        email: data.email,
         phone: data.phone,
         sourcePath: '/sell',
-        summary: `${data.propertyAddress}, ${data.city}, ${data.state}; timeline ${data.timelineToSell || 'not specified'}.`,
+        summary: `${data.propertyAddress}, ${data.city}, ${data.state}; timeline ${data.timelineToSell || 'not specified'}; value ${data.estimatedValue || 'unknown'}; mortgage ${data.mortgageBalance || 'unknown'}.`,
         metadata: {
           legacyId: insertedLead.id,
           city: data.city,
           state: data.state,
+          propertyType: data.propertyType,
           propertyCondition: data.propertyCondition,
           timelineToSell: data.timelineToSell,
+          occupancyStatus: data.occupancyStatus,
+          estimatedValue: data.estimatedValue,
+          mortgageBalance: data.mortgageBalance,
         },
       });
     }
 
     // 3. Send SMS Notification
-    const smsMessage = `New lead: ${data.name} - ${data.propertyAddress}, ${data.city}, ${data.state} - Timeline: ${data.timelineToSell || 'Not specified'}`;
+    const smsMessage = `New seller lead: ${data.name} - ${data.propertyAddress}, ${data.city}, ${data.state} - ${data.timelineToSell || 'Timeline not specified'} - Value: ${data.estimatedValue || 'unknown'}`;
 
     try {
       await sendSMS('+14146876923', smsMessage);

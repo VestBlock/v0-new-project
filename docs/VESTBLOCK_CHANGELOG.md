@@ -1,5 +1,42 @@
 # VestBlock Changelog
 
+## 2026-04-27 Funding And Real Estate Form Enhancements
+
+## Files Changed
+
+- `app/funding/page.tsx`
+- `app/funding/credit-card-strategy/page.tsx`
+- `app/real-estate-funding/page.tsx`
+- `app/sell/page.tsx`
+- `app/api/funding-strategy/route.ts`
+- `app/api/real-estate-lead/route.ts`
+- `app/api/sell-lead/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `db/migrations/026-add-funding-success-fee-fields.sql`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Updated card funding offer to `$297` upfront plus a `10%` success fee after approved card funding is accepted and available.
+- Added customer consent capture for the funding strategy success fee.
+- Added admin visibility for success-fee consent on Funding Strategy requests.
+- Enhanced real estate funding forms with requested loan amount, liquidity, borrowing entity, funding goal, DSCR value/expense fields, hard-money contract status, contractor/scope readiness, and deal notes.
+- Enhanced the sell-property lead form with email, property type, beds/baths, occupancy, estimated value, desired sale price, liens/taxes, best call time, and notes.
+- Expanded lead APIs so the new form details are saved into the unified `leads.form_data` JSON and included in admin lead automation metadata.
+
+## Database Changes Required
+
+- `db/migrations/026-add-funding-success-fee-fields.sql` was applied to live Supabase on 2026-04-27.
+
+## Verification
+
+- `corepack pnpm lint` passes with existing warnings only.
+- `npx tsc --noEmit` passed.
+- `corepack pnpm build` passed with local placeholder production env values.
+- Supabase verification confirmed `funding_strategy_requests.success_fee_rate` and `funding_strategy_requests.consent_success_fee` exist.
+- Built-app smoke checks returned `200` for `/real-estate-funding`, `/sell`, and `/funding/credit-card-strategy`.
+
 ## 2026-04-27 Business Credit Card Funding Strategy Workflow
 
 ## Files Changed

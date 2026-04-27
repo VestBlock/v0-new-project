@@ -42,6 +42,7 @@ const fundingStrategySchema = z.object({
   consentHardInquiries: z.boolean(),
   consentNoGuarantee: z.boolean(),
   consentTermsReview: z.boolean(),
+  consentSuccessFee: z.boolean(),
 });
 
 export async function POST(req: Request) {
@@ -72,7 +73,8 @@ export async function POST(req: Request) {
   if (
     !input.consentHardInquiries ||
     !input.consentNoGuarantee ||
-    !input.consentTermsReview
+    !input.consentTermsReview ||
+    !input.consentSuccessFee
   ) {
     return NextResponse.json(
       {
@@ -133,6 +135,8 @@ export async function POST(req: Request) {
       consent_hard_inquiries: input.consentHardInquiries,
       consent_no_guarantee: input.consentNoGuarantee,
       consent_terms_review: input.consentTermsReview,
+      consent_success_fee: input.consentSuccessFee,
+      success_fee_rate: 0.1,
       status: canCheckout ? 'awaiting_payment' : 'needs_prep',
       payment_status: 'unpaid',
     })

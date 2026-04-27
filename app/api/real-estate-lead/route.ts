@@ -12,14 +12,20 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       creditScoreRange,
+      requestedLoanAmount,
+      availableLiquidity,
+      vestingOrEntityName,
+      fundingGoal,
       // DSCR fields
       entity,
       propertyAddress,
       propertyType,
       purchasePrice,
+      estimatedValue,
       expectedRent,
       occupancy,
       downPaymentLtv,
+      taxesInsuranceHoa,
       closingDate,
       notes,
       // Hard Money fields
@@ -28,7 +34,9 @@ export async function POST(request: NextRequest) {
       arv,
       exitStrategy,
       closingTimeline,
-      fundsNeeded
+      fundsNeeded,
+      purchaseContractStatus,
+      contractorReady
     } = data
 
     const supabaseAdmin = createAdminClient()
@@ -54,14 +62,20 @@ export async function POST(request: NextRequest) {
         form_data: {
           loanType,
           creditScoreRange,
+          requestedLoanAmount,
+          availableLiquidity,
+          vestingOrEntityName,
+          fundingGoal,
           ...(loanType === 'dscr' ? {
             entity,
             propertyAddress,
             propertyType,
             purchasePrice,
+            estimatedValue,
             expectedRent,
             occupancy,
             downPaymentLtv,
+            taxesInsuranceHoa,
             closingDate,
             notes
           } : {
@@ -72,7 +86,10 @@ export async function POST(request: NextRequest) {
             arv,
             exitStrategy,
             closingTimeline,
-            fundsNeeded
+            fundsNeeded,
+            purchaseContractStatus,
+            contractorReady,
+            notes
           })
         }
       })
@@ -91,7 +108,14 @@ export async function POST(request: NextRequest) {
         phone,
         sourcePath: '/real-estate-funding',
         summary,
-        metadata: { loanType, creditScoreRange, propertyAddress },
+        metadata: {
+          loanType,
+          creditScoreRange,
+          propertyAddress,
+          requestedLoanAmount,
+          fundingGoal,
+          purchaseContractStatus,
+        },
       })
     }
 
