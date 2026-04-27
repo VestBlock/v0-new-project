@@ -57,36 +57,111 @@ export async function POST(req: Request) {
     }
 
     const supabase = createAdminClient();
-    await supabase
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = authUser?.user?.email;
+
+    const { error: subscriptionError } = await supabase
       .from('user_profiles')
       .update({ is_subscribed: true })
       .or(`id.eq.${userId},user_id.eq.${userId}`);
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-
-    const { data: payment } = await supabase
-      .from('payments')
-      .insert({
-        user_id: userId,
+    if (subscriptionError) {
+      await runPaymentFailedAutomation({
+        userId,
+        userEmail,
         amount,
-        status: 'completed',
-        payment_method: 'paypal',
-        paypal_transaction_id: transactionId,
-      })
+        provider: 'PayPal',
+        transactionId,
+        source: 'capture-order',
+        errorMessage:
+          subscriptionError.message ||
+          'Unable to update VestBlock subscription status.',
+        metadata: { orderID },
+      });
+
+      return NextResponse.json(
+        { success: false, error: 'Payment captured, but subscription update failed.' },
+        { status: 500 }
+      );
+    }
+
+    const { data: existingPayment, error: existingPaymentError } = await supabase
+      .from('payments')
       .select('id')
-      .single();
+      .eq('paypal_transaction_id', transactionId)
+      .maybeSingle();
 
-    await runPaymentCompletedAutomation({
-      paymentId: payment?.id || transactionId,
-      userId,
-      userEmail: authUser?.user?.email,
-      amount,
-      provider: 'PayPal',
-      transactionId,
-      source: 'capture-order',
+    if (existingPaymentError) {
+      await runPaymentFailedAutomation({
+        userId,
+        userEmail,
+        amount,
+        provider: 'PayPal',
+        transactionId,
+        source: 'capture-order',
+        errorMessage:
+          existingPaymentError.message || 'Unable to check existing PayPal payment.',
+        metadata: { orderID },
+      });
+
+      return NextResponse.json(
+        { success: false, error: 'Payment captured, but payment lookup failed.' },
+        { status: 500 }
+      );
+    }
+
+    let paymentId = existingPayment?.id || null;
+
+    if (!paymentId) {
+      const { data: payment, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          user_id: userId,
+          amount: Number.parseFloat(amount),
+          status: 'completed',
+          payment_method: 'paypal',
+          paypal_transaction_id: transactionId,
+        })
+        .select('id')
+        .single();
+
+      if (paymentError) {
+        await runPaymentFailedAutomation({
+          userId,
+          userEmail,
+          amount,
+          provider: 'PayPal',
+          transactionId,
+          source: 'capture-order',
+          errorMessage: paymentError.message || 'Unable to record PayPal payment.',
+          metadata: { orderID },
+        });
+
+        return NextResponse.json(
+          { success: false, error: 'Payment captured, but payment record failed.' },
+          { status: 500 }
+        );
+      }
+
+      paymentId = payment?.id || transactionId;
+
+      await runPaymentCompletedAutomation({
+        paymentId,
+        userId,
+        userEmail,
+        amount,
+        provider: 'PayPal',
+        transactionId,
+        source: 'capture-order',
+        metadata: { orderID },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      duplicate: Boolean(existingPayment?.id),
+      capture,
     });
-
-    return NextResponse.json({ success: true, capture });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('PayPal capture error:', error);

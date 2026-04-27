@@ -1,5 +1,27 @@
 # VestBlock Changelog
 
+## 2026-04-27 Capture Order Payment Dedupe
+
+## Files Changed
+
+- `app/api/capture-order/route.ts`
+- `.agents/skills/vestblock/revenue-operations-operator.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added explicit subscription update error handling to `/api/capture-order`.
+- Added a `payments.paypal_transaction_id` lookup before inserting a captured PayPal payment.
+- Prevented repeat capture requests from creating duplicate payment rows or repeating paid-customer automation.
+- Kept subscription repair idempotent so a repeated successful capture can still leave the user subscribed.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed before and after build.
+- `corepack pnpm run build` passed with local dummy production env values.
+
 ## 2026-04-27 PayPal Environment Configuration
 
 ## Files Changed

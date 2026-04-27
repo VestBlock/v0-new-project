@@ -138,6 +138,8 @@ Payment automation now runs through `lib/payments/paymentAutomation.ts` and the 
 
 PayPal API URLs are centralized in `lib/paypal/config.ts`. The default environment is sandbox; set `PAYPAL_ENV=live` or `PAYPAL_MODE=live` in Vercel only when the live PayPal app credentials and webhook ID are configured.
 
+The direct capture route checks `payments.paypal_transaction_id` before insert, so repeat capture requests do not duplicate payment records or repeat paid-customer automation.
+
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 
 Risk fixed: upload and PayPal webhook routes no longer log raw report text, extracted credit items, profile rows, webhook payloads, PayPal headers, or PayPal secrets.
