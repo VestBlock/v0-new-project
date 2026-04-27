@@ -1,5 +1,51 @@
 # VestBlock Changelog
 
+## 2026-04-27 Content Operations Dashboard
+
+## Files Changed
+
+- `app/admin-panel/page.tsx`
+- `app/api/admin/dashboard/route.ts`
+- `app/api/admin/content/route.ts`
+- `app/resources/[slug]/page.tsx`
+- `app/sitemap.ts`
+- `app/robots.ts`
+- `lib/content/marketingServices.ts`
+- `lib/content/contentGenerator.ts`
+- `lib/system/logEvent.ts`
+- `db/migrations/024-create-content-assets.sql`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+- `.agents/skills/vestblock/aeo-content-automation.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added an admin Content tab for SEO pages, social posts, and campaign drafts.
+- Added a protected `/api/admin/content` generator that uses `OPENAI_API_KEY`, service-specific compliance rules, and Supabase storage.
+- Added `content_assets` migration with RLS: public users can only read published SEO pages, while admins manage all content.
+- Added public `/resources/[slug]` pages for SEO assets marked `published`.
+- Added dynamic sitemap support for published generated SEO pages.
+- Added VestBlock service catalog for AI credit analysis, dispute letters, business setup, business credit, funding, grants, Spanish funding, real estate funding, sell-property leads, and the AI assistant.
+
+## Env Vars Required
+
+- `OPENAI_API_KEY`
+- Optional: `OPENAI_CONTENT_MODEL`
+
+## Database Changes Required
+
+- `db/migrations/024-create-content-assets.sql` was applied to the live VestBlock Supabase project on 2026-04-27.
+
+## Verification
+
+- `corepack pnpm run lint` passes with existing warnings only.
+- `corepack pnpm exec tsc --noEmit` passed.
+- `corepack pnpm run build` passed with local dummy production env values.
+- Built-app smoke checks passed for `/admin-panel`, `/business-setup`, `/sitemap.xml`, `/resources/not-published-yet` returning `404`, and `/api/admin/content` returning `401` without an admin session.
+- Supabase verification confirmed `public.content_assets` exists and currently has `0` rows.
+
 ## 2026-04-27 Business Setup And Spanish Funding SEO
 
 ## Files Changed

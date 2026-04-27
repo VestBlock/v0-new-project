@@ -5,6 +5,8 @@ Use this skill when planning or adding VestBlock AEO/SEO content for credit repa
 ## Starter Source
 
 Use `lib/aeo/topics.ts` as the topic registry.
+Use `lib/content/marketingServices.ts` as the service catalog for dashboard-generated SEO, social, and campaign content.
+Use `content_assets` for generated drafts, manual publishing status, and public SEO pages.
 
 ## Topic Clusters
 
@@ -33,6 +35,9 @@ Use `lib/aeo/topics.ts` as the topic registry.
 - Do not create thin pages that only swap keywords.
 - Avoid illegal guarantees or fake credit repair promises.
 - Each page should answer a concrete question and point to a real VestBlock workflow.
+- Use `/admin-panel` -> Content for operator-generated drafts.
+- Public generated SEO pages live at `/resources/[slug]` after an admin marks an SEO asset `published`.
+- Social posts and campaigns are manual-post assets until a social platform integration is added.
 
 ## Internal Linking
 
@@ -49,3 +54,13 @@ Use `lib/aeo/topics.ts` as the topic registry.
 - Explain preparation steps: EIN, banking, documents, revenue, business credit, and use of funds.
 - Add Spanish routes to `app/sitemap.ts` and allow the route family in `app/robots.ts`.
 - Do not generate many translated pages until language QA and partner tracking are in place.
+
+## Dashboard Generation
+
+When expanding the generator:
+
+- Keep prompts tied to `vestblockMarketingServices`.
+- Store output in `content_assets`; do not hardcode generated posts in route files.
+- Preserve status controls: `draft`, `ready`, `published`, `archived`.
+- Log `content_generated` and `content_published` to `admin_activity`.
+- Require `OPENAI_API_KEY`; use `OPENAI_CONTENT_MODEL` only as an optional override.

@@ -7,6 +7,10 @@ VestBlock should publish practical answer-focused content that helps users under
 Use `lib/aeo/topics.ts` as the starter topic registry. The first public
 implementation now lives at `/learn` and `/learn/[slug]`.
 
+Use `/admin-panel` -> Content for operational content creation. Generated
+drafts are stored in `content_assets`; published SEO pages become public at
+`/resources/[slug]`.
+
 Search discovery is handled through `app/sitemap.ts` and `app/robots.ts`.
 Keep those files curated: include public learning, offer, and tool pages; exclude
 admin, API, account, diagnostic, setup, test, and user-specific report routes.
@@ -49,6 +53,22 @@ admin, API, account, diagnostic, setup, test, and user-specific report routes.
 - `/learn/grants-for-small-businesses`
 - `/business-setup`
 - `/es/vestblock`
+- `/resources/[generated-slug]` for admin-approved generated SEO pages
+
+## Manual Publishing Workflow
+
+1. Open `/admin-panel` and select the Content tab.
+2. Choose content type: SEO page, social post, or campaign.
+3. Choose the VestBlock service, language, platform, post style, audience, and
+   prompt.
+4. Generate the draft, review the language, and edit manually if needed.
+5. Mark content as `ready` when reviewed.
+6. Mark SEO pages as `published` only when the page should be publicly visible.
+7. Copy social posts from the dashboard and post manually until platform API
+   posting is intentionally added.
+
+Generated pages should not be published just because they exist. Review for
+accuracy, compliance, repetition, and offer fit.
 
 ## Spanish Business Funding SEO
 

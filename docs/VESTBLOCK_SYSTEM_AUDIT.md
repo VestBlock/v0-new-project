@@ -6,7 +6,7 @@ VestBlock is a Next.js 14 App Router project. Routes live in `app/`, API handler
 
 ## Current App Structure
 
-- Public routes: `/`, `/funding`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
+- Public routes: `/`, `/funding`, `/business-setup`, `/es/vestblock`, `/resources/[slug]`, `/real-estate-funding`, `/sell`, `/ai-assistant`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/roadmap`.
 - User routes: `/dashboard`, `/credit-upload`, `/credit-dashboard/[reportId]`, `/analysis/results/[jobId]`, `/profile`, `/user-hub`, `/tools/business-credit`, `/tools/grants`, `/tools/my-dispute-letters`, `/super-dispute`.
 - Admin routes: `/admin-panel`, `/admin/leads`, `/admin/test`.
 - Debug/test routes: multiple credit report, upload, OpenAI, streaming, database, and auth debug pages remain in `app/`, but are protected by admin-only middleware.
@@ -44,6 +44,7 @@ Fixed: `lib/supabase/server.ts` no longer logs cookies/session details and now p
 - `email_events` added by migration `020-vestblock-ops-automation.sql`
 - `admin_activity` added by migration `020-vestblock-ops-automation.sql`
 - `admin_tasks` added by migration `022-create-admin-tasks.sql`
+- `content_assets` added by migration `024-create-content-assets.sql`
 
 ## API Routes
 
@@ -63,6 +64,7 @@ Important operating routes include:
 - `/api/process-payment`
 - `/api/admin/dashboard` added
 - `/api/admin/credit-reports/status` added
+- `/api/admin/content` added for protected SEO, social post, and campaign generation plus content status updates
 - `/api/admin/leads` supports lead listing and status updates for admin operators
 - `/api/real-estate-lead`
 - `/api/sell-lead`
@@ -115,10 +117,23 @@ Now `/admin-panel` uses `/api/admin/dashboard` and includes:
 - Funding lead status controls
 - Immediate lead alert and follow-up task automation through `lib/leads/leadAutomation.ts`
 - Admin task queue
+- Content operations tab for SEO pages, social posts, campaign drafts, and manual publishing status
 - Automation readiness checks for cron, email, PayPal payment configuration, and Supabase data source health
 - Individual report detail pages at `/admin-panel/reports/[reportId]`
 - Individual user detail pages at `/admin-panel/users/[userId]`
 - Rerun analysis action for stored credit report files
+
+## Content And SEO Operations
+
+VestBlock now has a dashboard-backed content operations foundation:
+
+- `lib/content/marketingServices.ts` defines the service catalog and compliance notes used by generators.
+- `lib/content/contentGenerator.ts` uses `OPENAI_API_KEY` and optional `OPENAI_CONTENT_MODEL` to create SEO pages, social posts, and campaigns.
+- `/api/admin/content` requires admin access, writes generated drafts to `content_assets`, and logs `content_generated` / `content_published` events.
+- `/admin-panel` includes a Content tab where admins can type the desired post/page style, choose service, language, audience, platform, and post type, then generate drafts.
+- Published SEO page assets are available at `/resources/[slug]` and are included in the dynamic sitemap when Supabase exposes published rows.
+
+Required setup: run `db/migrations/024-create-content-assets.sql` in Supabase and keep `OPENAI_API_KEY` configured in Vercel.
 
 ## Email Integration
 

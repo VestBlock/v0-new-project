@@ -22,6 +22,7 @@ export default function robots(): MetadataRoute.Robots {
           '/funding',
           '/business-setup',
           '/es',
+          '/resources',
           '/tools',
           '/super-dispute',
           '/real-estate-funding',

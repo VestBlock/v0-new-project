@@ -67,6 +67,7 @@ const dashboardDataSources = [
   'admin_activity',
   'leads',
   'admin_tasks',
+  'content_assets',
 ] as const;
 
 export async function GET() {
@@ -82,7 +83,18 @@ export async function GET() {
   const supabase = createAdminClient();
   const dataSourceIssues: DashboardDataSourceIssue[] = [];
 
-  const [users, reports, jobs, letters, payments, emailEvents, adminActivity, leads, tasks] =
+  const [
+    users,
+    reports,
+    jobs,
+    letters,
+    payments,
+    emailEvents,
+    adminActivity,
+    leads,
+    tasks,
+    contentAssets,
+  ] =
     await Promise.all([
       safeRows<any>(
         supabase
@@ -172,6 +184,17 @@ export async function GET() {
           .order('created_at', { ascending: false })
           .limit(100),
         'admin_tasks',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('content_assets')
+          .select(
+            'id,title,slug,content_type,service_key,language,audience,prompt,status,platform,post_type,seo_title,meta_description,excerpt,body_markdown,social_caption,hashtags,cta_label,cta_url,publish_path,metadata_json,created_by,created_at,updated_at,published_at'
+          )
+          .order('created_at', { ascending: false })
+          .limit(100),
+        'content_assets',
         dataSourceIssues
       ),
     ]);
@@ -320,6 +343,19 @@ export async function GET() {
             ? `/admin-panel/users/${task.user_id}`
             : undefined,
     })),
+    ...contentAssets.slice(0, 20).map((asset) => ({
+      id: `content-${asset.id}`,
+      type:
+        asset.status === 'published'
+          ? 'content_published'
+          : 'content_generated',
+      label: `${asset.content_type} ${asset.status}: ${asset.title}`,
+      createdAt: asset.updated_at || asset.created_at,
+      href:
+        asset.content_type === 'seo_page' && asset.status === 'published'
+          ? asset.publish_path
+          : undefined,
+    })),
   ]
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
     .slice(0, 30);
@@ -345,6 +381,12 @@ export async function GET() {
   const lifecycleEmailEvents = emailEvents.filter((event) =>
     lifecycleEmailTypes.has(String(event.event_type))
   );
+  const contentByStatus = {
+    draft: contentAssets.filter((asset) => asset.status === 'draft').length,
+    ready: contentAssets.filter((asset) => asset.status === 'ready').length,
+    published: contentAssets.filter((asset) => asset.status === 'published').length,
+    archived: contentAssets.filter((asset) => asset.status === 'archived').length,
+  };
   const paypalClientConfigured = Boolean(process.env.PAYPAL_CLIENT_ID);
   const paypalSecretConfigured = Boolean(process.env.PAYPAL_CLIENT_SECRET);
   const paypalWebhookConfigured = Boolean(process.env.PAYPAL_WEBHOOK_ID);
@@ -373,6 +415,8 @@ export async function GET() {
       totalOpenTasks: tasks.filter((task) =>
         ['open', 'in_progress', 'waiting'].includes(String(task.status))
       ).length,
+      totalContentAssets: contentAssets.length,
+      totalPublishedContent: contentByStatus.published,
     },
     creditReports,
     users: userManagement,
@@ -397,6 +441,20 @@ export async function GET() {
     payments,
     leads,
     tasks,
+    content: {
+      assets: contentAssets,
+      summary: {
+        total: contentAssets.length,
+        byStatus: contentByStatus,
+        seoPages: contentAssets.filter((asset) => asset.content_type === 'seo_page').length,
+        socialPosts: contentAssets.filter((asset) => asset.content_type === 'social_post').length,
+        campaigns: contentAssets.filter((asset) => asset.content_type === 'campaign').length,
+      },
+      generator: {
+        openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+        model: process.env.OPENAI_CONTENT_MODEL || 'gpt-4o',
+      },
+    },
     automation: {
       env: {
         cronSecretConfigured: Boolean(process.env.CRON_SECRET),

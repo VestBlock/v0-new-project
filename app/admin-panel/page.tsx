@@ -12,11 +12,14 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Globe2,
   Loader2,
+  Megaphone,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
+  Wand2,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -48,6 +51,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { vestblockMarketingServices } from '@/lib/content/marketingServices';
 
 type AdminDashboard = {
   overview: {
@@ -60,6 +64,8 @@ type AdminDashboard = {
     totalCompletedPayments: number;
     totalFundingLeads: number;
     totalOpenTasks: number;
+    totalContentAssets: number;
+    totalPublishedContent: number;
   };
   creditReports: Array<{
     id: string;
@@ -170,6 +176,44 @@ type AdminDashboard = {
     created_at?: string | null;
     updated_at?: string | null;
   }>;
+  content: {
+    assets: Array<{
+      id: string;
+      title: string;
+      slug: string;
+      content_type: 'seo_page' | 'social_post' | 'campaign';
+      service_key: string;
+      language: string;
+      audience?: string | null;
+      prompt?: string | null;
+      status: 'draft' | 'ready' | 'published' | 'archived';
+      platform?: string | null;
+      post_type?: string | null;
+      seo_title?: string | null;
+      meta_description?: string | null;
+      excerpt?: string | null;
+      body_markdown?: string | null;
+      social_caption?: string | null;
+      hashtags?: string[] | null;
+      cta_label?: string | null;
+      cta_url?: string | null;
+      publish_path?: string | null;
+      created_at?: string | null;
+      updated_at?: string | null;
+      published_at?: string | null;
+    }>;
+    summary: {
+      total: number;
+      byStatus: Record<'draft' | 'ready' | 'published' | 'archived', number>;
+      seoPages: number;
+      socialPosts: number;
+      campaigns: number;
+    };
+    generator: {
+      openAiConfigured: boolean;
+      model: string;
+    };
+  };
 };
 
 const statuses = [
@@ -184,6 +228,12 @@ const statuses = [
 
 const taskStatuses = ['open', 'in_progress', 'waiting', 'completed', 'dismissed'];
 const leadStatuses = ['new', 'contacted', 'qualified', 'closed'];
+const contentStatuses = ['draft', 'ready', 'published', 'archived'];
+const contentTypes = [
+  { value: 'seo_page', label: 'SEO page' },
+  { value: 'social_post', label: 'Social post' },
+  { value: 'campaign', label: 'Campaign' },
+] as const;
 
 const leadStatusLabels: Record<string, string> = {
   new: 'New',
@@ -272,6 +322,18 @@ export default function AdminPanelPage() {
   const [alertStatusFilter, setAlertStatusFilter] = useState('all');
   const [activitySearch, setActivitySearch] = useState('');
   const [paymentLeadSearch, setPaymentLeadSearch] = useState('');
+  const [contentSearch, setContentSearch] = useState('');
+  const [contentStatusFilter, setContentStatusFilter] = useState('active');
+  const [contentTypeFilter, setContentTypeFilter] = useState('all');
+  const [contentServiceKey, setContentServiceKey] = useState('business_setup');
+  const [contentTypeDraft, setContentTypeDraft] = useState<'seo_page' | 'social_post' | 'campaign'>('seo_page');
+  const [contentLanguage, setContentLanguage] = useState<'en' | 'es'>('en');
+  const [contentPlatform, setContentPlatform] = useState('manual');
+  const [contentPostType, setContentPostType] = useState('educational');
+  const [contentAudience, setContentAudience] = useState('');
+  const [contentPrompt, setContentPrompt] = useState('');
+  const [savingContentId, setSavingContentId] = useState<string | null>(null);
+  const [generatingContent, setGeneratingContent] = useState(false);
 
   const isAdminEmail =
     user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -345,6 +407,11 @@ export default function AdminPanelPage() {
         label: 'Open Tasks',
         value: dashboard.overview.totalOpenTasks,
         icon: ClipboardList,
+      },
+      {
+        label: 'Content Drafts',
+        value: dashboard.overview.totalContentAssets,
+        icon: Megaphone,
       },
     ];
   }, [dashboard]);
@@ -504,6 +571,40 @@ export default function AdminPanelPage() {
     );
   }, [dashboard, paymentLeadSearch]);
 
+  const filteredContentAssets = useMemo(() => {
+    if (!dashboard) return [];
+
+    return dashboard.content.assets.filter((asset) => {
+      const statusMatches =
+        contentStatusFilter === 'all' ||
+        (contentStatusFilter === 'active'
+          ? ['draft', 'ready'].includes(asset.status)
+          : asset.status === contentStatusFilter);
+      const typeMatches =
+        contentTypeFilter === 'all' || asset.content_type === contentTypeFilter;
+
+      return (
+        statusMatches &&
+        typeMatches &&
+        searchable(
+          [
+            asset.title,
+            asset.slug,
+            asset.service_key,
+            asset.language,
+            asset.status,
+            asset.platform,
+            asset.post_type,
+            asset.excerpt,
+            asset.social_caption,
+            asset.prompt,
+          ],
+          contentSearch
+        )
+      );
+    });
+  }, [dashboard, contentSearch, contentStatusFilter, contentTypeFilter]);
+
   const updateReportStatus = async (reportId: string, currentStatus: string) => {
     setSavingReportId(reportId);
     try {
@@ -576,6 +677,57 @@ export default function AdminPanelPage() {
     }
   };
 
+  const generateContentAsset = async () => {
+    setGeneratingContent(true);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contentType: contentTypeDraft,
+          serviceKey: contentServiceKey,
+          language: contentLanguage,
+          platform: contentPlatform,
+          postType: contentPostType,
+          audience: contentAudience,
+          prompt: contentPrompt,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to generate content.');
+      }
+      setContentPrompt('');
+      await loadDashboard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate content.');
+    } finally {
+      setGeneratingContent(false);
+    }
+  };
+
+  const updateContentStatus = async (assetId: string, status: string) => {
+    setSavingContentId(assetId);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/content', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: assetId, status }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update content.');
+      }
+      await loadDashboard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update content.');
+    } finally {
+      setSavingContentId(null);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -645,6 +797,7 @@ export default function AdminPanelPage() {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="content">Content</TabsTrigger>
             <TabsTrigger value="automation">Automation</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
@@ -1130,6 +1283,366 @@ export default function AdminPanelPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="content">
+            <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wand2 className="h-5 w-5 text-cyan-600" />
+                      Content Generator
+                    </CardTitle>
+                    <CardDescription>
+                      Create SEO pages, social posts, and campaign drafts for
+                      VestBlock services.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {!dashboard.content.generator.openAiConfigured && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>OpenAI not configured</AlertTitle>
+                        <AlertDescription>
+                          Add `OPENAI_API_KEY` before generating content from
+                          the dashboard.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Content type</label>
+                        <Select
+                          value={contentTypeDraft}
+                          onValueChange={(value) =>
+                            setContentTypeDraft(
+                              value as 'seo_page' | 'social_post' | 'campaign'
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {contentTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Language</label>
+                        <Select
+                          value={contentLanguage}
+                          onValueChange={(value) =>
+                            setContentLanguage(value as 'en' | 'es')
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="en">English</SelectItem>
+                            <SelectItem value="es">Spanish</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Service</label>
+                      <Select
+                        value={contentServiceKey}
+                        onValueChange={setContentServiceKey}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vestblockMarketingServices.map((service) => (
+                            <SelectItem key={service.key} value={service.key}>
+                              {service.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Platform</label>
+                        <Input
+                          value={contentPlatform}
+                          onChange={(event) =>
+                            setContentPlatform(event.target.value)
+                          }
+                          placeholder="Instagram, TikTok, LinkedIn, manual"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Post style</label>
+                        <Input
+                          value={contentPostType}
+                          onChange={(event) =>
+                            setContentPostType(event.target.value)
+                          }
+                          placeholder="educational, promo, FAQ, carousel"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Audience</label>
+                      <Input
+                        value={contentAudience}
+                        onChange={(event) => setContentAudience(event.target.value)}
+                        placeholder="Example: Spanish-speaking business owners in Georgia"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        What should be created?
+                      </label>
+                      <Textarea
+                        value={contentPrompt}
+                        onChange={(event) => setContentPrompt(event.target.value)}
+                        placeholder="Example: Create a LinkedIn post about getting business documents ready before applying for a grant."
+                        rows={5}
+                      />
+                    </div>
+
+                    <Button
+                      onClick={generateContentAsset}
+                      disabled={
+                        generatingContent ||
+                        !dashboard.content.generator.openAiConfigured
+                      }
+                      className="w-full"
+                    >
+                      {generatingContent ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="mr-2 h-4 w-4" />
+                      )}
+                      Generate Draft
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Total Assets</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dashboard.content.summary.total}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">SEO Pages</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dashboard.content.summary.seoPages}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Social Posts</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dashboard.content.summary.socialPosts}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Published</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dashboard.content.summary.byStatus.published}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe2 className="h-5 w-5 text-cyan-600" />
+                    Content Queue
+                  </CardTitle>
+                  <CardDescription>
+                    Review generated drafts, copy social posts, and publish SEO
+                    pages when ready.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={contentSearch}
+                        onChange={(event) => setContentSearch(event.target.value)}
+                        placeholder="Search content by title, service, platform, language, or prompt"
+                        className="pl-9"
+                      />
+                    </div>
+                    <Select
+                      value={contentTypeFilter}
+                      onValueChange={setContentTypeFilter}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All types</SelectItem>
+                        {contentTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={contentStatusFilter}
+                      onValueChange={setContentStatusFilter}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active drafts</SelectItem>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        {contentStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Showing {filteredContentAssets.length} of{' '}
+                    {dashboard.content.assets.length} content assets.
+                  </p>
+
+                  {filteredContentAssets.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No content assets found.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredContentAssets.map((asset) => (
+                        <div key={asset.id} className="rounded-lg border p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-semibold">{asset.title}</h3>
+                                <Badge variant={statusVariant(asset.status)}>
+                                  {asset.status}
+                                </Badge>
+                                <Badge variant="outline">{asset.content_type}</Badge>
+                                <Badge variant="outline">{asset.language}</Badge>
+                              </div>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {asset.service_key}
+                                {asset.platform ? ` - ${asset.platform}` : ''}
+                                {asset.post_type ? ` - ${asset.post_type}` : ''}
+                              </p>
+                              {asset.excerpt && (
+                                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                                  {asset.excerpt}
+                                </p>
+                              )}
+                              {asset.publish_path && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  Publish path: {asset.publish_path}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              {contentStatuses.map((status) => (
+                                <Button
+                                  key={status}
+                                  size="sm"
+                                  variant={
+                                    asset.status === status ? 'default' : 'outline'
+                                  }
+                                  onClick={() =>
+                                    updateContentStatus(asset.id, status)
+                                  }
+                                  disabled={savingContentId === asset.id}
+                                >
+                                  {savingContentId === asset.id &&
+                                  asset.status !== status ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    status
+                                  )}
+                                </Button>
+                              ))}
+                              {asset.status === 'published' &&
+                                asset.publish_path && (
+                                  <Button asChild size="sm" variant="outline">
+                                    <Link href={asset.publish_path}>Open</Link>
+                                  </Button>
+                                )}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Draft body
+                              </label>
+                              <Textarea
+                                readOnly
+                                value={asset.body_markdown || ''}
+                                rows={8}
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Social caption / manual post copy
+                              </label>
+                              <Textarea
+                                readOnly
+                                value={
+                                  [
+                                    asset.social_caption,
+                                    asset.hashtags?.join(' '),
+                                  ]
+                                    .filter(Boolean)
+                                    .join('\n\n') || asset.body_markdown || ''
+                                }
+                                rows={8}
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="automation">

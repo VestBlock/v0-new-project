@@ -13,6 +13,8 @@ export type SystemEventType =
   | 'payment_failed'
   | 'abandoned_checkout'
   | 'lead_created'
+  | 'content_generated'
+  | 'content_published'
   | 'signup_no_upload'
   | 'paid_customer_no_upload'
   | 'lead_followup_needed'

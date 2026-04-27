@@ -51,9 +51,15 @@ Email failures must be logged to `email_events` and must not break uploads or an
 ## AEO And Content Automation
 
 - Use `lib/aeo/topics.ts` as the starter topic source.
+- Use `lib/content/marketingServices.ts` as the service catalog for generated SEO, social, and campaign content.
 - Build content around high-intent clusters: AI credit repair, dispute letters, business credit, funding readiness, and grants.
 - Avoid mass low-quality page generation.
 - Tie each content page to a real VestBlock action: upload report, generate letters, join Pro, submit a funding lead.
+- Store generated drafts in `content_assets` with status `draft`, `ready`, `published`, or `archived`.
+- Let admins generate content from `/admin-panel` by choosing service, content type, language, platform, post style, audience, and prompt.
+- Public SEO pages are published at `/resources/[slug]` only after the admin marks an SEO asset as `published`.
+- Social posts and campaigns remain manual-post assets for now so the operator can review and post them safely.
+- Future: scheduled content creation, social platform API posting, approval workflows, and analytics feedback loops.
 
 ## User Lifecycle Automation
 

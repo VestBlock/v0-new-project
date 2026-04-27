@@ -1,5 +1,8 @@
 import type { MetadataRoute } from 'next';
+import { createClient } from '@supabase/supabase-js';
 import { vestblockAeoTopics } from '@/lib/aeo/topics';
+
+export const dynamic = 'force-dynamic';
 
 function getSiteUrl() {
   return (
@@ -25,9 +28,54 @@ const publicRoutes = [
   { path: '/sell', priority: 0.55, changeFrequency: 'monthly' },
 ] as const;
 
-export default function sitemap(): MetadataRoute.Sitemap {
+async function getPublishedResourceRoutes(siteUrl: string) {
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !anonKey) return [];
+
+  try {
+    const supabase = createClient(supabaseUrl, anonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const { data, error } = await supabase
+      .from('content_assets')
+      .select('slug,updated_at,published_at')
+      .eq('status', 'published')
+      .eq('content_type', 'seo_page')
+      .order('published_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.warn('[sitemap] content_assets unavailable:', error.message);
+      return [];
+    }
+
+    return (data || []).map((asset) => ({
+      url: `${siteUrl}/resources/${asset.slug}`,
+      lastModified: asset.updated_at || asset.published_at || new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.72,
+    }));
+  } catch (error) {
+    console.warn(
+      '[sitemap] unable to load published resources:',
+      error instanceof Error ? error.message : String(error)
+    );
+    return [];
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const now = new Date();
+  const publishedResources = await getPublishedResourceRoutes(siteUrl);
 
   return [
     ...publicRoutes.map((route) => ({
@@ -42,5 +90,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly' as const,
       priority: topic.intent === 'lead-capture' ? 0.8 : 0.7,
     })),
+    ...publishedResources,
   ];
 }
