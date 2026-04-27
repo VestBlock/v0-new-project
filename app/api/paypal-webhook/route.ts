@@ -6,7 +6,10 @@ export async function POST(req: NextRequest) {
     const body = await req.text()
     const event = JSON.parse(body)
 
-    console.log("PayPal webhook received:", event.event_type)
+    console.info("[paypal-webhook] Event received:", {
+      eventType: event.event_type,
+      eventId: event.id,
+    })
 
     // Handle successful payment completion
     if (event.event_type === "PAYMENT.CAPTURE.COMPLETED") {
@@ -35,7 +38,9 @@ export async function POST(req: NextRequest) {
           })
 
           if (!paymentError) {
-            console.log(`Payment recorded for user: ${payerEmail}`)
+            console.info("[paypal-webhook] Payment recorded.", {
+              paymentId: payment.id,
+            })
           }
         }
       }

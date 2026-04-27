@@ -18,7 +18,6 @@ const supabase = createClient(
 );
 
 export async function POST(request: Request) {
-  console.debug('🚀 ~ POST ~ request:', request);
   try {
     // 1) Read raw request body
     // const buf = await getRawBody(request as any);
@@ -26,9 +25,11 @@ export async function POST(request: Request) {
     // const event = JSON.parse(rawBody);
     // 1) Read raw body as text
     const rawBody = await request.text();
-    console.debug('🚀 ~ POST ~ rawBody:', rawBody);
     const event = JSON.parse(rawBody);
-    console.debug('🚀 ~ POST ~ event:', event);
+    console.info('[paypal-webhook] Event received:', {
+      eventType: event.event_type,
+      eventId: event.id,
+    });
 
     // 2) Extract PayPal headers for verification
     const headers = request.headers;
@@ -40,19 +41,6 @@ export async function POST(request: Request) {
     const webhookId = process.env.PAYPAL_WEBHOOK_ID!;
     const clientId = process.env.PAYPAL_CLIENT_ID!;
     const secret = process.env.PAYPAL_CLIENT_SECRET!;
-    console.debug(
-      '🚀 ~ POST ~ HEADERS:',
-      transmissionId,
-      transmissionId,
-      transmissionTime,
-      certUrl,
-      authAlgo,
-      transmissionSig,
-      webhookId,
-      clientId,
-      secret,
-      event
-    );
 
     // 3) Verify webhook signature with PayPal
     const verifyRes = await axios.post(
@@ -74,16 +62,12 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json' },
       }
     );
-    console.debug('🚀 ~ POST ~ verifyRes:', verifyRes);
-
     if (verifyRes.data.verification_status !== 'SUCCESS') {
       console.error('Invalid PayPal webhook signature:', verifyRes.data);
       return new Response('Invalid signature', { status: 400 });
     }
 
     // 4) Handle PAYMENT.CAPTURE.COMPLETED event
-    console.debug('🚀 ~ POST ~ event:', event);
-    console.debug('🚀 ~ POST ~ event:', event.event_type);
     const resource = event.resource;
     const orderId =
       resource?.supplementary_data?.related_ids?.order_id || resource?.id;
@@ -107,8 +91,10 @@ export async function POST(request: Request) {
     if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
       // detect completed status
       const captureStatus = resource.status;
-      console.debug('🚀 ~ POST ~ resource:', resource);
-      console.debug('🚀 ~ POST ~ captureStatus:', captureStatus, orderId);
+      console.info('[paypal-webhook] Capture event received:', {
+        captureStatus,
+        orderId,
+      });
       if (captureStatus === 'COMPLETED' && orderId) {
         const { error } = await supabase
           .from('user_profiles')

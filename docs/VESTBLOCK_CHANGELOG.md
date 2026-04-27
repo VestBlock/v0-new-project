@@ -1,5 +1,23 @@
 # VestBlock Changelog
 
+## 2026-04-26 Production Logging Cleanup
+
+## Files Changed
+
+- `lib/supabase/server.ts`
+- `app/api/upload-credit-report/route.ts`
+- `app/api/webhook/route.ts`
+- `app/api/paypal-webhook/route.ts`
+- `app/dashboard/page.tsx`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+
+## Features Added
+
+- Removed Supabase cookie/session dump logging from the server client helper.
+- Normalized the server Supabase helper to prefer `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Removed dashboard logging of PayPal return tokens and approval links.
+- Removed raw credit report text, extracted negative items, profile rows, PayPal webhook bodies, PayPal headers, and PayPal secrets from logs.
+
 ## 2026-04-26 Debug Route Hardening
 
 ## Files Changed

@@ -27,7 +27,7 @@ Auth is Supabase Auth through `@supabase/ssr` and `@supabase/supabase-js`.
 - Admin access previously depended on `user_profiles.role === 'admin'` or `NEXT_PUBLIC_ADMIN_EMAIL`.
 - Added server-side admin check in `lib/auth/admin.ts`, using session user plus `user_profiles.role` or configured admin email.
 
-Risk: `lib/supabase/server.ts` still contains noisy step/debug logging and uses `SUPABASE_URL` / `SUPABASE_ANON_KEY` instead of the `NEXT_PUBLIC_*` names used elsewhere.
+Fixed: `lib/supabase/server.ts` no longer logs cookies/session details and now prefers `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` with legacy fallbacks.
 
 ## Database Tables Referenced
 
@@ -128,6 +128,8 @@ PayPal is present through `/api/create-order`, `/api/capture-order`, `/api/paypa
 
 Risk fixed: `create-order` was logging PayPal credential values. This has been removed.
 
+Risk fixed: upload and PayPal webhook routes no longer log raw report text, extracted credit items, profile rows, webhook payloads, PayPal headers, or PayPal secrets.
+
 ## Missing Or Broken Integrations
 
 - `background-analyzer` still contains placeholder schemas and comments from a removed Vercel Blob workflow.
@@ -141,5 +143,5 @@ Risk fixed: `create-order` was logging PayPal credential values. This has been r
 - Regenerate `types/supabase.ts` from the live Supabase schema.
 - Consolidate credit analysis into the central workflow module.
 - Remove legacy database setup/debug routes once they are no longer needed for recovery work.
-- Normalize env var names across server Supabase helpers.
+- Regenerate Supabase types and remove legacy env fallbacks once deployment settings are fully standardized.
 - Add webhooks/cron for abandoned checkout, upload reminders, and stuck analysis jobs.

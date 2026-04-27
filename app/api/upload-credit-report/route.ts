@@ -50,7 +50,6 @@ export async function GET() {
         const { data: usr } = await supabaseAdmin.auth.admin.getUserById(
           r.user_id
         );
-        console.debug('🚀 ~ GET ~ usr:', usr);
         const email = usr?.user?.email;
 
         // 2) Create a 1-hour signed URL
@@ -58,7 +57,6 @@ export async function GET() {
           .from('credit-reports')
           .createSignedUrl(r.file_path, 3600);
 
-        console.debug('🚀 ~ GET ~ urlData:', urlData);
         return {
           id: r.id,
           userEmail: email,
@@ -80,7 +78,6 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('🚀 ~ POST ~ request:', request);
   try {
     const [{ htmlToPdfBuffer }, extractMod, { letterHtml }] = await Promise.all(
       [
@@ -109,11 +106,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    console.log('File details:', {
-      name: file.name,
+    console.info('[credit-upload] Upload received:', {
       size: file.size,
       type: file.type,
-      userId: userId,
+      userId,
     });
 
     // Validate file
@@ -146,9 +142,6 @@ export async function POST(request: NextRequest) {
 
     const fileName = `${userId}/${timestamp}_${sanitizedFileName}`;
 
-    console.log('Uploading to bucket: credit-reports');
-    console.log('Uploading to path:', fileName);
-
     // Convert file to buffer
     const fileBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(fileBuffer);
@@ -174,11 +167,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(
-      'File uploaded successfully to credit-reports bucket:',
-      uploadData.path
-    );
-    console.log('Full upload data:', uploadData);
+    console.info('[credit-upload] File stored in credit-reports bucket.', {
+      path: uploadData.path,
+      userId,
+    });
 
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
     const userEmail = email || authUser?.user?.email || null;
@@ -267,7 +259,6 @@ export async function POST(request: NextRequest) {
           ? await extractTextFromPdf(fileBuffer)
           : await ocrImageToText(fileBuffer); // TODO: add OCR fallback for images if/when needed
 
-      console.log('🚀 ~ POST ~ reportText:', reportText);
       if (reportId && reportText) {
         await attachExtractedText(reportId, reportText);
         await updateCreditReportStatus(reportId, 'analyzing');
@@ -277,11 +268,9 @@ export async function POST(request: NextRequest) {
       const items = reportText
         ? await extractNegativeItemsFromText(reportText)
         : [];
-      console.log('🚀 ~ POST ~ items:', items);
 
       // Group items by bureau + letter type
       const grouped: Record<string, NegativeItem[]> = {};
-      console.log('🚀 ~ POST ~ grouped:', grouped);
       for (const it of items) {
         for (const bureau of it.bureaus) {
           const key = `${bureau}::${it.suggested_letter_type}`;
@@ -300,7 +289,6 @@ export async function POST(request: NextRequest) {
         .eq('id', userId)
         .maybeSingle();
 
-      console.log('🚀 ~ POST ~ profileRow:', profileRow);
       const fullName = profileRow?.full_name || username || 'Your Name';
       const addressLine1 = profileRow?.address_street || 'Address Street';
       const city = profileRow?.address_city || 'City';

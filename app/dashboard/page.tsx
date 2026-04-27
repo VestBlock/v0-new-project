@@ -29,7 +29,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  console.debug('🚀 ~ DashboardPage ~ token:', token);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -56,7 +55,6 @@ export default function DashboardPage() {
   const handleCheckout = useCallback(async () => {
     setLoading(true);
     try {
-      console.debug('🚀 ~ DashboardPage ~ user:', user?.id);
       const res = await fetch('/api/create-order', {
         method: 'POST',
         body: JSON.stringify({
@@ -66,7 +64,6 @@ export default function DashboardPage() {
           'Content-Type': 'application/json',
         },
       });
-      console.debug('🚀 ~ PricingSection ~ res:', res);
       if (!res.ok) {
         const errText = await res.text();
         console.error('Create-order failed:', errText);
@@ -74,7 +71,6 @@ export default function DashboardPage() {
       }
 
       const json = await res.json();
-      console.log('PayPal create response:', json);
 
       if (!json.success) {
         console.error('PayPal API error:', json.error);
@@ -88,7 +84,6 @@ export default function DashboardPage() {
       }
 
       const approveLink = links.find((l: any) => l.rel === 'approve')?.href;
-      console.log('Approve link:', approveLink);
       if (!approveLink) {
         throw new Error('PayPal approval link not found.');
       }
