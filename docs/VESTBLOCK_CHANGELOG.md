@@ -1,5 +1,37 @@
 # VestBlock Changelog
 
+## 2026-04-27 Published Service AEO Guides
+
+## Files Changed
+
+- `app/services/[slug]/page.tsx`
+- `app/services/page.tsx`
+- `app/admin-panel/page.tsx`
+- `app/api/admin/dashboard/route.ts`
+- `app/sitemap.ts`
+- `lib/seo/llmFeed.ts`
+- `lib/seo/serviceSeoPages.ts`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+
+## Features Added
+
+- Added static, indexable service guide pages under `/services/[slug]` for every major VestBlock service.
+- Published AEO-ready pages for AI credit analysis, business funding eligibility, credit card stacking strategy, business setup for funding and grants, financial growth services, small business grants, Spanish business funding, real estate funding, sell-property review, and the VestBlock AI Assistant.
+- Added service guide FAQ schema and Service JSON-LD on every guide page.
+- Added a published guide section to `/services` so users and crawlers can reach every service guide.
+- Added service guide routes to `sitemap.xml` and `/llms.txt`.
+- Updated the admin AEO / LLM dashboard to count static service guide pages as published SEO coverage and link directly to them.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `107` pages, including the new `/services/[slug]` guide family.
+- Local built smoke passed: `/services/credit-card-stacking-strategy` returned `200`, guide metadata and JSON-LD rendered, `/services` links the guide family, `sitemap.xml` includes new service guide URLs, and `/llms.txt` lists the service guides.
+- Production deploy and live smoke are pending for this change.
+
 ## 2026-04-27 SEO, AEO, And Admin Visibility Upgrade
 
 ## Files Changed

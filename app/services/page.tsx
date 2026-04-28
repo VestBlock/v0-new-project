@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import { serviceSeoPages } from '@/lib/seo/serviceSeoPages';
 import { servicesItemListJsonLd } from '@/lib/seo/structuredData';
 import {
   serviceIntentLabels,
@@ -219,6 +220,32 @@ export default function ServicesPage() {
               </Card>
             );
           })}
+        </section>
+
+        <section className="space-y-4">
+          <div>
+            <Badge variant="outline">AEO service guides</Badge>
+            <h2 className="mt-3 text-2xl font-bold tracking-tight">
+              Published guides for every VestBlock service
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              These pages explain each service in plain language for clients,
+              search engines, and answer engines. Use them for internal links
+              from social posts, blogs, and manual SEO pages.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {serviceSeoPages.map((page) => (
+              <Link
+                key={page.slug}
+                href={`/services/${page.slug}`}
+                className="rounded-lg border p-4 transition-colors hover:border-cyan-500/60 hover:bg-muted/50"
+              >
+                <p className="font-semibold">{page.title}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{page.excerpt}</p>
+              </Link>
+            ))}
+          </div>
         </section>
       </div>
     </main>

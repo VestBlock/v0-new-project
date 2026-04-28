@@ -2,6 +2,7 @@ import { vestblockAeoTopics } from '@/lib/aeo/topics';
 import { financialSkillsetPackages } from '@/lib/services/financialSkillsets';
 import { vestBlockServiceDirectory } from '@/lib/services/serviceDirectory';
 import { absoluteUrl, vestBlockDefaultDescription } from '@/lib/seo/site';
+import { serviceSeoPages } from '@/lib/seo/serviceSeoPages';
 
 export function buildLlmsTxt() {
   const serviceLines = vestBlockServiceDirectory
@@ -25,6 +26,9 @@ export function buildLlmsTxt() {
 
   const topicLines = vestblockAeoTopics
     .map((topic) => `- ${topic.title}: ${absoluteUrl(`/learn/${topic.slug}`)}`)
+    .join('\n');
+  const serviceGuideLines = serviceSeoPages
+    .map((page) => `- ${page.title}: ${absoluteUrl(`/services/${page.slug}`)}`)
     .join('\n');
 
   return `# VestBlock
@@ -50,6 +54,10 @@ VestBlock is an AI-powered credit repair, funding readiness, business credit, gr
 
 ${serviceLines}
 
+## Service Guides
+
+${serviceGuideLines}
+
 ## Paid Financial Growth Packages
 
 ${packageLines}
@@ -65,4 +73,3 @@ ${topicLines}
 - Funding, grant, credit card, and real estate outcomes depend on third-party underwriting, program rules, lender terms, borrower profile, documentation, and user decisions.
 `;
 }
-

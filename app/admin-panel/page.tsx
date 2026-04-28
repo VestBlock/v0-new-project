@@ -269,6 +269,7 @@ type AdminDashboard = {
       priority: number;
       stage: string;
       hasMarketingBrief: boolean;
+      staticSeoRoute?: string | null;
       publishedSeoPages: number;
       draftAssets: number;
       socialPosts: number;
@@ -283,6 +284,7 @@ type AdminDashboard = {
       priority: number;
       stage: string;
       hasMarketingBrief: boolean;
+      staticSeoRoute?: string | null;
       publishedSeoPages: number;
       draftAssets: number;
       socialPosts: number;
@@ -1611,6 +1613,11 @@ export default function AdminPanelPage() {
                           <Button asChild size="sm" variant="outline">
                             <Link href={service.route}>Open Route</Link>
                           </Button>
+                          {service.staticSeoRoute && (
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={service.staticSeoRoute}>Open SEO Page</Link>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             onClick={() => primeAeoContentDraft(service)}

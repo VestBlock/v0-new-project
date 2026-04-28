@@ -3,6 +3,7 @@ import { vestblockAeoTopics } from '@/lib/aeo/topics';
 import { checkAdminAccess } from '@/lib/auth/admin';
 import { vestblockMarketingServices } from '@/lib/content/marketingServices';
 import { getPaypalEnvironment } from '@/lib/paypal/config';
+import { getServiceSeoPageByServiceKey } from '@/lib/seo/serviceSeoPages';
 import { vestBlockServiceDirectory } from '@/lib/services/serviceDirectory';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -459,6 +460,7 @@ export async function GET() {
     const socialPosts = serviceAssets.filter(
       (asset) => asset.content_type === 'social_post'
     ).length;
+    const staticSeoPage = getServiceSeoPageByServiceKey(service.key);
     const hasMarketingBrief = vestblockMarketingServices.some(
       (marketingService) => marketingService.key === contentServiceKey
     );
@@ -472,11 +474,12 @@ export async function GET() {
       priority: service.priority,
       stage: service.serviceStage,
       hasMarketingBrief,
-      publishedSeoPages,
+      staticSeoRoute: staticSeoPage ? `/services/${staticSeoPage.slug}` : null,
+      publishedSeoPages: publishedSeoPages + (staticSeoPage ? 1 : 0),
       draftAssets,
       socialPosts,
       recommendedNextContent:
-        publishedSeoPages > 0
+        publishedSeoPages > 0 || staticSeoPage
           ? 'Create supporting comparison, FAQ, or social content.'
           : 'Generate and publish one high-quality service SEO page.',
     };

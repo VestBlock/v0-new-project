@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { vestblockAeoTopics } from '@/lib/aeo/topics';
+import { serviceSeoPages } from '@/lib/seo/serviceSeoPages';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: 'monthly' as const,
       priority: topic.intent === 'lead-capture' ? 0.8 : 0.7,
+    })),
+    ...serviceSeoPages.map((page) => ({
+      url: `${siteUrl}/services/${page.slug}`,
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: 0.76,
     })),
     ...publishedResources,
   ];

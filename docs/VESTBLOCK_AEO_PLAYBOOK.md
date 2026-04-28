@@ -16,8 +16,11 @@ Search discovery is handled through `app/sitemap.ts`, `app/robots.ts`, and
 offer, and tool pages; exclude admin, API, account, diagnostic, setup, test,
 and user-specific report routes.
 
-Services without a published SEO page should get one high-quality page before
-generating supporting social posts, comparisons, or niche variants.
+Every major service now has a static starter guide in `/services/[slug]` from
+`lib/seo/serviceSeoPages.ts`. Treat those as the first indexable foundation.
+Services should still get supporting social posts, comparison pages, FAQs, and
+case-specific resources over time, but avoid publishing thin variants before
+the core guide is useful.
 
 ## Topic Clusters
 
@@ -62,6 +65,16 @@ generating supporting social posts, comparisons, or niche variants.
 - `/learn/grants-for-small-businesses`
 - `/business-setup`
 - `/es/vestblock`
+- `/services/ai-credit-analysis`
+- `/services/business-funding-eligibility`
+- `/services/credit-card-stacking-strategy`
+- `/services/business-setup-funding-grants`
+- `/services/financial-growth-services`
+- `/services/small-business-grants`
+- `/services/spanish-business-funding`
+- `/services/real-estate-funding`
+- `/services/sell-property`
+- `/services/vestblock-ai-assistant`
 - `/llms.txt`
 - `/resources/[generated-slug]` for admin-approved generated SEO pages
 
