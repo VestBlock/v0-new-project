@@ -38,7 +38,8 @@
 - `corepack pnpm lint` passed with existing warning-only output.
 - `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `107` pages.
 - Local built smoke passed: unauthenticated `/api/cron/dispute-letter-monitor` returns `401`, and `/tools/my-dispute-letters` renders.
-- Production deploy is pending for this change.
+- Production deploy `dpl_DXCAABuGQeJA7kAJbmKiMLAGubHh` passed and is aliased to `https://vestblock.io` and `https://www.vestblock.io`.
+- Live smoke passed: unauthenticated `/api/cron/dispute-letter-monitor` returns `401`, and `/tools/my-dispute-letters` returns `200`.
 
 ## 2026-04-28 Launch Hardening
 
