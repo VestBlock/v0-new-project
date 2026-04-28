@@ -1,5 +1,25 @@
 # VestBlock Changelog
 
+## 2026-04-28 Launch Hardening
+
+## Files Changed
+
+- `middleware.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added edge middleware protection for `/admin-panel` and `/admin` routes so admin pages are blocked before client-side code loads.
+- Kept existing diagnostic and test route protection in place for setup, OpenAI, upload, database, and analysis test surfaces.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `107` pages.
+- Local built smoke passed: unauthenticated `/admin-panel` redirects to login, unauthenticated `/api/test-openai-simple` returns `401`, and `/services/credit-card-stacking-strategy` returns `200`.
+- Production redeploy is pending for this hardening change.
+
 ## 2026-04-27 Published Service AEO Guides
 
 ## Files Changed

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const protectedDiagnostics = [
+  '/admin',
+  '/admin-panel',
   '/admin/test',
   '/auth-debug',
   '/credit-report-debug',
@@ -247,6 +249,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    '/admin/:path*',
+    '/admin-panel/:path*',
     '/admin/test/:path*',
     '/auth-debug/:path*',
     '/credit-report-debug/:path*',
