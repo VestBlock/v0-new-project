@@ -33,6 +33,11 @@ Legacy fallback:
 - `user_upload_reminder`
 - `user_paid_upload_reminder`
 - `admin_lead_followup`
+- `user_dispute_letters_ready`
+- `user_dispute_letter_mail_reminder`
+- `user_dispute_secondary_bureau_reminder`
+- `user_dispute_bureau_response_reminder`
+- `admin_dispute_letter_followup`
 
 ## Rules
 
@@ -41,13 +46,13 @@ Legacy fallback:
 - Log system-level email failure to `admin_activity`.
 - Keep HTML simple and professional.
 - Do not include credit report contents or sensitive full personal data in emails.
+- Dispute-letter emails should tell users to review letters, attach supporting documents, use trackable mailing, and save bureau responses. Do not promise deletion, score increases, or guaranteed bureau action.
 
 ## Future Events
 
 - Abandoned checkout.
 - Upload reminder.
 - Stuck analysis admin alert.
-- Dispute letters ready.
 - Payment completion admin alert.
 - Funding lead received.
 - Inactive user reactivation.

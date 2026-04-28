@@ -49,6 +49,11 @@ const automationEventTypes = new Set([
   'funding_strategy_submitted',
   'funding_strategy_paid',
   'funding_strategy_status_updated',
+  'dispute_letters_ready',
+  'dispute_letter_mail_reminder',
+  'dispute_secondary_bureau_reminder',
+  'dispute_bureau_response_due',
+  'dispute_letter_status_updated',
   'email_sent',
   'email_failed',
   'checkout_started',
@@ -62,6 +67,11 @@ const lifecycleEmailTypes = new Set([
   'user_paid_upload_reminder',
   'admin_lead_followup',
   'admin_abandoned_checkout',
+  'user_dispute_letters_ready',
+  'user_dispute_letter_mail_reminder',
+  'user_dispute_secondary_bureau_reminder',
+  'user_dispute_bureau_response_reminder',
+  'admin_dispute_letter_followup',
 ]);
 
 const dashboardDataSources = [
@@ -607,6 +617,13 @@ export async function GET() {
           schedule: '0 15 * * *',
           purpose:
             'Creates lifecycle tasks and sends upload reminders, paid onboarding reminders, and lead follow-up alerts.',
+        },
+        {
+          label: 'Dispute letter reminder monitor',
+          path: '/api/cron/dispute-letter-monitor',
+          schedule: '0 16 * * *',
+          purpose:
+            'Sends dispute-letter mailing reminders, secondary bureau reminders, and bureau response-window follow-ups.',
         },
       ],
       lifecycleEmails: {

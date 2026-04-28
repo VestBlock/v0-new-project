@@ -2,6 +2,10 @@ import type { NegativeItem } from '@/lib/extract-negative-items';
 import type { LetterType } from '@/lib/letters/templates';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  getInitialDisputeLetterAutomationFields,
+  notifyDisputeLettersReady,
+} from '@/lib/workflows/disputeLetterAutomation';
+import {
   attachAnalysisResult,
   attachDisputeLetters,
   attachExtractedText,
@@ -129,7 +133,7 @@ export async function processCreditReportAnalysis({
           ? bucket[0]?.creditor || bucket[0]?.account_type || 'Account'
           : 'Multiple Accounts';
 
-      const { error: insertError } = await supabase
+      const { data: insertedLetter, error: insertError } = await supabase
         .from('dispute_letters')
         .insert({
           user_id: userId,
@@ -143,9 +147,29 @@ export async function processCreditReportAnalysis({
           status: 'Ready',
           account_name: accountName,
           version: 1,
-        });
+        })
+        .select('id')
+        .single();
 
       if (insertError) throw insertError;
+
+      if (insertedLetter?.id) {
+        const { error: automationUpdateError } = await supabase
+          .from('dispute_letters')
+          .update({
+            user_email: userEmail,
+            ...getInitialDisputeLetterAutomationFields(new Date()),
+          })
+          .eq('id', insertedLetter.id);
+
+        if (automationUpdateError) {
+          console.warn(
+            '[credit-analysis] dispute-letter automation fields skipped:',
+            automationUpdateError.message
+          );
+        }
+      }
+
       generatedLetters += 1;
     }
 
@@ -164,6 +188,13 @@ export async function processCreditReportAnalysis({
       },
       { userId, userEmail }
     );
+
+    await notifyDisputeLettersReady({
+      reportId,
+      userId,
+      userEmail,
+      generatedLetterCount: generatedLetters,
+    });
 
     return {
       ok: true,

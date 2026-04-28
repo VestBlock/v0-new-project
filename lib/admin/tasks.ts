@@ -214,6 +214,88 @@ export async function createStalledCreditReportTask(input: {
   });
 }
 
+export async function createDisputeLetterMailingTask(input: {
+  letterId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  bureau?: string | null;
+  letterType?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Customer needs to mail dispute letter',
+    description:
+      'A generated dispute letter has reached the mailing reminder window. Confirm the customer knows to review, print/download, attach evidence, and mail using a trackable method.',
+    taskType: 'dispute_letter_mail_reminder',
+    priority: 'normal',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'dispute_letter',
+    entityId: input.letterId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      bureau: input.bureau,
+      letterType: input.letterType,
+      ageHours: input.ageHours,
+      nextAction: 'Confirm letter was mailed or help the customer complete mailing.',
+    },
+  });
+}
+
+export async function createDisputeSecondaryBureauTask(input: {
+  letterId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  bureau?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Check secondary bureau dispute coverage',
+    description:
+      'A dispute-letter workflow reached the secondary bureau reminder. Check whether the same issue appears with other bureaus and whether separate letters still need to be mailed.',
+    taskType: 'dispute_secondary_bureau_reminder',
+    priority: 'normal',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'dispute_letter',
+    entityId: input.letterId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      bureau: input.bureau,
+      ageHours: input.ageHours,
+      nextAction: 'Review other bureau letters and customer mailing status.',
+    },
+  });
+}
+
+export async function createDisputeBureauResponseTask(input: {
+  letterId: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  bureau?: string | null;
+  mailedAt?: string | null;
+  ageHours?: number | null;
+}) {
+  return createAdminTask({
+    title: 'Check dispute bureau response',
+    description:
+      'A mailed dispute letter has reached the response review window. Ask the customer to check for bureau results, upload/save the response, and decide whether another round is needed.',
+    taskType: 'dispute_bureau_response_due',
+    priority: 'high',
+    userId: input.userId,
+    userEmail: input.userEmail,
+    entityType: 'dispute_letter',
+    entityId: input.letterId,
+    dueAt: adminTaskDueDates.now(),
+    metadata: {
+      bureau: input.bureau,
+      mailedAt: input.mailedAt,
+      ageHours: input.ageHours,
+      nextAction: 'Collect bureau response and determine whether a follow-up dispute is needed.',
+    },
+  });
+}
+
 export async function createSignupNoUploadTask(input: {
   userId: string;
   userEmail?: string | null;

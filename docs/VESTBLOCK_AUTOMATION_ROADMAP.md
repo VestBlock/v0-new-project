@@ -49,6 +49,16 @@ Events:
 
 Email failures must be logged to `email_events` and must not break uploads or analysis.
 
+Implemented dispute-letter reminder automation:
+
+- When generated dispute letters are ready, VestBlock emails the user with a link to `/tools/my-dispute-letters`.
+- Each generated letter gets a first mailing reminder window after 24 hours.
+- Each generated letter gets a secondary-bureau check reminder after 7 days so customers do not assume one bureau dispute covers every bureau.
+- Users can mark a letter as mailed from `/tools/my-dispute-letters`.
+- Mailed letters get a bureau-response review window 35 days after mailing.
+- Daily `/api/cron/dispute-letter-monitor` creates admin tasks and sends user/admin reminders without duplicating already-sent reminder columns.
+- Required migration: `db/migrations/027-dispute-letter-automation.sql`.
+
 ## Lead And Funding Opportunity Automation
 
 - Centralize funding, real estate, and business credit leads in `leads`.

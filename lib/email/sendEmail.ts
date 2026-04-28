@@ -14,7 +14,12 @@ type EmailEventType =
   | 'admin_new_lead'
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
-  | 'admin_lead_followup';
+  | 'admin_lead_followup'
+  | 'user_dispute_letters_ready'
+  | 'user_dispute_letter_mail_reminder'
+  | 'user_dispute_secondary_bureau_reminder'
+  | 'user_dispute_bureau_response_reminder'
+  | 'admin_dispute_letter_followup';
 
 type SendEmailInput = {
   to?: string | null;
@@ -465,6 +470,137 @@ export async function sendAdminLeadFollowupEmail(details: {
       <strong>Lead type:</strong> ${escapeHtml(details.leadType || 'Unknown')}<br />
       <strong>Lead ID:</strong> ${escapeHtml(details.leadId)}<br />
       <strong>Age:</strong> ${escapeHtml(String(details.ageHours || 'Unknown'))} hours</p>
+      <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
+    `
+    ),
+  });
+}
+
+export async function sendUserDisputeLettersReadyEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  reportId?: string | null;
+  generatedLetterCount?: number | null;
+}) {
+  const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Your VestBlock dispute letters are ready',
+    eventType: 'user_dispute_letters_ready',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Your dispute letters are ready',
+      `
+      <p>Your VestBlock dispute-letter PDFs are ready to review. Download each letter, review it for accuracy, attach supporting documents, and mail it using a trackable method when you are comfortable.</p>
+      <p><strong>Letters generated:</strong> ${escapeHtml(String(details.generatedLetterCount || 'Available in dashboard'))}<br />
+      <strong>Report ID:</strong> ${escapeHtml(details.reportId || 'Available in dashboard')}</p>
+      <p><a href="${lettersUrl}" style="color:#67e8f9;">Open your dispute letters</a></p>
+      <p>Keep your mailing receipts and bureau responses. VestBlock can help you track the next review window from your dashboard.</p>
+    `
+    ),
+  });
+}
+
+export async function sendUserDisputeLetterMailReminderEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  letterId?: string | null;
+  bureau?: string | null;
+  letterType?: string | null;
+}) {
+  const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Reminder: mail your VestBlock dispute letter',
+    eventType: 'user_dispute_letter_mail_reminder',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Mail your dispute letter when ready',
+      `
+      <p>Your generated dispute letter is still waiting for the mailing step. Review the PDF, include copies of any supporting documents, and use a trackable mailing method so you can document when it was sent.</p>
+      <p><strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'See letter PDF')}<br />
+      <strong>Letter type:</strong> ${escapeHtml(details.letterType || 'Dispute letter')}<br />
+      <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
+      <p><a href="${lettersUrl}" style="color:#67e8f9;">Open dispute letters</a></p>
+    `
+    ),
+  });
+}
+
+export async function sendUserSecondaryBureauReminderEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  letterId?: string | null;
+  bureau?: string | null;
+}) {
+  const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Check your remaining bureau dispute letters',
+    eventType: 'user_dispute_secondary_bureau_reminder',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Check the other bureau letters',
+      `
+      <p>If this issue appears on more than one credit bureau report, make sure each relevant bureau letter is reviewed and mailed separately. Do not assume one bureau dispute updates every file automatically.</p>
+      <p><strong>Current letter:</strong> ${escapeHtml(details.bureau || 'Credit bureau letter')}<br />
+      <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
+      <p><a href="${lettersUrl}" style="color:#67e8f9;">Review dispute letters</a></p>
+    `
+    ),
+  });
+}
+
+export async function sendUserDisputeBureauResponseReminderEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  letterId?: string | null;
+  bureau?: string | null;
+}) {
+  const dashboardUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Check for your credit bureau response',
+    eventType: 'user_dispute_bureau_response_reminder',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Check for the bureau response',
+      `
+      <p>Your dispute-letter response window is ready for review. Check your mail, email, and bureau account for investigation results, then save the response for your records.</p>
+      <p><strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'See letter PDF')}<br />
+      <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
+      <p><a href="${dashboardUrl}" style="color:#67e8f9;">Update your dispute-letter status</a></p>
+    `
+    ),
+  });
+}
+
+export async function sendAdminDisputeLetterFollowupEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  letterId?: string | null;
+  bureau?: string | null;
+  reason?: string | null;
+}) {
+  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'VestBlock Dispute Letter Follow-Up Needed',
+    eventType: 'admin_dispute_letter_followup',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Dispute-letter follow-up needed',
+      `
+      <p>A dispute-letter workflow needs review or customer follow-up.</p>
+      <p><strong>User:</strong> ${escapeHtml(details.userEmail || details.userId || 'Unknown')}<br />
+      <strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'Unknown')}<br />
+      <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Unknown')}<br />
+      <strong>Reason:</strong> ${escapeHtml(details.reason || 'Reminder threshold reached')}</p>
       <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
     `
     ),

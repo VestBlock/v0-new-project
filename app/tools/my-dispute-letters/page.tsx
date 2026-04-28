@@ -27,9 +27,10 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
+  CalendarCheck,
   Download,
-  Recycle,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -39,7 +40,45 @@ import { Database } from '@/types/supabase';
 type DisputeLetterRow = Database['public']['Tables']['dispute_letters']['Row'] & {
   bureau?: string | null;
   num_items?: number | null;
+  mailed_at?: string | null;
+  first_mail_due_at?: string | null;
+  secondary_bureau_due_at?: string | null;
+  bureau_response_due_at?: string | null;
+  response_received_at?: string | null;
 };
+
+function formatOptionalDate(value?: string | null) {
+  if (!value) return 'Not scheduled';
+
+  try {
+    return format(parseISO(value), 'MMM d, yyyy');
+  } catch {
+    return 'Not scheduled';
+  }
+}
+
+function getNextLetterStep(letter: DisputeLetterRow) {
+  const status = String(letter.status || '').toLowerCase();
+
+  if (letter.response_received_at || ['responded', 'completed', 'closed'].includes(status)) {
+    return {
+      label: 'Response received',
+      due: formatOptionalDate(letter.response_received_at || letter.updated_at),
+    };
+  }
+
+  if (letter.mailed_at || ['mailed', 'sent'].includes(status)) {
+    return {
+      label: 'Check bureau response',
+      due: formatOptionalDate(letter.bureau_response_due_at),
+    };
+  }
+
+  return {
+    label: 'Mail with tracking',
+    due: formatOptionalDate(letter.first_mail_due_at),
+  };
+}
 
 export default function MyDisputeLettersPage() {
   const {
@@ -200,6 +239,44 @@ export default function MyDisputeLettersPage() {
     }
   }
 
+  async function handleMarkMailed(letter: DisputeLetterRow) {
+    if (!user) return;
+    try {
+      setRowBusy(letter.id as string);
+      const res = await fetch(`/api/dispute-letters/${letter.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, status: 'mailed' }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Status update failed');
+      }
+
+      toast({
+        title: 'Marked as mailed',
+        description:
+          'VestBlock will remind you when it is time to check for bureau responses.',
+      });
+
+      const { data } = await supabase
+        .from('dispute_letters')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      setLetters(data || []);
+    } catch (e: any) {
+      toast({
+        title: 'Could not update letter',
+        description: e.message || 'Try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
   if (authLoading || !isAuthenticated || !isProMember || isLoadingLetters) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -298,6 +375,7 @@ export default function MyDisputeLettersPage() {
                       <TableHead>Letter Type</TableHead>
                       <TableHead># of items</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Next Step</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -317,6 +395,22 @@ export default function MyDisputeLettersPage() {
                             {' '}
                             {letter.status || 'N/A'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const nextStep = getNextLetterStep(letter);
+                            return (
+                              <div className="min-w-40 text-sm">
+                                <div className="flex items-center gap-1 font-medium">
+                                  <CalendarCheck className="h-3.5 w-3.5 text-cyan-600" />
+                                  {nextStep.label}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {nextStep.due}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         {/* <TableCell>
                           <Button variant="ghost" size="sm">
@@ -371,6 +465,24 @@ export default function MyDisputeLettersPage() {
                               <RefreshCw className="h-4 w-4" />
                             )}
                           </Button>
+                          {!letter.mailed_at &&
+                            !['mailed', 'sent', 'responded', 'completed'].includes(
+                              String(letter.status || '').toLowerCase()
+                            ) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkMailed(letter)}
+                                disabled={rowBusy === (letter.id as string)}
+                                title="Mark mailed"
+                              >
+                                {rowBusy === letter.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Send className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                         </TableCell>
                       </TableRow>
                     ))}

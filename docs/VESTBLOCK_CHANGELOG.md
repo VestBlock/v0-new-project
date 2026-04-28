@@ -1,5 +1,45 @@
 # VestBlock Changelog
 
+## 2026-04-28 Dispute Letter Reminder Automation
+
+## Files Changed
+
+- `app/api/cron/dispute-letter-monitor/route.ts`
+- `app/api/dispute-letters/[id]/status/route.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/tools/my-dispute-letters/page.tsx`
+- `db/migrations/027-dispute-letter-automation.sql`
+- `lib/admin/tasks.ts`
+- `lib/email/sendEmail.ts`
+- `lib/system/logEvent.ts`
+- `lib/workflows/disputeLetterAutomation.ts`
+- `lib/workflows/processCreditReportAnalysis.ts`
+- `vercel.json`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added dispute-letter-ready customer emails after credit analysis generates dispute letters.
+- Added daily cron automation for mailing reminders, secondary bureau reminders, and bureau response-window follow-ups.
+- Added admin tasks and admin follow-up alerts for dispute-letter workflows that need action.
+- Added a customer-facing "mark mailed" action on `/tools/my-dispute-letters`.
+- Added dispute-letter automation dates and metadata migration for Supabase.
+- Added the dispute-letter reminder cron to the admin automation dashboard and Vercel cron schedule.
+
+## Setup Required
+
+- Run `db/migrations/027-dispute-letter-automation.sql` in Supabase before relying on live dispute-letter reminder automation.
+- Redeploy Vercel so `/api/cron/dispute-letter-monitor` is scheduled.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `107` pages.
+- Local built smoke passed: unauthenticated `/api/cron/dispute-letter-monitor` returns `401`, and `/tools/my-dispute-letters` renders.
+- Production deploy is pending for this change.
+
 ## 2026-04-28 Launch Hardening
 
 ## Files Changed
