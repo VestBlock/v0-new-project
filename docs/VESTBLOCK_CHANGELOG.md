@@ -45,7 +45,8 @@
 - `corepack pnpm lint` passed with existing warning-only output.
 - `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `109` pages.
 - Local built smoke passed: `/funding/business-funding-strategy` and `/services/business-funding-strategy` return `200`; old `/funding/credit-card-strategy` and `/services/credit-card-stacking-strategy` redirect to the new routes; sitemap and `/llms.txt` list the new business funding strategy URL.
-- Production deploy is pending for this change.
+- Production deploy `dpl_7g7z8g9pXnHpp7GA8VYxAMyYFA81` passed and is aliased to `https://vestblock.io` and `https://www.vestblock.io`.
+- Live smoke passed: `/funding/business-funding-strategy` and `/services/business-funding-strategy` return `200`; legacy funding and service URLs redirect to the new routes; sitemap and `/llms.txt` list the new business funding strategy URL.
 
 ## 2026-04-28 Dispute Letter Reminder Automation
 
