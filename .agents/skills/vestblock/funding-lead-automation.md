@@ -7,7 +7,7 @@ Use this skill when working on business funding leads, partner links, referral f
 - Leads table: `leads`
 - Public routes: `/funding`, `/real-estate-funding`, `/sell`
 - Free funding checker: `/funding#free-eligibility-check`
-- Card funding strategy route: `/funding/credit-card-strategy`
+- Card funding strategy route: `/funding/business-funding-strategy`
 - Business setup route: `/business-setup`
 - Spanish partner route: `/es/vestblock`
 - Approved Spanish Bank Breezy URL: `https://Bankbreezy.com/es/Vestblock`
@@ -37,7 +37,7 @@ Track:
 
 - Alert admin when a high-intent lead arrives.
 - After inserting a row into `leads`, call `runNewLeadAutomation()` with the new lead ID, source path, contact fields, and concise deal summary.
-- For card stacking requests, save a `funding_strategy_requests` row first, then call `runFundingStrategySubmittedAutomation()`.
+- For business funding strategy requests, save a `funding_strategy_requests` row first, then call `runFundingStrategySubmittedAutomation()`.
 - Use readiness tiers:
   - `needs_prep`: explain why they are not funding-ready and route them to the $300 readiness plan.
   - `review_ready`: explain the cleanup items and allow the $300 readiness plan.

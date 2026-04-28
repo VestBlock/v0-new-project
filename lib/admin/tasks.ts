@@ -479,9 +479,9 @@ export async function createFundingStrategyReviewTask(input: {
   return createAdminTask({
     title: input.paid
       ? 'Complete paid funding readiness plan'
-      : 'Review card funding strategy request',
+      : 'Review business funding strategy request',
     description:
-      'A customer submitted a business credit card funding strategy request. Review credit readiness, business setup, consent, and whether the plan should focus on applications or eligibility prep.',
+      'A customer submitted a business funding strategy request. Review credit readiness, business setup, consent, and whether the plan should focus on applications or eligibility prep.',
     taskType: input.paid
       ? 'paid_funding_strategy_review'
       : 'funding_strategy_review',

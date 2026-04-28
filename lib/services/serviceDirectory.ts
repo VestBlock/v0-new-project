@@ -54,9 +54,9 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     bestFor: 'Business owners who want to know whether they should apply now or clean up first.',
     route: '/funding#free-eligibility-check',
     primaryCta: 'Check Eligibility Free',
-    secondaryRoute: '/funding/credit-card-strategy',
+    secondaryRoute: '/funding/business-funding-strategy',
     secondaryCta: 'Start $300 Readiness Plan',
-    priceNote: 'Free check, then $300 readiness plan plus 10% after accepted card funding is available',
+    priceNote: 'Free check, then $300 readiness plan plus 10% after accepted business credit funding is available',
     operatorNote: 'Scores readiness, captures leads, creates funding strategy requests, and queues admin review.',
     trustNote: 'No funding, limit, or approval guarantees; customers review terms before applications.',
     serviceStage: 'free_check',
@@ -65,16 +65,16 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
   {
     key: 'credit_card_stacking',
     intent: 'get_business_funding',
-    title: 'Credit Card Stacking Strategy',
+    title: 'Business Funding Strategy',
     shortTitle: 'Card Stacking',
     summary:
-      'Review business credit card funding readiness, document requirements, inquiry risk, utilization impact, and the paid strategy path.',
+      'Review business credit line readiness, document requirements, inquiry risk, utilization impact, and the paid strategy path.',
     bestFor: 'Business owners considering multiple business credit cards for working capital.',
-    route: '/funding/credit-card-strategy',
-    primaryCta: 'Start Card Funding Strategy',
+    route: '/funding/business-funding-strategy',
+    primaryCta: 'Start Funding Strategy',
     secondaryRoute: '/funding#free-eligibility-check',
     secondaryCta: 'Check Eligibility First',
-    priceNote: '$300 readiness plan plus 10% after accepted card funding is available',
+    priceNote: '$300 readiness plan plus 10% after accepted business credit funding is available',
     operatorNote:
       'Creates funding strategy requests, payment readiness records, admin review tasks, and success-fee consent visibility.',
     trustNote:

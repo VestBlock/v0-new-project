@@ -284,7 +284,7 @@ export function FundingEligibilityChecker() {
                   </Button>
                 ) : (
                   <Button asChild>
-                    <Link href="/funding/credit-card-strategy">{copy.action}</Link>
+                    <Link href="/funding/business-funding-strategy">{copy.action}</Link>
                   </Button>
                 )}
                 <Button asChild variant="outline">

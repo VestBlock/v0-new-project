@@ -63,8 +63,8 @@ Implemented dispute-letter reminder automation:
 
 - Centralize funding, real estate, and business credit leads in `leads`.
 - Route the public `/funding` form into `/api/funding-lead` so business funding interest creates a real lead row, admin email alert, follow-up task, and `lead_created` event.
-- Use `/funding` for the free instant business funding eligibility checker, then route people who need help becoming eligible into `/funding/credit-card-strategy`.
-- Use `/funding/credit-card-strategy` for the paid business funding readiness plan. The workflow creates `funding_strategy_requests`, scores readiness, captures consent, and queues paid plan requests for admin follow-up.
+- Use `/funding` for the free instant business funding eligibility checker, then route people who need help becoming eligible into `/funding/business-funding-strategy`.
+- Use `/funding/business-funding-strategy` for the paid business funding readiness plan. The workflow creates `funding_strategy_requests`, scores readiness, captures consent, and queues paid plan requests for admin follow-up.
 - Charge `$300` for the `funding_strategy_review` product through the shared PayPal order/capture routes.
 - Keep funding strategy payments separate from VestBlock Pro subscription payments with `payments.product_type` and `metadata_json`.
 - Alert admin when a funding lead is submitted.

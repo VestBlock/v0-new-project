@@ -27,7 +27,7 @@ const publicRoutes = [
   { path: '/learn', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/credit-upload', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/funding', priority: 0.85, changeFrequency: 'weekly' },
-  { path: '/funding/credit-card-strategy', priority: 0.82, changeFrequency: 'weekly' },
+  { path: '/funding/business-funding-strategy', priority: 0.82, changeFrequency: 'weekly' },
   { path: '/business-setup', priority: 0.82, changeFrequency: 'weekly' },
   { path: '/es/vestblock', priority: 0.84, changeFrequency: 'weekly' },
   { path: '/tools/business-credit', priority: 0.8, changeFrequency: 'weekly' },

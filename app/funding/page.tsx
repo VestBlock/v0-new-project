@@ -112,7 +112,7 @@ export default function FundingPage() {
               </a>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <Link href="/funding/credit-card-strategy">
+              <Link href="/funding/business-funding-strategy">
                 <Phone className="mr-2 h-5 w-5" />
                 Join $300 Readiness Plan
               </Link>
@@ -179,7 +179,7 @@ export default function FundingPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <CreditCard className="h-4 w-4 text-cyan-500" />
-                    <span>Credit Card Stacking</span>
+                    <span>Business Credit Lines</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-cyan-500" />
@@ -316,11 +316,11 @@ export default function FundingPage() {
                 </div>
                 <div className="rounded-lg border p-4">
                   <div className="font-medium">$300 Readiness Plan</div>
-                  <div className="text-muted-foreground">Then 10% after accepted card funding is available.</div>
+                  <div className="text-muted-foreground">Then 10% after accepted business credit funding is available.</div>
                 </div>
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>
-                <Link href="/funding/credit-card-strategy">
+                <Link href="/funding/business-funding-strategy">
                   Join Business Funding Readiness Plan
                   <CreditCard className="ml-2 h-4 w-4" />
                 </Link>

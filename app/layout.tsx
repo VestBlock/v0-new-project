@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     'AI credit repair',
     'credit dispute letters',
     'business funding',
-    'credit card stacking',
+    'business credit line readiness',
     'business credit',
     'small business grants',
     'real estate funding',

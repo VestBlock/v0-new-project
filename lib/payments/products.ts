@@ -20,7 +20,7 @@ export const vestblockProducts: Record<VestBlockProductType, VestBlockProduct> =
     type: 'funding_strategy_review',
     label: 'Business Funding Readiness Plan',
     amount: '300',
-    defaultReturnPath: '/funding/credit-card-strategy',
+    defaultReturnPath: '/funding/business-funding-strategy',
     description:
       'One-time readiness plan for business funding eligibility, credit cleanup, and application preparation.',
   },

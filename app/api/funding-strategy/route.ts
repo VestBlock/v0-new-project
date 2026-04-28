@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       {
         success: false,
         error:
-          'Please confirm the review terms before submitting a card funding strategy request.',
+          'Please confirm the review terms before submitting a business funding strategy request.',
       },
       { status: 400 }
     );

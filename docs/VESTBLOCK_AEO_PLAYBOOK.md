@@ -47,7 +47,7 @@ the core guide is useful.
 - Business credit pages should link to `/tools/business-credit` and `/funding`.
 - Grant and funding pages should link to `/funding`, `/business-setup`, and relevant lead forms.
 - Spanish business funding pages should link to `/es/vestblock`, `/business-setup`, and the approved Bank Breezy Spanish URL.
-- Credit card stacking pages should link to `/funding/credit-card-strategy`,
+- Business funding strategy pages should link to `/funding/business-funding-strategy`,
   `/funding#free-eligibility-check`, and `/services/financial-growth`.
 - Financial growth service pages should link to `/services/financial-growth`,
   `/funding`, `/business-setup`, `/tools/business-credit`, `/tools/grants`,
@@ -67,7 +67,7 @@ the core guide is useful.
 - `/es/vestblock`
 - `/services/ai-credit-analysis`
 - `/services/business-funding-eligibility`
-- `/services/credit-card-stacking-strategy`
+- `/services/business-funding-strategy`
 - `/services/business-setup-funding-grants`
 - `/services/financial-growth-services`
 - `/services/small-business-grants`

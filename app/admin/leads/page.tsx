@@ -70,7 +70,7 @@ const LEAD_TYPE_LABELS: Record<string, string> = {
   real_estate: 'Real Estate Funding',
   ai_assistant: 'AI Assistant',
   business_funding: 'Business Funding',
-  credit_card_funding_strategy: 'Card Funding Strategy',
+  credit_card_funding_strategy: 'Business Funding Strategy',
 }
 
 const LEAD_TYPE_ICONS: Record<string, any> = {
@@ -364,7 +364,7 @@ export default function AdminLeadsPage() {
                         <SelectItem value="sell_house">Sell House</SelectItem>
                         <SelectItem value="real_estate">Real Estate Funding</SelectItem>
                         <SelectItem value="business_funding">Business Funding</SelectItem>
-                        <SelectItem value="credit_card_funding_strategy">Card Funding Strategy</SelectItem>
+                        <SelectItem value="credit_card_funding_strategy">Business Funding Strategy</SelectItem>
                         <SelectItem value="ai_assistant">AI Assistant</SelectItem>
                       </SelectContent>
                     </Select>
@@ -567,7 +567,7 @@ export default function AdminLeadsPage() {
                   {selectedLead.lead_type === 'sell_house' && 'Property Details'}
                   {selectedLead.lead_type === 'real_estate' && 'Loan Details'}
                   {selectedLead.lead_type === 'business_funding' && 'Funding / Financial Service Details'}
-                  {selectedLead.lead_type === 'credit_card_funding_strategy' && 'Card Funding Strategy Details'}
+                  {selectedLead.lead_type === 'credit_card_funding_strategy' && 'Business Funding Strategy Details'}
                   {selectedLead.lead_type === 'ai_assistant' && 'Business Details'}
                 </h3>
                 <div className="bg-muted/50 p-4 rounded-lg space-y-4">

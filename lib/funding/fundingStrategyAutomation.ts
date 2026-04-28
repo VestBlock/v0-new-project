@@ -26,7 +26,7 @@ export async function runFundingStrategySubmittedAutomation(
       name: input.fullName || input.businessName,
       email: input.userEmail,
       phone: input.phone,
-      sourcePath: '/funding/credit-card-strategy',
+      sourcePath: '/funding/business-funding-strategy',
       summary:
         input.summary ||
         `Readiness score ${input.readinessScore ?? 'n/a'} (${input.readinessTier || 'unknown'}).`,

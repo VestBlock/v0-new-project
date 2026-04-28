@@ -97,8 +97,8 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       'Business owners comparing funding options, readiness gaps, documents, credit profile, and use-of-funds requirements.',
     primaryRoute: '/funding#free-eligibility-check',
     primaryCta: 'Check Funding Eligibility Free',
-    secondaryRoute: '/funding/credit-card-strategy',
-    secondaryCta: 'Review Card Funding Strategy',
+    secondaryRoute: '/funding/business-funding-strategy',
+    secondaryCta: 'Review Funding Strategy',
     sections: [
       {
         heading: 'Start with a free readiness check',
@@ -139,28 +139,28 @@ export const serviceSeoPages: ServiceSeoPage[] = [
           'VestBlock helps with readiness, routing, and follow-up. Actual funding depends on partners, lenders, underwriting, terms, and user decisions.',
       },
     ],
-    relatedSlugs: ['credit-card-stacking-strategy', 'business-setup-funding-grants'],
+    relatedSlugs: ['business-funding-strategy', 'business-setup-funding-grants'],
   },
   {
     serviceKey: 'credit_card_stacking',
-    slug: 'credit-card-stacking-strategy',
-    title: 'Credit Card Stacking Strategy Readiness',
-    seoTitle: 'Credit Card Stacking Strategy For Business Funding Readiness',
+    slug: 'business-funding-strategy',
+    title: 'Business Funding Strategy Readiness',
+    seoTitle: 'Business Funding Strategy And Credit Line Readiness',
     metaDescription:
-      'Prepare for business credit card stacking with VestBlock readiness review, document checks, inquiry-risk consent, utilization guidance, and admin follow-up.',
+      'Prepare for business credit funding with VestBlock readiness review, document checks, inquiry-risk consent, utilization guidance, and admin follow-up.',
     excerpt:
-      'VestBlock helps business owners understand the risk, readiness, documents, and repayment considerations before pursuing a card funding sequence.',
+      'VestBlock helps business owners understand the risk, readiness, documents, and repayment considerations before pursuing a business credit funding sequence.',
     audience:
-      'Business owners considering multiple business credit cards as a working-capital strategy.',
-    primaryRoute: '/funding/credit-card-strategy',
-    primaryCta: 'Start The Card Strategy Review',
+      'Business owners considering business credit lines or business credit line working-capital options.',
+    primaryRoute: '/funding/business-funding-strategy',
+    primaryCta: 'Start The Funding Strategy Review',
     secondaryRoute: '/funding#free-eligibility-check',
     secondaryCta: 'Check Eligibility First',
     sections: [
       {
-        heading: 'What credit card stacking preparation means',
+        heading: 'What business funding strategy preparation means',
         body:
-          'Credit card stacking usually means applying for multiple business credit cards in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as a readiness and consent workflow, not an instant approval promise.',
+          'A business credit line funding strategy usually means reviewing multiple business credit options in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as a readiness and consent workflow, not an instant approval promise.',
         bullets: [
           'Review business and personal credit readiness',
           'Check business documents and banking basics',
@@ -171,7 +171,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'How the VestBlock offer is priced',
         body:
-          'The current strategy path uses a $300 readiness plan plus a 10% success fee only after accepted card funding is available. This keeps the paid setup separate from any final lender or card issuer decision.',
+          'The current strategy path uses a $300 readiness plan plus a 10% success fee only after accepted business credit funding is available. This keeps the paid setup separate from any final lender or issuer decision.',
       },
       {
         heading: 'What owners should know before applying',
@@ -181,7 +181,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     ],
     faqs: [
       {
-        question: 'Does credit card stacking guarantee business funding?',
+        question: 'Does this strategy guarantee business funding?',
         answer:
           'No. Card approvals, limits, terms, and fees depend on issuers, underwriting, credit profile, income, business details, and user decisions.',
       },
@@ -193,7 +193,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'When does the success fee apply?',
         answer:
-          'The success-fee language is tied to accepted and available card funding, not to a simple application or inquiry.',
+          'The success-fee language is tied to accepted and available business credit funding, not to a simple application or inquiry.',
       },
     ],
     relatedSlugs: ['business-funding-eligibility', 'debt-utilization-planning'],
@@ -608,4 +608,3 @@ export function getServiceSeoPage(slug: string) {
 export function getServiceSeoPageByServiceKey(serviceKey: string) {
   return serviceSeoPages.find((page) => page.serviceKey === serviceKey);
 }
-

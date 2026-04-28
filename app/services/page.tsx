@@ -35,7 +35,7 @@ import {
 export const metadata: Metadata = {
   title: 'VestBlock Services For Credit Repair, Funding, Grants, and Real Estate',
   description:
-    'Compare VestBlock services for AI credit analysis, dispute letters, business funding eligibility, credit card stacking readiness, business setup, grants, Spanish funding, real estate funding, and property seller leads.',
+    'Compare VestBlock services for AI credit analysis, dispute letters, business funding eligibility, business credit line readiness, business setup, grants, Spanish funding, real estate funding, and property seller leads.',
   alternates: {
     canonical: '/services',
   },

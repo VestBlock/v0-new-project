@@ -52,7 +52,7 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
       'Business credit monitoring setup guidance',
       'Funding-readiness milestones',
     ],
-    upsellPath: 'Funding readiness or credit card stacking support after foundations are stronger',
+    upsellPath: 'Funding readiness or business credit line support after foundations are stronger',
     complianceNote:
       'Does not promise approvals, tradeline reporting, specific scores, or EIN-only funding.',
   },

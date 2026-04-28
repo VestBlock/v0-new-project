@@ -115,11 +115,11 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'credit_card_stacking',
-    label: 'Credit Card Stacking Strategy',
-    offerPath: '/funding/credit-card-strategy',
+    label: 'Business Funding Strategy',
+    offerPath: '/funding/business-funding-strategy',
     audience: 'business owners considering multiple business credit cards for working capital',
     valuePromise:
-      'Review readiness, documents, utilization, inquiry risk, consent, and repayment considerations before a business credit card funding strategy.',
+      'Review readiness, documents, utilization, inquiry risk, consent, and repayment considerations before a business credit line funding strategy.',
     proofPoints: [
       '$300 readiness plan',
       'Funding strategy request workflow',
@@ -129,7 +129,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     complianceNotes: [
       'Do not guarantee card approvals or limits.',
       'Explain hard-inquiry, utilization, and repayment risks.',
-      'Keep the 10% success fee tied to accepted and available card funding.',
+      'Keep the 10% success fee tied to accepted and available business credit funding.',
     ],
   },
   {

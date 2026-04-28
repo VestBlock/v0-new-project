@@ -15,7 +15,7 @@ export function organizationJsonLd() {
       'AI credit repair',
       'credit dispute letters',
       'business funding readiness',
-      'credit card stacking preparation',
+      'business credit line preparation',
       'business credit',
       'small business grants',
       'Spanish business funding',
@@ -122,13 +122,12 @@ export function financialGrowthFaqJsonLd() {
       },
       {
         '@type': 'Question',
-        name: 'Can VestBlock help with credit card stacking preparation?',
+        name: 'Can VestBlock help with business credit line preparation?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'VestBlock can review readiness for a credit card funding strategy, organize documents, explain risk factors, and prepare next steps before applications. Customers should review all terms and understand repayment responsibilities.',
+          text: 'VestBlock can review readiness for a business credit funding strategy, organize documents, explain risk factors, and prepare next steps before applications. Customers should review all terms and understand repayment responsibilities.',
         },
       },
     ],
   };
 }
-

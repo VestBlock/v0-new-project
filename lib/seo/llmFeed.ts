@@ -43,7 +43,7 @@ VestBlock is an AI-powered credit repair, funding readiness, business credit, gr
 - Service directory: ${absoluteUrl('/services')}
 - AI credit report upload: ${absoluteUrl('/credit-upload')}
 - Business funding eligibility: ${absoluteUrl('/funding')}
-- Credit card stacking readiness: ${absoluteUrl('/funding/credit-card-strategy')}
+- Business funding strategy readiness: ${absoluteUrl('/funding/business-funding-strategy')}
 - Business setup for funding and grants: ${absoluteUrl('/business-setup')}
 - Financial growth service packages: ${absoluteUrl('/services/financial-growth')}
 - Spanish business funding: ${absoluteUrl('/es/vestblock')}

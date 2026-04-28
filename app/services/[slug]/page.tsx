@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,10 @@ import {
   type ServiceSeoFaq,
 } from '@/lib/seo/serviceSeoPages';
 
+const legacyServiceSlugs: Record<string, string> = {
+  'credit-card-stacking-strategy': 'business-funding-strategy',
+};
+
 export function generateStaticParams() {
   return serviceSeoPages.map((page) => ({ slug: page.slug }));
 }
@@ -23,6 +27,10 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  if (legacyServiceSlugs[slug]) {
+    redirect(`/services/${legacyServiceSlugs[slug]}`);
+  }
+
   const page = getServiceSeoPage(slug);
 
   if (!page) {
@@ -244,4 +252,3 @@ export default async function ServiceSeoPage({
     </main>
   );
 }
-

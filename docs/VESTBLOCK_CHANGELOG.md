@@ -1,5 +1,52 @@
 # VestBlock Changelog
 
+## 2026-04-28 Business Funding Terminology Cleanup
+
+## Files Changed
+
+- `app/funding/business-funding-strategy/page.tsx`
+- `app/funding/business-funding-strategy/layout.tsx`
+- `app/funding/credit-card-strategy/page.tsx`
+- `app/services/[slug]/page.tsx`
+- `app/funding/page.tsx`
+- `app/funding/layout.tsx`
+- `app/services/page.tsx`
+- `app/sitemap.ts`
+- `components/funding-eligibility-checker.tsx`
+- `lib/content/marketingServices.ts`
+- `lib/funding/cardStacking.ts`
+- `lib/funding/fundingStrategyAutomation.ts`
+- `lib/payments/products.ts`
+- `lib/seo/llmFeed.ts`
+- `lib/seo/serviceSeoPages.ts`
+- `lib/seo/structuredData.ts`
+- `lib/services/serviceDirectory.ts`
+- `lib/services/financialSkillsets.ts`
+- `lib/admin/tasks.ts`
+- `app/admin-panel/page.tsx`
+- `app/admin/leads/page.tsx`
+- `docs/VESTBLOCK_AEO_PLAYBOOK.md`
+- `docs/VESTBLOCK_AUTOMATION_ROADMAP.md`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `.agents/skills/vestblock/funding-lead-automation.md`
+
+## Features Added
+
+- Replaced public-facing "credit card stacking" language with "Business Funding Strategy," "business credit lines," and "business credit funding" language.
+- Added the clean customer route `/funding/business-funding-strategy`.
+- Kept `/funding/credit-card-strategy` as a legacy redirect so old links continue working.
+- Changed the SEO service guide slug to `/services/business-funding-strategy`.
+- Kept `/services/credit-card-stacking-strategy` as a legacy redirect.
+- Updated sitemap, LLM feed, service directory, admin labels, and payment return paths to use the cleaner business funding route.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `109` pages.
+- Local built smoke passed: `/funding/business-funding-strategy` and `/services/business-funding-strategy` return `200`; old `/funding/credit-card-strategy` and `/services/credit-card-stacking-strategy` redirect to the new routes; sitemap and `/llms.txt` list the new business funding strategy URL.
+- Production deploy is pending for this change.
+
 ## 2026-04-28 Dispute Letter Reminder Automation
 
 ## Files Changed

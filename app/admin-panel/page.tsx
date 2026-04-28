@@ -333,7 +333,7 @@ const leadTypeLabels: Record<string, string> = {
   real_estate: 'Real Estate Funding',
   ai_assistant: 'AI Assistant',
   business_funding: 'Business Funding',
-  credit_card_funding_strategy: 'Card Funding Strategy',
+  credit_card_funding_strategy: 'Business Funding Strategy',
 };
 
 const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
@@ -2276,7 +2276,7 @@ export default function AdminPanelPage() {
           <TabsContent value="funding-strategy">
             <Card>
               <CardHeader>
-                <CardTitle>Credit Card Funding Strategy</CardTitle>
+                <CardTitle>Business Funding Strategy</CardTitle>
                 <CardDescription>
                   Paid review requests, readiness scoring, consents, payment status,
                   and admin follow-up actions.

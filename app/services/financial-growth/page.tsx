@@ -189,7 +189,7 @@ export default function FinancialGrowthServicesPage() {
               <div>
                 <p className="font-medium">$300 readiness plan plus success fee</p>
                 <p className="text-muted-foreground">
-                  Deeper funding prep for card stacking and business funding cases.
+                  Deeper funding prep for business credit lines and business funding cases.
                 </p>
               </div>
               <div>

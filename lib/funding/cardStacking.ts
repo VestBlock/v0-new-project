@@ -72,7 +72,7 @@ export function evaluateCardFundingReadiness(
     strengths.push('Current utilization appears manageable for a funding review.');
   } else {
     risks.push('High utilization can reduce approval odds and starting limits.');
-    nextSteps.push('Lower revolving utilization before a card funding sequence.');
+    nextSteps.push('Lower revolving utilization before a business credit funding sequence.');
   }
 
   const inquiryScore = scoreInquiries(answers.recentInquiries);
@@ -164,7 +164,7 @@ export function evaluateCardFundingReadiness(
   return {
     score,
     tier: 'needs_prep',
-    label: 'Needs prep before card funding',
+    label: 'Needs prep before business funding',
     summary:
       'This profile should focus on eligibility work before a business funding sequence. Applying too early could create avoidable inquiries, fees, or utilization risk.',
     strengths,

@@ -5,7 +5,7 @@ import { absoluteUrl } from '@/lib/seo/site';
 export const metadata: Metadata = {
   title: 'Business Funding Eligibility Checker And Readiness Plan',
   description:
-    'Check business funding eligibility for free, review readiness factors, and move into VestBlock funding prep or credit card stacking strategy when more support is needed.',
+    'Check business funding eligibility for free, review readiness factors, and move into VestBlock funding prep or business funding strategy when more support is needed.',
   alternates: {
     canonical: '/funding',
   },
@@ -20,4 +20,3 @@ export const metadata: Metadata = {
 export default function FundingLayout({ children }: { children: ReactNode }) {
   return children;
 }
-
