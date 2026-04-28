@@ -18,7 +18,8 @@
 - `corepack pnpm lint` passed with existing warning-only output.
 - `OPENAI_API_KEY=sk-build-placeholder NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=build-placeholder SUPABASE_SERVICE_ROLE_KEY=build-placeholder NEXT_PUBLIC_SITE_URL=https://www.vestblock.io corepack pnpm build` passed and generated `107` pages.
 - Local built smoke passed: unauthenticated `/admin-panel` redirects to login, unauthenticated `/api/test-openai-simple` returns `401`, and `/services/credit-card-stacking-strategy` returns `200`.
-- Production redeploy is pending for this hardening change.
+- Production deploy `dpl_JDKNRAiCZ5WB98JpXh9qvHuDHfc6` passed and is aliased to `https://vestblock.io` and `https://www.vestblock.io`.
+- Live smoke passed: apex and `www` return `200`, unauthenticated `/admin-panel` redirects to login, `/services/credit-card-stacking-strategy` returns `200`, `sitemap.xml` includes `/llms.txt` and the credit card stacking guide, and `/llms.txt` includes Spanish funding, real estate funding, and credit card stacking coverage.
 
 ## 2026-04-27 Published Service AEO Guides
 
