@@ -247,6 +247,7 @@ export async function createDisputeSecondaryBureauTask(input: {
   userId?: string | null;
   userEmail?: string | null;
   bureau?: string | null;
+  letterType?: string | null;
   ageHours?: number | null;
 }) {
   return createAdminTask({
@@ -262,6 +263,7 @@ export async function createDisputeSecondaryBureauTask(input: {
     dueAt: adminTaskDueDates.now(),
     metadata: {
       bureau: input.bureau,
+      letterType: input.letterType,
       ageHours: input.ageHours,
       nextAction: 'Review other bureau letters and customer mailing status.',
     },
@@ -273,6 +275,7 @@ export async function createDisputeBureauResponseTask(input: {
   userId?: string | null;
   userEmail?: string | null;
   bureau?: string | null;
+  letterType?: string | null;
   mailedAt?: string | null;
   ageHours?: number | null;
 }) {
@@ -289,6 +292,7 @@ export async function createDisputeBureauResponseTask(input: {
     dueAt: adminTaskDueDates.now(),
     metadata: {
       bureau: input.bureau,
+      letterType: input.letterType,
       mailedAt: input.mailedAt,
       ageHours: input.ageHours,
       nextAction: 'Collect bureau response and determine whether a follow-up dispute is needed.',
@@ -441,18 +445,32 @@ export async function createLeadFollowupTask(input: {
   leadType?: string | null;
   name?: string | null;
   email?: string | null;
+  phone?: string | null;
+  propertyAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  summary?: string | null;
+  assignedTo?: string | null;
   ageHours?: number | null;
   sourcePath?: string | null;
   immediate?: boolean;
 }) {
+  const locationLine =
+    input.propertyAddress || [input.city, input.state].filter(Boolean).join(', ') || null;
+
   return createAdminTask({
     title: input.immediate ? 'Contact new lead' : 'Follow up with new lead',
-    description:
+    description: [
       input.immediate
-        ? 'A new lead was submitted. Review the source, contact details, and next sales step while intent is fresh.'
-        : 'A lead is still marked new after the follow-up window. Review the source, contact details, and next sales step.',
+        ? 'A new lead was submitted. Review the source, contact details, property details, and next sales step while intent is fresh.'
+        : 'A lead is still marked new after the follow-up window. Review the source, contact details, property details, and next sales step.',
+      locationLine ? `Address: ${locationLine}` : null,
+      input.phone ? `Phone: ${input.phone}` : null,
+      input.summary ? `Summary: ${input.summary}` : null,
+    ].filter(Boolean).join('\n\n'),
     taskType: 'lead_followup',
     priority: input.immediate ? 'high' : 'normal',
+    assignedTo: input.assignedTo ?? null,
     userEmail: input.email,
     entityType: 'lead',
     entityId: input.leadId,
@@ -460,6 +478,11 @@ export async function createLeadFollowupTask(input: {
     metadata: {
       leadType: input.leadType,
       name: input.name,
+      phone: input.phone,
+      propertyAddress: input.propertyAddress,
+      city: input.city,
+      state: input.state,
+      summary: input.summary,
       ageHours: input.ageHours,
       sourcePath: input.sourcePath,
       nextAction: 'Contact lead or update lead status.',
@@ -478,10 +501,10 @@ export async function createFundingStrategyReviewTask(input: {
 }) {
   return createAdminTask({
     title: input.paid
-      ? 'Complete paid funding readiness plan'
+      ? 'Complete paid funding prep plan'
       : 'Review business funding strategy request',
     description:
-      'A customer submitted a business funding strategy request. Review credit readiness, business setup, consent, and whether the plan should focus on applications or eligibility prep.',
+      'A customer submitted a business funding strategy request. Review credit factors, business setup, consent, and whether the plan should focus on applications or eligibility prep.',
     taskType: input.paid
       ? 'paid_funding_strategy_review'
       : 'funding_strategy_review',
@@ -497,8 +520,8 @@ export async function createFundingStrategyReviewTask(input: {
       readinessTier: input.readinessTier,
       paid: Boolean(input.paid),
       nextAction: input.paid
-        ? 'Prepare the readiness plan, verify documents, and contact the customer.'
-        : 'Review readiness score and decide whether to route toward partner funding or prep work.',
+        ? 'Prepare the funding prep plan, verify documents, and contact the customer.'
+        : 'Review the funding-prep score and decide whether to recommend partner funding or prep work.',
     },
   });
 }

@@ -4,6 +4,7 @@ import { logEvent } from '@/lib/system/logEvent';
 
 type EmailEventType =
   | 'admin_credit_report_uploaded'
+  | 'user_signup_credit_report_start'
   | 'user_credit_report_received'
   | 'user_analysis_completed'
   | 'admin_analysis_completed'
@@ -15,6 +16,12 @@ type EmailEventType =
   | 'user_upload_reminder'
   | 'user_paid_upload_reminder'
   | 'admin_lead_followup'
+  | 'admin_lead_email_sent'
+  | 'admin_lead_run_daily_report'
+  | 'admin_lead_scoring_daily_report'
+  | 'admin_lead_outreach_daily_report'
+  | 'admin_lead_send_daily_report'
+  | 'user_service_deliverable_ready'
   | 'user_dispute_letters_ready'
   | 'user_dispute_letter_mail_reminder'
   | 'user_dispute_secondary_bureau_reminder'
@@ -68,6 +75,120 @@ function shell(title: string, body: string) {
       </div>
     </div>
   `;
+}
+
+function getDisputeMethodGuidance(letterType?: string | null) {
+  const normalized = String(letterType || '').trim().toLowerCase();
+
+  const defaultGuidance = {
+    readyTitle: 'Review each letter carefully before mailing.',
+    readyBody:
+      'Make sure the facts are accurate, attach supporting records where helpful, and keep copies for your own file.',
+    mailBody:
+      'Review the PDF, attach supporting documents where relevant, and use a trackable mailing method so you can document when it was sent.',
+    secondaryBody:
+      'If the same reporting issue appears with more than one bureau, make sure each relevant bureau letter is reviewed and mailed separately.',
+    responseBody:
+      'Check for the bureau response, save the result, and compare it against the exact issue raised in the letter.',
+    adminBody:
+      'Check whether the customer completed the next step for this dispute method and whether another follow-up round is needed.',
+  };
+
+  const guides: Record<string, typeof defaultGuidance> = {
+    'direct furnisher dispute': {
+      readyTitle: 'Confirm the reporting source details before mailing.',
+      readyBody:
+        'Direct furnisher disputes work best when the reported balance, dates, payment status, or ownership issue is stated clearly and backed by documents.',
+      mailBody:
+        'Make sure the letter and attachments clearly show the balance, dates, status, or ownership issue you want the furnisher to investigate.',
+      secondaryBody:
+        'If the same account is reported across multiple bureaus, confirm whether matching bureau letters also need to be mailed while the furnisher dispute is pending.',
+      responseBody:
+        'Compare the furnisher or bureau response against the exact balance, status, ownership, or date issue raised in the letter.',
+      adminBody:
+        'Review whether the furnisher answered the specific reporting problem and whether bureau follow-up or another documentation round is needed.',
+    },
+    'method of verification': {
+      readyTitle: 'Keep the prior dispute result handy with this letter.',
+      readyBody:
+        'This method works best when the customer is following up after a prior dispute and asking how the information was actually verified.',
+      mailBody:
+        'Include any prior dispute response if available so the follow-up request is tied to the earlier investigation result.',
+      secondaryBody:
+        'If multiple bureaus reported the same item after a prior dispute, check whether each bureau still needs its own verification follow-up.',
+      responseBody:
+        'Look for whether the bureau actually identified the method or source used to verify the reporting, not just a generic conclusion.',
+      adminBody:
+        'Confirm whether the bureau gave a real verification method and whether the customer needs a more specific follow-up.',
+    },
+    'statement of dispute': {
+      readyTitle: 'Review the unresolved issue summary before mailing.',
+      readyBody:
+        'This method is meant to preserve the customer’s dispute position when the issue remains unresolved after review.',
+      mailBody:
+        'Make sure the unresolved issue is summarized clearly so the dispute notation request matches the customer’s actual position.',
+      secondaryBody:
+        'If the unresolved issue appears across multiple bureaus, confirm whether each file needs its own dispute notation request.',
+      responseBody:
+        'Check whether the response addresses the notation request or leaves the reporting unresolved without any file notation.',
+      adminBody:
+        'Review whether the bureau added the dispute notation or whether another customer follow-up is needed.',
+    },
+    'identity theft block': {
+      readyTitle: 'Double-check the fraud documentation before mailing.',
+      readyBody:
+        'Identity-theft block letters are strongest when they line up with unauthorized activity details and any fraud or police documentation the customer has.',
+      mailBody:
+        'Make sure the unauthorized-account details and any fraud documentation are attached before mailing this identity-theft block request.',
+      secondaryBody:
+        'If fraudulent reporting appears across multiple bureaus, confirm whether each bureau received its own block request and supporting documents.',
+      responseBody:
+        'Check whether the response actually addresses the unauthorized activity and blocking request, not just the account status.',
+      adminBody:
+        'Review whether the bureau handled the fraud-block request correctly and whether additional documentation is needed quickly.',
+    },
+    'mixed file': {
+      readyTitle: 'Review the wrong-person or merged-file details carefully.',
+      readyBody:
+        'Mixed-file disputes are strongest when the incorrect identifiers, addresses, or unrelated accounts are called out precisely.',
+      mailBody:
+        'Make sure the mixed-file details are specific so the bureau can separate unrelated identifiers or accounts from the customer’s file.',
+      secondaryBody:
+        'If the same merged-file problem appears with other bureaus, make sure those bureau letters are also reviewed and mailed.',
+      responseBody:
+        'Check whether the bureau corrected the mixed identifiers and removed unrelated accounts, not just whether it replied.',
+      adminBody:
+        'Review whether the response actually separated the file correctly and whether another correction round is needed.',
+    },
+    'outdated information': {
+      readyTitle: 'Check the reporting dates before mailing.',
+      readyBody:
+        'Outdated-information disputes work best when the reporting timeline and the reason the item should no longer appear are easy to verify.',
+      mailBody:
+        'Review the dates and attach any records that help show the reporting timeline before mailing this request.',
+      secondaryBody:
+        'If the same outdated reporting appears with multiple bureaus, confirm whether each bureau letter has also been reviewed and mailed.',
+      responseBody:
+        'Check whether the bureau actually corrected or removed the outdated reporting based on the timeline issue raised.',
+      adminBody:
+        'Review whether the bureau addressed the reporting-period issue directly and whether another follow-up is needed.',
+    },
+    'personal information correction': {
+      readyTitle: 'Confirm the wrong identifiers before mailing.',
+      readyBody:
+        'This method is strongest when the incorrect names, addresses, or identifiers are precise and tied to the customer’s real information.',
+      mailBody:
+        'Review the personal-information details closely and attach any records that support the correction request.',
+      secondaryBody:
+        'If the incorrect identifiers appear on multiple bureau files, make sure each bureau letter is reviewed separately.',
+      responseBody:
+        'Check whether the bureau corrected the wrong personal information and whether any related accounts still need review.',
+      adminBody:
+        'Review whether the bureau corrected the identifiers cleanly and whether related account cleanup is still needed.',
+    },
+  };
+
+  return guides[normalized] || defaultGuidance;
 }
 
 async function recordEmailEvent(
@@ -366,10 +487,26 @@ export async function sendNewLeadAlertEmail(details: {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+  propertyAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
   sourcePath?: string | null;
   summary?: string | null;
 }) {
   const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const locationLine =
+    details.propertyAddress || [details.city, details.state].filter(Boolean).join(', ') || null;
+  const detailRows = [
+    details.name ? `<strong>Name:</strong> ${escapeHtml(details.name)}` : null,
+    details.email ? `<strong>Email:</strong> ${escapeHtml(details.email)}` : null,
+    details.phone ? `<strong>Phone:</strong> ${escapeHtml(details.phone)}` : null,
+    locationLine ? `<strong>Address:</strong> ${escapeHtml(locationLine)}` : null,
+    details.leadType ? `<strong>Lead type:</strong> ${escapeHtml(details.leadType)}` : null,
+    details.sourcePath ? `<strong>Source:</strong> ${escapeHtml(details.sourcePath)}` : null,
+    details.leadId ? `<strong>Lead ID:</strong> ${escapeHtml(details.leadId)}` : null,
+  ].filter(Boolean);
+  const directContactCaptured = Boolean(String(details.email || '').trim() || String(details.phone || '').trim());
+
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
     subject: 'New VestBlock Lead Submitted',
@@ -379,12 +516,12 @@ export async function sendNewLeadAlertEmail(details: {
       'New lead submitted',
       `
       <p>A new VestBlock lead was submitted and is ready for follow-up.</p>
-      <p><strong>Name:</strong> ${escapeHtml(details.name || 'Unknown')}<br />
-      <strong>Email:</strong> ${escapeHtml(details.email || 'Unknown')}<br />
-      <strong>Phone:</strong> ${escapeHtml(details.phone || 'Unknown')}<br />
-      <strong>Lead type:</strong> ${escapeHtml(details.leadType || 'Unknown')}<br />
-      <strong>Source:</strong> ${escapeHtml(details.sourcePath || 'Unknown')}<br />
-      <strong>Lead ID:</strong> ${escapeHtml(details.leadId || 'Unknown')}</p>
+      ${
+        detailRows.length
+          ? `<p>${detailRows.join('<br />')}</p>`
+          : '<p>No direct lead details were captured in this alert payload.</p>'
+      }
+      <p><strong>Direct contact captured:</strong> ${directContactCaptured ? 'Yes' : 'No'}</p>
       ${
         details.summary
           ? `<p><strong>Summary:</strong><br />${escapeHtml(details.summary)}</p>`
@@ -396,12 +533,52 @@ export async function sendNewLeadAlertEmail(details: {
   });
 }
 
+export async function sendLeadOutreachSentAlertEmail(details: {
+  leadId?: string | null;
+  leadType?: string | null;
+  name?: string | null;
+  email?: string | null;
+  provider?: string | null;
+  subject?: string | null;
+  sourcePath?: string | null;
+  deliveryMode?: 'auto' | 'manual' | 'queue' | null;
+}) {
+  const adminUrl = details.leadId
+    ? `${getSiteUrl()}/admin/leads/${details.leadId}`
+    : `${getSiteUrl()}/admin/leads`;
+
+  return sendEmail({
+    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    subject: 'VestBlock Outreach Email Sent',
+    eventType: 'admin_lead_email_sent',
+    userEmail: details.email,
+    html: shell(
+      'Lead outreach email sent',
+      `
+      <p>A lead outreach email was successfully sent.</p>
+      <p>
+        ${details.name ? `<strong>Name:</strong> ${escapeHtml(details.name)}<br />` : ''}
+        ${details.email ? `<strong>Email:</strong> ${escapeHtml(details.email)}<br />` : ''}
+        ${details.leadType ? `<strong>Lead type:</strong> ${escapeHtml(details.leadType)}<br />` : ''}
+        ${details.provider ? `<strong>Provider:</strong> ${escapeHtml(details.provider)}<br />` : ''}
+        ${details.deliveryMode ? `<strong>Send path:</strong> ${escapeHtml(details.deliveryMode)}<br />` : ''}
+        ${details.subject ? `<strong>Subject:</strong> ${escapeHtml(details.subject)}<br />` : ''}
+        ${details.sourcePath ? `<strong>Source:</strong> ${escapeHtml(details.sourcePath)}<br />` : ''}
+        ${details.leadId ? `<strong>Lead ID:</strong> ${escapeHtml(details.leadId)}` : ''}
+      </p>
+      <p><a href="${adminUrl}" style="color:#67e8f9;">Open lead record</a></p>
+    `
+    ),
+  });
+}
+
 export async function sendUserUploadReminderEmail(details: {
   userEmail?: string | null;
   userId?: string | null;
   fullName?: string | null;
 }) {
   const uploadUrl = `${getSiteUrl()}/credit-upload`;
+  const reportUrl = 'https://www.annualcreditreport.com/';
   const greeting = details.fullName
     ? `Hi ${escapeHtml(details.fullName)},`
     : 'Hi,';
@@ -416,9 +593,42 @@ export async function sendUserUploadReminderEmail(details: {
       'Your credit analysis starts with an upload',
       `
       <p>${greeting}</p>
-      <p>Your VestBlock account is ready. The next step is uploading a recent credit report so we can start the credit analysis and dispute-letter workflow.</p>
+      <p>Your VestBlock account is ready. The next step is getting a recent credit report and uploading it so we can start the credit analysis and dispute-letter workflow.</p>
+      <p><strong>Official source:</strong> <a href="${reportUrl}" style="color:#67e8f9;">AnnualCreditReport.com</a></p>
       <p><a href="${uploadUrl}" style="color:#67e8f9;">Upload your credit report</a></p>
       <p>If you already uploaded a report, you can ignore this message and check your dashboard for status updates.</p>
+    `
+    ),
+  });
+}
+
+export async function sendUserSignupCreditReportStartEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  fullName?: string | null;
+}) {
+  const reportUrl = 'https://www.annualcreditreport.com/';
+  const uploadUrl = `${getSiteUrl()}/credit-upload`;
+  const greeting = details.fullName
+    ? `Hi ${escapeHtml(details.fullName)},`
+    : 'Hi,';
+
+  return sendEmail({
+    to: details.userEmail,
+    subject: 'Start here: download your free credit report',
+    eventType: 'user_signup_credit_report_start',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      'Start your VestBlock credit workflow',
+      `
+      <p>${greeting}</p>
+      <p>Your VestBlock account is ready. The fastest next step is downloading your free official credit report and then uploading it to VestBlock for analysis.</p>
+      <p><strong>Official source:</strong> <a href="${reportUrl}" style="color:#67e8f9;">AnnualCreditReport.com</a></p>
+      <p>This is the federally authorized site for free credit reports from Equifax, Experian, and TransUnion.</p>
+      <p>After you download your report, come back here:</p>
+      <p><a href="${uploadUrl}" style="color:#67e8f9;">Upload your credit report to VestBlock</a></p>
+      <p>Once uploaded, VestBlock can help organize dispute methods, boost-pack steps, card ideas, and side-hustle recommendations based on your actual profile.</p>
     `
     ),
   });
@@ -476,13 +686,67 @@ export async function sendAdminLeadFollowupEmail(details: {
   });
 }
 
+export async function sendUserServiceDeliverableReadyEmail(details: {
+  userEmail?: string | null;
+  userId?: string | null;
+  packageTitle: string;
+  summary: string;
+  recommendedActions?: string[];
+  customerMessage?: string | null;
+}) {
+  const servicesUrl = `${getSiteUrl()}/dashboard/services`;
+  const actions = (details.recommendedActions || [])
+    .slice(0, 5)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join('');
+
+  return sendEmail({
+    to: details.userEmail,
+    subject: `Your ${details.packageTitle} is ready`,
+    eventType: 'user_service_deliverable_ready',
+    userId: details.userId,
+    userEmail: details.userEmail,
+    html: shell(
+      `${details.packageTitle} is ready`,
+      `
+      <p>Your VestBlock service deliverable is ready to review.</p>
+      <p><strong>Service:</strong> ${escapeHtml(details.packageTitle)}</p>
+      <p>${escapeHtml(details.summary)}</p>
+      ${
+        actions
+          ? `<p><strong>Recommended next steps:</strong></p><ul>${actions}</ul>`
+          : ''
+      }
+      ${
+        details.customerMessage
+          ? `<p><strong>VestBlock note:</strong><br />${escapeHtml(details.customerMessage)}</p>`
+          : ''
+      }
+      <p><a href="${servicesUrl}" style="color:#67e8f9;">Open your service dashboard</a></p>
+      <p>Only submit truthful, accurate, and documentable information as you move into any next funding, grant, credit, or deal step.</p>
+    `
+    ),
+  });
+}
+
 export async function sendUserDisputeLettersReadyEmail(details: {
   userEmail?: string | null;
   userId?: string | null;
   reportId?: string | null;
   generatedLetterCount?: number | null;
+  letterTypes?: string[] | null;
 }) {
   const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  const uniqueTypes = Array.from(
+    new Set((details.letterTypes || []).map((type) => String(type).trim()).filter(Boolean))
+  );
+  const methodSummary = uniqueTypes.length
+    ? `<p><strong>Methods included:</strong></p><ul>${uniqueTypes
+        .slice(0, 6)
+        .map((type) => `<li>${escapeHtml(type)}</li>`)
+        .join('')}</ul>`
+    : '';
+  const firstGuide = getDisputeMethodGuidance(uniqueTypes[0] || null);
   return sendEmail({
     to: details.userEmail,
     subject: 'Your VestBlock dispute letters are ready',
@@ -495,6 +759,8 @@ export async function sendUserDisputeLettersReadyEmail(details: {
       <p>Your VestBlock dispute-letter PDFs are ready to review. Download each letter, review it for accuracy, attach supporting documents, and mail it using a trackable method when you are comfortable.</p>
       <p><strong>Letters generated:</strong> ${escapeHtml(String(details.generatedLetterCount || 'Available in dashboard'))}<br />
       <strong>Report ID:</strong> ${escapeHtml(details.reportId || 'Available in dashboard')}</p>
+      ${methodSummary}
+      <p><strong>VestBlock note:</strong> ${escapeHtml(firstGuide.readyTitle)} ${escapeHtml(firstGuide.readyBody)}</p>
       <p><a href="${lettersUrl}" style="color:#67e8f9;">Open your dispute letters</a></p>
       <p>Keep your mailing receipts and bureau responses. VestBlock can help you track the next review window from your dashboard.</p>
     `
@@ -510,6 +776,7 @@ export async function sendUserDisputeLetterMailReminderEmail(details: {
   letterType?: string | null;
 }) {
   const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  const guide = getDisputeMethodGuidance(details.letterType);
   return sendEmail({
     to: details.userEmail,
     subject: 'Reminder: mail your VestBlock dispute letter',
@@ -519,7 +786,7 @@ export async function sendUserDisputeLetterMailReminderEmail(details: {
     html: shell(
       'Mail your dispute letter when ready',
       `
-      <p>Your generated dispute letter is still waiting for the mailing step. Review the PDF, include copies of any supporting documents, and use a trackable mailing method so you can document when it was sent.</p>
+      <p>Your generated dispute letter is still waiting for the mailing step. ${escapeHtml(guide.mailBody)}</p>
       <p><strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'See letter PDF')}<br />
       <strong>Letter type:</strong> ${escapeHtml(details.letterType || 'Dispute letter')}<br />
       <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
@@ -534,8 +801,10 @@ export async function sendUserSecondaryBureauReminderEmail(details: {
   userId?: string | null;
   letterId?: string | null;
   bureau?: string | null;
+  letterType?: string | null;
 }) {
   const lettersUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  const guide = getDisputeMethodGuidance(details.letterType);
   return sendEmail({
     to: details.userEmail,
     subject: 'Check your remaining bureau dispute letters',
@@ -545,8 +814,9 @@ export async function sendUserSecondaryBureauReminderEmail(details: {
     html: shell(
       'Check the other bureau letters',
       `
-      <p>If this issue appears on more than one credit bureau report, make sure each relevant bureau letter is reviewed and mailed separately. Do not assume one bureau dispute updates every file automatically.</p>
+      <p>${escapeHtml(guide.secondaryBody)} Do not assume one bureau dispute updates every file automatically.</p>
       <p><strong>Current letter:</strong> ${escapeHtml(details.bureau || 'Credit bureau letter')}<br />
+      <strong>Letter type:</strong> ${escapeHtml(details.letterType || 'Dispute letter')}<br />
       <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
       <p><a href="${lettersUrl}" style="color:#67e8f9;">Review dispute letters</a></p>
     `
@@ -559,8 +829,10 @@ export async function sendUserDisputeBureauResponseReminderEmail(details: {
   userId?: string | null;
   letterId?: string | null;
   bureau?: string | null;
+  letterType?: string | null;
 }) {
   const dashboardUrl = `${getSiteUrl()}/tools/my-dispute-letters`;
+  const guide = getDisputeMethodGuidance(details.letterType);
   return sendEmail({
     to: details.userEmail,
     subject: 'Check for your credit bureau response',
@@ -570,8 +842,9 @@ export async function sendUserDisputeBureauResponseReminderEmail(details: {
     html: shell(
       'Check for the bureau response',
       `
-      <p>Your dispute-letter response window is ready for review. Check your mail, email, and bureau account for investigation results, then save the response for your records.</p>
+      <p>Your dispute-letter response window is ready for review. ${escapeHtml(guide.responseBody)}</p>
       <p><strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'See letter PDF')}<br />
+      <strong>Letter type:</strong> ${escapeHtml(details.letterType || 'Dispute letter')}<br />
       <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Available in dashboard')}</p>
       <p><a href="${dashboardUrl}" style="color:#67e8f9;">Update your dispute-letter status</a></p>
     `
@@ -584,9 +857,11 @@ export async function sendAdminDisputeLetterFollowupEmail(details: {
   userId?: string | null;
   letterId?: string | null;
   bureau?: string | null;
+  letterType?: string | null;
   reason?: string | null;
 }) {
   const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const guide = getDisputeMethodGuidance(details.letterType);
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
     subject: 'VestBlock Dispute Letter Follow-Up Needed',
@@ -599,8 +874,10 @@ export async function sendAdminDisputeLetterFollowupEmail(details: {
       <p>A dispute-letter workflow needs review or customer follow-up.</p>
       <p><strong>User:</strong> ${escapeHtml(details.userEmail || details.userId || 'Unknown')}<br />
       <strong>Bureau/recipient:</strong> ${escapeHtml(details.bureau || 'Unknown')}<br />
+      <strong>Letter type:</strong> ${escapeHtml(details.letterType || 'Dispute letter')}<br />
       <strong>Letter ID:</strong> ${escapeHtml(details.letterId || 'Unknown')}<br />
       <strong>Reason:</strong> ${escapeHtml(details.reason || 'Reminder threshold reached')}</p>
+      <p><strong>Method-aware note:</strong> ${escapeHtml(guide.adminBody)}</p>
       <p><a href="${adminUrl}" style="color:#67e8f9;">Open admin dashboard</a></p>
     `
     ),
