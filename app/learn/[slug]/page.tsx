@@ -18,9 +18,26 @@ import {
   intentLabels,
   vestblockAeoTopics,
 } from '@/lib/aeo/topics';
+import { absoluteUrl } from '@/lib/seo/site';
+import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/structuredData';
 
 type LearnTopicPageProps = {
   params: Promise<{ slug: string }>;
+};
+
+const spanishClusterLabels: Partial<Record<(typeof vestblockAeoTopics)[number]['cluster'], string>> = {
+  funding: 'Financiamiento',
+  'business-credit': 'Credito comercial',
+  'credit-builder': 'Construccion de credito',
+  disputes: 'Disputas de credito',
+  'credit-repair': 'Reparacion de credito',
+};
+
+const spanishIntentLabels: Partial<Record<(typeof vestblockAeoTopics)[number]['intent'], string>> = {
+  education: 'Aprender',
+  comparison: 'Comparar',
+  'lead-capture': 'Prepararte',
+  'tool-support': 'Usar herramienta',
 };
 
 export function generateStaticParams() {
@@ -40,10 +57,17 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${topic.title} Guide | VestBlock`,
+    title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
     description: topic.metaDescription,
     alternates: {
       canonical: `/learn/${topic.slug}`,
+    },
+    openGraph: {
+      title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
+      description: topic.metaDescription,
+      url: absoluteUrl(`/learn/${topic.slug}`),
+      type: 'article',
+      locale: topic.language === 'es' ? 'es_US' : 'en_US',
     },
   };
 }
@@ -71,22 +95,48 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
     notFound();
   }
 
+  const isSpanish = topic.language === 'es';
+  const clusterLabel = isSpanish
+    ? spanishClusterLabels[topic.cluster] || clusterLabels[topic.cluster]
+    : clusterLabels[topic.cluster];
+  const intentLabel = isSpanish
+    ? spanishIntentLabels[topic.intent] || intentLabels[topic.intent]
+    : intentLabels[topic.intent];
   const relatedTopics = getRelatedAeoTopics(topic);
   const faqSchema = buildFaqSchema(topic);
+  const articleSchema = articleJsonLd({
+    headline: topic.title,
+    description: topic.metaDescription,
+    path: `/learn/${topic.slug}`,
+    inLanguage: topic.language || 'en',
+    keywords: [
+      topic.title,
+      clusterLabel,
+      intentLabel,
+      'VestBlock',
+    ],
+  });
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Learn', path: '/learn' },
+    { name: topic.title, path: `/learn/${topic.slug}` },
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([breadcrumbs, articleSchema, faqSchema]),
+        }}
       />
 
       <section className="border-b bg-muted/30 px-4 py-12">
         <div className="container mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1fr_340px]">
           <div className="space-y-5">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{clusterLabels[topic.cluster]}</Badge>
-              <Badge variant="outline">{intentLabels[topic.intent]}</Badge>
+              <Badge variant="secondary">{clusterLabel}</Badge>
+              <Badge variant="outline">{intentLabel}</Badge>
             </div>
             <div className="max-w-3xl space-y-3">
               <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
@@ -97,29 +147,33 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
             <div className="flex flex-wrap gap-3">
               <Button asChild>
                 <Link href={topic.offerPath}>
-                  Open Related VestBlock Tool
+                  {isSpanish
+                    ? 'Abrir ruta relacionada de VestBlock'
+                    : 'Open Related VestBlock Tool'}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/learn">All Guides</Link>
+                <Link href="/learn">{isSpanish ? 'Todas las guias' : 'All Guides'}</Link>
               </Button>
             </div>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Who This Helps</CardTitle>
+              <CardTitle>{isSpanish ? 'Para quien sirve' : 'Who This Helps'}</CardTitle>
               <CardDescription>{topic.audience}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>
-                VestBlock provides education and workflow tools. It does not
-                guarantee approvals, deletions, score changes, grants, or funding.
+                {isSpanish
+                  ? 'VestBlock ofrece educacion y herramientas de flujo de trabajo. No garantiza aprobaciones, eliminaciones, cambios de puntaje, subvenciones ni financiamiento.'
+                  : 'VestBlock provides education and practical tools. It does not guarantee approvals, deletions, score changes, grants, or funding.'}
               </p>
               <p>
-                Use this guide to prepare better questions, documents, and next
-                steps before using the related tool.
+                {isSpanish
+                  ? 'Usa esta guia para preparar mejores preguntas, documentos y proximos pasos antes de usar la herramienta relacionada.'
+                  : 'Use this guide to prepare better questions, documents, and next steps before using the related tool.'}
               </p>
             </CardContent>
           </Card>
@@ -131,7 +185,7 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Key Takeaways</CardTitle>
+                <CardTitle>{isSpanish ? 'Puntos clave' : 'Key Takeaways'}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3">
                 {topic.keyTakeaways.map((takeaway) => (
@@ -145,9 +199,11 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle>What To Do Next</CardTitle>
+                <CardTitle>{isSpanish ? 'Que hacer ahora' : 'What To Do Next'}</CardTitle>
                 <CardDescription>
-                  A simple checklist before you move into the related VestBlock tool.
+                  {isSpanish
+                    ? 'Una lista simple antes de pasar a la herramienta relacionada de VestBlock.'
+                    : 'A simple checklist before you move into the related VestBlock tool.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -166,7 +222,9 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle>Frequently Asked Questions</CardTitle>
+                <CardTitle>
+                  {isSpanish ? 'Preguntas frecuentes' : 'Frequently Asked Questions'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {topic.faqs.map((faq) => (
@@ -182,7 +240,7 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
           <aside className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Related Guides</CardTitle>
+                <CardTitle>{isSpanish ? 'Guias relacionadas' : 'Related Guides'}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {relatedTopics.map((related) => (
@@ -193,7 +251,9 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
                   >
                     <p className="font-medium">{related.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {clusterLabels[related.cluster]}
+                      {isSpanish
+                        ? spanishClusterLabels[related.cluster] || clusterLabels[related.cluster]
+                        : clusterLabels[related.cluster]}
                     </p>
                   </Link>
                 ))}
@@ -202,15 +262,16 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle>Use VestBlock</CardTitle>
+                <CardTitle>{isSpanish ? 'Usa VestBlock' : 'Use VestBlock'}</CardTitle>
                 <CardDescription>
-                  Move from research to a real credit, funding, or business-credit
-                  action.
+                  {isSpanish
+                    ? 'Pasa de la investigacion a una accion real de credito, financiamiento o credito comercial.'
+                    : 'Move from research to a real credit, funding, or business-credit action.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button asChild className="w-full">
-                  <Link href={topic.offerPath}>Open Tool</Link>
+                  <Link href={topic.offerPath}>{isSpanish ? 'Abrir ruta' : 'Open Tool'}</Link>
                 </Button>
               </CardContent>
             </Card>

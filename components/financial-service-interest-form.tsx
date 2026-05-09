@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,9 +32,20 @@ const initialForm = {
 };
 
 export function FinancialServiceInterestForm() {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const packageKey = searchParams.get('package');
+    if (!packageKey) return;
+
+    const packageExists = financialSkillsetPackages.some((item) => item.key === packageKey);
+    if (!packageExists) return;
+
+    setForm((current) => ({ ...current, packageKey }));
+  }, [searchParams]);
 
   const updateField = (name: string, value: string) => {
     setForm((current) => ({ ...current, [name]: value }));
@@ -79,8 +91,8 @@ export function FinancialServiceInterestForm() {
       <CardHeader>
         <CardTitle>Request A Financial Service</CardTitle>
         <CardDescription>
-          Tell us which package fits your goal. This creates a real VestBlock lead
-          for admin follow-up.
+          Tell us which package fits your goal. VestBlock will review the request
+          and follow up with the next step.
         </CardDescription>
       </CardHeader>
       <CardContent>

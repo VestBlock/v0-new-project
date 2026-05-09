@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { absoluteUrl, vestBlockSiteName } from '@/lib/seo/site';
+import { breadcrumbJsonLd } from '@/lib/seo/structuredData';
 import {
   getServiceSeoPage,
   serviceSeoPages,
@@ -69,6 +70,8 @@ function faqJsonLd(faqs: ServiceSeoFaq[]) {
 }
 
 function serviceJsonLd(page: NonNullable<ReturnType<typeof getServiceSeoPage>>) {
+  const numericPrice = page.priceLabel?.replace(/[^0-9.]/g, '');
+
   return {
     '@context': 'https://schema.org',
     '@type': 'Service',
@@ -90,6 +93,12 @@ function serviceJsonLd(page: NonNullable<ReturnType<typeof getServiceSeoPage>>) 
           name: page.primaryCta,
           url: absoluteUrl(page.primaryRoute),
           availability: 'https://schema.org/InStock',
+          ...(numericPrice
+            ? {
+                price: numericPrice,
+                priceCurrency: 'USD',
+              }
+            : {}),
         },
       ],
     },
@@ -111,7 +120,15 @@ export default async function ServiceSeoPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([serviceJsonLd(page), faqJsonLd(page.faqs)]),
+          __html: JSON.stringify([
+            breadcrumbJsonLd([
+              { name: 'Home', path: '/' },
+              { name: 'Services', path: '/services' },
+              { name: page.title, path: `/services/${page.slug}` },
+            ]),
+            serviceJsonLd(page),
+            faqJsonLd(page.faqs),
+          ]),
         }}
       />
 
@@ -120,6 +137,11 @@ export default async function ServiceSeoPage({
           <Badge className="mb-4 w-fit bg-cyan-600 text-white">
             VestBlock service guide
           </Badge>
+          {page.priceLabel && (
+            <Badge variant="outline" className="mb-4 ml-3">
+              {page.priceLabel}
+            </Badge>
+          )}
           <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-5xl">
             {page.title}
           </h1>

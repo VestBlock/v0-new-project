@@ -9,15 +9,15 @@ import { CTAFooter } from '@/components/cta-footer';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-background circuit-bg">
+    <div className="premium-page">
       <main>
         <HeroSection />
+        <MetricsSection />
         <ServiceCards />
         <HowItWorks />
-        <MetricsSection />
+        <PropertyCTASection />
         <BusinessTypesGrid />
         <CreditToolsSection />
-        <PropertyCTASection />
         <CTAFooter />
       </main>
     </div>

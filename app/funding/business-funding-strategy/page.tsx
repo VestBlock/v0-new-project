@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -73,6 +73,24 @@ const initialForm = {
   consentSuccessFee: false,
 };
 
+type FundingStrategyForm = typeof initialForm;
+
+const FUNDING_STRATEGY_DRAFT_KEY = 'vestblock_funding_strategy_draft';
+
+function getInitialForm(): FundingStrategyForm {
+  if (typeof window === 'undefined') return initialForm;
+
+  const saved = window.sessionStorage.getItem(FUNDING_STRATEGY_DRAFT_KEY);
+  if (!saved) return initialForm;
+
+  try {
+    return { ...initialForm, ...JSON.parse(saved) } as FundingStrategyForm;
+  } catch {
+    window.sessionStorage.removeItem(FUNDING_STRATEGY_DRAFT_KEY);
+    return initialForm;
+  }
+}
+
 function tierVariant(tier?: string) {
   if (tier === 'strong_candidate') return 'default';
   if (tier === 'review_ready') return 'secondary';
@@ -83,30 +101,26 @@ export default function CreditCardStrategyPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(getInitialForm);
   const [submitting, setSubmitting] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [capturingPayment, setCapturingPayment] = useState(false);
+  const captureStartedRef = useRef(false);
   const [readiness, setReadiness] = useState<FundingReadiness | null>(null);
   const [fundingRequest, setFundingRequest] = useState<FundingRequest | null>(null);
   const [canCheckout, setCanCheckout] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const [loginRequired, setLoginRequired] = useState(false);
 
   useEffect(() => {
-    if (user?.email) {
-      setForm((current) => ({ ...current, email: user.email || current.email }));
-    }
-  }, [user]);
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(
+      FUNDING_STRATEGY_DRAFT_KEY,
+      JSON.stringify(form)
+    );
+  }, [form]);
 
   useEffect(() => {
-    if (isLoading) return;
-    if (!isAuthenticated) {
-      router.push('/login?redirect=/funding/business-funding-strategy');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (!user?.id || capturingPayment || paymentComplete) return;
+    if (!user?.id || captureStartedRef.current || paymentComplete) return;
 
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
@@ -114,7 +128,7 @@ export default function CreditCardStrategyPage() {
 
     if (!token || !requestId) return;
 
-    setCapturingPayment(true);
+    captureStartedRef.current = true;
     fetch('/api/capture-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -134,7 +148,7 @@ export default function CreditCardStrategyPage() {
         toast({
           title: 'Payment received',
           description:
-            'Your funding readiness plan is paid and queued for admin review.',
+            'Your funding prep plan is paid and queued for review.',
         });
         window.history.replaceState({}, '', '/funding/business-funding-strategy');
       })
@@ -148,8 +162,10 @@ export default function CreditCardStrategyPage() {
           variant: 'destructive',
         });
       })
-      .finally(() => setCapturingPayment(false));
-  }, [capturingPayment, paymentComplete, toast, user?.id]);
+      .finally(() => {
+        captureStartedRef.current = false;
+      });
+  }, [paymentComplete, toast, user?.id]);
 
   const canSubmit = useMemo(
     () =>
@@ -173,6 +189,7 @@ export default function CreditCardStrategyPage() {
     setReadiness(null);
     setFundingRequest(null);
     setCanCheckout(false);
+    setLoginRequired(false);
 
     try {
       const response = await fetch('/api/funding-strategy', {
@@ -182,6 +199,23 @@ export default function CreditCardStrategyPage() {
       });
       const data = await response.json();
 
+      if (response.status === 401) {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(
+            FUNDING_STRATEGY_DRAFT_KEY,
+            JSON.stringify(form)
+          );
+        }
+        setLoginRequired(true);
+        toast({
+          title: 'Sign in to save the paid plan request',
+          description:
+            'Your funding strategy draft is saved. Sign in and we will bring you back here.',
+        });
+        router.push('/login?redirect=/funding/business-funding-strategy');
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Unable to submit funding strategy request.');
       }
@@ -189,11 +223,14 @@ export default function CreditCardStrategyPage() {
       setReadiness(data.readiness);
       setFundingRequest(data.request);
       setCanCheckout(Boolean(data.canCheckout));
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(FUNDING_STRATEGY_DRAFT_KEY);
+      }
       toast({
-        title: 'Readiness review created',
+        title: 'Funding prep review created',
         description:
           data.readiness?.tier === 'needs_prep'
-            ? 'You can now join the $300 readiness plan to work on eligibility.'
+            ? 'You can now join the $300 funding prep plan to work on eligibility.'
             : 'You can now purchase the funding strategy plan.',
       });
     } catch (error) {
@@ -253,7 +290,7 @@ export default function CreditCardStrategyPage() {
     }
   };
 
-  if (isLoading || capturingPayment) {
+  if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-cyan-500" />
@@ -268,10 +305,10 @@ export default function CreditCardStrategyPage() {
           <div className="space-y-5">
             <Badge className="w-fit">Business funding strategy</Badge>
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Business funding readiness plan
+              Business funding prep plan
             </h1>
             <p className="text-lg text-muted-foreground">
-              If the free checker shows you are not funding-ready yet, this is
+              If the free checker shows you should prepare before applying, this is
               the $300 plan that helps organize the credit, business setup,
               documentation, use-of-funds, and application-prep work before you
               pursue business funding.
@@ -296,23 +333,34 @@ export default function CreditCardStrategyPage() {
             <ShieldCheck className="h-4 w-4" />
             <AlertTitle>Compliance-first funding support</AlertTitle>
             <AlertDescription>
-              This service organizes strategy and readiness. It does not
+              This service organizes strategy and funding preparation. It does not
               guarantee approvals, credit limits, rates, or funding. No
               application should be submitted until you review the lender terms,
-              fees, inquiries, and repayment obligations. The $300 readiness plan
+              fees, inquiries, and repayment obligations. The $300 funding prep plan
               is due upfront; a 10% success fee is only owed after business credit funding is
               approved, accepted, and made available to you.
             </AlertDescription>
           </Alert>
+          {!isAuthenticated && !isLoading && (
+            <Alert>
+              <CreditCard className="h-4 w-4" />
+              <AlertTitle>Review first, sign in when you are ready</AlertTitle>
+              <AlertDescription>
+                You can read the plan and complete this form before signing in.
+                VestBlock saves the draft and only asks you to log in when it is
+                time to save the paid request and continue to checkout.
+              </AlertDescription>
+            </Alert>
+          )}
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[1.2fr_.8fr]">
           <Card>
             <CardHeader>
-              <CardTitle>Readiness assessment</CardTitle>
+              <CardTitle>Funding prep assessment</CardTitle>
               <CardDescription>
-                Submit your profile, generate a readiness score, and start the
-                $300 plan if VestBlock needs to help you become funding-ready.
+                Submit your profile, generate a funding-prep score, and start the
+                $300 plan if VestBlock needs to help you prepare before applying.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -502,7 +550,7 @@ export default function CreditCardStrategyPage() {
                       onChange={(event) =>
                         updateField('useOfFunds', event.target.value)
                       }
-                      placeholder="Example: inventory, ads, payroll bridge, equipment, expansion, or real estate project expenses."
+                      placeholder="Example: inventory, ads, payroll bridge, equipment, new location, or real estate project expenses."
                       rows={4}
                       required
                     />
@@ -525,7 +573,7 @@ export default function CreditCardStrategyPage() {
                     ],
                     [
                       'consentSuccessFee',
-                      'I understand VestBlock charges $300 for the readiness plan and a 10% success fee only after approved business credit funding is accepted and available.',
+                      'I understand VestBlock charges $300 for the funding prep plan and a 10% success fee only after approved business credit funding is accepted and available.',
                     ],
                   ].map(([name, label]) => (
                     <label key={name} className="flex items-start gap-2 text-sm">
@@ -550,7 +598,7 @@ export default function CreditCardStrategyPage() {
                   ) : (
                     <CreditCard className="mr-2 h-4 w-4" />
                   )}
-                  Generate Readiness Review
+                  Generate Funding Prep Review
                 </Button>
               </form>
             </CardContent>
@@ -567,11 +615,23 @@ export default function CreditCardStrategyPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {!readiness ? (
-                  <p className="text-sm text-muted-foreground">
-                    Use the free checker first if you just want an instant result.
-                    Submit here when you are ready to save the request and start
-                    the paid readiness workflow.
-                  </p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Use the free checker first if you just want an instant result.
+                      Submit here when you are ready to save the request and start
+                      the paid funding prep plan.
+                    </p>
+                    {loginRequired && (
+                      <Alert>
+                        <ShieldCheck className="h-4 w-4" />
+                        <AlertTitle>Draft saved</AlertTitle>
+                        <AlertDescription>
+                          Sign in to continue this funding strategy request without
+                          re-entering the form.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <div className="space-y-2">
@@ -589,8 +649,8 @@ export default function CreditCardStrategyPage() {
                         <CheckCircle2 className="h-4 w-4" />
                         <AlertTitle>Paid plan queued</AlertTitle>
                         <AlertDescription>
-                          VestBlock has logged this as a paid funding readiness
-                          plan for admin follow-up.
+                          VestBlock has logged this as a paid funding prep
+                          plan for follow-up.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -628,7 +688,7 @@ export default function CreditCardStrategyPage() {
                       ) : (
                         <CreditCard className="mr-2 h-4 w-4" />
                       )}
-                      Pay $300 For Readiness Plan
+                      Pay $300 For Funding Prep Plan
                     </Button>
                   </>
                 )}

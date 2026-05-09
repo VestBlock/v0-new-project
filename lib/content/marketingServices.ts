@@ -1,4 +1,5 @@
 export type VestBlockServiceKey =
+  | 'dealvault'
   | 'ai_credit_analysis'
   | 'credit_dispute_letters'
   | 'business_setup'
@@ -10,7 +11,8 @@ export type VestBlockServiceKey =
   | 'spanish_business_funding'
   | 'real_estate_funding'
   | 'sell_property'
-  | 'ai_assistant';
+  | 'ai_assistant'
+  | 'visibility_expansion';
 
 export type VestBlockMarketingService = {
   key: VestBlockServiceKey;
@@ -24,6 +26,25 @@ export type VestBlockMarketingService = {
 
 export const vestblockMarketingServices: VestBlockMarketingService[] = [
   {
+    key: 'dealvault',
+    label: 'DealVault',
+    offerPath: '/dealvault',
+    audience: 'small real estate businesses, investor teams, partner groups, and contractor-led projects that need cleaner records and accountability',
+    valuePromise:
+      'Track agreements, payout terms, proof records, and project milestones with a premium record system and a live audit trail behind it.',
+    proofPoints: [
+      'Live on-chain proof and payout records',
+      'Proof certificate generation',
+      'Deal, payout, and milestone tracking',
+      'Private demo request path',
+    ],
+    complianceNotes: [
+      'Do not overpromise legal enforceability.',
+      'Make clear that sensitive documents stay off-chain.',
+      'Position the product as proof records, payout tracking, and transparent event trails.',
+    ],
+  },
+  {
     key: 'ai_credit_analysis',
     label: 'AI Credit Analysis',
     offerPath: '/credit-upload',
@@ -32,7 +53,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
       'Upload a credit report and get an organized analysis of possible issues, next steps, and dispute-letter support.',
     proofPoints: [
       'Report upload and analysis flow',
-      'Credit repair workflow statuses',
+      'Credit repair progress statuses',
       'Admin alerts for uploaded, completed, and failed analyses',
     ],
     complianceNotes: [
@@ -65,16 +86,16 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     offerPath: '/business-setup',
     audience: 'business owners preparing their company before applying for funding or grants',
     valuePromise:
-      'Organize entity records, EIN, banking, documents, credit readiness, and use-of-funds details before applying.',
+      'Organize business records, EIN, banking, documents, credit profile details, and use-of-funds notes before applying.',
     proofPoints: [
-      'Funding readiness pillars',
+      'Funding preparation checklist',
       'Business setup checklist',
       'Links into business credit and grants tools',
     ],
     complianceNotes: [
       'Do not guarantee funding.',
       'Do not describe grants as easy free money.',
-      'Focus on readiness and documentation.',
+      'Focus on preparation and documentation.',
     ],
   },
   {
@@ -119,10 +140,10 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     offerPath: '/funding/business-funding-strategy',
     audience: 'business owners considering multiple business credit cards for working capital',
     valuePromise:
-      'Review readiness, documents, utilization, inquiry risk, consent, and repayment considerations before a business credit line funding strategy.',
+      'Review documents, utilization, inquiry risk, consent, and repayment considerations before a business credit line funding strategy.',
     proofPoints: [
-      '$300 readiness plan',
-      'Funding strategy request workflow',
+      '$300 funding preparation plan',
+      'Funding strategy request path',
       'Success-fee consent tracking',
       'Admin review dashboard',
     ],
@@ -138,7 +159,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     offerPath: '/services/financial-growth',
     audience: 'clients who need paid preparation before applying for funding, grants, credit, or real estate financing',
     valuePromise:
-      'Offer one-time financial prep packages for readiness reviews, business credit setup, grants, debt utilization, cash-flow documents, and real estate deal funding review.',
+      'Offer one-time financial prep packages for funding reviews, business credit setup, grants, debt utilization, cash-flow documents, and real estate deal funding review.',
     proofPoints: [
       'Financial service request form',
       'Business funding lead automation',
@@ -161,7 +182,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     proofPoints: [
       'Grant matching tool',
       'Application letter draft',
-      'Grant readiness checklist',
+      'Grant preparation checklist',
     ],
     complianceNotes: [
       'Do not promise awards.',
@@ -175,11 +196,11 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     offerPath: '/es/vestblock',
     audience: 'Spanish-speaking business owners preparing for funding',
     valuePromise:
-      'Help Spanish-speaking owners prepare documents, banking, credit readiness, and next steps before reviewing Bank Breezy options.',
+      'Help Spanish-speaking owners prepare documents, banking, credit profile details, and next steps before reviewing Bank Breezy options.',
     proofPoints: [
       'Spanish funding landing page',
       'Bank Breezy Spanish partner link',
-      'Business setup readiness pillars',
+      'Business setup preparation steps',
     ],
     complianceNotes: [
       'Do not guarantee funding in Spanish or English.',
@@ -208,7 +229,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     audience: 'property owners who want a cash-offer or investor conversation',
     valuePromise:
       'Collect property details and contact information so the team can review and follow up.',
-    proofPoints: ['Sell property form', 'Lead tracking', 'Admin follow-up workflow'],
+    proofPoints: ['Sell property form', 'Lead tracking', 'Admin follow-up path'],
     complianceNotes: [
       'Do not promise a specific offer.',
       'Do not imply instant approval.',
@@ -217,16 +238,40 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'ai_assistant',
-    label: 'VestBlock AI Assistant',
+    label: 'AI Receptionist And Website Systems',
     offerPath: '/ai-assistant',
-    audience: 'users who need guided answers about credit, funding, and next steps',
+    audience: 'service businesses that need stronger lead capture, booking automation, or a better converting website',
     valuePromise:
-      'Guide users toward the right VestBlock workflow for credit repair, business funding, grants, and support.',
-    proofPoints: ['AI assistant route', 'Lead-support context', 'Internal tool routing'],
+      'Install AI receptionist, appointment-booking, and conversion-focused website systems that help visitors turn into leads and appointments.',
+    proofPoints: [
+      'AI receptionist intake route',
+      'Appointment booking offer path',
+      'Website upgrade sprint packaging',
+      'Lead automation and admin follow-up',
+    ],
     complianceNotes: [
-      'Do not provide legal, tax, or guaranteed approval advice.',
-      'Route users to documented workflows.',
-      'Keep sensitive information out of public posts.',
+      'Do not guarantee booked revenue or sales results.',
+      'Keep pricing clear between setup fees, monthly support, and larger website scopes.',
+      'Frame the service around lead capture, conversion support, and business responsiveness.',
+    ],
+  },
+  {
+    key: 'visibility_expansion',
+    label: 'Visibility Expansion SaaS',
+    offerPath: '/visibility-expansion',
+    audience: 'service businesses that want more search visibility, answer-engine coverage, and authority without a vague marketing retainer',
+    valuePromise:
+      'Package search visibility, AI-answer visibility, city pages, and PR authority work into recurring growth plans that are easier to understand and easier to keep moving.',
+    proofPoints: [
+      'Search visibility package page',
+      'City and authority package offer paths',
+      'AI-assisted first-pass visibility review',
+      'Lead automation and admin follow-up',
+    ],
+    complianceNotes: [
+      'Do not guarantee rankings, traffic, citations, media pickups, or revenue.',
+      'Frame the work around better search coverage, publishing discipline, and authority growth.',
+      'Keep the customer promise tied to execution quality and recurring monthly support.',
     ],
   },
 ];

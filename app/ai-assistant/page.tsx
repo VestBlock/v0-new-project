@@ -1,470 +1,783 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { useToast } from "@/hooks/use-toast"
+import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
-  MessageSquare,
-  UserCheck,
-  Mail,
-  Calendar,
-  Clock,
-  CheckCircle,
-  Zap,
   ArrowRight,
   Bot,
+  CalendarClock,
+  CheckCircle2,
+  Globe,
+  Loader2,
+  Rocket,
   Send,
-  Loader2
-} from "lucide-react"
+  Sparkles,
+} from "lucide-react";
 
-export default function AIAssistantPage() {
-  const { toast } = useToast()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
-    businessName: "",
-    contactName: "",
-    email: "",
-    phone: "",
-    websiteUrl: "",
-    industry: "",
-    hasBookingSoftware: "",
-    bookingSoftwareName: "",
-    notes: ""
-  })
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import { WebsitePreviewShowcase } from "@/components/site-preview-showcase";
+import type { SitePreviewResult } from "@/lib/services/sitePreview";
+import {
+  automationPackageKeys,
+  automationPackages,
+  getAutomationPackage,
+  type AutomationPackageKey,
+} from "@/lib/services/automationPackages";
+import {
+  getSmallBusinessTemplate,
+  smallBusinessTemplateKeys,
+  type SmallBusinessTemplateKey,
+} from "@/lib/services/smallBusinessTemplates";
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+const initialForm = {
+  packageKey: automationPackageKeys[0] as AutomationPackageKey,
+  businessName: "",
+  contactName: "",
+  email: "",
+  phone: "",
+  websiteUrl: "",
+  industry: "",
+  currentSystem: "",
+  monthlyLeadVolume: "",
+  notes: "",
+};
+
+const iconByPackage = {
+  ai_receptionist_launch: Bot,
+  appointment_booking_system: CalendarClock,
+  website_upgrade_sprint: Globe,
+} satisfies Record<AutomationPackageKey, typeof Bot>;
+
+function AIAssistantContent() {
+  const searchParams = useSearchParams();
+  const requestedPackage = searchParams.get("package");
+  const initialPackageKey = automationPackageKeys.includes(requestedPackage as AutomationPackageKey)
+    ? (requestedPackage as AutomationPackageKey)
+    : initialForm.packageKey;
+  const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [formData, setFormData] = useState(() => ({
+    ...initialForm,
+    packageKey: initialPackageKey,
+  }));
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<SmallBusinessTemplateKey | null>(null);
+  const [submissionState, setSubmissionState] = useState<{
+    businessName: string;
+    packageTitle: string;
+    deliverableStatus: string;
+  } | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [websitePreview, setWebsitePreview] = useState<SitePreviewResult | null>(null);
+
+  const selectedPackage = useMemo(
+    () => getAutomationPackage(formData.packageKey) ?? automationPackages[0],
+    [formData.packageKey]
+  );
+  const selectedTemplate = useMemo(
+    () => (selectedTemplateKey ? getSmallBusinessTemplate(selectedTemplateKey) ?? null : null),
+    [selectedTemplateKey]
+  );
+  const previewBusinessName = formData.businessName || selectedTemplate?.title || "Your business";
+  const previewIndustry = formData.industry || selectedTemplate?.industry || "your industry";
+  const previewSystem = formData.currentSystem || "your current website and lead flow";
+  const setupPreview = useMemo(() => {
+    if (selectedTemplate?.aiAssistant.firstFocus.length) {
+      return selectedTemplate.aiAssistant.firstFocus;
+    }
+
+    if (selectedPackage.key === "website_upgrade_sprint") {
+      return [
+        `Audit ${previewBusinessName} for mobile clarity, CTA friction, and weak conversion paths.`,
+        `Turn ${previewSystem} into a cleaner visitor-to-lead journey.`,
+        "Outline homepage, service-page, and booking-flow improvements.",
+      ];
+    }
+
+    if (selectedPackage.key === "appointment_booking_system") {
+      return [
+        `Train the AI receptionist for ${previewIndustry} questions and qualification needs.`,
+        "Route qualified visitors into calendar or booking logic instead of dead-end chat.",
+        "Add clearer missed-lead notifications and follow-up steps.",
+      ];
+    }
+
+    return [
+      `Train a front-desk assistant for ${previewBusinessName}.`,
+      `Use ${previewSystem} as the starting point for lead-flow improvements.`,
+      "Outline a cleaner lead capture and FAQ flow.",
+    ];
+  }, [previewBusinessName, previewIndustry, previewSystem, selectedPackage.key, selectedTemplate]);
+  const deliverableStatusLabel =
+    submissionState?.deliverableStatus === "sent_to_client"
+      ? "Ready in your account"
+      : submissionState?.deliverableStatus === "ready_for_review"
+        ? "Being reviewed"
+        : submissionState?.deliverableStatus === "queued"
+          ? "Queued for setup"
+        : submissionState?.deliverableStatus === "generating"
+          ? "In progress"
+          : "Saved";
+
+  const handleInputChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  const applyTemplate = (templateKey: SmallBusinessTemplateKey) => {
+    const template = getSmallBusinessTemplate(templateKey);
+    if (!template) return;
+
+    setSelectedTemplateKey(templateKey);
+    setFormData((current) => ({
+      ...current,
+      packageKey: template.aiAssistant.recommendedPackage,
+      industry: current.industry || template.industry,
+      currentSystem: current.currentSystem || template.aiAssistant.currentSystem,
+      monthlyLeadVolume: current.monthlyLeadVolume || template.aiAssistant.monthlyLeadVolume,
+      notes: current.notes || template.aiAssistant.notes,
+    }));
+  };
+
+  const generateWebsitePreview = async () => {
+    if (!formData.websiteUrl.trim()) {
+      setPreviewError("Add a website URL first.");
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    setPreviewError("");
+
+    try {
+      const response = await fetch("/api/site-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteUrl: formData.websiteUrl,
+          businessName: formData.businessName,
+          industry: formData.industry,
+          packageType: "ai_assistant",
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to generate website preview.");
+      }
+
+      setWebsitePreview(data.preview);
+      setFormData((current) => ({
+        ...current,
+        businessName: current.businessName || data.preview.siteName || current.businessName,
+        industry: current.industry || data.preview.inferredIndustry || current.industry,
+      }));
+    } catch (error) {
+      setPreviewError(
+        error instanceof Error ? error.message : "Unable to generate website preview."
+      );
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const choosePackage = (packageKey: AutomationPackageKey) => {
+    setFormData((current) => ({ ...current, packageKey }));
+    document.getElementById("request-setup")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/ai-assistant-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-      })
+        body: JSON.stringify({
+          ...formData,
+          email: formData.email || user?.email || "",
+          templateKey: selectedTemplateKey || "",
+        }),
+      });
 
-      if (!response.ok) throw new Error("Failed to submit")
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit request.");
+      }
 
       toast({
-        title: "Request Submitted!",
-        description: "We'll be in touch within 24 hours to discuss your AI assistant setup.",
-      })
-
-      setFormData({
-        businessName: "",
-        contactName: "",
-        email: "",
-        phone: "",
-        websiteUrl: "",
-        industry: "",
-        hasBookingSoftware: "",
-        bookingSoftwareName: "",
-        notes: ""
-      })
+        title: "Request submitted",
+        description: `We received your ${selectedPackage.title.toLowerCase()} request and saved the next-step recommendations.`,
+      });
+      setSubmissionState({
+        businessName: formData.businessName,
+        packageTitle: selectedPackage.title,
+        deliverableStatus: data.deliverableStatus || "requested",
+      });
     } catch (error) {
       toast({
-        title: "Submission Failed",
-        description: "Please try again or contact us directly.",
-        variant: "destructive"
-      })
+        title: "Submission failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Please try again or contact VestBlock directly.",
+        variant: "destructive",
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Section 1: Hero */}
-      <section className="pt-24 pb-16 px-4">
-        <div className="container mx-auto text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 bg-cyan-500/10 text-cyan-500 px-4 py-2 rounded-full mb-6">
-            <Bot className="h-5 w-5" />
-            <span className="text-sm font-medium">AI-Powered Lead Capture</span>
+    <main className="premium-page">
+      <section className="px-4 pb-16 pt-24">
+        <div className="container mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
+          <div className="space-y-5">
+            <Badge className="w-fit bg-cyan-600 text-white">
+              Lead capture and booking systems
+            </Badge>
+            <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+              AI receptionist, booking, and website improvements for service businesses.
+            </h1>
+            <p className="max-w-3xl text-lg text-muted-foreground">
+              VestBlock helps businesses clean up the front end of the customer journey:
+              better lead capture, better booking flow, and a stronger website experience before
+              you spend more on ads or keep paying for a clunky bot that still drops intent.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
+                <a href="#request-setup">
+                  Request Setup
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/pricing">Compare Pricing</Link>
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+                <CardContent className="p-4">
+                  <p className="text-sm font-medium text-foreground">Capture more leads</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Stop relying on missed calls, weak forms, or generic contact pages.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+                <CardContent className="p-4">
+                  <p className="text-sm font-medium text-foreground">Book better conversations</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Add qualification and booking logic instead of hoping people call back.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+                <CardContent className="p-4">
+                  <p className="text-sm font-medium text-foreground">Upgrade weak websites</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Improve mobile clarity, CTAs, and the move from visitor to lead.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            AI Assistant That Captures Leads + Books Appointments{" "}
-            <span className="gradient-text">Automatically</span>
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Perfect for service businesses (HVAC, roofing, dental, med spa, auto repair).
-            Works 24/7 and installs on your site fast.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
-              <a href="https://cdn.botpress.cloud/webchat/v3.6/shareable.html?configUrl=https://files.bpcontent.cloud/2026/03/07/00/20260307001828-1TCHUA94.json" target="_blank" rel="noopener noreferrer">
-                <MessageSquare className="mr-2 h-5 w-5" />
-                Try Live Demo
-              </a>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <a href="#request-setup">
-                <Send className="mr-2 h-5 w-5" />
-                Request Setup
-              </a>
-            </Button>
+
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-cyan-600" />
+                Simple pricing for real setup work
+              </CardTitle>
+              <CardDescription>
+                These offers are meant to be easier to start than a traditional agency build while
+                still covering setup, launch work, and support.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                AI receptionist tools in the market often start in the low hundreds per month, while
+                small-business agency website projects can quickly reach the mid-thousands. VestBlock
+                keeps the first step tighter and clearer while still giving the business practical tools it can actually use.
+              </p>
+              <p>
+                Setup fees cover training, implementation, and launch cleanup. Monthly pricing covers
+                the ongoing receptionist or booking support. Website upgrade work starts with a defined
+                sprint scope so the project does not become vague or open-ended.
+              </p>
+              <p>
+                No package guarantees revenue. The goal is stronger lead capture and follow-up.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="px-4 py-16">
+        <div className="container mx-auto max-w-7xl space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold">Automation offers</h2>
+            <p className="max-w-3xl text-muted-foreground">
+              Start with the offer that matches the biggest gap in your current lead capture, then add more only when the business needs it.
+            </p>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {automationPackages.map((servicePackage) => {
+              const Icon = iconByPackage[servicePackage.key];
+              const isSelected = servicePackage.key === selectedPackage.key;
+
+              return (
+                <Card
+                  key={servicePackage.key}
+                  className={
+                    isSelected ? "premium-card border-cyan-500 shadow-lg shadow-cyan-500/10" : "premium-card border-cyan-500/20"
+                  }
+                >
+                  <CardHeader>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-600">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <Badge variant="outline">{servicePackage.priceLabel}</Badge>
+                    </div>
+                    <CardTitle>{servicePackage.title}</CardTitle>
+                    <CardDescription>{servicePackage.summary}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium">Best for</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {servicePackage.bestFor}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Includes</p>
+                      <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                        {servicePackage.deliverables.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">Typical timing</p>
+                      <p className="mt-1">{servicePackage.turnaround}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={() => choosePackage(servicePackage.key)}>
+                        Choose This Offer
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link href={`/services/${servicePackage.slug}`}>View Service</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Section 2: What It Does */}
-      <section className="py-16 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">What Your AI Assistant Does</h2>
-            <p className="text-xl text-muted-foreground">Automate your customer interactions and never miss a lead</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
-              <CardContent className="pt-6">
-                <MessageSquare className="h-10 w-10 text-cyan-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Answers Questions Instantly</h3>
-                <p className="text-muted-foreground">Respond to customer inquiries 24/7 with accurate, helpful information about your services.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
-              <CardContent className="pt-6">
-                <UserCheck className="h-10 w-10 text-cyan-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Captures Lead Info</h3>
-                <p className="text-muted-foreground">Collects name, phone, and service needed from every visitor who engages.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
-              <CardContent className="pt-6">
-                <Mail className="h-10 w-10 text-cyan-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Sends Leads Automatically</h3>
-                <p className="text-muted-foreground">Delivers leads straight to your email and Google Sheet in real-time.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
-              <CardContent className="pt-6">
-                <Calendar className="h-10 w-10 text-cyan-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Books Appointments</h3>
-                <p className="text-muted-foreground">Guides visitors to book through Calendly or your existing booking system.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
-              <CardContent className="pt-6">
-                <Clock className="h-10 w-10 text-cyan-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Works After Hours</h3>
-                <p className="text-muted-foreground">Captures leads and answers questions even when you're closed—never miss a job.</p>
-              </CardContent>
-            </Card>
-          </div>
+      <section className="px-4 py-16">
+        <div className="container mx-auto grid max-w-7xl gap-6 lg:grid-cols-3">
+          <Card className="premium-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Rocket className="h-5 w-5 text-cyan-600" />
+                When this makes sense
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>You are getting traffic but too many visitors leave without contacting you.</p>
+              <p>You miss leads after hours or your team keeps answering the same questions.</p>
+              <p>Your booking flow is weak, manual, or inconsistent across devices.</p>
+            </CardContent>
+          </Card>
+          <Card className="premium-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-cyan-600" />
+                What VestBlock handles
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>Website chat setup, booking prompts, and follow-up flow improvements.</p>
+              <p>Qualification questions and booking logic when the package includes it.</p>
+              <p>Website improvement direction around mobile clarity, calls to action, and conversion flow.</p>
+            </CardContent>
+          </Card>
+          <Card className="premium-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-cyan-600" />
+                Guardrail
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>VestBlock provides setup, organization, and conversion support.</p>
+              <p>Booked revenue, close rate, and lead quality still depend on the business and market.</p>
+              <p>Only truthful, accurate, and documentable information should be used in customer responses.</p>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
-      {/* Section 3: How It Works */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
-            <p className="text-xl text-muted-foreground">Get up and running in 3 simple steps</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-cyan-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
-                1
-              </div>
-              <h3 className="font-semibold text-xl mb-2">We Install It</h3>
-              <p className="text-muted-foreground">We set up and install the AI assistant on your website—no tech skills needed.</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-cyan-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
-                2
-              </div>
-              <h3 className="font-semibold text-xl mb-2">Customers Engage</h3>
-              <p className="text-muted-foreground">Visitors ask questions, request services, and book appointments through the chat.</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-cyan-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
-                3
-              </div>
-              <h3 className="font-semibold text-xl mb-2">You Get Leads</h3>
-              <p className="text-muted-foreground">Receive leads and booking requests instantly via email and spreadsheet.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 4: Pricing */}
-      <section className="py-16 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-xl text-muted-foreground">Choose the package that fits your business</p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Starter Package */}
-            <Card className="bg-card/80 backdrop-blur border-2 hover:border-cyan-500/50 transition-colors">
-              <CardHeader>
-                <CardTitle className="text-2xl">Starter</CardTitle>
-                <CardDescription>AI Assistant</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-6">
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-4xl font-bold">$399</span>
-                    <span className="text-muted-foreground">one-time setup</span>
+      <section id="request-setup" className="px-4 py-16">
+        <div className="container mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_360px] lg:items-start">
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle>Request your setup</CardTitle>
+              <CardDescription>
+                Tell VestBlock about your business and current website so we can recommend the right next steps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-foreground">Start from a small-business template</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Pick the template that matches the business and we will preload a better setup direction.
+                      </p>
+                    </div>
+                    {selectedTemplate ? (
+                      <Badge variant="outline">Using {selectedTemplate.title} template</Badge>
+                    ) : null}
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold">$79</span>
-                    <span className="text-muted-foreground">/month</span>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {smallBusinessTemplateKeys.map((templateKey) => {
+                      const template = getSmallBusinessTemplate(templateKey);
+                      if (!template) return null;
+                      const isActive = selectedTemplateKey === template.key;
+
+                      return (
+                        <button
+                          key={template.key}
+                          type="button"
+                          onClick={() => applyTemplate(template.key)}
+                          className={`rounded-xl border p-4 text-left transition ${
+                            isActive
+                              ? "border-cyan-600 bg-cyan-600/10"
+                              : "border-cyan-500/20 bg-background hover:border-cyan-500/40"
+                          }`}
+                        >
+                          <p className="font-medium text-foreground">{template.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{template.summary}</p>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Website chat assistant</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Lead capture</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Email notifications</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Basic FAQ responses</span>
-                  </li>
-                </ul>
-                <Button className="w-full" variant="outline" asChild>
-                  <a href="#request-setup">
-                    Get Started
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-              </CardContent>
-            </Card>
 
-            {/* Pro Package */}
-            <Card className="bg-card/80 backdrop-blur border-2 border-cyan-500 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-cyan-500 text-white text-sm font-medium px-3 py-1 rounded-full">
-                  Most Popular
-                </span>
-              </div>
-              <CardHeader>
-                <CardTitle className="text-2xl">Pro</CardTitle>
-                <CardDescription>AI Assistant + Appointment Booking</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-6">
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-4xl font-bold">$699</span>
-                    <span className="text-muted-foreground">one-time setup</span>
+                {submissionState ? (
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      {submissionState.packageTitle} request saved for {submissionState.businessName}
+                    </p>
+                    <p className="mt-1">
+                      Status: {deliverableStatusLabel}. We will review your site and prepare the next recommendations.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <Button asChild size="sm">
+                        <Link href={isAuthenticated ? "/dashboard/services" : "/register?redirect=/dashboard/services"}>
+                          {isAuthenticated ? "View My Account" : "Create Account to Save"}
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/get-started">Choose Another Service</Link>
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold">$149</span>
-                    <span className="text-muted-foreground">/month</span>
-                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <Label htmlFor="packageKey">Offer</Label>
+                  <Select
+                    value={formData.packageKey}
+                    onValueChange={(value) => handleSelectChange("packageKey", value)}
+                  >
+                    <SelectTrigger id="packageKey">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {automationPackages.map((servicePackage) => (
+                        <SelectItem key={servicePackage.key} value={servicePackage.key}>
+                          {servicePackage.title} ({servicePackage.priceLabel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Everything in Starter</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Appointment booking integration</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Calendly / booking page support</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Lead qualification questions</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Google Sheet + email routing</span>
-                  </li>
-                </ul>
-                <Button className="w-full bg-cyan-500 hover:bg-cyan-600" asChild>
-                  <a href="#request-setup">
-                    Get Started
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
 
-      {/* Section 5: Request Setup Form */}
-      <section id="request-setup" className="py-16 px-4">
-        <div className="container mx-auto max-w-2xl">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Request Your AI Assistant Setup</h2>
-            <p className="text-xl text-muted-foreground">Fill out the form and we'll get back to you within 24 hours</p>
-          </div>
-          <Card className="bg-card/80 backdrop-blur">
-            <CardContent className="pt-6">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="businessName">Business Name *</Label>
+                    <Label htmlFor="businessName">Business name</Label>
                     <Input
                       id="businessName"
                       name="businessName"
                       value={formData.businessName}
                       onChange={handleInputChange}
                       required
-                      placeholder="ABC Services"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contactName">Contact Name *</Label>
+                    <Label htmlFor="contactName">Contact name</Label>
                     <Input
                       id="contactName"
                       name="contactName"
                       value={formData.contactName}
                       onChange={handleInputChange}
                       required
-                      placeholder="John Smith"
                     />
                   </div>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
                       name="email"
                       type="email"
-                      value={formData.email}
+                      value={formData.email || user?.email || ""}
                       onChange={handleInputChange}
                       required
-                      placeholder="john@example.com"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone *</Label>
+                    <Label htmlFor="phone">Phone</Label>
                     <Input
                       id="phone"
                       name="phone"
-                      type="tel"
                       value={formData.phone}
                       onChange={handleInputChange}
                       required
-                      placeholder="(555) 123-4567"
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="websiteUrl">Website URL *</Label>
-                  <Input
-                    id="websiteUrl"
-                    name="websiteUrl"
-                    type="url"
-                    value={formData.websiteUrl}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="https://yourwebsite.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="industry">Industry *</Label>
-                  <Select
-                    value={formData.industry}
-                    onValueChange={(value) => handleSelectChange("industry", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your industry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hvac">HVAC</SelectItem>
-                      <SelectItem value="roofing">Roofing</SelectItem>
-                      <SelectItem value="dental">Dental</SelectItem>
-                      <SelectItem value="medspa">Med Spa</SelectItem>
-                      <SelectItem value="auto">Auto Repair</SelectItem>
-                      <SelectItem value="plumbing">Plumbing</SelectItem>
-                      <SelectItem value="cleaning">Cleaning</SelectItem>
-                      <SelectItem value="contractor">General Contractor</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-3">
-                  <Label>Do you currently use booking software? *</Label>
-                  <RadioGroup
-                    value={formData.hasBookingSoftware}
-                    onValueChange={(value) => handleSelectChange("hasBookingSoftware", value)}
-                    className="flex gap-6"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="booking-yes" />
-                      <Label htmlFor="booking-yes" className="cursor-pointer">Yes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="booking-no" />
-                      <Label htmlFor="booking-no" className="cursor-pointer">No</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                {formData.hasBookingSoftware === "yes" && (
                   <div className="space-y-2">
-                    <Label htmlFor="bookingSoftwareName">Which booking software?</Label>
+                    <Label htmlFor="websiteUrl">Website URL</Label>
                     <Input
-                      id="bookingSoftwareName"
-                      name="bookingSoftwareName"
-                      value={formData.bookingSoftwareName}
+                      id="websiteUrl"
+                      name="websiteUrl"
+                      placeholder="Optional if you need a new site or a rebuild"
+                      value={formData.websiteUrl}
                       onChange={handleInputChange}
-                      placeholder="e.g., Calendly, Acuity, ServiceTitan"
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={generateWebsitePreview}
+                        disabled={isPreviewLoading || !formData.websiteUrl.trim()}
+                      >
+                        {isPreviewLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating Preview
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Preview My Site
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Paste a website to preview the bot style and a few likely website improvements.
+                      </p>
+                    </div>
+                    {previewError ? (
+                      <p className="text-sm text-destructive">{previewError}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="industry">Industry</Label>
+                    <Input
+                      id="industry"
+                      name="industry"
+                      placeholder="HVAC, med spa, legal, salon, auto repair..."
+                      value={formData.industry}
+                      onChange={handleInputChange}
+                      required
                     />
                   </div>
-                )}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentSystem">Current lead or booking setup</Label>
+                    <Input
+                      id="currentSystem"
+                      name="currentSystem"
+                      placeholder="Phone only, contact form, Calendly, no booking tool..."
+                      value={formData.currentSystem}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="monthlyLeadVolume">Approx. monthly lead volume</Label>
+                    <Input
+                      id="monthlyLeadVolume"
+                      name="monthlyLeadVolume"
+                      placeholder="Optional"
+                      value={formData.monthlyLeadVolume}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Additional Notes (Optional)</Label>
+                  <Label htmlFor="notes">What needs the most help?</Label>
                   <Textarea
                     id="notes"
                     name="notes"
+                    rows={5}
+                    placeholder="Tell us where the current process breaks: missed calls, weak booking, slow follow-up, outdated pages, no clear CTA, mobile issues..."
                     value={formData.notes}
                     onChange={handleInputChange}
-                    placeholder="Tell us more about your business or specific needs..."
-                    rows={4}
                   />
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-cyan-500 hover:bg-cyan-600"
-                  disabled={isSubmitting}
-                >
+
+                <Button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-700" disabled={isSubmitting}>
                   {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <>
-                      <Send className="mr-2 h-4 w-4" />
-                      Submit Request
-                    </>
+                    <Send className="mr-2 h-4 w-4" />
                   )}
+                  Submit Setup Request
                 </Button>
               </form>
             </CardContent>
           </Card>
+
+          <div className="space-y-4">
+            <WebsitePreviewShowcase
+              preview={websitePreview}
+              isLoading={isPreviewLoading}
+              mode="ai_assistant"
+            />
+
+            <Card className="premium-card border-cyan-500/20">
+              <CardHeader>
+                <CardTitle>{selectedPackage.title}</CardTitle>
+                <CardDescription>{selectedPackage.priceLabel}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-muted-foreground">
+                <p>{selectedPackage.summary}</p>
+                <div>
+                  <p className="font-medium text-foreground">Best for</p>
+                  <p className="mt-1">{selectedPackage.bestFor}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Included</p>
+                  <ul className="mt-2 space-y-2">
+                    {selectedPackage.deliverables.map((item) => (
+                      <li key={item} className="flex gap-2">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="premium-card border-cyan-500/20">
+              <CardHeader>
+                <CardTitle>Live launch preview</CardTitle>
+                <CardDescription>
+                  This updates as you fill out the form so you can see the direction before you submit.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-muted-foreground">
+                <div className="grid gap-3">
+                  <div className="rounded-lg border p-3">
+                    <p className="font-medium text-foreground">Business</p>
+                    <p className="mt-1">{previewBusinessName}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="font-medium text-foreground">Industry</p>
+                    <p className="mt-1">{previewIndustry}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="font-medium text-foreground">Current setup</p>
+                    <p className="mt-1">{previewSystem}</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-4">
+                  <p className="font-medium text-foreground">First setup queue</p>
+                  <ul className="mt-3 space-y-2">
+                    {setupPreview.map((item) => (
+                      <li key={item} className="flex gap-2">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {selectedTemplate ? (
+                  <div className="rounded-xl border p-4">
+                    <p className="font-medium text-foreground">Template ready for {selectedTemplate.title}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Recommended package:{" "}
+                      {getAutomationPackage(selectedTemplate.aiAssistant.recommendedPackage)?.title ||
+                        selectedTemplate.aiAssistant.recommendedPackage}
+                    </p>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle>What happens next</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <p>1. We review your website and how visitors currently become leads.</p>
+                <p>2. We prepare the first recommendations for setup and any website fixes that matter most.</p>
+                <p>3. If you want to move forward, we confirm scope, timing, and the best package.</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
-    </div>
-  )
+    </main>
+  );
+}
+
+export default function AIAssistantPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <AIAssistantContent />
+    </Suspense>
+  );
 }

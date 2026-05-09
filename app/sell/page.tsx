@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   Phone,
   Mail,
-  MapPin,
   Zap,
   HandshakeIcon,
   TrendingUp,
@@ -158,7 +157,7 @@ export default function SellPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="premium-page">
         {/* Hero Section */}
         <section className="relative pt-16 pb-20 px-4 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-cyan-900/20" />
@@ -183,13 +182,13 @@ export default function SellPage() {
               </div>
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-                <span className="gradient-text">Sell Your House Fast</span>
+                <span className="gradient-text">Request A Property Review</span>
                 <br />
-                <span className="text-white">Get a Cash Offer in 24 Hours</span>
+                <span className="text-white">And Explore Your Best Next Sale Option</span>
               </h1>
 
               <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                No Repairs. No Agents. No Fees. Flexible Closing.
+                Share the property details, timeline, occupancy, and selling situation so VestBlock can review whether a cash-buyer conversation, investor follow-up, or traditional sale makes the most sense.
               </p>
 
               <Button
@@ -198,9 +197,40 @@ export default function SellPage() {
                 onClick={scrollToForm}
               >
                 <Home className="mr-2 h-5 w-5" />
-                Get My Offer
+                Review My Property
               </Button>
             </motion.div>
+          </div>
+        </section>
+
+        <section className="pb-10 px-4">
+          <div className="container mx-auto max-w-5xl">
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card className="premium-card border-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-lg">Submit the property</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Add the address, condition, timeline, payoff context, and any issues affecting the sale.
+                  </p>
+                </CardHeader>
+              </Card>
+              <Card className="premium-card border-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-lg">Review the options</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    VestBlock uses the details to decide whether a faster investor conversation, follow-up call, or another sale option makes sense.
+                  </p>
+                </CardHeader>
+              </Card>
+              <Card className="premium-card border-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-lg">Choose the next step</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    The goal is clarity first, then the right buyer or follow-up conversation based on the situation.
+                  </p>
+                </CardHeader>
+              </Card>
+            </div>
           </div>
         </section>
 
@@ -213,13 +243,13 @@ export default function SellPage() {
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
             >
-              <Card className="bg-card/80 backdrop-blur border-cyan-500/20">
+              <Card className="premium-card border-cyan-500/20">
                 <CardHeader className="text-center pb-6">
                   <CardTitle className="text-3xl font-bold gradient-text">
-                    Get Your Cash Offer
+                    Request Your Property Review
                   </CardTitle>
                   <p className="text-muted-foreground mt-2">
-                    Fill out the form below and we'll contact you within 24 hours
+                    Fill out the form below and VestBlock can review the property details and route the next conversation.
                   </p>
                 </CardHeader>
 
@@ -237,8 +267,15 @@ export default function SellPage() {
                         Thank You!
                       </h3>
                       <p className="text-muted-foreground text-lg">
-                        We've received your information and will contact you within 24 hours with your cash offer.
+                        We've received your information and will follow up after reviewing the property, timeline, and sale context.
                       </p>
+                      <div className="mt-6 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-left">
+                        <p className="font-medium text-foreground">What happens next</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          VestBlock reviews the property details first, then decides whether the next step is an investor conversation,
+                          a more traditional sale, or a different follow-up based on the timeline and condition.
+                        </p>
+                      </div>
                     </motion.div>
                   ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -592,7 +629,7 @@ export default function SellPage() {
                         ) : (
                           <>
                             <DollarSign className="mr-2 h-5 w-5" />
-                            Get My Cash Offer
+                            Submit Property Review
                           </>
                         )}
                       </Button>
@@ -615,10 +652,10 @@ export default function SellPage() {
               className="text-center mb-12"
             >
               <h2 className="text-3xl md:text-4xl font-bold gradient-text mb-4">
-                Flexible Selling Solutions
+                Flexible selling options
               </h2>
               <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                We offer multiple options to meet your unique needs
+                The best route depends on the property, timeline, liens, repairs, and buyer interest.
               </p>
             </motion.div>
 
@@ -629,14 +666,14 @@ export default function SellPage() {
                 transition={{ duration: 0.6, delay: 0.1 }}
                 viewport={{ once: true }}
               >
-                <Card className="bg-card/80 backdrop-blur border-cyan-500/20 h-full hover:border-cyan-500/50 transition-colors">
+                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
                   <CardContent className="pt-8 text-center">
                     <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                       <Zap className="h-8 w-8 text-cyan-500" />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-3">Fast Cash Offers</h3>
                     <p className="text-muted-foreground">
-                      Get a competitive cash offer within 24 hours. No waiting, no uncertainty.
+                      Some properties may work for a faster investor or cash-buyer conversation when speed matters most.
                     </p>
                   </CardContent>
                 </Card>
@@ -648,14 +685,14 @@ export default function SellPage() {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 viewport={{ once: true }}
               >
-                <Card className="bg-card/80 backdrop-blur border-cyan-500/20 h-full hover:border-cyan-500/50 transition-colors">
+                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
                   <CardContent className="pt-8 text-center">
                     <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                       <HandshakeIcon className="h-8 w-8 text-cyan-500" />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-3">Take Over Payments</h3>
                     <p className="text-muted-foreground">
-                      If applicable, we can take over your existing mortgage payments to help you move on.
+                      In some cases, creative structures may be reviewed when the underlying deal makes sense.
                     </p>
                   </CardContent>
                 </Card>
@@ -667,14 +704,14 @@ export default function SellPage() {
                 transition={{ duration: 0.6, delay: 0.3 }}
                 viewport={{ once: true }}
               >
-                <Card className="bg-card/80 backdrop-blur border-cyan-500/20 h-full hover:border-cyan-500/50 transition-colors">
+                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
                   <CardContent className="pt-8 text-center">
                     <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                       <TrendingUp className="h-8 w-8 text-cyan-500" />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-3">Maximize Your Sale</h3>
                     <p className="text-muted-foreground">
-                      Sell without traditional fees, commissions, or agent costs. Keep more of your equity.
+                      Other properties may be better served by a cleaner review, more time, or a different sale option.
                     </p>
                   </CardContent>
                 </Card>
@@ -694,7 +731,7 @@ export default function SellPage() {
               className="text-center mb-12"
             >
               <h2 className="text-3xl md:text-4xl font-bold gradient-text mb-4">
-                Why Choose Us
+                Why sellers use VestBlock first
               </h2>
             </motion.div>
 

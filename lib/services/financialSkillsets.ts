@@ -24,18 +24,18 @@ export type FinancialSkillsetPackage = {
 export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
   {
     key: 'funding_readiness_snapshot',
-    title: 'Funding Readiness Snapshot',
+    title: 'Funding Prep Snapshot',
     price: '$149',
     summary:
-      'A focused review of the owner profile, business setup, credit readiness, and documents before applying for funding.',
+      'A focused review of the owner profile, business setup, credit factors, and documents before applying for funding.',
     bestFor: 'Owners who want to know what to fix before they submit funding applications.',
     deliverables: [
-      'Readiness score and risk notes',
+      'Funding-prep score and risk notes',
       'Document checklist',
-      'Next best funding path recommendation',
-      'Admin follow-up task for VestBlock review',
+      'Next best funding option recommendation',
+      'Follow-up task for VestBlock review',
     ],
-    upsellPath: '$300 Business Funding Readiness Plan when hands-on prep is needed',
+    upsellPath: '$300 Business Funding Prep Plan when hands-on prep is needed',
     complianceNote:
       'Does not guarantee approval, terms, limits, or funding availability.',
   },
@@ -44,15 +44,15 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
     title: 'Business Credit Builder Sprint',
     price: '$499',
     summary:
-      'A setup sprint for business credit foundations, starter vendor strategy, monitoring, and lender-readiness organization.',
-    bestFor: 'Businesses with an EIN and bank account that want a cleaner business credit path.',
+      'A setup sprint for business credit foundations, starter vendor strategy, monitoring, and lender-facing organization.',
+    bestFor: 'Businesses with an EIN and bank account that want a cleaner business credit plan.',
     deliverables: [
       'Business profile checklist',
       'Starter vendor and account roadmap',
       'Business credit monitoring setup guidance',
-      'Funding-readiness milestones',
+      'Funding-prep milestones',
     ],
-    upsellPath: 'Funding readiness or business credit line support after foundations are stronger',
+    upsellPath: 'Funding prep or business credit line support after foundations are stronger',
     complianceNote:
       'Does not promise approvals, tradeline reporting, specific scores, or EIN-only funding.',
   },
@@ -61,10 +61,10 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
     title: 'Grant Application Prep Review',
     price: '$249',
     summary:
-      'A practical review of grant fit, required documents, use-of-funds story, and application narrative before submission.',
+      'A practical review of grant eligibility, required documents, use-of-funds story, and application narrative before submission.',
     bestFor: 'Owners who found a grant but need help organizing the application package.',
     deliverables: [
-      'Grant-readiness checklist',
+      'Grant-prep checklist',
       'Use-of-funds and impact outline',
       'Application narrative improvement notes',
       'Deadline and document tracker',
@@ -78,13 +78,13 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
     title: 'Debt And Utilization Paydown Plan',
     price: '$199',
     summary:
-      'A credit-utilization and payoff sequence plan built around funding readiness, cash flow, and dispute workflow timing.',
+      'A credit-utilization and payoff sequence plan built around funding preparation, cash flow, and dispute timing.',
     bestFor: 'Clients whose card balances or debt load may be hurting funding or credit outcomes.',
     deliverables: [
       'Utilization target plan',
       'Paydown sequence options',
       'Funding application timing notes',
-      'Credit repair workflow alignment',
+      'Credit repair timing alignment',
     ],
     upsellPath: 'AI credit analysis and dispute-letter support when report issues are also present',
     complianceNote:
@@ -103,7 +103,7 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
       'Lender question prep',
       'Missing-records action list',
     ],
-    upsellPath: 'Funding readiness plan when the file needs deeper cleanup before applications',
+    upsellPath: 'Funding prep plan when the file needs deeper cleanup before applications',
     complianceNote:
       'Preparation support only; not accounting, tax advice, underwriting, or lender approval.',
   },
@@ -116,11 +116,11 @@ export const financialSkillsetPackages: FinancialSkillsetPackage[] = [
     bestFor: 'Investors with a specific deal who need to prepare lender-facing details.',
     deliverables: [
       'Deal summary review',
-      'Funding product fit notes',
+      'Funding product notes',
       'Document and timeline checklist',
-      'Partner/lender follow-up routing',
+      'Partner option notes for Kiavi, broker intake, or prep-first next steps',
     ],
-    upsellPath: 'Real estate funding lead workflow for lender or partner review',
+    upsellPath: 'Real estate funding review for lender or partner follow-up',
     complianceNote:
       'Does not promise financing, appraised value, terms, closing, or lender approval.',
   },

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { FundingEligibilityChecker } from "@/components/funding-eligibility-checker"
+import type { FundingEligibilityAnswers } from "@/components/funding-eligibility-checker"
 import {
   DollarSign,
   CheckCircle,
@@ -28,21 +29,53 @@ export default function FundingPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submissionResult, setSubmissionResult] = useState<null | {
+    leadId: string | null
+    name: string
+    businessType: string
+    fundingAmount: string
+    email: string
+    fundingPlan: null | {
+      confidence: 'full' | 'limited'
+      readiness: {
+        score: number
+        label: string
+        summary: string
+        risks: string[]
+        nextSteps: string[]
+      }
+      strategy: {
+        recommendedPath: string
+        estimatedFundingMin: number
+        estimatedFundingMax: number
+        strategySummary: string
+        warnings: string[]
+      }
+      recommendedProducts: Array<{
+        id: string
+        issuer: string
+        productName: string
+        type: string
+        applicationUrl: string | null
+        affiliateUrl: string | null
+        estimatedLimitMin: number | null
+        estimatedLimitMax: number | null
+        recommendedDay: number
+        reason: string
+        fitScore: number
+      }>
+    }
+  }>(null)
+  const [eligibilitySnapshot, setEligibilitySnapshot] = useState<null | FundingEligibilityAnswers>(null)
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    email: user?.email || "",
     phone: "",
     business_type: "",
     funding_amount: "",
     credit_score: "",
     message: "",
   })
-
-  useEffect(() => {
-    if (user?.email) {
-      setFormData((prev) => ({ ...prev, email: user.email || "" }))
-    }
-  }, [user])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -52,12 +85,32 @@ export default function FundingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setSubmissionResult(null)
 
     try {
       const response = await fetch("/api/funding-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          email: formData.email || user?.email || "",
+          eligibilitySnapshot:
+            eligibilitySnapshot
+              ? {
+                  businessStage: eligibilitySnapshot.businessStage,
+                  businessAgeMonths: Number(eligibilitySnapshot.businessAgeMonths || 0),
+                  monthlyRevenue: Number(eligibilitySnapshot.monthlyRevenue || 0),
+                  personalCreditScore: eligibilitySnapshot.personalCreditScore,
+                  currentUtilization: eligibilitySnapshot.currentUtilization,
+                  recentInquiries: eligibilitySnapshot.recentInquiries,
+                  hasEin: eligibilitySnapshot.hasEin,
+                  hasBusinessBank: eligibilitySnapshot.hasBusinessBank,
+                  hasBusinessCreditCard: eligibilitySnapshot.hasBusinessCreditCard,
+                  requestedFundingAmount: Number(eligibilitySnapshot.requestedFundingAmount || 0),
+                  useOfFunds: eligibilitySnapshot.useOfFunds,
+                }
+              : undefined,
+        }),
       })
       const data = await response.json()
 
@@ -69,6 +122,15 @@ export default function FundingPage() {
         title: "Application Submitted!",
         description: "We'll review your information and get back to you within 24 hours.",
         variant: "default",
+      })
+
+      setSubmissionResult({
+        leadId: data.leadId || null,
+        name: formData.name,
+        businessType: formData.business_type,
+        fundingAmount: formData.funding_amount,
+        email: formData.email || user?.email || "",
+        fundingPlan: data.fundingPlan || null,
       })
 
       setFormData({
@@ -95,14 +157,13 @@ export default function FundingPage() {
     }
   }
   return (
-    <div className="min-h-screen bg-background">
+    <div className="premium-page">
       
       <section className="pt-24 pb-16 px-4">
         <div className="container mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold gradient-text mb-6">Check Business Funding Eligibility Free</h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            See whether your business looks funding-ready before you pay for anything. If you need help getting
-            eligible, VestBlock can organize the credit, business setup, and documentation work through the $300 plan.
+            Check whether your business looks ready for funding before you pay for anything. If you need help getting prepared, VestBlock can help with credit, business setup, and documentation through the $300 plan.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
@@ -114,52 +175,100 @@ export default function FundingPage() {
             <Button size="lg" variant="outline" asChild>
               <Link href="/funding/business-funding-strategy">
                 <Phone className="mr-2 h-5 w-5" />
-                Join $300 Readiness Plan
+                Join $300 Funding Prep Plan
               </Link>
             </Button>
           </div>
         </div>
       </section>
-      <section id="free-eligibility-check" className="py-12 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <FundingEligibilityChecker />
+      <section className="pb-8 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Free first check</CardTitle>
+                <CardDescription>
+                  See whether the business looks ready now or needs cleanup before applications.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Paid prep when needed</CardTitle>
+                <CardDescription>
+                  Move into the $300 plan only when credit, documents, business setup, or sequencing need work.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Partner options after review</CardTitle>
+                <CardDescription>
+                  Funding partners are shown as options, not guarantees. Terms, limits, and approvals depend on the lender.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
         </div>
       </section>
-      <section className="py-16 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-cyan-500 mb-2">$500M+</div>
-              <div className="text-muted-foreground">Total Funding Facilitated</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-cyan-500 mb-2">2,500+</div>
-              <div className="text-muted-foreground">Businesses Funded</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-cyan-500 mb-2">2</div>
-              <div className="text-muted-foreground">Trusted Partners</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-cyan-500 mb-2">24hrs</div>
-              <div className="text-muted-foreground">Average Response Time</div>
-            </div>
+      <section id="free-eligibility-check" className="py-12 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <FundingEligibilityChecker
+            onAssessmentChange={({ answers, submitted }) => {
+              setEligibilitySnapshot(submitted ? answers : null)
+            }}
+          />
+        </div>
+      </section>
+      <section className="py-16">
+        <div className="container mx-auto max-w-5xl px-4">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How funding review works</h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              The goal is to reduce wasted applications and make the next step clearer.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Check the basics</CardTitle>
+                <CardDescription>
+                  Review credit, utilization, inquiries, business setup, EIN, banking, and use of funds.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Fix blockers</CardTitle>
+                <CardDescription>
+                  Improve the profile first if utilization, inquiries, documents, or business setup still need work.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Choose the next step</CardTitle>
+                <CardDescription>
+                  Apply through a partner option when you are ready, or use VestBlock paid prep first.
+                </CardDescription>
+              </CardHeader>
+            </Card>
           </div>
         </div>
       </section>
       <section className="py-16 px-4">
         <div className="container mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Funding Partners</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Partner options and paid preparation</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              We've partnered with industry-leading lenders to provide you with the best funding options available.
+              Some businesses are ready to explore partner options now. Others need a cleaner profile, better documents, or more preparation first.
             </p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-            <Card className="border-2 border-cyan-500/20 bg-gradient-to-br from-cyan-50/50 to-blue-50/50 dark:from-cyan-950/20 dark:to-blue-950/20">
+            <Card className="premium-card border-2 border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <Badge className="bg-cyan-500 text-white">Featured Lender</Badge>
+                  <Badge className="bg-cyan-500 text-white">Partner option</Badge>
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -168,7 +277,7 @@ export default function FundingPage() {
                 </div>
                 <CardTitle className="text-2xl">The Funding Playbook</CardTitle>
                 <CardDescription className="text-base">
-                  Comprehensive lending solutions with expert underwriters handling most of the work for you.
+                  A third-party funding option for businesses that appear ready to pursue lending after review.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -193,12 +302,12 @@ export default function FundingPage() {
                 <div className="bg-background/50 rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="font-medium">Funding Range:</span>
-                      <div className="text-cyan-600 font-bold">$25K - $5M</div>
+                      <span className="font-medium">Use case:</span>
+                      <div className="text-cyan-600 font-bold">Business and real estate lending</div>
                     </div>
                     <div>
-                      <span className="font-medium">Processing Time:</span>
-                      <div className="text-green-600 font-bold">7-14 Days</div>
+                      <span className="font-medium">Review note:</span>
+                      <div className="text-green-600 font-bold">Terms depend on lender review</div>
                     </div>
                   </div>
                 </div>
@@ -207,15 +316,15 @@ export default function FundingPage() {
                   <ul className="text-sm space-y-1">
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Expert underwriters handle most paperwork
+                      Can be used after a funding review
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Multiple loan products available
+                      Multiple funding categories
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Competitive rates and terms
+                      Final approval and terms come from the partner
                     </li>
                   </ul>
                 </div>
@@ -231,10 +340,10 @@ export default function FundingPage() {
                 </Button>
               </CardContent>
             </Card>
-            <Card className="border-2 border-blue-500/20">
+            <Card className="premium-card border-2 border-blue-500/20">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <Badge variant="secondary">Referral Network</Badge>
+                  <Badge variant="secondary">Partner option</Badge>
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -243,7 +352,7 @@ export default function FundingPage() {
                 </div>
                 <CardTitle className="text-2xl">OPM Mastery Network</CardTitle>
                 <CardDescription className="text-base">
-                  Exclusive lending network focused on startup business owners with strong personal credit.
+                  A third-party option that may work for startup owners with stronger personal credit profiles.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -251,7 +360,7 @@ export default function FundingPage() {
                   <h4 className="font-medium mb-2">Requirements:</h4>
                   <div className="flex items-center gap-2 text-sm">
                     <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="font-medium">700+ Personal Credit Score Required</span>
+                    <span className="font-medium">Usually a stronger personal credit profile is needed</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -261,7 +370,7 @@ export default function FundingPage() {
                   </div>
                   <div>
                     <span className="font-medium">Focus:</span>
-                    <div className="text-blue-600 font-bold">Lending Solutions</div>
+                    <div className="text-blue-600 font-bold">Startup-oriented funding option</div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -269,15 +378,15 @@ export default function FundingPage() {
                   <ul className="text-sm space-y-1">
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Exclusive access to qualified lenders
+                      May work for stronger owner-credit profiles
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Lending-focused, not educational
+                      Useful after a funding-prep decision is made
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Specialized in startup funding
+                      Final lender criteria still apply
                     </li>
                   </ul>
                 </div>
@@ -294,12 +403,12 @@ export default function FundingPage() {
               </CardContent>
             </Card>
           </div>
-          <Card className="border-2 border-emerald-500/20">
-            <CardHeader>
-              <Badge className="w-fit bg-emerald-600 text-white">VestBlock Service</Badge>
-              <CardTitle className="text-2xl">Business Funding Readiness Plan</CardTitle>
+            <Card className="premium-card border-2 border-emerald-500/20">
+              <CardHeader>
+              <Badge className="w-fit bg-emerald-600 text-white">VestBlock paid plan</Badge>
+              <CardTitle className="text-2xl">Business Funding Prep Plan</CardTitle>
               <CardDescription className="text-base">
-                A $300 plan for business owners who need help becoming eligible before they pursue funding, plus a
+                A $300 plan for business owners who need help getting ready before they pursue funding, plus a
                 10% success fee only after approved funding is accepted and available. VestBlock helps organize credit,
                 business setup, documentation, use of funds, and application sequencing.
               </CardDescription>
@@ -307,21 +416,21 @@ export default function FundingPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div className="rounded-lg border p-4">
-                  <div className="font-medium">Automated Intake</div>
-                  <div className="text-muted-foreground">Creates a readiness score and admin task.</div>
+                  <div className="font-medium">Guided review</div>
+                  <div className="text-muted-foreground">Creates a funding score and clear follow-up.</div>
                 </div>
                 <div className="rounded-lg border p-4">
                   <div className="font-medium">Compliance-Safe</div>
                   <div className="text-muted-foreground">No funding guarantees or hidden application promises.</div>
                 </div>
                 <div className="rounded-lg border p-4">
-                  <div className="font-medium">$300 Readiness Plan</div>
+                  <div className="font-medium">$300 Funding Prep Plan</div>
                   <div className="text-muted-foreground">Then 10% after accepted business credit funding is available.</div>
                 </div>
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>
                 <Link href="/funding/business-funding-strategy">
-                  Join Business Funding Readiness Plan
+                  Join Business Funding Prep Plan
                   <CreditCard className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -333,20 +442,118 @@ export default function FundingPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold mb-4">Get Pre-Qualified Today</h2>
+              <h2 className="text-3xl font-bold mb-4">Request a funding review</h2>
               <p className="text-muted-foreground">
-                Fill out our quick form and we'll connect you with the right funding partner for your needs.
+                Submit the basic business details and VestBlock can review whether a partner conversation makes sense now or whether prep work comes first.
               </p>
             </div>
-            <Card>
+            <Card className="premium-card">
               <CardHeader>
-                <CardTitle>Funding Application</CardTitle>
+                <CardTitle>Funding review form</CardTitle>
                 <CardDescription>
-                  Tell us about your business and funding needs. We'll review your information and get back to you
-                  within 24 hours.
+                  Tell us about your business and funding needs so the team can review timing, preparation gaps, and the best next step.
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {submissionResult && (
+                  <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="mt-0.5 h-5 w-5 text-emerald-500" />
+                      <div className="space-y-2">
+                        <div className="font-semibold text-foreground">
+                          Funding review saved for {submissionResult.name}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          VestBlock captured the {submissionResult.businessType} request for {submissionResult.fundingAmount}. The follow-up will go to {submissionResult.email}.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Next step: the file gets reviewed for partner options versus paid preparation, then the team follows up with a clear recommendation.
+                        </p>
+                        {submissionResult.fundingPlan && (
+                          <div className="space-y-3 pt-2">
+                            <div className="rounded-lg border border-emerald-500/20 bg-background/60 p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-foreground">
+                                  First recommendation:
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  {submissionResult.fundingPlan.strategy.recommendedPath.replace(/_/g, " ")}
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  {submissionResult.fundingPlan.readiness.score}/100
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                {submissionResult.fundingPlan.strategy.strategySummary}
+                              </p>
+                            </div>
+                            {submissionResult.fundingPlan.recommendedProducts.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-sm font-medium text-foreground">
+                                  Suggested first options
+                                </div>
+                                <div className="space-y-2">
+                                  {submissionResult.fundingPlan.recommendedProducts.map((product) => {
+                                    const destination = product.affiliateUrl || product.applicationUrl
+                                    return (
+                                      <div
+                                        key={product.id}
+                                        className="rounded-lg border border-border bg-background/60 p-3"
+                                      >
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div>
+                                            <div className="font-medium text-foreground">
+                                              {product.productName}
+                                            </div>
+                                            <div className="text-sm text-muted-foreground">
+                                              {product.issuer} · day {product.recommendedDay}
+                                            </div>
+                                          </div>
+                                          {destination ? (
+                                            <a
+                                              href={destination}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="text-sm font-medium text-cyan-500 hover:text-cyan-400"
+                                            >
+                                              Review offer
+                                            </a>
+                                          ) : null}
+                                        </div>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                          {product.reason}
+                                        </p>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {submissionResult.fundingPlan.readiness.nextSteps.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-sm font-medium text-foreground">
+                                  What to do before applying
+                                </div>
+                                <ul className="space-y-1 text-sm text-muted-foreground">
+                                  {submissionResult.fundingPlan.readiness.nextSteps
+                                    .slice(0, 4)
+                                    .map((step) => (
+                                      <li key={step}>• {step}</li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+                            {submissionResult.fundingPlan.confidence === "limited" && (
+                              <p className="text-xs text-muted-foreground">
+                                This recommendation uses limited lead details. Run the free checker first for a stronger sequence.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -370,7 +577,7 @@ export default function FundingPage() {
                         id="email"
                         name="email"
                         type="email"
-                        value={formData.email}
+                        value={formData.email || user?.email || ""}
                         onChange={handleInputChange}
                         required
                         placeholder="your@email.com"
@@ -465,31 +672,19 @@ export default function FundingPage() {
       </section>
       <section className="py-16 px-4">
         <div className="container mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Fund Your Business?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Choose the next step</h2>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Don't let funding be the barrier to your business success. Our partners are ready to help you access the
-            capital you need.
+            Some businesses can explore partner options right away. Others can move into paid preparation first.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
-              <a
-                href="https://thefundingplaybook.com/homepage?am_id=VestBlock"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Apply with The Funding Playbook
-                <ExternalLink className="ml-2 h-5 w-5" />
-              </a>
+              <Link href="/funding/business-funding-strategy">
+                Start $300 Funding Prep Plan
+                <CreditCard className="ml-2 h-5 w-5" />
+              </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <a
-                href="https://opmmastery.referralrock.com/l/ROBERTSAND60/referral"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Join OPM Network
-                <ExternalLink className="ml-2 h-5 w-5" />
-              </a>
+              <a href="#funding-application">Request Funding Review</a>
             </Button>
           </div>
         </div>

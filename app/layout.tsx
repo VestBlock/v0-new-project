@@ -2,6 +2,7 @@ import type React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { PosthogProvider } from '@/components/providers/posthog-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from '@/components/ui/toaster';
@@ -19,7 +20,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    default: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
     template: `%s | ${vestBlockSiteName}`,
   },
   description: vestBlockDefaultDescription,
@@ -29,26 +30,35 @@ export const metadata: Metadata = {
   applicationName: vestBlockSiteName,
   authors: [{ name: vestBlockSiteName, url: absoluteUrl('/') }],
   keywords: [
-    'AI credit repair',
-    'credit dispute letters',
+    'AI receptionist',
+    'local visibility growth',
+    'small business growth services',
     'business funding',
-    'business credit line readiness',
-    'business credit',
-    'small business grants',
+    'buyer and lender deal flow',
+    'home seller submissions',
+    'business setup',
     'real estate funding',
-    'Spanish business funding',
   ],
   openGraph: {
     type: 'website',
     siteName: vestBlockSiteName,
     url: absoluteUrl('/'),
-    title: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    title: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
     description: vestBlockDefaultDescription,
+    images: [
+      {
+        url: absoluteUrl('/opengraph-image'),
+        width: 1200,
+        height: 630,
+        alt: 'VestBlock website preview',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${vestBlockSiteName} - AI Credit Repair, Funding, Grants, and Financial Growth`,
+    title: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
     description: vestBlockDefaultDescription,
+    images: [absoluteUrl('/opengraph-image')],
   },
   robots: {
     index: true,
@@ -78,11 +88,13 @@ export default function RootLayout({
           }}
         />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
-            <Navigation />
-            <main>{children}</main>
-            <Toaster />
-          </AuthProvider>
+          <PosthogProvider>
+            <AuthProvider>
+              <Navigation />
+              <main>{children}</main>
+              <Toaster />
+            </AuthProvider>
+          </PosthogProvider>
         </ThemeProvider>
       </body>
     </html>

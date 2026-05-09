@@ -5,7 +5,8 @@ export type VestBlockServiceIntent =
   | 'find_grants'
   | 'fund_real_estate'
   | 'sell_property'
-  | 'automate_followup';
+  | 'automate_followup'
+  | 'grow_visibility';
 
 export type VestBlockServiceDirectoryItem = {
   key: string;
@@ -50,14 +51,14 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Business Funding Eligibility',
     shortTitle: 'Funding Check',
     summary:
-      'Check funding readiness for free, then route qualified owners to partners or into VestBlock prep if they need help becoming eligible.',
+      'Check funding eligibility for free, then move qualified owners to partners or into VestBlock prep if they need help becoming eligible.',
     bestFor: 'Business owners who want to know whether they should apply now or clean up first.',
     route: '/funding#free-eligibility-check',
     primaryCta: 'Check Eligibility Free',
     secondaryRoute: '/funding/business-funding-strategy',
-    secondaryCta: 'Start $300 Readiness Plan',
-    priceNote: 'Free check, then $300 readiness plan plus 10% after accepted business credit funding is available',
-    operatorNote: 'Scores readiness, captures leads, creates funding strategy requests, and queues admin review.',
+    secondaryCta: 'Start $300 Funding Plan',
+    priceNote: 'Free check, then $300 funding plan plus 10% after accepted business credit funding is available',
+    operatorNote: 'Scores eligibility, captures leads, creates funding strategy requests, and queues admin review.',
     trustNote: 'No funding, limit, or approval guarantees; customers review terms before applications.',
     serviceStage: 'free_check',
     priority: 20,
@@ -66,17 +67,17 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     key: 'credit_card_stacking',
     intent: 'get_business_funding',
     title: 'Business Funding Strategy',
-    shortTitle: 'Card Stacking',
+    shortTitle: 'Funding Strategy',
     summary:
-      'Review business credit line readiness, document requirements, inquiry risk, utilization impact, and the paid strategy path.',
+      'Review business credit line eligibility, document requirements, inquiry risk, utilization impact, and the paid strategy plan.',
     bestFor: 'Business owners considering multiple business credit cards for working capital.',
     route: '/funding/business-funding-strategy',
     primaryCta: 'Start Funding Strategy',
     secondaryRoute: '/funding#free-eligibility-check',
     secondaryCta: 'Check Eligibility First',
-    priceNote: '$300 readiness plan plus 10% after accepted business credit funding is available',
+    priceNote: '$300 funding prep plan plus 10% after accepted business credit funding is available',
     operatorNote:
-      'Creates funding strategy requests, payment readiness records, admin review tasks, and success-fee consent visibility.',
+      'Creates funding strategy requests, payment records, admin review tasks, and success-fee consent records.',
     trustNote:
       'No approval, limit, or interest-rate guarantees; customers review terms, hard-inquiry risk, and repayment responsibility.',
     serviceStage: 'paid_plan',
@@ -88,14 +89,14 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Business Setup For Funding And Grants',
     shortTitle: 'Business Setup',
     summary:
-      'Organize entity, EIN, business banking, documents, business credit basics, and use-of-funds details before applications.',
-    bestFor: 'Owners who are not lender-ready yet or need grant/funding documentation organized.',
+      'Organize business registration, EIN, business banking, documents, business credit basics, and use-of-funds details before applications.',
+    bestFor: 'Owners who need business records and grant/funding documents organized.',
     route: '/business-setup',
     primaryCta: 'Prepare My Business',
     secondaryRoute: '/tools/business-credit',
     secondaryCta: 'Build Business Credit',
-    priceNote: 'Free readiness guidance with paid funding support available',
-    operatorNote: 'Routes users toward business credit, grants, and funding readiness workflows.',
+    priceNote: 'Free preparation guidance with paid funding support available',
+    operatorNote: 'Routes users toward business credit, grants, and funding preparation.',
     trustNote: 'Positioned as preparation and documentation, not legal, tax, or guaranteed funding advice.',
     serviceStage: 'free_check',
     priority: 30,
@@ -106,7 +107,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Financial Growth Services',
     shortTitle: 'Financial Services',
     summary:
-      'Paid prep packages for funding readiness, business credit, grant applications, debt utilization, cash-flow documents, and real estate deal review.',
+      'Paid prep packages for funding, business credit, grant applications, debt utilization, cash-flow documents, and real estate deal review.',
     bestFor: 'Clients who need more than a free checker and want a paid review or preparation package.',
     route: '/services/financial-growth',
     primaryCta: 'View Financial Packages',
@@ -142,13 +143,13 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Spanish Business Funding',
     shortTitle: 'Spanish Funding',
     summary:
-      'A Spanish-language path for business owners to prepare for funding and review the Bank Breezy Spanish partner option.',
-    bestFor: 'Spanish-speaking owners who need a clearer funding-readiness path.',
+      'A Spanish-language page for business owners to prepare for funding and review the Bank Breezy Spanish partner option.',
+    bestFor: 'Spanish-speaking owners who need a clearer funding preparation process.',
     route: '/es/vestblock',
     primaryCta: 'Ver Opciones En Espanol',
     secondaryRoute: 'https://Bankbreezy.com/es/Vestblock',
     secondaryCta: 'Open Bank Breezy',
-    priceNote: 'Partner path plus VestBlock readiness support where appropriate',
+    priceNote: 'Partner option plus VestBlock preparation support where appropriate',
     operatorNote: 'Keeps Spanish leads and partner routing distinct for future reporting.',
     trustNote: 'Spanish copy should stay natural and avoid guaranteed approval language.',
     serviceStage: 'lead_followup',
@@ -164,7 +165,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     bestFor: 'Investors and property owners with a specific real estate deal or lending need.',
     route: '/real-estate-funding',
     primaryCta: 'Submit Funding Deal',
-    priceNote: 'Lead review and partner/lender follow-up',
+    priceNote: 'Lead review and partner or lender follow-up',
     operatorNote: 'Creates real estate lead records, admin alerts, and follow-up tasks.',
     trustNote: 'No financing promise before deal review, underwriting, and lender terms.',
     serviceStage: 'lead_followup',
@@ -176,7 +177,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Sell Property',
     shortTitle: 'Sell Property',
     summary:
-      'Collect property details from sellers who want an investor conversation, cash-offer review, or fast-sale path.',
+      'Collect property details from sellers who want an investor conversation, cash-offer review, or faster sale conversation.',
     bestFor: 'Owners who want to sell a house or investment property and need follow-up.',
     route: '/sell',
     primaryCta: 'Request Property Review',
@@ -189,18 +190,42 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
   {
     key: 'ai_assistant',
     intent: 'automate_followup',
-    title: 'AI Assistant',
-    shortTitle: 'AI Assistant',
+    title: 'AI Receptionist And Website Services',
+    shortTitle: 'AI Receptionist',
     summary:
-      'Guide visitors toward the right VestBlock workflow for credit repair, business funding, grants, and support questions.',
-    bestFor: 'Users who need help deciding which service fits their situation.',
+      'Install AI receptionist, appointment-booking, and website-upgrade services that help service businesses capture more leads and convert more traffic.',
+    bestFor:
+      'Service businesses that need better lead capture, booking flow, or a cleaner website before they spend more on traffic.',
     route: '/ai-assistant',
-    primaryCta: 'Ask The Assistant',
-    priceNote: 'Free guidance path with service routing',
-    operatorNote: 'Useful for lead capture, support triage, and routing users into the correct product flow.',
-    trustNote: 'Should route users to documented workflows instead of making legal, tax, or approval claims.',
-    serviceStage: 'free_check',
+    primaryCta: 'View AI Receptionist Offers',
+    priceNote: '$495 setup + $149/mo for AI receptionist, $895 setup + $249/mo with booking, website sprints from $2,500',
+    operatorNote:
+      'Creates lead records for AI receptionist, booking, and website-upgrade requests with admin follow-up and offer visibility.',
+    trustNote:
+      'Positioned around lead capture, booking support, and conversion improvement without guaranteeing revenue or appointment volume.',
+    serviceStage: 'paid_plan',
     priority: 80,
+  },
+  {
+    key: 'visibility_expansion',
+    intent: 'grow_visibility',
+    title: 'Search Visibility Service',
+    shortTitle: 'Search Visibility',
+    summary:
+      'Package search, AI-answer visibility, city pages, and PR authority work into a clearer monthly service for growing businesses.',
+    bestFor:
+      'Businesses that want more discoverability, stronger AI-answer visibility, and better authority without a vague marketing retainer.',
+    route: '/visibility-expansion',
+    primaryCta: 'View Search Visibility',
+    secondaryRoute: '/pricing#visibility-expansion',
+    secondaryCta: 'Compare Visibility Pricing',
+    priceNote: '$299/mo starter, city-page plan from $750 setup + $349/mo, authority PR from $995/mo',
+    operatorNote:
+      'Creates lead records for search, AI-answer visibility, city pages, and PR requests with deliverables, admin follow-up, and package tracking.',
+    trustNote:
+      'Positioned around visibility, content, and authority building without guaranteeing rankings, traffic, media coverage, or revenue.',
+    serviceStage: 'paid_plan',
+    priority: 85,
   },
 ];
 
@@ -211,7 +236,8 @@ export const serviceIntentLabels: Record<VestBlockServiceIntent, string> = {
   find_grants: 'Find grant opportunities',
   fund_real_estate: 'Fund a real estate deal',
   sell_property: 'Sell a property',
-  automate_followup: 'Get guided help',
+  automate_followup: 'Automate lead capture',
+  grow_visibility: 'Grow search visibility',
 };
 
 export function getServiceDirectoryByIntent(intent: VestBlockServiceIntent) {

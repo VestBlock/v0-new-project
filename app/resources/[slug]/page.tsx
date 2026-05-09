@@ -8,6 +8,8 @@ import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getVestBlockMarketingService } from '@/lib/content/marketingServices';
+import { absoluteUrl } from '@/lib/seo/site';
+import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/structuredData';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +85,12 @@ export async function generateMetadata({
     alternates: {
       canonical: `/resources/${asset.slug}`,
     },
+    openGraph: {
+      title: asset.seo_title || asset.title,
+      description: asset.meta_description || asset.excerpt || undefined,
+      url: absoluteUrl(`/resources/${asset.slug}`),
+      type: 'article',
+    },
   };
 }
 
@@ -99,13 +107,35 @@ export default async function ResourcePage({
   const service = getVestBlockMarketingService(asset.service_key);
   const ctaUrl = asset.cta_url || service.offerPath;
   const ctaLabel = asset.cta_label || `Start with ${service.label}`;
+  const isSpanish = asset.language === 'es';
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Learn', path: '/learn' },
+    { name: asset.title, path: `/resources/${asset.slug}` },
+  ]);
+  const articleSchema = articleJsonLd({
+    headline: asset.title,
+    description: asset.meta_description || asset.excerpt || asset.title,
+    path: `/resources/${asset.slug}`,
+    publishedAt: asset.published_at,
+    modifiedAt: asset.published_at,
+    inLanguage: asset.language || 'en',
+    keywords: [service.label, asset.title, 'VestBlock'],
+  });
 
   return (
     <main className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([breadcrumbs, articleSchema]),
+        }}
+      />
+
       <section className="border-b">
         <div className="container mx-auto max-w-4xl px-4 pb-10 pt-24 md:pt-28">
           <Badge variant="outline" className="mb-4">
-            {service.label}
+            {isSpanish ? 'Guia en espanol de VestBlock' : service.label}
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
             {asset.title}
@@ -129,10 +159,13 @@ export default async function ResourcePage({
         </div>
 
         <div className="mt-10 rounded-lg border bg-muted/30 p-5">
-          <p className="font-medium">Ready for the next step?</p>
+          <p className="font-medium">
+            {isSpanish ? 'Listo para el siguiente paso?' : 'Ready for the next step?'}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            VestBlock connects this topic to a practical tool or workflow so you
-            can act on it.
+            {isSpanish
+              ? 'VestBlock conecta este tema con una herramienta o flujo practico para que puedas actuar con mas claridad.'
+              : 'VestBlock connects this topic to a practical tool or next step so you can act on it.'}
           </p>
           <Button asChild className="mt-4" variant="outline">
             <Link href={ctaUrl}>

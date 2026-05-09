@@ -13,7 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import {
   Menu,
   Loader2,
@@ -23,32 +30,49 @@ import {
   FileText,
   Briefcase,
   LayoutDashboard,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isClientAdmin } from '@/lib/auth/client-admin';
 import Image from 'next/image';
 import React from 'react';
 
 export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const isAdmin = React.useMemo(
+    () =>
+      isClientAdmin({
+        email: user?.email,
+        role: userProfile?.role,
+      }),
+    [user?.email, userProfile?.role]
+  );
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/services', label: 'Services' },
+    { href: '/dealvault', label: 'DealVault' },
+    { href: '/smart-contracts', label: 'Smart Contracts' },
+    { href: '/visibility-expansion', label: 'Visibility' },
+    { href: '/ai-assistant', label: 'AI Receptionist' },
     { href: '/funding', label: 'Funding' },
-    { href: '/credit-upload', label: 'Credit Tools' },
-    { href: '/business-setup', label: 'Business Setup' },
+    { href: '/pricing', label: 'Pricing' },
     { href: '/learn', label: 'Learn' },
-    { href: '/sell', label: 'Sell Property' },
   ];
 
   // User menu links (when logged in)
   const userMenuLinks = [
+    { href: '/get-started', label: 'Workspace', icon: LayoutDashboard },
     { href: '/profile', label: 'Profile', icon: User },
+    { href: '/dashboard/funding', label: 'Funding Assistant', icon: Sparkles },
+    { href: '/dashboard/services', label: 'My Services', icon: FileText },
     { href: '/credit-upload', label: 'Credit Upload', icon: CreditCard },
     { href: '/tools/my-dispute-letters', label: 'Dispute Letters', icon: FileText },
     { href: '/tools/business-credit', label: 'Business Credit', icon: Briefcase },
+    ...(process.env.NEXT_PUBLIC_ENABLE_DEALVAULT === 'true'
+      ? [{ href: '/dashboard/dealvault', label: 'DealVault', icon: Briefcase }]
+      : []),
   ];
 
   const getInitials = (name?: string | null) => {
@@ -60,25 +84,18 @@ export function Navigation() {
       .toUpperCase();
   };
 
-  React.useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
-    }
-  }, [user]);
-
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#050913]/85 shadow-[0_10px_40px_rgba(2,6,23,0.22)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#050913]/70">
       <div className="container flex h-14 items-center">
         <div className="mr-4 flex items-center">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+          <Link href="/" className="group mr-6 flex items-center space-x-2 rounded-full outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <Image
               src="/4D3E27E0-6C7A-4B5B-92D5-CF92182A4C7A.png"
               alt="VestBlock Logo"
               width={28}
               height={28}
             />
-            <span className="font-bold">VestBlock</span>
+            <span className="font-bold transition-colors group-hover:text-cyan-100">VestBlock</span>
           </Link>
           {/* Desktop Navigation */}
           <nav className="hidden items-center space-x-6 text-sm font-medium lg:flex">
@@ -87,9 +104,9 @@ export function Navigation() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'transition-colors hover:text-foreground/80',
+                  'rounded-full px-3 py-2 transition-[color,background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-foreground hover:shadow-[0_0_24px_rgba(34,211,238,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   pathname === link.href
-                    ? 'text-foreground'
+                    ? 'bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgba(34,211,238,0.18)]'
                     : 'text-foreground/60'
                 )}
               >
@@ -102,7 +119,7 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Sheet>
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <Menu className="h-6 w-6" />
@@ -110,6 +127,12 @@ export function Navigation() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Site navigation</SheetTitle>
+                  <SheetDescription>
+                    Browse VestBlock services, pricing, learning resources, and account links.
+                  </SheetDescription>
+                </SheetHeader>
                 <Link href="/" className="mb-6 flex items-center space-x-2">
                   <Image
                     src="/4D3E27E0-6C7A-4B5B-92D5-CF92182A4C7A.png"
@@ -124,7 +147,8 @@ export function Navigation() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="text-foreground"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    className="rounded-xl px-3 py-3 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -132,11 +156,15 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login" className="text-foreground">
+                      <Link href="/login?redirect=/get-started" onClick={() => setIsMobileMenuOpen(false)} className="text-foreground">
                         Sign In
                       </Link>
-                      <Link href="/register" className="text-foreground font-medium">
-                        Get Started
+                      <Link
+                        href="/dealvault/demo"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
+                      >
+                        Request Demo
                       </Link>
                     </>
                   ) : (
@@ -145,18 +173,22 @@ export function Navigation() {
                         <Link
                           key={link.href}
                           href={link.href}
-                          className="text-foreground"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
                         >
                           {link.label}
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin-panel" className="text-foreground">
+                        <Link href="/admin-panel" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
                       <button
-                        onClick={signOut}
+                        onClick={async () => {
+                          setIsMobileMenuOpen(false);
+                          await signOut();
+                        }}
                         className="text-left text-foreground"
                       >
                         Sign Out
@@ -226,10 +258,10 @@ export function Navigation() {
           ) : (
             <nav className="hidden items-center space-x-2 md:flex">
               <Button variant="ghost" asChild>
-                <Link href="/login">Sign In</Link>
+                <Link href="/login?redirect=/get-started">Sign In</Link>
               </Button>
               <Button asChild className="bg-cyan-500 hover:bg-cyan-600">
-                <Link href="/register">Get Started</Link>
+                <Link href="/dealvault/demo">Request Demo</Link>
               </Button>
             </nav>
           )}

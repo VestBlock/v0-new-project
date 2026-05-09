@@ -1,52 +1,65 @@
 "use client"
 
-import { Building2, Clock, Zap, Users } from "lucide-react"
 import { motion } from "framer-motion"
+import { Bot, Landmark, Search, ShieldCheck } from "lucide-react"
 
-const metrics = [
+const signals = [
   {
-    icon: Building2,
-    label: "Built for Service Businesses",
-    description: "HVAC, roofing, dental, and more"
+    icon: ShieldCheck,
+    label: "Live proof contracts",
+    note: "Proof, payout, and milestone records are backed by live Polygon contracts.",
   },
   {
-    icon: Clock,
-    label: "24/7 Lead Capture",
-    description: "Never miss an opportunity"
+    icon: Search,
+    label: "Monthly visibility work",
+    note: "Search pages, AI-answer coverage, PR, and credibility work without vague retainers.",
   },
   {
-    icon: Zap,
-    label: "Fast Follow-up",
-    description: "Instant lead notifications"
+    icon: Bot,
+    label: "AI lead capture layer",
+    note: "Better response, qualification, and booking flow for service teams.",
   },
   {
-    icon: Users,
-    label: "Multiple Funding Partners",
-    description: "More options for approval"
-  }
-]
+    icon: Landmark,
+    label: "Extra help when needed",
+    note: "Funding, setup, and credit services stay available without crowding the main offer.",
+  },
+] as const
 
 export function MetricsSection() {
   return (
-    <section className="py-16 px-4 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-cyan-500/10">
+    <section className="px-4 pb-10">
       <div className="container mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {metrics.map((metric, index) => (
+        <div className="premium-section p-5 md:p-7">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Why clients trust it</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">Credibility should show up before the sales call.</h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-slate-400">
+              VestBlock works better when visitors see real proof, clear offers, and one obvious next step instead of a long list of disconnected services.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {signals.map((signal, index) => (
             <motion.div
-              key={metric.label}
-              initial={{ opacity: 0, y: 20 }}
+              key={signal.label}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
+              whileHover={{ y: -4 }}
               viewport={{ once: true }}
-              className="text-center"
+              transition={{ duration: 0.35, delay: index * 0.05 }}
+              className="premium-card p-4"
             >
-              <div className="w-14 h-14 bg-background rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <metric.icon className="h-7 w-7 text-cyan-500" />
-              </div>
-              <h3 className="font-semibold text-lg mb-1">{metric.label}</h3>
-              <p className="text-sm text-muted-foreground">{metric.description}</p>
-            </motion.div>
-          ))}
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05]">
+                  <signal.icon className="h-5 w-5 text-cyan-300" />
+                </div>
+                <p className="text-sm font-medium text-white">{signal.label}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{signal.note}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

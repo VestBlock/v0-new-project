@@ -21,6 +21,7 @@ import {
   bankBreezySpanishFundingUrl,
   spanishFundingReadinessPillars,
 } from '@/lib/business-readiness/fundingCompliance';
+import { vestblockAeoTopics } from '@/lib/aeo/topics';
 
 export const metadata: Metadata = {
   title: 'Financiamiento Para Negocios En Espanol | VestBlock',
@@ -74,6 +75,10 @@ const faqSchema = {
     },
   ],
 };
+
+const spanishFundingGuides = vestblockAeoTopics
+  .filter((topic) => topic.language === 'es' && topic.offerPath === '/es/vestblock')
+  .slice(0, 6);
 
 export default function SpanishVestBlockPage() {
   return (
@@ -179,6 +184,32 @@ export default function SpanishVestBlockPage() {
 
       <section className="border-t bg-muted/30">
         <div className="container mx-auto max-w-6xl px-4 py-12">
+          <div className="mb-8 max-w-2xl">
+            <h2 className="text-2xl font-semibold">
+              Guias en espanol para fortalecer tu perfil
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Estas guias ayudan a crear una red de contenido en espanol alrededor
+              de financiamiento, credito comercial, documentos y subvenciones.
+            </p>
+          </div>
+
+          <div className="mb-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {spanishFundingGuides.map((guide) => (
+              <Card key={guide.slug}>
+                <CardHeader>
+                  <CardTitle className="text-lg">{guide.title}</CardTitle>
+                  <CardDescription>{guide.metaDescription}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild variant="outline">
+                    <Link href={`/resources/${guide.slug}`}>Leer guia</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>

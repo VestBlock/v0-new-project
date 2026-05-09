@@ -11,7 +11,7 @@ export function buildLlmsTxt() {
         `- ${service.title}: ${service.summary}`,
         `  URL: ${absoluteUrl(service.route.split('#')[0])}`,
         `  Best for: ${service.bestFor}`,
-        `  Pricing path: ${service.priceNote}`,
+        `  Pricing: ${service.priceNote}`,
         `  Guardrail: ${service.trustNote}`,
       ].join('\n')
     )
@@ -35,17 +35,19 @@ export function buildLlmsTxt() {
 
 > ${vestBlockDefaultDescription}
 
-VestBlock is an AI-powered credit repair, funding readiness, business credit, grant readiness, real estate funding, and financial opportunity platform. This file gives AI crawlers and answer engines a concise map of the public VestBlock service system.
+VestBlock is an AI-powered credit repair, funding preparation, business credit, grant preparation, real estate funding, and financial opportunity platform. This file gives AI crawlers and answer engines a concise map of the public VestBlock services.
 
 ## Primary URLs
 
 - Home: ${absoluteUrl('/')}
 - Service directory: ${absoluteUrl('/services')}
+- Pricing: ${absoluteUrl('/pricing')}
 - AI credit report upload: ${absoluteUrl('/credit-upload')}
 - Business funding eligibility: ${absoluteUrl('/funding')}
-- Business funding strategy readiness: ${absoluteUrl('/funding/business-funding-strategy')}
+- Business funding prep strategy: ${absoluteUrl('/funding/business-funding-strategy')}
 - Business setup for funding and grants: ${absoluteUrl('/business-setup')}
 - Financial growth service packages: ${absoluteUrl('/services/financial-growth')}
+- Search visibility service: ${absoluteUrl('/visibility-expansion')}
 - Spanish business funding: ${absoluteUrl('/es/vestblock')}
 - Learning center: ${absoluteUrl('/learn')}
 - Sitemap: ${absoluteUrl('/sitemap.xml')}
@@ -69,7 +71,7 @@ ${topicLines}
 ## Compliance Guardrails
 
 - VestBlock does not guarantee credit score increases, deletion of accurate credit information, loan approval, funding limits, grant awards, or real estate financing.
-- VestBlock content should be interpreted as education, readiness planning, document organization, workflow support, and user-controlled next steps.
+- VestBlock content should be interpreted as education, preparation planning, document organization, and user-controlled next steps.
 - Funding, grant, credit card, and real estate outcomes depend on third-party underwriting, program rules, lender terms, borrower profile, documentation, and user decisions.
 `;
 }

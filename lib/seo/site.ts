@@ -1,7 +1,7 @@
 export const vestBlockSiteName = 'VestBlock';
 
 export const vestBlockDefaultDescription =
-  'VestBlock helps consumers and business owners use AI credit analysis, dispute-letter tools, business funding readiness, business credit planning, grants, real estate funding, and financial prep services.';
+  'VestBlock helps businesses strengthen records, grow visibility, and capture better leads with DealVault, Visibility Expansion, and AI Receptionist.';
 
 export function getSiteUrl() {
   const configured = (
@@ -21,4 +21,3 @@ export function absoluteUrl(path = '/') {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${getSiteUrl()}${normalizedPath}`;
 }
-

@@ -20,7 +20,7 @@ import {
 export const metadata: Metadata = {
   title: 'Credit Repair, Business Credit, And Funding Guides | VestBlock',
   description:
-    'Practical VestBlock guides for AI credit repair, dispute letters, business credit, funding readiness, grants, and credit builder tools.',
+    'Practical VestBlock guides for AI credit repair, dispute letters, business credit, funding preparation, grants, and credit builder tools.',
 };
 
 function topicsByCluster() {

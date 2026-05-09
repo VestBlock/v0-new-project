@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
+import { buildPartnerReferralPath, partnerReferralDefinitions } from "@/lib/partners/referrals"
 import {
+  ArrowUpRight,
   Building2,
   DollarSign,
   Send,
@@ -127,6 +130,7 @@ export default function RealEstateFundingPage() {
       })
 
       if (!response.ok) throw new Error("Failed to submit")
+      const result = await response.json()
 
       // Track form submission conversion
       if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -137,8 +141,14 @@ export default function RealEstateFundingPage() {
         })
       }
 
-      router.push("/real-estate-funding/thanks")
-    } catch (error) {
+      const thanksParams = new URLSearchParams()
+      thanksParams.set("loanType", loanType)
+      if (result?.leadId) {
+        thanksParams.set("leadId", result.leadId)
+      }
+
+      router.push(`/real-estate-funding/thanks?${thanksParams.toString()}`)
+    } catch (_error) {
       toast({
         title: "Submission Failed",
         description: "Please try again or contact us directly.",
@@ -150,7 +160,7 @@ export default function RealEstateFundingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="premium-page">
       {/* Hero Section */}
       <section className="pt-24 pb-12 px-4">
         <div className="container mx-auto text-center max-w-4xl">
@@ -159,26 +169,147 @@ export default function RealEstateFundingPage() {
             <span className="text-sm font-medium">Real Estate Funding</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
-            Get Funding for Your{" "}
-            <span className="gradient-text">Real Estate Deal</span>
+            Real Estate Deal Review And{" "}
+            <span className="gradient-text">Funding Support</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            DSCR loans for rental properties or hard money for fix & flip projects.
-            Fast approvals, competitive rates.
+            Submit the deal details, timeline, and property information so
+            VestBlock can review whether the best next move is DSCR, hard
+            money, or more preparation before lender conversations.
           </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-5">
+            <Button
+              size="lg"
+              className="bg-cyan-500 hover:bg-cyan-600 text-white"
+              onClick={() =>
+                document.getElementById("loan-type-selection")?.scrollIntoView({
+                  behavior: "smooth",
+                })
+              }
+            >
+              <Building2 className="mr-2 h-5 w-5" />
+              Review My Deal
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href="/services/financial-growth#request-service">
+                Request Paid Deal Review
+              </Link>
+            </Button>
+          </div>
           <a
-            href="tel:+18005551234"
+            href="mailto:contact@vestblock.io?subject=Real%20Estate%20Funding%20Question"
             onClick={handlePhoneClick}
             className="inline-flex items-center gap-2 text-cyan-500 hover:text-cyan-400 transition-colors"
           >
             <Phone className="h-5 w-5" />
-            <span className="font-medium">Prefer to talk? Call us</span>
+            <span className="font-medium">Prefer to talk? Email VestBlock</span>
           </a>
         </div>
       </section>
 
+      <section className="pb-8 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Submit the deal</CardTitle>
+                <CardDescription>
+                  Share property type, requested amount, liquidity, timeline, and the real estate use case.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Review the deal</CardTitle>
+                <CardDescription>
+                  VestBlock uses the deal details to judge whether the scenario looks ready for lender conversations or still needs more preparation.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card className="premium-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Choose the next step</CardTitle>
+                <CardDescription>
+                  Stronger deals can move toward partner conversations. Other deals can move into paid review or more preparation first.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-8 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle className="text-2xl">Partner paths VestBlock can open when the deal is strong</CardTitle>
+              <CardDescription>
+                These options are best used when the property, reserves, timeline, and borrower details are already fairly organized. VestBlock tracks the click first so the follow-up stays tied to the deal context on our side.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40">
+                <div className="mb-3 flex items-center gap-2">
+                  <Home className="h-5 w-5 text-cyan-500" />
+                  <h3 className="text-lg font-semibold">{partnerReferralDefinitions.kiavi.displayName}</h3>
+                </div>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {partnerReferralDefinitions.kiavi.fitSummary}
+                </p>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  {partnerReferralDefinitions.kiavi.disclosure}
+                </p>
+                <Button asChild className="w-full bg-cyan-600 hover:bg-cyan-700">
+                  <a
+                    href={buildPartnerReferralPath({
+                      partnerKey: "kiavi",
+                      source: "real-estate-funding",
+                      loanType: loanType || "dscr",
+                      service: "real_estate_funding"
+                    })}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {partnerReferralDefinitions.kiavi.ctaLabel}
+                    <ArrowUpRight className="ml-2 h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-amber-500" />
+                  <h3 className="text-lg font-semibold">{partnerReferralDefinitions.rcn.displayName}</h3>
+                </div>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {partnerReferralDefinitions.rcn.fitSummary}
+                </p>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  {partnerReferralDefinitions.rcn.disclosure}
+                </p>
+                <Button asChild variant="outline" className="w-full">
+                  <a
+                    href={buildPartnerReferralPath({
+                      partnerKey: "rcn",
+                      source: "real-estate-funding",
+                      loanType: loanType || "hard-money",
+                      service: "real_estate_funding"
+                    })}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {partnerReferralDefinitions.rcn.ctaLabel}
+                    <ArrowUpRight className="ml-2 h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
       {/* Loan Type Selection */}
-      <section className="py-8 px-4">
+      <section id="loan-type-selection" className="py-8 px-4">
         <div className="container mx-auto max-w-4xl">
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             <Card
@@ -193,7 +324,7 @@ export default function RealEstateFundingPage() {
                   <div>
                     <h3 className="font-semibold text-lg mb-1">DSCR Loan</h3>
                     <p className="text-sm text-muted-foreground">
-                      For rental properties. Qualify based on property cash flow, not personal income.
+                      Best for rental-property cash-flow scenarios where the property and timing are already fairly well defined.
                     </p>
                   </div>
                 </div>
@@ -212,7 +343,7 @@ export default function RealEstateFundingPage() {
                   <div>
                     <h3 className="font-semibold text-lg mb-1">Hard Money / Fix & Flip</h3>
                     <p className="text-sm text-muted-foreground">
-                      Short-term financing for flips and rehab projects. Fast closings.
+                      Best for rehab, flip, bridge, or time-sensitive scenarios that need a deal-specific review.
                     </p>
                   </div>
                 </div>
@@ -226,13 +357,13 @@ export default function RealEstateFundingPage() {
       {loanType && (
         <section className="py-8 px-4 pb-16">
           <div className="container mx-auto max-w-2xl">
-            <Card className="bg-card/80 backdrop-blur">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle>
-                  {loanType === 'dscr' ? 'DSCR Loan Application' : 'Hard Money / Fix & Flip Application'}
+                  {loanType === 'dscr' ? 'DSCR Deal Review Form' : 'Hard Money / Fix & Flip Review Form'}
                 </CardTitle>
                 <CardDescription>
-                  Fill out the form below and we'll get back to you within 24 hours.
+                  Fill out the form below and VestBlock can review the file, recommend the next step, and determine whether outside lender follow-up or paid prep makes more sense.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -301,7 +432,7 @@ export default function RealEstateFundingPage() {
                       {/* DSCR specific: Entity */}
                       {loanType === 'dscr' && (
                         <div className="space-y-2">
-                          <Label>Entity Type *</Label>
+                          <Label>Borrower Type *</Label>
                           <RadioGroup value={entity} onValueChange={setEntity} className="flex gap-6">
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="llc" id="entity-llc" />
@@ -579,7 +710,7 @@ export default function RealEstateFundingPage() {
                               <Label htmlFor="contractorReady">Contractor / Scope Ready</Label>
                               <Select value={contractorReady} onValueChange={setContractorReady}>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select readiness" />
+                                  <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="scope-and-bid-ready">Scope and bid ready</SelectItem>
@@ -648,12 +779,12 @@ export default function RealEstateFundingPage() {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Submitting...
+                        Sending Review...
                       </>
                     ) : (
                       <>
                         <Send className="mr-2 h-4 w-4" />
-                        Submit Application
+                        Submit Deal Review
                       </>
                     )}
                   </Button>

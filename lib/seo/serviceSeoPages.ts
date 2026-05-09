@@ -1,3 +1,5 @@
+import { pricedVestBlockOffers } from '@/lib/services/pricedOffers';
+
 export type ServiceSeoSection = {
   heading: string;
   body: string;
@@ -24,9 +26,10 @@ export type ServiceSeoPage = {
   sections: ServiceSeoSection[];
   faqs: ServiceSeoFaq[];
   relatedSlugs: string[];
+  priceLabel?: string;
 };
 
-export const serviceSeoPages: ServiceSeoPage[] = [
+const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'credit_analysis',
     slug: 'ai-credit-analysis',
@@ -87,26 +90,26 @@ export const serviceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'business_funding',
     slug: 'business-funding-eligibility',
-    title: 'Business Funding Eligibility And Readiness',
-    seoTitle: 'Business Funding Eligibility Checker And Readiness Plan',
+    title: 'Business Funding Eligibility Check',
+    seoTitle: 'Business Funding Eligibility Checker And Funding Prep Plan',
     metaDescription:
-      'Check business funding readiness for free, then use VestBlock prep services if documents, revenue, credit, or business structure need work first.',
+      'Check business funding eligibility for free, then use VestBlock prep services if documents, revenue, credit, or business structure need work first.',
     excerpt:
       'VestBlock helps business owners understand whether they should apply now, prepare first, or review a more structured funding strategy.',
     audience:
-      'Business owners comparing funding options, readiness gaps, documents, credit profile, and use-of-funds requirements.',
+      'Business owners comparing funding options, document gaps, credit profile, and use-of-funds requirements.',
     primaryRoute: '/funding#free-eligibility-check',
     primaryCta: 'Check Funding Eligibility Free',
     secondaryRoute: '/funding/business-funding-strategy',
     secondaryCta: 'Review Funding Strategy',
     sections: [
       {
-        heading: 'Start with a free readiness check',
+        heading: 'Start with a free funding check',
         body:
-          'The free funding checker helps a business owner compare basic readiness factors before applying. It looks at the kind of details lenders and funding partners often care about, such as business stage, revenue, credit profile, documentation, and intended use of funds.',
+          'The free funding checker helps a business owner compare basic factors before applying. It looks at the kind of details lenders and funding partners often care about, such as business stage, revenue, credit profile, documentation, and intended use of funds.',
         bullets: [
-          'Business profile and entity basics',
-          'Revenue and banking readiness',
+          'Business profile and registration basics',
+          'Revenue and banking history',
           'Personal credit and utilization considerations',
           'Funding amount and use-of-funds clarity',
         ],
@@ -114,19 +117,19 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'When paid help makes sense',
         body:
-          'Some owners are not ready to apply right away. VestBlock can route them into paid readiness support when the business needs cleaner records, better documents, lower risk factors, or a more realistic funding path before applications.',
+          'Some owners are not ready to apply right away. VestBlock can recommend paid prep when the business needs cleaner records, better documents, lower risk factors, or a more realistic funding plan before applications.',
       },
       {
         heading: 'What VestBlock does not promise',
         body:
-          'VestBlock does not guarantee approvals, terms, limits, rates, or funding timelines. The platform helps prepare and route the next step so owners can make better decisions before they apply.',
+          'VestBlock does not guarantee approvals, terms, limits, rates, or funding timelines. The platform helps prepare the next step so owners can make better decisions before they apply.',
       },
     ],
     faqs: [
       {
         question: 'Is the business funding eligibility check free?',
         answer:
-          'Yes. The initial readiness check is free. If the business needs preparation before applying, VestBlock may recommend a paid readiness plan.',
+          'Yes. The initial funding check is free. If the business needs preparation before applying, VestBlock may recommend a paid funding plan.',
       },
       {
         question: 'What if my business is not eligible yet?',
@@ -136,7 +139,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Does VestBlock fund the business directly?',
         answer:
-          'VestBlock helps with readiness, routing, and follow-up. Actual funding depends on partners, lenders, underwriting, terms, and user decisions.',
+          'VestBlock helps with preparation, review, and follow-up. Actual funding depends on partners, lenders, underwriting, terms, and user decisions.',
       },
     ],
     relatedSlugs: ['business-funding-strategy', 'business-setup-funding-grants'],
@@ -144,12 +147,12 @@ export const serviceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'credit_card_stacking',
     slug: 'business-funding-strategy',
-    title: 'Business Funding Strategy Readiness',
-    seoTitle: 'Business Funding Strategy And Credit Line Readiness',
+    title: 'Business Funding Strategy Review',
+    seoTitle: 'Business Funding Strategy And Credit Line Prep',
     metaDescription:
-      'Prepare for business credit funding with VestBlock readiness review, document checks, inquiry-risk consent, utilization guidance, and admin follow-up.',
+      'Prepare for business credit funding with VestBlock document checks, inquiry-risk consent, utilization guidance, and follow-up.',
     excerpt:
-      'VestBlock helps business owners understand the risk, readiness, documents, and repayment considerations before pursuing a business credit funding sequence.',
+      'VestBlock helps business owners understand the risk, documents, and repayment considerations before pursuing a business credit funding sequence.',
     audience:
       'Business owners considering business credit lines or business credit line working-capital options.',
     primaryRoute: '/funding/business-funding-strategy',
@@ -160,9 +163,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What business funding strategy preparation means',
         body:
-          'A business credit line funding strategy usually means reviewing multiple business credit options in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as a readiness and consent workflow, not an instant approval promise.',
+          'A business credit line funding strategy usually means reviewing multiple business credit options in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as preparation and consent, not an instant approval promise.',
         bullets: [
-          'Review business and personal credit readiness',
+          'Review business and personal credit factors',
           'Check business documents and banking basics',
           'Explain hard-inquiry and repayment considerations',
           'Capture success-fee consent only where applicable',
@@ -171,7 +174,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'How the VestBlock offer is priced',
         body:
-          'The current strategy path uses a $300 readiness plan plus a 10% success fee only after accepted business credit funding is available. This keeps the paid setup separate from any final lender or issuer decision.',
+          'The current strategy uses a $300 funding plan plus a 10% success fee only after accepted business credit funding is available. This keeps the paid setup separate from any final lender or issuer decision.',
       },
       {
         heading: 'What owners should know before applying',
@@ -186,9 +189,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
           'No. Card approvals, limits, terms, and fees depend on issuers, underwriting, credit profile, income, business details, and user decisions.',
       },
       {
-        question: 'Why charge a readiness fee?',
+        question: 'Why charge a funding plan fee?',
         answer:
-          'The readiness fee covers review, organization, risk checks, and preparation before a strategy is pursued. It is not a guarantee of approval.',
+          'The plan fee covers review, organization, risk checks, and preparation before a strategy is pursued. It is not a guarantee of approval.',
       },
       {
         question: 'When does the success fee apply?',
@@ -204,7 +207,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     title: 'Business Setup For Funding And Grants',
     seoTitle: 'Business Setup For Funding, Grants, And Business Credit',
     metaDescription:
-      'Prepare entity records, EIN, business banking, documents, business credit basics, and use-of-funds details before funding or grant applications.',
+      'Prepare business records, EIN, business banking, documents, business credit basics, and use-of-funds details before funding or grant applications.',
     excerpt:
       'VestBlock helps owners organize the business foundations that often matter before applying for funding, grants, or business credit.',
     audience:
@@ -219,8 +222,8 @@ export const serviceSeoPages: ServiceSeoPage[] = [
         body:
           'Many funding and grant problems start before the application. Missing records, unclear use of funds, weak banking history, or inconsistent business identity can slow down reviews or create avoidable denials.',
         bullets: [
-          'Entity and EIN basics',
-          'Business bank account readiness',
+          'Business registration and EIN basics',
+          'Business bank account setup',
           'Revenue and document organization',
           'Business credit and monitoring next steps',
         ],
@@ -240,7 +243,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Do I need an EIN before business funding?',
         answer:
-          'Many business funding paths expect a clear business identity, and an EIN is often part of that setup. Requirements still vary by product, lender, and program.',
+          'Many business funding options expect a clear business identity, and an EIN is often part of that setup. Requirements still vary by product, lender, and program.',
       },
       {
         question: 'Can setup help with grants too?',
@@ -250,7 +253,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Is this legal or tax advice?',
         answer:
-          'No. VestBlock provides readiness guidance and organization. Owners should use qualified professionals for legal, tax, or accounting decisions.',
+          'No. VestBlock provides preparation guidance and organization. Owners should use qualified professionals for legal, tax, or accounting decisions.',
       },
     ],
     relatedSlugs: ['business-funding-eligibility', 'small-business-grants'],
@@ -259,9 +262,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     serviceKey: 'financial_growth_services',
     slug: 'financial-growth-services',
     title: 'Financial Growth Services For Credit, Funding, Grants, And Deals',
-    seoTitle: 'Financial Growth Services For Funding Readiness And Credit Planning',
+    seoTitle: 'Financial Growth Services For Funding Prep And Credit Planning',
     metaDescription:
-      'Review VestBlock paid financial prep packages for funding readiness, business credit, grants, utilization, cash-flow documents, and real estate funding.',
+      'Review VestBlock paid financial prep packages for funding, business credit, grants, utilization, cash-flow documents, and real estate funding.',
     excerpt:
       'VestBlock offers paid preparation packages for clients who need more than a free checker before they apply, dispute, or submit a deal.',
     audience:
@@ -274,9 +277,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What these packages are for',
         body:
-          'Financial Growth Services turn broad goals into clear, paid preparation work. Each package has a defined scope, price, and follow-up path so clients know what they are buying before deeper funding or credit work begins.',
+          'Financial Growth Services turn broad goals into clear, paid preparation work. Each package has a defined scope, price, and follow-up so clients know what they are buying before deeper funding or credit work begins.',
         bullets: [
-          'Funding Readiness Snapshot',
+          'Funding Prep Snapshot',
           'Business Credit Builder Sprint',
           'Grant Application Prep Review',
           'Debt And Utilization Paydown Plan',
@@ -285,9 +288,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
         ],
       },
       {
-        heading: 'How this helps VestBlock operations',
+        heading: 'How this helps customers move forward',
         body:
-          'Each request creates a real lead with the selected package, price, business details, user goal, and admin follow-up context. That makes the service easier to sell, track, and fulfill.',
+          'Each request includes the selected package, price, business details, goal, and follow-up context. That helps the customer understand what happens next and helps VestBlock follow through clearly.',
       },
       {
         heading: 'What is not included',
@@ -299,7 +302,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Which financial growth package should I choose?',
         answer:
-          'Start with the package closest to the immediate goal: funding readiness, business credit, grants, debt utilization, cash-flow documents, or real estate deal review.',
+          'Start with the package closest to the immediate goal: funding prep, business credit, grants, debt utilization, cash-flow documents, or real estate deal review.',
       },
       {
         question: 'Are these one-time packages?',
@@ -309,7 +312,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Can this replace a lender, CPA, attorney, or financial advisor?',
         answer:
-          'No. VestBlock helps with readiness and organization. Specialized legal, tax, accounting, investment, or underwriting advice should come from qualified professionals.',
+          'No. VestBlock helps with preparation and organization. Specialized legal, tax, accounting, investment, or underwriting advice should come from qualified professionals.',
       },
     ],
     relatedSlugs: ['business-funding-eligibility', 'real-estate-funding'],
@@ -320,22 +323,22 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     title: 'Small Business Grants And Application Prep',
     seoTitle: 'Small Business Grant Finder And Application Prep',
     metaDescription:
-      'Use VestBlock to review grant readiness, match business details to opportunities, and draft stronger application language for manual review.',
+      'Use VestBlock to review grant requirements, match business details to opportunities, and draft stronger application language for manual review.',
     excerpt:
-      'VestBlock helps business owners organize grant-fit details, deadlines, documents, and application language without promising awards.',
+      'VestBlock helps business owners organize grant details, deadlines, documents, and application language without promising awards.',
     audience:
       'Small business owners searching for grant opportunities and clearer application preparation.',
     primaryRoute: '/tools/grants',
     primaryCta: 'Find Grant Matches',
     secondaryRoute: '/business-setup',
-    secondaryCta: 'Check Grant Readiness',
+    secondaryCta: 'Prepare For Grants',
     sections: [
       {
-        heading: 'What grant readiness means',
+        heading: 'What grant preparation means',
         body:
-          'Grant readiness is not just finding a list of programs. Owners need to understand eligibility, deadlines, requested documents, business purpose, budget, and how the opportunity connects to their real use of funds.',
+          'Grant preparation is not just finding a list of programs. Owners need to understand eligibility, deadlines, requested documents, business purpose, budget, and how the opportunity connects to their real use of funds.',
         bullets: [
-          'Business profile and industry fit',
+          'Business profile and industry match',
           'Required documents and deadlines',
           'Use-of-funds explanation',
           'Application letter draft for review',
@@ -366,7 +369,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'What makes a grant application stronger?',
         answer:
-          'Clear eligibility fit, strong documentation, specific use of funds, realistic outcomes, and complete answers usually matter more than generic language.',
+          'Clear eligibility, strong documentation, specific use of funds, realistic outcomes, and complete answers usually matter more than generic language.',
       },
     ],
     relatedSlugs: ['business-setup-funding-grants', 'business-funding-eligibility'],
@@ -379,7 +382,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     metaDescription:
       'VestBlock ayuda a duenos de negocio que hablan espanol a preparar documentos, credito comercial y pasos de financiamiento antes de revisar opciones.',
     excerpt:
-      'Una ruta clara en espanol para duenos de negocio que quieren prepararse antes de solicitar financiamiento.',
+      'Una pagina clara en espanol para duenos de negocio que quieren prepararse antes de solicitar financiamiento.',
     audience:
       'Duenos de negocio que hablan espanol y necesitan una guia clara antes de buscar financiamiento.',
     primaryRoute: '/es/vestblock',
@@ -390,7 +393,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'Para quien es esta pagina',
         body:
-          'Esta ruta es para duenos de negocio que quieren entender que preparar antes de revisar opciones de financiamiento. El enfoque esta en documentos, credito, banco comercial, ingresos, uso de fondos y siguientes pasos.',
+          'Esta pagina es para duenos de negocio que quieren entender que preparar antes de revisar opciones de financiamiento. El enfoque esta en documentos, credito, banco comercial, ingresos, uso de fondos y siguientes pasos.',
         bullets: [
           'Preparacion de documentos del negocio',
           'Credito personal y comercial',
@@ -401,7 +404,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'Como VestBlock ayuda',
         body:
-          'VestBlock organiza la preparacion y conecta al dueno con paginas, herramientas y rutas de seguimiento. Cuando sea apropiado, tambien se puede revisar la opcion en espanol de Bank Breezy.',
+          'VestBlock organiza la preparacion y conecta al dueno con paginas, herramientas y seguimiento claro. Cuando sea apropiado, tambien se puede revisar la opcion en espanol de Bank Breezy.',
       },
       {
         heading: 'Sin promesas falsas',
@@ -423,7 +426,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Bank Breezy es parte de VestBlock?',
         answer:
-          'Bank Breezy es una ruta de socio que los usuarios pueden revisar. VestBlock mantiene la preparacion y el seguimiento separados de cualquier decision externa.',
+          'Bank Breezy es una opcion de socio que los usuarios pueden revisar. VestBlock mantiene la preparacion y el seguimiento separados de cualquier decision externa.',
       },
     ],
     relatedSlugs: ['business-funding-eligibility', 'business-setup-funding-grants'],
@@ -434,7 +437,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     title: 'Real Estate Funding Review For Investors And Property Deals',
     seoTitle: 'Real Estate Funding Review For DSCR, Rental, Flip, And Deal Prep',
     metaDescription:
-      'Submit DSCR, rental, fix-and-flip, hard-money, or deal funding details so VestBlock can review the opportunity and route follow-up.',
+      'Submit DSCR, rental, fix-and-flip, hard-money, or deal funding details so VestBlock can review the opportunity and follow up with context.',
     excerpt:
       'VestBlock collects deal details so real estate funding requests can be reviewed and routed with more context.',
     audience:
@@ -447,12 +450,12 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What real estate funding review collects',
         body:
-          'A real estate funding conversation needs more than a name and phone number. VestBlock collects deal type, property details, requested amount, liquidity, entity readiness, DSCR or rental context, contractor readiness, and notes that help route the opportunity.',
+          'A real estate funding conversation needs more than a name and phone number. VestBlock collects deal type, property details, requested amount, liquidity, borrower setup, DSCR or rental context, contractor details, and notes that help the team respond with better context.',
         bullets: [
           'DSCR and rental deal context',
           'Fix-and-flip or hard-money details',
           'Requested amount and use of funds',
-          'Borrowing entity and document readiness',
+          'Borrower setup and key documents',
         ],
       },
       {
@@ -480,7 +483,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
       {
         question: 'Does VestBlock guarantee financing?',
         answer:
-          'No. VestBlock captures and routes the opportunity. Financing depends on review, underwriting, lender or partner requirements, and borrower decisions.',
+          'No. VestBlock captures the opportunity for review. Financing depends on review, underwriting, lender or partner requirements, and borrower decisions.',
       },
     ],
     relatedSlugs: ['financial-growth-services', 'sell-property'],
@@ -495,7 +498,7 @@ export const serviceSeoPages: ServiceSeoPage[] = [
     excerpt:
       'VestBlock helps property owners submit the details needed for a clearer investor or buyer follow-up conversation.',
     audience:
-      'Property owners who want an investor conversation, cash-offer review, or fast-sale path.',
+      'Property owners who want an investor conversation, cash-offer review, or faster sale conversation.',
     primaryRoute: '/sell',
     primaryCta: 'Request Property Review',
     secondaryRoute: '/real-estate-funding',
@@ -513,9 +516,9 @@ export const serviceSeoPages: ServiceSeoPage[] = [
         ],
       },
       {
-        heading: 'When this path fits',
+        heading: 'When this option makes sense',
         body:
-          'This path is useful when an owner wants a fast conversation, has an as-is property, is comparing investor interest, or wants to understand whether a sale path makes sense.',
+          'This option is useful when an owner wants a fast conversation, has an as-is property, is comparing investor interest, or wants to understand whether a sale makes sense.',
       },
       {
         heading: 'Keeping expectations clear',
@@ -545,60 +548,181 @@ export const serviceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'ai_assistant',
     slug: 'vestblock-ai-assistant',
-    title: 'VestBlock AI Assistant For Credit, Funding, And Service Routing',
-    seoTitle: 'VestBlock AI Assistant For Credit Repair And Funding Questions',
+    title: 'AI Receptionist, Appointment Booking, And Website Upgrades',
+    seoTitle: 'AI Receptionist And Appointment Booking Service | VestBlock',
     metaDescription:
-      'Use the VestBlock AI Assistant to get routed toward credit repair, funding readiness, business credit, grants, real estate, or support workflows.',
+      'Compare VestBlock AI receptionist, appointment-booking, and website-upgrade offers for service businesses that need stronger lead capture and conversion.',
     excerpt:
-      'The AI Assistant helps users decide which VestBlock tool or service path fits their situation.',
+      'VestBlock offers AI receptionist, booking, and website-upgrade services for businesses that need more leads to turn into real conversations.',
     audience:
-      'Visitors who need help choosing between credit repair, funding, grants, business credit, property, and support options.',
+      'Owners who want more leads, better appointment flow, and a clearer move from website traffic to booked conversations.',
     primaryRoute: '/ai-assistant',
-    primaryCta: 'Ask The Assistant',
-    secondaryRoute: '/services',
-    secondaryCta: 'Compare Services',
+    primaryCta: 'Compare Automation Offers',
+    secondaryRoute: '/pricing',
+    secondaryCta: 'Compare Pricing',
     sections: [
       {
-        heading: 'What the assistant is for',
+        heading: 'What these services are for',
         body:
-          'VestBlock has several paths, and not every visitor knows where to start. The AI Assistant helps route questions toward the right public page, tool, or lead workflow.',
+          'These offers are built for businesses that need to capture more of the traffic they already have. Instead of relying on a weak contact page or missed calls, VestBlock packages AI receptionist, booking, and website conversion support into clear services.',
         bullets: [
-          'Credit report upload questions',
-          'Funding readiness questions',
-          'Business credit and grant direction',
-          'Real estate funding or seller routing',
+          'AI receptionist setup for website lead capture',
+          'Appointment-booking flow for service businesses',
+          'Website upgrades for weak lead capture',
+          'Admin follow-up and routed service requests',
         ],
       },
       {
-        heading: 'How it should be used',
+        heading: 'How VestBlock positions the service',
         body:
-          'The assistant is a guide, not a substitute for legal, tax, financial, underwriting, or credit reporting decisions. It should point users toward documented VestBlock workflows.',
+          'VestBlock sells setup, automation, and conversion support. The service is not positioned as a guarantee of revenue, booked jobs, or closed sales. Better lead capture helps, but the business still has to answer, fulfill, and follow up well.',
       },
       {
-        heading: 'Why this helps service conversion',
+        heading: 'Why the pricing is structured this way',
         body:
-          'Good routing reduces confusion. Users can move faster from a question to the right action: upload a report, check funding, prepare a business, review grants, submit a property, or request a paid service.',
+          'Setup fees cover implementation, training, and launch work. Monthly pricing covers the ongoing assistant or booking support. Website upgrade work is scoped separately because page count, design cleanup, and revisions can vary a lot from one business to another.',
       },
     ],
     faqs: [
       {
-        question: 'Can the AI Assistant tell me what service to use?',
+        question: 'What is the difference between the receptionist and booking offers?',
         answer:
-          'It can help route you based on your goal, but you should still review the service page and decide which action fits your situation.',
+          'The receptionist offer focuses on lead capture, FAQs, and routing. The booking offer adds calendar flow, qualification questions, and stronger appointment handling for businesses that need real scheduling support.',
       },
       {
-        question: 'Can it guarantee credit or funding results?',
+        question: 'Do these services guarantee more revenue or appointments?',
         answer:
-          'No. It should provide guidance and routing only, with no guarantees around scores, funding, approvals, grants, or property outcomes.',
+          'No. They improve lead capture and conversion, but results still depend on traffic quality, follow-up speed, market demand, and business operations.',
       },
       {
-        question: 'What if I already know what I need?',
+        question: 'What if my website needs more than a light refresh?',
         answer:
-          'Use the service directory to go directly to credit upload, funding, business setup, grants, real estate funding, or property review.',
+          'VestBlock can start with the Website Upgrade Sprint scope and then quote a larger build separately if the site needs more pages, heavier design work, or custom functionality.',
       },
     ],
-    relatedSlugs: ['business-funding-eligibility', 'ai-credit-analysis'],
+    relatedSlugs: ['website-upgrade-sprint', 'ai-receptionist-launch', 'ai-appointment-booking-system'],
   },
+  {
+    serviceKey: 'visibility_expansion',
+    slug: 'visibility-expansion-saas',
+    title: 'Search Visibility Service For SEO, AI Answers, And PR Growth',
+    seoTitle: 'Search Visibility Service For SEO, AI Answers, And PR | VestBlock',
+    metaDescription:
+      'Use VestBlock visibility packages to improve search presence, AI-answer coverage, city pages, and authority-building without vague retainers.',
+    excerpt:
+      'VestBlock packages SEO, AI-answer coverage, city pages, and PR authority work into clearer monthly services.',
+    audience:
+      'Businesses that want clearer search presence, stronger AI-answer coverage, and more trusted brand mentions.',
+    primaryRoute: '/visibility-expansion',
+    primaryCta: 'Compare Visibility Packages',
+    secondaryRoute: '/pricing#visibility-expansion',
+    secondaryCta: 'Compare Pricing',
+    sections: [
+      {
+        heading: 'What this service is for',
+        body:
+          'This visibility service is built for businesses that want more than isolated blog posts or generic SEO retainers. The goal is simple: clearer search presence, stronger AI-answer coverage, smarter city pages, and authority work that helps buyers find and trust the company.',
+        bullets: [
+          'Search and schema priorities',
+          'AI-answer question and topic coverage',
+          'City and service page planning',
+          'PR and authority-building support',
+        ],
+      },
+      {
+        heading: 'How VestBlock frames the work',
+        body:
+          'VestBlock sells strategy, implementation planning, content direction, and monthly visibility support. The service is not positioned as guaranteed rankings, media coverage, traffic, or revenue.',
+      },
+      {
+        heading: 'Why this is easier to sell',
+        body:
+          'Productized visibility packages give the customer a defined starting point instead of an open-ended marketing retainer. That makes the offer easier to understand, scope, and fulfill.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'What is the difference between SEO, AI answers, and PR in this offer?',
+        answer:
+          'SEO focuses on search discovery, AI-answer coverage helps buyers find you in answer tools, and PR supports authority, mentions, backlinks, and brand trust. The packages combine them where they reinforce each other.',
+      },
+      {
+        question: 'Does this guarantee rankings or traffic?',
+        answer:
+          'No. VestBlock improves the visibility plan and monthly execution, but rankings, citations, traffic, and market response still depend on competition, site quality, and follow-through.',
+      },
+      {
+        question: 'Who should start with the city-page or authority package?',
+        answer:
+          'The city-page package helps businesses growing into multiple service areas. Authority PR is better once the site and core offer are clear enough to support outreach and citations.',
+      },
+    ],
+    relatedSlugs: ['vestblock-ai-assistant', 'financial-growth-services', 'small-business-grants'],
+  },
+];
+
+const pricedOfferSeoPages: ServiceSeoPage[] = pricedVestBlockOffers.map((offer) => ({
+  serviceKey: offer.serviceKey,
+  slug: offer.slug,
+  title: offer.title,
+  seoTitle: offer.title,
+  metaDescription: `${offer.title} for ${offer.bestFor.toLowerCase()} Price: ${offer.priceLabel}.`,
+  excerpt: offer.summary,
+  audience: offer.bestFor,
+  primaryRoute: offer.primaryRoute,
+  primaryCta: offer.primaryCta,
+  secondaryRoute: offer.secondaryRoute ?? offer.parentServiceRoute,
+  secondaryCta: offer.secondaryCta ?? `Compare ${offer.parentServiceLabel}`,
+  sections: [
+    {
+      heading: 'What this service includes',
+      body:
+        `${offer.title} gives you a clearly scoped paid service inside VestBlock so you know what you are buying before you move forward.`,
+      bullets: offer.deliverables,
+    },
+    {
+      heading: 'Who this paid offer is for',
+      body: offer.bestFor,
+    },
+    {
+      heading: 'How this service is framed',
+      body: offer.complianceNote,
+    },
+  ],
+  faqs: [
+    {
+      question: 'Is this price a guarantee of results?',
+      answer:
+        'No. VestBlock prices its tools, reviews, and preparation work separately from any issuer, lender, grant committee, or property decision.',
+    },
+    {
+      question: 'What happens after I choose this service?',
+      answer:
+        offer.category === 'financial_growth'
+          ? 'Your request is routed into the VestBlock service form so the team can review the package, your goal, and the next follow-up step.'
+          : 'You move into the linked VestBlock page where your profile, preparation details, and next steps can be saved and reviewed.',
+    },
+    {
+      question: 'Can I compare this with other VestBlock offers first?',
+      answer:
+        `Yes. You can review the main ${offer.parentServiceLabel} page before choosing this paid offer.`,
+    },
+  ],
+  relatedSlugs: Array.from(
+    new Set(
+      [
+        baseServiceSeoPages.find((page) => page.serviceKey === offer.serviceKey)?.slug,
+        'financial-growth-services',
+        'business-funding-eligibility',
+      ].filter((slug): slug is string => Boolean(slug) && slug !== offer.slug)
+    )
+  ).slice(0, 3),
+  priceLabel: offer.priceLabel,
+}));
+
+export const serviceSeoPages: ServiceSeoPage[] = [
+  ...baseServiceSeoPages,
+  ...pricedOfferSeoPages,
 ];
 
 export function getServiceSeoPage(slug: string) {

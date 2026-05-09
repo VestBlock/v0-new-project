@@ -1,19 +1,26 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Sell Your House Fast - Cash Offer in 24 Hours | VestBlock",
-  description: "Get a cash offer for your house in 24 hours. No repairs, no agents, no fees. Flexible closing options available.",
-  keywords: "sell my house fast, cash home buyers, we buy houses, sell house as-is",
+  title: "Property Review And Sale Path Evaluation | VestBlock",
+  description:
+    "Submit your property details so VestBlock can review the situation and route the right next sale conversation, including investor review, creative structures, or prep-first support.",
+  keywords:
+    "property review, sell house options, investor property review, creative sale options, home sale planning",
+  alternates: {
+    canonical: "/sell",
+  },
   openGraph: {
-    title: "Sell Your House Fast - Cash Offer in 24 Hours | VestBlock",
-    description: "Get a cash offer for your house in 24 hours. No repairs, no agents, no fees. Flexible closing options available.",
+    title: "VestBlock Property Review",
+    description:
+      "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
     type: "website",
-    url: "https://vestblock.io/sell",
+    url: "https://www.vestblock.io/sell",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Sell Your House Fast - Cash Offer in 24 Hours | VestBlock",
-    description: "Get a cash offer for your house in 24 hours. No repairs, no agents, no fees. Flexible closing options available.",
+    title: "VestBlock Property Review",
+    description:
+      "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
   },
   robots: {
     index: true,

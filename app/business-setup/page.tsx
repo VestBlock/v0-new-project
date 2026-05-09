@@ -19,7 +19,7 @@ import {
 export const metadata: Metadata = {
   title: 'Business Setup For Funding And Grants | VestBlock',
   description:
-    'Prepare your business for funding, grants, business credit, and lender review with VestBlock business setup readiness tools.',
+    'Prepare your business for funding, grants, business credit, and lender review with VestBlock business setup tools.',
   alternates: {
     canonical: '/business-setup',
     languages: {
@@ -46,14 +46,14 @@ const nextSteps = [
   {
     title: 'Explore funding options',
     description:
-      'Review funding paths based on credit, revenue, documents, and business stage.',
+      'Review funding options based on credit, revenue, documents, and business stage.',
     href: '/funding',
     cta: 'View funding options',
   },
   {
     title: 'Spanish funding support',
     description:
-      'Send Spanish-speaking business owners to the dedicated funding path with Bank Breezy.',
+      'Send Spanish-speaking business owners to the dedicated funding page with Bank Breezy.',
     href: '/es/vestblock',
     cta: 'Ver pagina en espanol',
   },
@@ -66,14 +66,14 @@ export default function BusinessSetupPage() {
         <div className="container mx-auto grid max-w-6xl gap-8 px-4 pb-14 pt-24 md:grid-cols-[1.25fr_0.75fr] md:pt-28">
           <div>
             <Badge variant="outline" className="mb-4">
-              Funding and grants readiness
+              Funding and grants preparation
             </Badge>
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight md:text-5xl">
               Set up your business before you apply for funding.
             </h1>
             <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
               VestBlock helps business owners organize the legal, banking,
-              credit, document, and grant-readiness pieces lenders and programs
+              credit, document, and grant-prep pieces lenders and programs
               usually review. The goal is a cleaner application file, not false
               promises or random applications.
             </p>
@@ -96,8 +96,7 @@ export default function BusinessSetupPage() {
                 What VestBlock helps organize
               </CardTitle>
               <CardDescription>
-                A practical setup path for businesses that want to become more
-                funding-ready.
+                Practical setup help for businesses that want to apply with a cleaner file.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -174,7 +173,7 @@ export default function BusinessSetupPage() {
           <p className="mt-8 max-w-3xl text-sm text-muted-foreground">
             VestBlock does not guarantee grant awards, loan approvals, credit
             line approvals, or specific funding terms. We help organize the
-            readiness work so owners can apply with clearer information and
+            preparation work so owners can apply with clearer information and
             better documentation.
           </p>
         </div>

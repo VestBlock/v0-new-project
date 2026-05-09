@@ -1,6 +1,7 @@
 export type AeoTopic = {
   slug: string;
   title: string;
+  language?: 'en' | 'es';
   cluster:
     | 'credit-repair'
     | 'business-credit'
@@ -23,7 +24,7 @@ export type AeoTopic = {
 export const clusterLabels: Record<AeoTopic['cluster'], string> = {
   'credit-repair': 'AI Credit Repair',
   'business-credit': 'Business Credit',
-  funding: 'Funding Readiness',
+  funding: 'Funding Preparation',
   'credit-builder': 'Credit Builder Tools',
   disputes: 'Credit Disputes',
 };
@@ -310,7 +311,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
   },
   {
     slug: 'funding-readiness',
-    title: 'Funding Readiness',
+    title: 'Funding Preparation',
     cluster: 'funding',
     intent: 'lead-capture',
     offerPath: '/funding',
@@ -318,7 +319,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
       'Prepare for business funding by reviewing credit, revenue, documentation, and lender-fit before applying.',
     audience: 'Business owners trying to improve approval odds before funding applications.',
     overview:
-      'Funding readiness is the work you do before applying. It includes reviewing credit, business identity, bank activity, revenue, documents, and the type of funding that actually fits your situation.',
+      'Funding preparation is the work you do before applying. It includes reviewing credit, business identity, bank activity, revenue, documents, and the type of funding that actually fits your situation.',
     keyTakeaways: [
       'A clean application starts before the application form.',
       'Lender-fit matters as much as raw revenue or credit score.',
@@ -331,7 +332,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     ],
     faqs: [
       {
-        question: 'What makes a business funding-ready?',
+        question: 'What makes a business prepared for funding?',
         answer:
           'Consistent business records, clear revenue, organized documents, and a funding product that matches the business profile.',
       },
@@ -349,7 +350,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     intent: 'lead-capture',
     offerPath: '/business-setup',
     metaDescription:
-      'Use a business setup checklist to prepare entity records, banking, documents, credit, and grant readiness before applying for funding.',
+      'Use a business setup checklist to prepare entity records, banking, documents, credit, and grant requirements before applying for funding.',
     audience: 'Business owners who want a cleaner funding file before they apply.',
     overview:
       'Business setup for funding is the preparation work that makes an application easier to review. It connects entity records, EIN details, banking, bookkeeping, licenses, documents, credit, and use-of-funds planning into one organized file.',
@@ -379,6 +380,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
   {
     slug: 'financiamiento-para-negocios-en-espanol',
     title: 'Financiamiento Para Negocios En Espanol',
+    language: 'es',
     cluster: 'funding',
     intent: 'lead-capture',
     offerPath: '/es/vestblock',
@@ -407,6 +409,222 @@ export const vestblockAeoTopics: AeoTopic[] = [
         question: 'Donde esta la pagina en espanol de Bank Breezy?',
         answer:
           'VestBlock enlaza a Bankbreezy.com/es/Vestblock para que duenos de negocio puedan revisar opciones en espanol.',
+      },
+    ],
+  },
+  {
+    slug: 'requisitos-para-financiamiento-comercial',
+    title: 'Requisitos Para Financiamiento Comercial',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'education',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Conoce los requisitos mas comunes para financiamiento comercial y que debes preparar antes de aplicar.',
+    audience:
+      'Duenos de negocio que quieren entender que documentos y senales revisan los bancos o socios financieros.',
+    overview:
+      'Los requisitos para financiamiento comercial suelen incluir identidad del negocio, EIN, cuenta bancaria comercial, ingresos verificables, tiempo operando y una razon clara para usar los fondos. Preparar estos puntos antes de aplicar puede ayudar a evitar retrasos y aplicaciones debiles.',
+    keyTakeaways: [
+      'Los bancos y socios quieren informacion clara, coherente y documentable.',
+      'El credito personal todavia puede influir, especialmente en negocios nuevos.',
+      'Aplicar sin documentos listos puede crear friccion innecesaria.',
+    ],
+    actionSteps: [
+      'Confirma que nombre legal, direccion, telefono y EIN coincidan en todos tus registros.',
+      'Organiza estados bancarios, prueba de ingresos y documentos de la entidad.',
+      'Define cuanto capital necesitas y como lo usara el negocio.',
+    ],
+    faqs: [
+      {
+        question: 'Que piden normalmente para financiamiento comercial?',
+        answer:
+          'Con frecuencia piden informacion de la entidad, EIN, estados bancarios, detalles de ingresos, informacion del propietario y el uso esperado de los fondos.',
+      },
+      {
+        question: 'Si mi negocio es nuevo, todavia puedo aplicar?',
+        answer:
+          'Puede haber opciones, pero un negocio nuevo normalmente necesita expectativas mas realistas, mejor preparacion y una ruta de financiamiento bien elegida.',
+      },
+    ],
+  },
+  {
+    slug: 'credito-comercial-para-negocios',
+    title: 'Credito Comercial Para Negocios',
+    language: 'es',
+    cluster: 'business-credit',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende como funciona el credito comercial para negocios y que debes organizar antes de buscar lineas o tarjetas.',
+    audience:
+      'Duenos de negocio que quieren crear un perfil comercial mas fuerte antes de buscar financiamiento.',
+    overview:
+      'El credito comercial para negocios funciona mejor cuando la empresa tiene una identidad consistente, cuentas separadas, historial de pagos y documentos faciles de revisar. No se trata solo de abrir cuentas; se trata de construir un perfil creible y util para futuras decisiones de financiamiento.',
+    keyTakeaways: [
+      'La consistencia del negocio importa tanto como la solicitud.',
+      'Un EIN no reemplaza automaticamente el credito personal.',
+      'El historial de pagos y la documentacion ayudan a fortalecer el perfil comercial.',
+    ],
+    actionSteps: [
+      'Verifica que la entidad, EIN, direccion y telefono del negocio esten actualizados.',
+      'Separa las finanzas del negocio de las finanzas personales.',
+      'Usa VestBlock para revisar si debes construir credito primero o preparar financiamiento.',
+    ],
+    faqs: [
+      {
+        question: 'Que es credito comercial para negocios?',
+        answer:
+          'Es el perfil de credito asociado al negocio y puede apoyarse en cuentas comerciales, historial de pagos, registros de la empresa y documentacion consistente.',
+      },
+      {
+        question: 'Necesito credito personal para empezar?',
+        answer:
+          'Muchas veces si influye, sobre todo en etapas tempranas, aunque depende del producto y del perfil del negocio.',
+      },
+    ],
+  },
+  {
+    slug: 'documentos-para-solicitar-financiamiento',
+    title: 'Documentos Para Solicitar Financiamiento',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'tool-support',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Revisa los documentos que normalmente conviene preparar antes de solicitar financiamiento para tu negocio.',
+    audience:
+      'Duenos de negocio que quieren evitar aplicaciones incompletas y preparar un archivo mas limpio.',
+    overview:
+      'Tener los documentos correctos listos antes de solicitar financiamiento hace que el proceso sea mas claro para ti y para quien revisa la solicitud. La meta no es llenar papeles por llenar, sino respaldar la historia del negocio con informacion facil de verificar.',
+    keyTakeaways: [
+      'Los estados bancarios y la informacion de ingresos suelen ser piezas centrales.',
+      'La identidad legal del negocio debe coincidir en todos los documentos.',
+      'Una explicacion clara del uso de fondos puede fortalecer la solicitud.',
+    ],
+    actionSteps: [
+      'Junta formacion de la entidad, EIN y documentos de propiedad si aplican.',
+      'Organiza estados bancarios recientes y cualquier prueba de ingresos relevante.',
+      'Prepara una explicacion simple de como el negocio usara el capital.',
+    ],
+    faqs: [
+      {
+        question: 'Que documentos debo tener listos primero?',
+        answer:
+          'Empieza con documentos de la entidad, EIN, estados bancarios, detalles de ingresos, identificacion del propietario y una explicacion del uso de fondos.',
+      },
+      {
+        question: 'Puedo aplicar si todavia me faltan algunos papeles?',
+        answer:
+          'A veces si, pero normalmente es mejor organizar lo principal primero para evitar retrasos o preguntas innecesarias.',
+      },
+    ],
+  },
+  {
+    slug: 'como-mejorar-la-elegibilidad-para-financiamiento',
+    title: 'Como Mejorar La Elegibilidad Para Financiamiento',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende pasos practicos para mejorar tu elegibilidad antes de solicitar financiamiento comercial.',
+    audience:
+      'Duenos de negocio que quieren fortalecer credito, documentos e ingresos antes de aplicar.',
+    overview:
+      'Mejorar la elegibilidad para financiamiento no significa inventar informacion; significa reducir debilidades reales antes de enviar mas solicitudes. VestBlock enfoca ese trabajo en credito, utilizacion, documentos, ingresos y consistencia del negocio.',
+    keyTakeaways: [
+      'Bajar utilizacion y evitar demasiadas consultas recientes puede ayudar.',
+      'Los documentos claros reducen friccion y preguntas durante la revision.',
+      'A veces la mejor jugada es preparar primero, no aplicar hoy.',
+    ],
+    actionSteps: [
+      'Revisa si la utilizacion personal esta demasiado alta antes de solicitar nuevas cuentas.',
+      'Organiza ingresos, estados bancarios y registros de la empresa.',
+      'Evalua si necesitas una ruta de preparacion antes de buscar financiamiento.',
+    ],
+    faqs: [
+      {
+        question: 'Cual es la forma mas rapida de mejorar elegibilidad?',
+        answer:
+          'Depende del perfil, pero con frecuencia ayuda reducir utilizacion, aclarar documentos y evitar solicitudes innecesarias mientras preparas mejor el archivo.',
+      },
+      {
+        question: 'VestBlock me dice si debo aplicar ahora o despues?',
+        answer:
+          'Si. VestBlock puede ayudarte a comparar una ruta de aplicar ahora frente a una ruta de preparacion primero.',
+      },
+    ],
+  },
+  {
+    slug: 'lineas-de-credito-comercial',
+    title: 'Lineas De Credito Comercial',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'comparison',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Compara de forma segura que revisar antes de buscar lineas de credito comercial para capital de trabajo.',
+    audience:
+      'Duenos de negocio que investigan lineas de credito comercial y quieren entender riesgos y preparacion.',
+    overview:
+      'Las lineas de credito comercial pueden ser utiles para capital de trabajo, pero no todas son iguales. Antes de solicitarlas, conviene revisar costos, pagos, requisitos, consultas y si el negocio puede manejar la deuda sin presion excesiva.',
+    keyTakeaways: [
+      'No toda linea de credito es adecuada para cada etapa del negocio.',
+      'El costo total y el calendario de pagos importan tanto como el limite.',
+      'La preparacion correcta ayuda a comparar mejor las opciones disponibles.',
+    ],
+    actionSteps: [
+      'Aclara para que necesita capital el negocio y como planea devolverlo.',
+      'Compara credito, ingresos, tiempo en negocio y documentos disponibles.',
+      'Revisa opciones solo cuando el negocio este listo para sostener el pago.',
+    ],
+    faqs: [
+      {
+        question: 'Una linea de credito comercial es mejor que una tarjeta?',
+        answer:
+          'Depende del uso de fondos, costos, plazos y del perfil del negocio. Lo importante es escoger una opcion coherente con tu capacidad real de pago.',
+      },
+      {
+        question: 'VestBlock garantiza lineas de credito?',
+        answer:
+          'No. VestBlock ayuda con preparacion, comparacion y estrategia, pero las decisiones finales son del emisor o socio financiero.',
+      },
+    ],
+  },
+  {
+    slug: 'subvenciones-para-pequenos-negocios-en-espanol',
+    title: 'Subvenciones Para Pequenos Negocios En Espanol',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'education',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Entiende como prepararte para subvenciones de pequenos negocios y que informacion conviene tener lista antes de aplicar.',
+    audience:
+      'Duenos de negocio que hablan espanol y quieren buscar subvenciones con un enfoque mas organizado.',
+    overview:
+      'Las subvenciones para pequenos negocios pueden ser utiles, pero suelen ser competitivas y requieren elegibilidad clara. Una mejor estrategia es preparar primero el perfil del negocio, la historia de la empresa y el uso especifico de fondos antes de llenar muchas solicitudes.',
+    keyTakeaways: [
+      'La mayoria de las subvenciones tienen reglas especificas de elegibilidad.',
+      'La calidad de la aplicacion importa mas que la cantidad de formularios enviados.',
+      'Un resumen claro del negocio y del uso de fondos fortalece la presentacion.',
+    ],
+    actionSteps: [
+      'Define industria, ubicacion y perfil del negocio antes de buscar oportunidades.',
+      'Prepara una descripcion breve del negocio y del uso esperado de los fondos.',
+      'Usa VestBlock para organizar una ruta de preparacion antes de aplicar.',
+    ],
+    faqs: [
+      {
+        question: 'Las subvenciones son dinero facil?',
+        answer:
+          'Normalmente no. Suelen ser competitivas y requieren una buena coincidencia entre el negocio y los criterios del programa.',
+      },
+      {
+        question: 'Que debo tener listo antes de aplicar a una subvencion?',
+        answer:
+          'Una historia clara del negocio, informacion de elegibilidad, documentos basicos y una explicacion especifica de como se usaran los fondos.',
       },
     ],
   },
@@ -622,7 +840,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     offerPath: '/dashboard',
     metaDescription:
       'Learn how credit utilization affects credit profiles and what practical steps can lower reported balances.',
-    audience: 'People trying to improve revolving credit usage and approval readiness.',
+    audience: 'People trying to improve revolving credit usage before they apply.',
     overview:
       'Credit utilization compares revolving balances with credit limits. Lower utilization can support stronger credit profiles, but the timing of reported balances matters. The goal is to manage what reports, not just what you pay by the due date.',
     keyTakeaways: [
@@ -645,6 +863,244 @@ export const vestblockAeoTopics: AeoTopic[] = [
         question: 'Does paying before the due date help utilization?',
         answer:
           'It can if the lower balance is reported to the bureaus. Reporting dates vary by issuer.',
+      },
+    ],
+  },
+  {
+    slug: 'credit-repair-methods',
+    title: 'Credit Repair Methods That Actually Make Sense',
+    cluster: 'credit-repair',
+    intent: 'education',
+    offerPath: '/credit-upload',
+    metaDescription:
+      'Review the most practical credit repair methods: bureau disputes, direct furnisher disputes, identity theft blocks, debt validation, utilization cleanup, and timing-based follow-up.',
+    audience: 'Consumers who want a realistic list of credit repair methods without gimmicks.',
+    overview:
+      'Effective credit repair usually comes down to a handful of repeatable methods: checking reports carefully, disputing inaccurate or mixed information, following up when results do not make sense, handling identity theft correctly, and improving the parts of the file that are hurting scores but are still accurate. VestBlock should teach methods that match real rights and real data, not magical deletion claims.',
+    keyTakeaways: [
+      'Start with a current credit report before choosing a method.',
+      'Different problems call for different methods: bureau disputes, collector validation, furnisher disputes, or identity theft blocks.',
+      'Profile cleanup methods like lower utilization can help even when no dispute is involved.',
+    ],
+    actionSteps: [
+      'Separate inaccurate reporting issues from accurate but negative history.',
+      'Use documentation-heavy methods first when the data is wrong or incomplete.',
+      'Use utilization, payment, and timing improvements when the problem is accurate reporting rather than bad data.',
+    ],
+    faqs: [
+      {
+        question: 'Is there one best credit repair method for everyone?',
+        answer:
+          'No. The best method depends on whether the issue is inaccurate reporting, identity theft, a collector problem, a mixed file, or accurate but high-risk balances.',
+      },
+      {
+        question: 'Can a good method remove accurate negative information?',
+        answer:
+          'Usually no. Accurate negative information generally stays until its reporting period ends unless a creditor voluntarily changes it or the reporting turns out to be wrong.',
+      },
+    ],
+  },
+  {
+    slug: 'direct-furnisher-dispute',
+    title: 'Direct Furnisher Disputes',
+    cluster: 'disputes',
+    intent: 'education',
+    offerPath: '/tools/dispute-letters',
+    metaDescription:
+      'Learn when to dispute directly with the furnisher of credit information and how that differs from a bureau dispute.',
+    audience: 'Consumers whose bureau dispute came back verified or who want the creditor or servicer to review the reporting directly.',
+    overview:
+      'A direct furnisher dispute goes to the company that supplied the information, such as a lender, servicer, or collector. This can be useful when a bureau dispute result does not make sense or when the reporting source itself needs to correct balances, dates, ownership, or account status.',
+    keyTakeaways: [
+      'A furnisher dispute is different from a bureau dispute and can be used alongside it.',
+      'This method works best when you can point to a specific reporting problem.',
+      'Good records matter: statements, payment proof, account history, and prior dispute responses.',
+    ],
+    actionSteps: [
+      'Identify the exact furnisher reporting the account.',
+      'Describe the reporting problem clearly and include supporting documents.',
+      'Track when the dispute was sent and compare the furnisher response with the bureau result.',
+    ],
+    faqs: [
+      {
+        question: 'When should I dispute directly with the furnisher?',
+        answer:
+          'It is often useful when the bureau verified an item but the reporting still looks inaccurate, incomplete, or inconsistent with your records.',
+      },
+      {
+        question: 'Does a furnisher dispute replace a bureau dispute?',
+        answer:
+          'Not always. Many consumers use both so the bureau and the reporting source each review the issue.',
+      },
+    ],
+  },
+  {
+    slug: 'statement-of-dispute',
+    title: 'Statement Of Dispute',
+    cluster: 'disputes',
+    intent: 'education',
+    offerPath: '/credit-upload',
+    metaDescription:
+      'Learn when a statement of dispute can be added to a credit file after an unresolved dispute and what it can realistically do.',
+    audience: 'Consumers whose dispute was not resolved and who want the file to reflect their side of the issue.',
+    overview:
+      'If a dispute is not resolved, a consumer can ask for a brief statement of dispute to be added to the file. This does not force deletion, but it can create a record that the item is contested and can appear in future reports.',
+    keyTakeaways: [
+      'This is a follow-up method, not a first-step dispute strategy.',
+      'A statement of dispute does not remove the account by itself.',
+      'It can still be useful when the record needs a written explanation attached to it.',
+    ],
+    actionSteps: [
+      'Keep the unresolved dispute result letter.',
+      'Draft a short, factual summary of the disagreement.',
+      'Request that the statement be included in the file and future reports.',
+    ],
+    faqs: [
+      {
+        question: 'Will a statement of dispute improve my score?',
+        answer:
+          'Not directly. It is mainly a rights-based way to document that you disagree with how an item was handled.',
+      },
+      {
+        question: 'Should I use a statement of dispute instead of disputing?',
+        answer:
+          'Usually no. It is normally a follow-up step after a dispute result, not a replacement for the original dispute.',
+      },
+    ],
+  },
+  {
+    slug: 'identity-theft-block-and-fraud-alerts',
+    title: 'Identity Theft Blocks And Fraud Alerts',
+    cluster: 'disputes',
+    intent: 'education',
+    offerPath: '/tools/dispute-letters',
+    metaDescription:
+      'Learn when identity theft blocks, fraud alerts, and credit freezes are stronger than a regular dispute.',
+    audience: 'Consumers dealing with unauthorized accounts, inquiries, or address history caused by identity theft.',
+    overview:
+      'Identity theft cases often need more than a standard dispute. Fraud alerts and credit freezes help prevent new fraud, while identity theft block rights can be used to stop reporting of accounts that resulted from identity theft when the proper report and identification are provided.',
+    keyTakeaways: [
+      'Fraud alerts and credit freezes are prevention tools.',
+      'Identity theft block rights can be stronger than a generic dispute for fraudulent accounts.',
+      'Documentation matters: identity theft reports, account lists, and proof of identity.',
+    ],
+    actionSteps: [
+      'Freeze credit or place a fraud alert if new-account fraud is a concern.',
+      'Report identity theft through the official government process and save the report.',
+      'Use that report when disputing fraudulent accounts and requesting blocks.',
+    ],
+    faqs: [
+      {
+        question: 'Is a credit freeze the same as a dispute?',
+        answer:
+          'No. A freeze helps stop new credit from being opened, while a dispute challenges information already appearing on the report.',
+      },
+      {
+        question: 'When is an identity theft block stronger than a normal dispute?',
+        answer:
+          'When the item truly resulted from identity theft and you can provide the required identity theft report and identification documents.',
+      },
+    ],
+  },
+  {
+    slug: 'reinserted-information-after-dispute',
+    title: 'Reinserted Information After A Dispute',
+    cluster: 'disputes',
+    intent: 'education',
+    offerPath: '/tools/my-dispute-letters',
+    metaDescription:
+      'Understand what to review when a deleted item shows up again after a dispute and why reinsertion notice matters.',
+    audience: 'Consumers who saw a disputed item disappear and then reappear.',
+    overview:
+      'When information is deleted and later comes back, the user should not assume the process was clean. Reinserted information should be reviewed carefully, including whether the furnisher recertified accuracy and whether proper notice was given.',
+    keyTakeaways: [
+      'A reappearing item deserves a fresh review, not blind acceptance.',
+      'This is a follow-up method many consumers never think to use.',
+      'Keep earlier reports and deletion results so you can compare what changed.',
+    ],
+    actionSteps: [
+      'Save copies of reports showing the item removed and later reinserted.',
+      'Review the new reporting date, balance, status, and furnisher details.',
+      'Follow up quickly if the reinsertion still appears unsupported or inaccurate.',
+    ],
+    faqs: [
+      {
+        question: 'Can an item come back after it was deleted?',
+        answer:
+          'Yes, but it should be reviewed carefully. Reinserted information is supposed to meet accuracy and notice requirements.',
+      },
+      {
+        question: 'Does reinsertion mean the item is automatically valid?',
+        answer:
+          'No. It means the reporting returned. You should still review whether the information is accurate and whether the process was handled correctly.',
+      },
+    ],
+  },
+  {
+    slug: 'mixed-file-and-personal-info-disputes',
+    title: 'Mixed File And Personal Information Disputes',
+    cluster: 'disputes',
+    intent: 'education',
+    offerPath: '/tools/dispute-letters',
+    metaDescription:
+      'Learn how to challenge mixed-file problems, wrong addresses, name variations, and personal-information errors that can contaminate a credit report.',
+    audience: 'Consumers whose reports show incorrect personal details or accounts that are not theirs.',
+    overview:
+      'Personal-information errors are easy to underestimate. Wrong addresses, name variants, or a mixed file can cause someone else’s data to land on the report and create bigger dispute problems later. Cleaning the identity layer of the report can make other disputes stronger.',
+    keyTakeaways: [
+      'Personal-information cleanup can be a first step, not an afterthought.',
+      'A mixed file is a serious issue if accounts or addresses are not yours.',
+      'The goal is to separate your file from anyone else’s data before working deeper disputes.',
+    ],
+    actionSteps: [
+      'Review names, addresses, employers, and SSN fragments first.',
+      'Flag any item that belongs to another person or another version of your file.',
+      'Request correction of identity details before or alongside account disputes.',
+    ],
+    faqs: [
+      {
+        question: 'Why do personal-information disputes matter so much?',
+        answer:
+          'Because identity-layer errors can be the reason other inaccurate accounts or addresses are appearing in the first place.',
+      },
+      {
+        question: 'What is a mixed file?',
+        answer:
+          'A mixed file is when a credit report contains information belonging to another person, often because identifiers are similar or merged incorrectly.',
+      },
+    ],
+  },
+  {
+    slug: 'outdated-negative-information',
+    title: 'Outdated Negative Information',
+    cluster: 'credit-repair',
+    intent: 'education',
+    offerPath: '/credit-upload',
+    metaDescription:
+      'Learn how normal credit reporting time limits work and when old negative information may deserve a closer review.',
+    audience: 'Consumers reviewing older collections, charge-offs, judgments, or bankruptcies.',
+    overview:
+      'Older negative information does not always disappear exactly when users expect, so timing reviews matter. Most adverse items have normal reporting limits, and users should compare those limits with the dates currently showing on the report before deciding what to challenge.',
+    keyTakeaways: [
+      'Most negative information is generally limited to about seven years, with some exceptions.',
+      'Bankruptcies can remain longer than most other adverse items.',
+      'A date review is useful when a user thinks an item should already be gone.',
+    ],
+    actionSteps: [
+      'List the date of first delinquency, charge-off date, collection open date, and any update dates shown.',
+      'Compare the item type with normal reporting-time limits.',
+      'Challenge reporting that appears older than normal limits or is using the wrong timeline.',
+    ],
+    faqs: [
+      {
+        question: 'Can accurate negative information stay forever?',
+        answer:
+          'Usually no. Most negative information has reporting limits, although the exact period can vary by item type.',
+      },
+      {
+        question: 'Should I dispute every old account?',
+        answer:
+          'Not automatically. First confirm the dates and whether the reporting actually appears to be beyond the normal reporting period.',
       },
     ],
   },
