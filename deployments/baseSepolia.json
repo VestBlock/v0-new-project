@@ -1,0 +1,13 @@
+{
+  "network": "baseSepolia",
+  "chainId": 84532,
+  "deployer": "0x017B65db53ff8d587AaC723A279Fa6a62a16ed23",
+  "adminAddress": "0x017B65db53ff8d587AaC723A279Fa6a62a16ed23",
+  "deployedAt": "2026-05-04T21:19:09.493Z",
+  "contracts": {
+    "dealVaultRealEstate": "0x4005D1cFB956F8B3b6244412Bfe16Fd7369C1274",
+    "proofVault": "0x168638046f41C52BC41FA16960F367916E48335C",
+    "partnerPay": "0x3ca01c84a93c9927034Fd0afb3cFc298528E1092",
+    "milestoneVault": "0xB0B594e1e1142E6E7743b66a904252f2367D0D78"
+  }
+}

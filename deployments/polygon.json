@@ -1,0 +1,13 @@
+{
+  "network": "polygon",
+  "chainId": 137,
+  "deployer": "0x017B65db53ff8d587AaC723A279Fa6a62a16ed23",
+  "adminAddress": "0x017B65db53ff8d587AaC723A279Fa6a62a16ed23",
+  "deployedAt": "2026-05-05T18:07:48.780Z",
+  "contracts": {
+    "dealVaultRealEstate": "0xc4c60151632b6Afb68F32add11852C27b643BC22",
+    "proofVault": "0xd675085FBf966Dc65501136B5ad5c0142DC27607",
+    "partnerPay": "0x4EB94567a792094b1fB976B8D839EFD640659fc5",
+    "milestoneVault": "0x138A25687ab95B401786303Bef88883CF685295E"
+  }
+}

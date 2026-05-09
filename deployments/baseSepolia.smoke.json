@@ -1,0 +1,17 @@
+{
+  "network": "baseSepolia",
+  "chainId": 84532,
+  "signer": "0x017B65db53ff8d587AaC723A279Fa6a62a16ed23",
+  "executedAt": "2026-05-04T21:22:48.804Z",
+  "dealVault": {
+    "dealId": "0x1e20c808f38943814eb85a8611c8b6a32667175f4b54a36273252262dc13faa4",
+    "propertyHash": "0x05fbd78e903ecad34416655fc21dde3afa0ec9aeb2da9dd1651f078eb48fbcca",
+    "proofId": "0x30c8733163362161a15b35b9db34b067248f17e06321685ff04ce0752eb6e9c3"
+  },
+  "partnerPay": {
+    "dealId": "0xd18a15c6a32605763cf2cb2ba4ce11f1ad9051da8c16d1a34790afb0d356c917"
+  },
+  "milestoneVault": {
+    "projectId": "0x48cdd468a3aa1b636fc34b4f0876c9d751bceab0d1e819c3b3f86411b240d336"
+  }
+}
