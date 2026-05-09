@@ -11,6 +11,88 @@ import { extractTextWithFallback } from "@/lib/pdf-extraction-service"
 import { Loader2, Upload, FileText, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
+function formatStructuredAnalysis(data: any) {
+  const sections: string[] = []
+
+  if (data.summary) {
+    sections.push(`## Summary\n${data.summary}`)
+  }
+
+  const creditScore = data.detailedAnalysis?.creditScore
+  if (creditScore) {
+    const factors = Array.isArray(creditScore.factors)
+      ? creditScore.factors.map((factor: string) => `- ${factor}`).join("\n")
+      : ""
+
+    sections.push(
+      `## Credit Score\nScore: ${creditScore.score ?? "Not found"}\nRating: ${creditScore.rating || "Unknown"}${
+        factors ? `\nFactors:\n${factors}` : ""
+      }`,
+    )
+  }
+
+  const accounts = data.detailedAnalysis?.accounts
+  if (accounts) {
+    const details = Array.isArray(accounts.details)
+      ? accounts.details
+          .slice(0, 8)
+          .map(
+            (account: any) =>
+              `- ${account.creditor || "Unknown creditor"} | ${account.type || "Account"} | ${account.status || "Status unavailable"} | ${account.balance || "Balance unavailable"}`,
+          )
+          .join("\n")
+      : ""
+
+    sections.push(
+      `## Accounts\nTotal: ${accounts.total ?? 0}\nPositive: ${accounts.positive ?? 0}\nNegative: ${accounts.negative ?? 0}${
+        details ? `\nDetails:\n${details}` : ""
+      }`,
+    )
+  }
+
+  const negativeItems = Array.isArray(data.detailedAnalysis?.negativeItems)
+    ? data.detailedAnalysis.negativeItems
+        .map(
+          (item: any) =>
+            `- ${item.creditor || "Unknown creditor"} | ${item.type || "Negative item"} | ${item.details || "No details"}${
+              item.disputeStrategy ? ` | Strategy: ${item.disputeStrategy}` : ""
+            }`,
+        )
+        .join("\n")
+    : ""
+
+  if (negativeItems) {
+    sections.push(`## Negative Items\n${negativeItems}`)
+  }
+
+  const inquiries = Array.isArray(data.detailedAnalysis?.inquiries)
+    ? data.detailedAnalysis.inquiries
+        .map(
+          (inquiry: any) =>
+            `- ${inquiry.creditor || "Unknown source"} | ${inquiry.date || "Unknown date"} | ${inquiry.type || "Inquiry"}`,
+        )
+        .join("\n")
+    : ""
+
+  if (inquiries) {
+    sections.push(`## Inquiries\n${inquiries}`)
+  }
+
+  const recommendations = Array.isArray(data.detailedAnalysis?.recommendations)
+    ? data.detailedAnalysis.recommendations.map((item: string) => `- ${item}`).join("\n")
+    : ""
+
+  if (recommendations) {
+    sections.push(`## Recommendations\n${recommendations}`)
+  }
+
+  if (data.letterContent) {
+    sections.push(`## Letter Content\n${data.letterContent}`)
+  }
+
+  return sections.join("\n\n") || data.rawResponse || "No analysis returned."
+}
+
 export function DebugReportAnalyzer() {
   const [file, setFile] = useState<File | null>(null)
   const [extractedText, setExtractedText] = useState<string>("")
@@ -38,7 +120,6 @@ export function DebugReportAnalyzer() {
       const result = await extractTextWithFallback(selectedFile)
       const text = result.text
       setExtractedText(text)
-      console.log(`Extracted ${text.length} characters from PDF`)
       setDebugInfo(`Extraction method: ${result.metadata.extractionMethod}, Characters: ${text.length}`)
     } catch (err) {
       console.error("Error extracting text:", err)
@@ -69,14 +150,15 @@ export function DebugReportAnalyzer() {
         setExtractedText(extractedText.substring(0, 100000))
       }
 
-      const response = await fetch("/api/analyze-report", {
+      const response = await fetch("/api/analyze-credit-direct", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           reportText: extractedText,
-          question: question,
+          analysisType: "comprehensive",
+          generateLetter: false,
         }),
       })
 
@@ -93,11 +175,12 @@ export function DebugReportAnalyzer() {
         throw new Error(errorMessage)
       }
 
-      setAnalysis(data.analysis)
+      setAnalysis(formatStructuredAnalysis(data))
       if (data.tokens) {
-        setDebugInfo(
-          `Tokens used: ${data.tokens.total} (Prompt: ${data.tokens.prompt}, Completion: ${data.tokens.completion})`,
-        )
+        const total = data.tokens.total ?? data.tokens.total_tokens ?? "unknown"
+        const prompt = data.tokens.prompt ?? data.tokens.prompt_tokens ?? "unknown"
+        const completion = data.tokens.completion ?? data.tokens.completion_tokens ?? "unknown"
+        setDebugInfo(`Tokens used: ${total} (Prompt: ${prompt}, Completion: ${completion})`)
       }
     } catch (err) {
       console.error("Error analyzing report:", err)
@@ -210,8 +293,8 @@ export function DebugReportAnalyzer() {
             <CardTitle>Analysis Results</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, "<br/>") }} />
+            <div className="prose prose-sm max-w-none whitespace-pre-wrap break-words dark:prose-invert">
+              {analysis}
             </div>
           </CardContent>
         </Card>

@@ -1,24 +1,29 @@
 import { testOpenAIConnection } from "@/lib/openai-service"
+import { getSafeDiagnosticErrorMessage, requireInternalDiagnosticsAccess } from "@/lib/debug/access"
 
 export const dynamic = "force-dynamic"
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export async function GET() {
+  const access = await requireInternalDiagnosticsAccess()
+  if (access.error) {
+    return access.error
+  }
+
   try {
-    console.log("[Test OpenAI API] Testing OpenAI connection")
-
     const result = await testOpenAIConnection()
-
-    console.log("[Test OpenAI API] Test result:", result)
 
     return Response.json(result)
   } catch (error) {
-    console.error("[Test OpenAI API] Error:", error)
+    console.error("[Test OpenAI API] Error:", getErrorMessage(error))
 
     return Response.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        error: getSafeDiagnosticErrorMessage("OpenAI diagnostic request failed.") || getErrorMessage(error),
       },
       { status: 500 },
     )

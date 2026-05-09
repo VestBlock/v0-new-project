@@ -1,9 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { requireInternalDiagnosticsAccess } from "@/lib/debug/access"
 
 export async function POST(req: NextRequest) {
+  const access = await requireInternalDiagnosticsAccess()
+  if (access.error) {
+    return access.error
+  }
+
   try {
     const contentType = req.headers.get("content-type") || "not-set"
-    console.log("Test FormData - Content-Type:", contentType)
 
     // Try to parse as FormData
     try {
@@ -34,14 +39,24 @@ export async function POST(req: NextRequest) {
         success: false,
         contentType,
         error: "Failed to parse FormData",
-        details: formError instanceof Error ? formError.message : String(formError),
+        details:
+          process.env.NODE_ENV === "production"
+            ? undefined
+            : formError instanceof Error
+              ? formError.message
+              : String(formError),
       })
     }
   } catch (error) {
     return NextResponse.json({
       success: false,
       error: "Server error",
-      details: error instanceof Error ? error.message : String(error),
+      details:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : error instanceof Error
+            ? error.message
+            : String(error),
     })
   }
 }

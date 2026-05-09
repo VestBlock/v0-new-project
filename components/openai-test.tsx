@@ -23,13 +23,11 @@ export function OpenAITest() {
   const testConnection = async () => {
     setIsLoading(true)
     setResult(null)
-    console.log("Starting OpenAI connection test from client...")
 
     try {
       const response = await fetch("/api/test-openai-connection") // Ensure this matches your route
       const data: TestResult = await response.json()
 
-      console.log("Test API response received:", data)
       setResult(data)
 
       if (data.success) {

@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
+import { getSafeDiagnosticErrorMessage, requireInternalDiagnosticsAccess } from "@/lib/debug/access"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
+  const access = await requireInternalDiagnosticsAccess()
+  if (access.error) {
+    return access.error
+  }
+
   try {
     // Verify API key is available
     if (!process.env.OPENAI_API_KEY) {
@@ -33,7 +39,7 @@ export async function GET() {
         {
           success: false,
           status: response.status,
-          error: errorText,
+          error: getSafeDiagnosticErrorMessage("OpenAI diagnostic request failed.") || errorText,
         },
         { status: 500 },
       )
@@ -51,7 +57,9 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error:
+          getSafeDiagnosticErrorMessage("OpenAI diagnostic request failed.") ||
+          (error instanceof Error ? error.message : String(error)),
       },
       { status: 500 },
     )

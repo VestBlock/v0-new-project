@@ -1,7 +1,14 @@
+import { redirect } from 'next/navigation';
 import { AuthStatusChecker } from '@/components/auth-status-checker';
 import { Card } from '@/components/ui/card';
+import { checkAdminAccess } from '@/lib/auth/admin';
 
-export default function AuthDebugPage() {
+export default async function AuthDebugPage() {
+  const adminCheck = await checkAdminAccess();
+  if (!adminCheck.isAdmin) {
+    redirect('/dashboard');
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <main className="pt-32 px-4 pb-16">
@@ -30,7 +37,7 @@ export default function AuthDebugPage() {
                   <ul className="list-disc pl-5 text-sm space-y-1">
                     <li>Check if cookies are enabled in your browser</li>
                     <li>Try clearing your browser cache and cookies</li>
-                    <li>Use the "Bypass Auth" button during development</li>
+                    <li>Confirm the login redirect target is correct</li>
                     <li>Check for CORS issues if using a different domain</li>
                   </ul>
                 </div>
@@ -45,7 +52,7 @@ export default function AuthDebugPage() {
                   </p>
                   <ul className="list-disc pl-5 text-sm space-y-1">
                     <li>Check if the session is being properly set</li>
-                    <li>Try using the "Bypass Auth" option</li>
+                    <li>Verify the post-login redirect path still exists</li>
                     <li>Check for errors in the browser console</li>
                     <li>Verify that your Supabase configuration is correct</li>
                   </ul>
@@ -67,9 +74,7 @@ export default function AuthDebugPage() {
                       Verify that your API routes are properly checking
                       authentication
                     </li>
-                    <li>
-                      Try using the "Bypass Auth" option during development
-                    </li>
+                    <li>Re-test after signing out and back in normally</li>
                   </ul>
                 </div>
               </div>

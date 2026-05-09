@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
+import { getSafeDiagnosticErrorMessage, requireInternalDiagnosticsAccess } from "@/lib/debug/access"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
+  const access = await requireInternalDiagnosticsAccess()
+  if (access.error) {
+    return access.error
+  }
+
   try {
     const apiKey = process.env.OPENAI_API_KEY
 
@@ -37,7 +43,7 @@ export async function GET() {
       return NextResponse.json({
         success: false,
         error: "Failed to connect to OpenAI",
-        details: error,
+        details: process.env.NODE_ENV === "production" ? undefined : error,
       })
     }
 
@@ -61,7 +67,7 @@ export async function GET() {
               const data = JSON.parse(line.slice(6))
               const content = data.choices[0]?.delta?.content || ""
               fullResponse += content
-            } catch (e) {
+            } catch {
               // Skip invalid JSON
             }
           }
@@ -78,8 +84,8 @@ export async function GET() {
     console.error("Streaming test error:", error)
     return NextResponse.json({
       success: false,
-      error: "Failed to test streaming",
-      details: error.message,
+      error: getSafeDiagnosticErrorMessage("Failed to test streaming.") || "Failed to test streaming",
+      details: process.env.NODE_ENV === "production" ? undefined : error.message,
     })
   }
 }

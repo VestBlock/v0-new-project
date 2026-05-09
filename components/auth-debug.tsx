@@ -79,14 +79,6 @@ export function AuthDebug() {
       await supabase.auth.signOut()
       setAuthState({ message: "Signed out successfully" })
 
-      // Clear any bypass flags
-      localStorage.removeItem("bypass_auth")
-      localStorage.removeItem("admin_bypass")
-
-      // Clear cookies
-      document.cookie = "bypass_auth=; path=/; max-age=0"
-      document.cookie = "admin_bypass=; path=/; max-age=0"
-
       setTimeout(() => {
         window.location.href = "/login"
       }, 1000)
@@ -96,13 +88,6 @@ export function AuthDebug() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleBypassAuth = () => {
-    // Set a local storage flag to bypass auth checks
-    localStorage.setItem("bypass_auth", "true")
-    document.cookie = "bypass_auth=true; path=/; max-age=3600"
-    window.location.reload()
   }
 
   const handleForceRedirect = (path: string) => {
@@ -141,14 +126,9 @@ export function AuthDebug() {
           </Button>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="destructive" size="sm" onClick={handleBypassAuth} className="flex-1">
-            Bypass Auth
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleForceRedirect("/chat")} className="flex-1">
-            Go to Chat
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => handleForceRedirect("/chat")} className="w-full">
+          Go to Chat
+        </Button>
 
         {authState && (
           <div className="mt-4 text-xs">
@@ -162,8 +142,7 @@ export function AuthDebug() {
                   {
                     isAuthenticated: !!authState.session?.session,
                     user: authState.user?.user?.email,
-                    bypassAuth: authState.cookies?.bypass_auth === "true",
-                    adminBypass: authState.cookies?.admin_bypass === "true",
+                    cookieCount: Object.keys(authState.cookies || {}).length,
                   },
                   null,
                   2,

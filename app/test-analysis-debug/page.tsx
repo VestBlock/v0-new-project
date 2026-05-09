@@ -80,7 +80,6 @@ INQUIRIES
       type,
     };
     setDebugLogs((prev) => [...prev, log]);
-    console.log(`[DEBUG] ${step}:`, data);
   };
 
   const clearLogs = () => {

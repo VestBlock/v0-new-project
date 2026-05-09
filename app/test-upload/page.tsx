@@ -37,8 +37,6 @@ export default function TestUploadPage() {
       formData.append('file', file);
       formData.append('test', 'value');
 
-      console.log('Testing FormData endpoint...');
-
       const res = await fetch('/api/test-formdata', {
         method: 'POST',
         body: formData,
@@ -64,8 +62,6 @@ export default function TestUploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      console.log('Testing document analysis endpoint...');
 
       const res = await fetch('/api/analyze-document', {
         method: 'POST',
@@ -99,7 +95,7 @@ export default function TestUploadPage() {
         try {
           const data = JSON.parse(xhr.responseText);
           setResponse(data);
-        } catch (e) {
+        } catch {
           setError('Failed to parse response: ' + xhr.responseText);
         }
         setIsUploading(false);

@@ -62,7 +62,7 @@ export default function CreditReportDiagnosticPage() {
     const checkNetwork = async () => {
       const startTime = Date.now();
       try {
-        const response = await fetch('/api/test-openai-connection', {
+        await fetch('/api/test-openai-connection', {
           method: 'GET',
           headers: {
             'Cache-Control': 'no-cache',
@@ -73,7 +73,7 @@ export default function CreditReportDiagnosticPage() {
           online: true,
           latency,
         });
-      } catch (error) {
+      } catch {
         setNetworkStatus({
           online: false,
           latency: null,
@@ -286,13 +286,6 @@ export default function CreditReportDiagnosticPage() {
         // Append the file with the correct field name
         formData.append('file', file);
 
-        // Log what we're sending
-        console.log('Sending file:', {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        });
-
         // Make the fetch request with proper error handling
         try {
           response = await fetch('/api/analyze-document', {
@@ -318,12 +311,12 @@ export default function CreditReportDiagnosticPage() {
             errorMessage += ` - ${
               errorData.error || errorData.message || JSON.stringify(errorData)
             }`;
-          } catch (e) {
+          } catch {
             // If we can't parse the error as JSON, try to get the text
             try {
               const errorText = await response.text();
               errorMessage += ` - ${errorText}`;
-            } catch (e2) {
+            } catch {
               // If we can't get the text either, just use the status
               errorMessage += ' (could not parse error details)';
             }
@@ -366,7 +359,6 @@ export default function CreditReportDiagnosticPage() {
         let responseText;
         try {
           responseText = await response.text();
-          console.log('Response text:', responseText.substring(0, 500) + '...');
         } catch (textError) {
           throw new Error(
             `Failed to read response text: ${

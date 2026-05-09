@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server"
 import { testOpenAIConnection } from "@/lib/openai-service"
+import { getSafeDiagnosticErrorMessage, requireInternalDiagnosticsAccess } from "@/lib/debug/access"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  console.log("[API /test-openai-connection] Received request to test OpenAI connection.")
+  const access = await requireInternalDiagnosticsAccess()
+  if (access.error) {
+    return access.error
+  }
 
   try {
     const result = await testOpenAIConnection() // This is the direct fetch-based test
 
     if (result.success) {
-      console.log("[API /test-openai-connection] Connection test successful via service:", result)
       return NextResponse.json({
         success: true,
         message: "Successfully connected to OpenAI API and listed models.",
@@ -27,8 +30,8 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to connect to OpenAI API via service.",
-          details: result.error, // This will contain the actual error message from OpenAI or the service
+          error: getSafeDiagnosticErrorMessage("Failed to connect to OpenAI API via service.") || "Failed to connect to OpenAI API via service.",
+          details: process.env.NODE_ENV === "production" ? undefined : result.error,
           status: result.status || 500, // Ensure status is passed
         },
         { status: result.status || 500 },
@@ -40,7 +43,7 @@ export async function GET() {
       {
         success: false,
         error: "An unexpected error occurred on the server during the test.",
-        details: error.message || String(error),
+        details: process.env.NODE_ENV === "production" ? undefined : error.message || String(error),
       },
       { status: 500 },
     )
