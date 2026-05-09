@@ -4,7 +4,9 @@ import type { Metadata } from 'next';
 import {
   ArrowRight,
   BadgeCheck,
+  Download,
   FileCheck,
+  FileText,
   Fingerprint,
   Link2,
   LockKeyhole,
@@ -29,6 +31,7 @@ import {
   shortenHex,
 } from '@/lib/dealvault/contractMetadata';
 import { absoluteUrl } from '@/lib/seo/site';
+import demoPackage from '@/deployments/dealvault-demo-package.json';
 
 export const metadata: Metadata = {
   title: 'DealVault Demo | See Proof, Payout, and Milestone Records',
@@ -98,6 +101,21 @@ const buyerProofQuestions = [
   'What should the team do next?',
 ];
 
+const demoAgreementFlow = [
+  'PDF Agreement',
+  'Hash Created',
+  'DealVault Record',
+  'Milestones / Payouts',
+  'Proof Certificate',
+];
+
+const demoAgreementStats = [
+  ['Demo deal ID', demoPackage.demoDealId],
+  ['Proof type', demoPackage.proof.proofType],
+  ['External reference', demoPackage.proof.externalReference],
+  ['Raw document on-chain', demoPackage.proof.sendsRawDocumentOnChain ? 'Yes' : 'No'],
+];
+
 export default function DealVaultDemoPage() {
   return (
     <main className="premium-page px-4 py-24">
@@ -130,6 +148,12 @@ export default function DealVaultDemoPage() {
               </Button>
               <Button asChild size="lg" variant="outline">
                 <Link href="/smart-contracts">View Live Contracts</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <a href={demoPackage.pdf.publicPath} target="_blank" rel="noopener noreferrer">
+                  Download Sample Agreement
+                  <Download className="ml-2 h-4 w-4" />
+                </a>
               </Button>
             </div>
 
@@ -183,6 +207,81 @@ export default function DealVaultDemoPage() {
               </Card>
             );
           })}
+        </section>
+
+        <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr]">
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-cyan-600" />
+                Demo agreement package
+              </CardTitle>
+              <CardDescription>
+                A fictional sample agreement becomes a hash-backed proof package. The PDF stays
+                off-chain; DealVault uses the hash and clean references for the demo record.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {demoAgreementStats.map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-background/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+                    <p className="mt-2 break-words text-sm font-medium">{String(value)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-600">SHA-256 document hash</p>
+                <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                  {demoPackage.proof.documentHash}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
+                  <a href={demoPackage.pdf.publicPath} target="_blank" rel="noopener noreferrer">
+                    Download Sample Demo Agreement
+                    <Download className="ml-2 h-4 w-4" />
+                  </a>
+                </Button>
+                <Button asChild variant="outline">
+                  <a href={demoPackage.certificate.pdfPath} target="_blank" rel="noopener noreferrer">
+                    View Proof Certificate
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle>How the demo moves through DealVault</CardTitle>
+              <CardDescription>
+                This is the buyer-friendly version of the proof flow. Customers do not need to
+                connect a wallet to understand or request the demo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {demoAgreementFlow.map((step, index) => (
+                  <div key={step} className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-sm font-semibold text-cyan-600">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 rounded-xl border border-white/10 bg-background/70 p-3 text-sm font-medium transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40">
+                      {step}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-5 text-sm text-muted-foreground">
+                This sample is for product demonstration only. It is not legal advice and does not
+                replace legal counsel, title, escrow, brokerage compliance, or required written
+                agreements.
+              </p>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[.95fr_1.05fr]">

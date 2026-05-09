@@ -14,6 +14,7 @@
     "compile:contracts": "hardhat compile",
     "copy-abis": "ts-node scripts/copyAbis.ts",
     "clean:local": "rm -rf .next tsconfig.tsbuildinfo automation-run-results.json artifacts cache",
+    "demo:dealvault": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/createDealVaultDemoPackage.ts",
     "dev": "next dev",
     "deploy:dealvault:amoy": "hardhat run scripts/deployDealVault.ts --network amoy",
     "deploy:dealvault:base": "hardhat run scripts/deployDealVault.ts --network base",

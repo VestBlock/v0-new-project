@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-05-09T22:07:58.793Z",
+  "demoDealName": "DealVault Demo Agreement Record",
+  "demoDealId": "dv-demo-592503cb40f8",
+  "parties": [
+    "VestBlock Demo Client LLC",
+    "Northstar Referral Partners LLC",
+    "Apex Milestone Services LLC"
+  ],
+  "pdf": {
+    "filePath": "public/dealvault/demo-agreement.pdf",
+    "publicPath": "/dealvault/demo-agreement.pdf",
+    "sha256": "592503cb40f88206532bf8a4ff0f945f7edde0cca3082008ed8363724c30de8e"
+  },
+  "proof": {
+    "documentHash": "0x592503cb40f88206532bf8a4ff0f945f7edde0cca3082008ed8363724c30de8e",
+    "algorithm": "SHA-256",
+    "proofType": "demo_agreement_pdf_hash",
+    "externalReference": "dealvault-demo-agreement-2026",
+    "timestamp": "2026-05-09T22:07:58.793Z",
+    "sendsRawDocumentOnChain": false,
+    "onChainPayloadDescription": "Only hash, proof type, external reference, and timestamp-style metadata are used for proof workflows."
+  },
+  "payoutSplits": [
+    {
+      "party": "VestBlock Demo Client LLC",
+      "allocationPercent": 70,
+      "status": "sample_owner_allocation"
+    },
+    {
+      "party": "Northstar Referral Partners LLC",
+      "allocationPercent": 20,
+      "status": "sample_referral_allocation"
+    },
+    {
+      "party": "Apex Milestone Services LLC",
+      "allocationPercent": 10,
+      "status": "sample_milestone_services_allocation"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "Agreement package uploaded for proof",
+      "status": "completed"
+    },
+    {
+      "title": "Referral split reviewed by parties",
+      "status": "in_review"
+    },
+    {
+      "title": "Service milestone submitted for approval",
+      "status": "submitted"
+    },
+    {
+      "title": "Proof certificate prepared for review",
+      "status": "ready"
+    }
+  ],
+  "certificate": {
+    "imagePath": "/dealvault/sample-certificate.png",
+    "pdfPath": "/dealvault/sample-certificate.pdf"
+  },
+  "polygon": {
+    "network": "Polygon",
+    "chainId": 137,
+    "proofVaultAddress": "0xd675085FBf966Dc65501136B5ad5c0142DC27607",
+    "proofVaultExplorerUrl": "https://polygonscan.com/address/0xd675085FBf966Dc65501136B5ad5c0142DC27607",
+    "latestLiveProofTransactionHash": "0xa7ba4ce076b01582d32315f2be081b2d43209b75e45bedf48c2d3d3222519452",
+    "latestLiveProofExplorerUrl": "https://polygonscan.com/tx/0xa7ba4ce076b01582d32315f2be081b2d43209b75e45bedf48c2d3d3222519452",
+    "liveTransactionUsedForThisPackage": false
+  },
+  "disclaimer": "This sample is for product demonstration only. It is not legal advice, does not replace legal counsel, title, escrow, brokerage compliance, or required written agreements."
+}
