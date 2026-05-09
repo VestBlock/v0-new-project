@@ -155,6 +155,9 @@ export default function DealVaultDemoPage() {
                   <Download className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/dealvault/demo-record">View Demo Record</Link>
+              </Button>
             </div>
 
             <p className="max-w-3xl text-sm text-muted-foreground">
@@ -249,6 +252,9 @@ export default function DealVaultDemoPage() {
                   <a href={demoPackage.certificate.pdfPath} target="_blank" rel="noopener noreferrer">
                     View Proof Certificate
                   </a>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/dealvault/demo-record">View Buyer-Ready Demo Record</Link>
                 </Button>
               </div>
             </CardContent>
@@ -361,7 +367,7 @@ export default function DealVaultDemoPage() {
               </p>
             </div>
             <Button asChild variant="outline">
-              <Link href="/dealvault">Read Full Product Page</Link>
+              <Link href="/dealvault/demo-record">View Demo Record</Link>
             </Button>
           </div>
 

@@ -25,6 +25,7 @@ const publicRoutes = [
   { path: '/services', priority: 0.92, changeFrequency: 'weekly' },
   { path: '/dealvault', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/dealvault/demo', priority: 0.91, changeFrequency: 'weekly' },
+  { path: '/dealvault/demo-record', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/smart-contracts', priority: 0.89, changeFrequency: 'weekly' },
   { path: '/pricing', priority: 0.88, changeFrequency: 'weekly' },
   { path: '/services/financial-growth', priority: 0.86, changeFrequency: 'weekly' },
