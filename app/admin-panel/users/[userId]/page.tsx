@@ -40,16 +40,11 @@ export default function AdminUserDetailPage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = use(params);
-  const { user, userProfile, isAuthenticated, isLoading: authLoading } =
-    useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const isAdminEmail =
-    user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isAdmin = userProfile?.role === 'admin' || Boolean(isAdminEmail);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -61,6 +56,14 @@ export default function AdminUserDetailPage({
         });
         const result = await response.json();
         if (!response.ok) {
+          if (response.status === 401) {
+            router.replace(`/login?redirect=/admin-panel/users/${userId}`);
+            return;
+          }
+          if (response.status === 403) {
+            router.replace('/dashboard');
+            return;
+          }
           throw new Error(result.error || 'Unable to load user.');
         }
         setData(result);
@@ -76,13 +79,8 @@ export default function AdminUserDetailPage({
       router.push(`/login?redirect=/admin-panel/users/${userId}`);
       return;
     }
-    if (!isAdmin) {
-      setError('Admin access required.');
-      setLoading(false);
-      return;
-    }
     loadUser();
-  }, [authLoading, isAuthenticated, isAdmin, userId, router]);
+  }, [authLoading, isAuthenticated, userId, router]);
 
   if (authLoading || loading) {
     return (

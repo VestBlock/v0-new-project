@@ -41,6 +41,30 @@ function countBy<T extends Record<string, any>>(
   return rows.filter((row) => String(row[key] || '').toLowerCase() === value.toLowerCase()).length;
 }
 
+function envInt(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function hoursSince(value?: string | null) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return Number.POSITIVE_INFINITY;
+  return (Date.now() - timestamp) / (1000 * 60 * 60);
+}
+
+function daysSince(value?: string | null) {
+  return hoursSince(value) / 24;
+}
+
+function isWithinDays(value: string | null | undefined, days: number) {
+  return daysSince(value) <= days;
+}
+
+function isWithinHours(value: string | null | undefined, hours: number) {
+  return hoursSince(value) <= hours;
+}
+
 const automationEventTypes = new Set([
   'credit_analysis_stalled',
   'signup_no_upload',
@@ -81,11 +105,26 @@ const dashboardDataSources = [
   'dispute_letters',
   'payments',
   'email_events',
+  'outreach_send_events',
   'admin_activity',
   'leads',
   'admin_tasks',
   'content_assets',
   'funding_strategy_requests',
+  'funding_profiles',
+  'funding_recommendations',
+  'funding_sequence_items',
+  'funding_payments',
+  'lenders',
+  'lender_outreach_messages',
+  'buyers',
+  'buyer_outreach_messages',
+  'sam_watchlists',
+  'sam_opportunities',
+  'sam_exclusion_checks',
+  'sam_alert_runs',
+  'sam_award_intelligence',
+  'sam_assistance_listings',
 ] as const;
 
 const serviceContentKeys: Record<string, string> = {
@@ -99,6 +138,7 @@ const serviceContentKeys: Record<string, string> = {
   real_estate_funding: 'real_estate_funding',
   sell_property: 'sell_property',
   ai_assistant: 'ai_assistant',
+  visibility_expansion: 'visibility_expansion',
 };
 
 export async function GET() {
@@ -121,11 +161,26 @@ export async function GET() {
     letters,
     payments,
     emailEvents,
+    outreachSendEvents,
     adminActivity,
     leads,
     tasks,
     contentAssets,
     fundingStrategyRequests,
+    fundingProfiles,
+    fundingRecommendations,
+    fundingSequenceItems,
+    fundingPayments,
+    lenders,
+    lenderOutreachMessages,
+    buyers,
+    buyerOutreachMessages,
+    _samWatchlists,
+    _samOpportunities,
+    _samExclusionChecks,
+    _samAlertRuns,
+    _samAwardIntelligence,
+    _samAssistanceListings,
   ] =
     await Promise.all([
       safeRows<any>(
@@ -190,6 +245,15 @@ export async function GET() {
       ),
       safeRows<any>(
         supabase
+          .from('outreach_send_events')
+          .select('id,channel,status,created_at')
+          .order('created_at', { ascending: false })
+          .limit(5000),
+        'outreach_send_events',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
           .from('admin_activity')
           .select('id,actor_user_id,action_type,entity_type,entity_id,metadata_json,created_at')
           .order('created_at', { ascending: false })
@@ -200,7 +264,9 @@ export async function GET() {
       safeRows<any>(
         supabase
           .from('leads')
-          .select('id,lead_type,status,name,email,phone,notes,created_at,updated_at')
+          .select(
+            'id,lead_type,status,outreach_status,delivery_status,name,email,phone,notes,last_contacted_at,created_at,updated_at'
+          )
           .order('created_at', { ascending: false })
           .limit(100),
         'leads',
@@ -240,7 +306,133 @@ export async function GET() {
         'funding_strategy_requests',
         dataSourceIssues
       ),
+      safeRows<any>(
+        supabase
+          .from('funding_profiles')
+          .select(
+            'id,user_id,mode,funding_goal_amount,fico_estimate,risk_level,readiness_score,created_at,updated_at'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(250),
+        'funding_profiles',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('funding_recommendations')
+          .select(
+            'id,user_id,profile_id,mode,recommended_path,readiness_score,estimated_funding_min,estimated_funding_max,created_at,updated_at'
+          )
+          .order('created_at', { ascending: false })
+          .limit(250),
+        'funding_recommendations',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('funding_sequence_items')
+          .select(
+            'id,user_id,recommendation_id,status,approved_limit,created_at,updated_at,approved_at'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(500),
+        'funding_sequence_items',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('funding_payments')
+          .select(
+            'id,user_id,recommendation_id,payment_plan,amount_paid,amount_due,status,created_at,updated_at'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(250),
+        'funding_payments',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('lenders')
+          .select(
+            'id,name,category,lender_type,relationship_stage,outreach_status,next_follow_up_at,last_contacted_at,created_at,updated_at'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(250),
+        'lenders',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('lender_outreach_messages')
+          .select('id,lender_id,channel,status,sent_at,approved_at,created_at,updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(500),
+        'lender_outreach_messages',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('buyers')
+          .select(
+            'id,name,category,buyer_type,relationship_stage,outreach_status,next_follow_up_at,last_contacted_at,created_at,updated_at'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(250),
+        'buyers',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase
+          .from('buyer_outreach_messages')
+          .select('id,buyer_id,channel,status,sent_at,approved_at,created_at,updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(500),
+        'buyer_outreach_messages',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_watchlists').select('id,label,status,watch_type,created_at').limit(50),
+        'sam_watchlists',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_opportunities').select('id,title,status,response_deadline,agency_name,naics_code,created_at').limit(50),
+        'sam_opportunities',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_exclusion_checks').select('id,subject_label,active_exclusion,match_status,checked_at').limit(50),
+        'sam_exclusion_checks',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_alert_runs').select('id,run_type,status,started_at,completed_at').limit(50),
+        'sam_alert_runs',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_award_intelligence').select('id,awardee_name,award_date,agency_name,naics_code').limit(50),
+        'sam_award_intelligence',
+        dataSourceIssues
+      ),
+      safeRows<any>(
+        supabase.from('sam_assistance_listings').select('id,title,published_date,agency_name,status').limit(50),
+        'sam_assistance_listings',
+        dataSourceIssues
+      ),
     ]);
+
+  if (!process.env.SAM_GOV_API_KEY) {
+    dataSourceIssues.push({
+      source: 'sam_opportunities',
+      message: 'Add SAM_GOV_API_KEY to enable government contracting ingestion and intelligence routes.',
+    });
+  } else if (!['1', 'true', 'yes', 'on'].includes((process.env.LEADS_ENABLE_SAM || '').toLowerCase())) {
+    dataSourceIssues.push({
+      source: 'sam_watchlists',
+      message: 'Set LEADS_ENABLE_SAM=true to activate SAM.gov automation routes.',
+    });
+  }
 
   const reportCountByUser = new Map<string, number>();
   reports.forEach((report) =>
@@ -367,7 +559,7 @@ export async function GET() {
         request.business_name || request.user_email || request.id
       }`,
       createdAt: request.updated_at || request.created_at,
-      href: '/admin-panel',
+      href: '/admin-panel?tab=funding-strategy',
     })),
     ...adminActivity.slice(0, 20).map((activity) => ({
       id: `activity-${activity.id}`,
@@ -408,6 +600,15 @@ export async function GET() {
           ? asset.publish_path
           : undefined,
     })),
+    ...fundingRecommendations.slice(0, 20).map((recommendation) => ({
+      id: `funding-assistant-${recommendation.id}`,
+      type: 'funding_assistant_recommendation',
+      label: `Funding assistant ${recommendation.recommended_path}: ${
+        usersById.get(recommendation.user_id)?.email || recommendation.user_id || recommendation.id
+      }`,
+      createdAt: recommendation.updated_at || recommendation.created_at,
+      href: '/admin/funding',
+    })),
   ]
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
     .slice(0, 30);
@@ -432,6 +633,13 @@ export async function GET() {
 
   const lifecycleEmailEvents = emailEvents.filter((event) =>
     lifecycleEmailTypes.has(String(event.event_type))
+  );
+  const fundingAssistantApprovedItems = fundingSequenceItems.filter(
+    (item) => item.status === 'approved'
+  );
+  const fundingAssistantAmountApproved = fundingAssistantApprovedItems.reduce(
+    (sum, item) => sum + Number(item.approved_limit || 0),
+    0
   );
   const contentByStatus = {
     draft: contentAssets.filter((asset) => asset.status === 'draft').length,
@@ -501,6 +709,351 @@ export async function GET() {
     },
     {}
   );
+  const openTaskStatuses = new Set(['open', 'in_progress', 'waiting']);
+  const staleReports = creditReports
+    .filter(
+      (report) =>
+        ['uploaded', 'extracting_text', 'text_extracted', 'analyzing', 'needs_review'].includes(
+          String(report.status)
+        ) && hoursSince(report.updatedAt || report.uploadedAt) >= 24
+    )
+    .slice(0, 8)
+    .map((report) => ({
+      id: report.id,
+      label: report.fileName,
+      detail: `${report.userEmail || 'Unknown user'} · ${report.status}`,
+      ageHours: Math.round(hoursSince(report.updatedAt || report.uploadedAt)),
+      href: report.analysisUrl,
+    }));
+  const failedReports = creditReports
+    .filter((report) => String(report.status) === 'failed')
+    .slice(0, 8)
+    .map((report) => ({
+      id: report.id,
+      label: report.fileName,
+      detail: report.errorMessage || report.userEmail || 'Failed analysis',
+      href: report.analysisUrl,
+    }));
+  const urgentTasks = tasks
+    .filter(
+      (task) =>
+        openTaskStatuses.has(String(task.status)) &&
+        ['urgent', 'high'].includes(String(task.priority))
+    )
+    .slice(0, 8)
+    .map((task) => ({
+      id: task.id,
+      label: task.title,
+      detail: `${task.priority} · ${task.status}${task.user_email ? ` · ${task.user_email}` : ''}`,
+      href:
+        task.entity_type === 'credit_report' && task.entity_id
+          ? `/admin-panel/reports/${task.entity_id}`
+          : task.entity_type === 'lead'
+            ? '/admin/leads'
+            : task.user_id
+              ? `/admin-panel/users/${task.user_id}`
+              : '/admin-panel?tab=tasks',
+    }));
+  const readyContent = contentAssets
+    .filter((asset) => asset.status === 'ready')
+    .slice(0, 8)
+    .map((asset) => ({
+      id: asset.id,
+      label: asset.title,
+      detail: `${asset.content_type} · ${asset.language?.toUpperCase() || 'EN'}`,
+      href: '/admin-panel?tab=content',
+    }));
+  const leadFollowups = leads
+    .filter(
+      (lead) =>
+        ['new', 'open', 'pending', 'contacted'].includes(
+          String(lead.status || '').toLowerCase()
+        ) && hoursSince(lead.updated_at || lead.created_at) >= 24
+    )
+    .slice(0, 8)
+    .map((lead) => ({
+      id: lead.id,
+      label: lead.name || lead.email || 'Lead follow-up',
+      detail: `${lead.lead_type || 'lead'} · ${lead.status || 'new'}`,
+      ageHours: Math.round(hoursSince(lead.updated_at || lead.created_at)),
+      href: `/admin/leads?search=${encodeURIComponent(lead.email || lead.name || '')}`,
+    }));
+  const fundingNeedsReview = fundingStrategyRequests
+    .filter((request) =>
+      ['submitted', 'paid', 'in_review', 'under_review', 'documents_needed'].includes(
+        String(request.status || '').toLowerCase()
+      )
+    )
+    .slice(0, 8)
+    .map((request) => ({
+      id: request.id,
+      label: request.business_name || request.full_name || request.user_email || request.id,
+      detail: `${request.status || 'submitted'} · ${request.readiness_tier || 'unscored'}`,
+      href: `/admin/funding?search=${encodeURIComponent(
+        request.user_email || request.business_name || request.full_name || ''
+      )}`,
+    }));
+  const overdueTasks = tasks.filter(
+    (task) =>
+      openTaskStatuses.has(String(task.status)) &&
+      task.due_at &&
+      new Date(task.due_at).getTime() < Date.now()
+  );
+  const onboardingWatchlist = userManagement
+    .filter((user) => user.uploads === 0)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    )
+    .slice(0, 8)
+    .map((user) => ({
+      id: user.id,
+      label: user.fullName || user.email || 'New user',
+      detail: `${user.subscriptionStatus} · signed up ${formatRelativeAdminTime(
+        user.createdAt
+      )}`,
+      href: `/admin-panel/users/${user.id}`,
+    }));
+  const disputeMethodMix = Array.from(
+    letters.reduce((map, letter) => {
+      const key = String(letter.letter_type || 'General dispute').trim() || 'General dispute';
+      map.set(key, (map.get(key) || 0) + 1);
+      return map;
+    }, new Map<string, number>()) as Map<string, number>
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([letterType, count]) => ({ letterType, count }));
+  const taskLaneMap = tasks.reduce((map, task) => {
+    const key = String(task.task_type || 'general').trim() || 'general';
+    const current = map.get(key) || { taskType: key, total: 0, open: 0, urgent: 0 };
+    current.total += 1;
+    if (openTaskStatuses.has(String(task.status))) current.open += 1;
+    if (['urgent', 'high'].includes(String(task.priority))) current.urgent += 1;
+    map.set(key, current);
+    return map;
+  }, new Map<string, { taskType: string; total: number; open: number; urgent: number }>());
+  const taskLanes = Array.from(
+    taskLaneMap.values() as Iterable<{
+      taskType: string;
+      total: number;
+      open: number;
+      urgent: number;
+    }>
+  )
+    .sort((a, b) => b.open - a.open || b.urgent - a.urgent || b.total - a.total)
+    .slice(0, 8);
+  const completedPayments = payments.filter((payment) =>
+    ['completed', 'paid', 'succeeded'].includes(String(payment.status).toLowerCase())
+  );
+  const weeklyVelocity = {
+    newUsers7d: userManagement.filter((user) => isWithinDays(user.createdAt, 7)).length,
+    uploads7d: creditReports.filter((report) => isWithinDays(report.uploadedAt, 7)).length,
+    analyses7d: [
+      ...jobs.filter((job) =>
+        ['completed', 'COMPLETED'].includes(String(job.status)) &&
+        isWithinDays(job.updated_at || job.created_at, 7)
+      ),
+      ...creditReports.filter(
+        (report) => report.status === 'completed' && isWithinDays(report.completedAt, 7)
+      ),
+    ].length,
+    publishedSeo7d: contentAssets.filter(
+      (asset) =>
+        asset.content_type === 'seo_page' &&
+        asset.status === 'published' &&
+        isWithinDays(asset.published_at || asset.updated_at || asset.created_at, 7)
+    ).length,
+    paidCustomers7d: completedPayments.filter((payment) =>
+      isWithinDays(payment.created_at || payment.updated_at, 7)
+    ).length,
+  };
+  const failedEmailEvents = emailEvents.filter((event) => event.status === 'failed');
+  const dataSourceOutages = dataSourceHealth.filter((source) => source.status === 'unavailable');
+
+  const revenueSnapshot = {
+    completedPaymentVolume: completedPayments.reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
+      0
+    ),
+    paidFundingRequests: fundingStrategyRequests.filter(
+      (request) => request.payment_status === 'paid'
+    ).length,
+    approvedFundingAmount: fundingAssistantAmountApproved,
+    openHighPriorityTasks: urgentTasks.length,
+    overdueTasks: overdueTasks.length,
+    noUploadUsers: userManagement.filter((user) => user.uploads === 0).length,
+  };
+
+  const paidFundingPayments = fundingPayments.filter((payment) =>
+    ['paid', 'completed'].includes(String(payment.status || '').toLowerCase())
+  );
+  const trailing30CompletedPayments = completedPayments.filter((payment) =>
+    isWithinDays(payment.created_at || payment.updated_at, 30)
+  );
+  const trailing30FundingPayments = paidFundingPayments.filter((payment) =>
+    isWithinDays(payment.created_at || payment.updated_at, 30)
+  );
+  const trailing30Revenue =
+    trailing30CompletedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) +
+    trailing30FundingPayments.reduce((sum, payment) => sum + Number(payment.amount_paid || 0), 0);
+  const monthlyRevenueTarget = 100000;
+  const newLeads24h = leads.filter((lead) => isWithinHours(lead.created_at, 24)).length;
+  const leadEmailSends24h = outreachSendEvents.filter(
+    (event) =>
+      String(event.status || '').toLowerCase() === 'sent' &&
+      String(event.channel || '').toLowerCase() === 'email' &&
+      isWithinHours(event.created_at, 24)
+  ).length;
+  const lenderOutreach24h = lenderOutreachMessages.filter(
+    (message) =>
+      String(message.status || '').toLowerCase() === 'sent' &&
+      isWithinHours(message.sent_at || message.updated_at, 24)
+  ).length;
+  const buyerOutreach24h = buyerOutreachMessages.filter(
+    (message) =>
+      String(message.status || '').toLowerCase() === 'sent' &&
+      isWithinHours(message.sent_at || message.updated_at, 24)
+  ).length;
+  const totalOutreach24h = leadEmailSends24h + lenderOutreach24h + buyerOutreach24h;
+  const replySignals7d =
+    leads.filter(
+      (lead) =>
+        ['replied', 'interested', 'qualified', 'closed_won'].includes(
+          String(lead.status || '').toLowerCase()
+        ) && isWithinDays(lead.updated_at || lead.created_at, 7)
+    ).length +
+    lenders.filter(
+      (lender) =>
+        ['responded', 'active_partner'].includes(
+          String(lender.relationship_stage || '').toLowerCase()
+        ) && isWithinDays(lender.last_contacted_at || lender.updated_at || lender.created_at, 7)
+    ).length +
+    buyers.filter(
+      (buyer) =>
+        ['responded', 'active_buyer'].includes(
+          String(buyer.relationship_stage || '').toLowerCase()
+        ) && isWithinDays(buyer.last_contacted_at || buyer.updated_at || buyer.created_at, 7)
+    ).length;
+  const bookedOrWon7d =
+    leads.filter(
+      (lead) =>
+        (String(lead.status || '').toLowerCase() === 'closed_won' ||
+          String(lead.delivery_status || '').toLowerCase() === 'booked') &&
+        isWithinDays(lead.updated_at || lead.created_at, 7)
+    ).length +
+    fundingStrategyRequests.filter(
+      (request) =>
+        ['strategy_ready', 'closed'].includes(String(request.status || '').toLowerCase()) &&
+        isWithinDays(request.updated_at || request.created_at, 7)
+    ).length;
+  const approvedPartnerMessagesReady =
+    lenderOutreachMessages.filter(
+      (message) => String(message.status || '').toLowerCase() === 'approved'
+    ).length +
+    buyerOutreachMessages.filter(
+      (message) => String(message.status || '').toLowerCase() === 'approved'
+    ).length;
+  const activeLenderConversations = lenders.filter((lender) =>
+    ['contacted', 'responded', 'reviewing', 'active_partner'].includes(
+      String(lender.relationship_stage || '').toLowerCase()
+    )
+  ).length;
+  const activeBuyerConversations = buyers.filter((buyer) =>
+    ['contacted', 'responded', 'reviewing', 'active_buyer'].includes(
+      String(buyer.relationship_stage || '').toLowerCase()
+    )
+  ).length;
+  const overduePartnerFollowups =
+    lenders.filter(
+      (lender) =>
+        lender.next_follow_up_at &&
+        new Date(lender.next_follow_up_at).getTime() < Date.now() &&
+        !['dormant', 'paused', 'not_a_fit'].includes(
+          String(lender.relationship_stage || '').toLowerCase()
+        )
+    ).length +
+    buyers.filter(
+      (buyer) =>
+        buyer.next_follow_up_at &&
+        new Date(buyer.next_follow_up_at).getTime() < Date.now() &&
+        !['dormant', 'paused', 'not_a_fit'].includes(
+          String(buyer.relationship_stage || '').toLowerCase()
+        )
+    ).length;
+  const hotFundingRequests = fundingStrategyRequests.filter(
+    (request) =>
+      ['submitted', 'paid', 'in_review', 'strategy_ready'].includes(
+        String(request.status || '').toLowerCase()
+      ) && Number(request.readiness_score || 0) >= 70
+  ).length;
+  const hardScoreboardTargets = {
+    monthlyRevenue: monthlyRevenueTarget,
+    newLeads24h: 10,
+    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 100),
+    partnerOutreach24h: 6,
+    replySignals7d: 7,
+    bookedOrWon7d: 3,
+  };
+  const immediateRevenueAngle =
+    hotFundingRequests > 0
+      ? 'Push funding-readiness and paid strategy conversions first. High-readiness funding requests are the fastest path to near-term cash.'
+      : approvedPartnerMessagesReady >= 5
+        ? 'Send approved lender and buyer outreach now. Partner conversations are queued and waiting, so speed-to-send is the fastest unlock.'
+        : newLeads24h < hardScoreboardTargets.newLeads24h
+          ? 'Lead flow is too soft. Lean harder into demand generation, higher-intent SEO output, and direct outreach that produces immediate conversations.'
+          : totalOutreach24h < hardScoreboardTargets.totalOutreach24h
+            ? 'Cadence is too low. Increase same-day contact volume across leads, lenders, and buyers before adding more complexity.'
+            : 'Follow-up and conversion are the lever. The machine is creating movement, so tighten objections, routing, and close paths.';
+  const hardScoreboard = {
+    monthlyRevenueTarget,
+    trailing30Revenue,
+    revenueGap: Math.max(0, monthlyRevenueTarget - trailing30Revenue),
+    immediateRevenueAngle,
+    dailyCadence: {
+      newLeads24h: {
+        actual: newLeads24h,
+        target: hardScoreboardTargets.newLeads24h,
+        status: newLeads24h >= hardScoreboardTargets.newLeads24h ? 'on_track' : 'behind',
+      },
+      totalOutreach24h: {
+        actual: totalOutreach24h,
+        target: hardScoreboardTargets.totalOutreach24h,
+        status:
+          totalOutreach24h >= hardScoreboardTargets.totalOutreach24h ? 'on_track' : 'behind',
+      },
+      partnerOutreach24h: {
+        actual: lenderOutreach24h + buyerOutreach24h,
+        target: hardScoreboardTargets.partnerOutreach24h,
+        status:
+          lenderOutreach24h + buyerOutreach24h >= hardScoreboardTargets.partnerOutreach24h
+            ? 'on_track'
+            : 'behind',
+      },
+      replySignals7d: {
+        actual: replySignals7d,
+        target: hardScoreboardTargets.replySignals7d,
+        status:
+          replySignals7d >= hardScoreboardTargets.replySignals7d ? 'on_track' : 'behind',
+      },
+      bookedOrWon7d: {
+        actual: bookedOrWon7d,
+        target: hardScoreboardTargets.bookedOrWon7d,
+        status:
+          bookedOrWon7d >= hardScoreboardTargets.bookedOrWon7d ? 'on_track' : 'behind',
+      },
+    },
+    pipeline: {
+      leadEmailSends24h,
+      lenderOutreach24h,
+      buyerOutreach24h,
+      activeLenderConversations,
+      activeBuyerConversations,
+      approvedPartnerMessagesReady,
+      overduePartnerFollowups,
+      hotFundingRequests,
+    },
+  };
 
   return NextResponse.json({
     overview: {
@@ -516,6 +1069,13 @@ export async function GET() {
       totalPaidFundingStrategyRequests: fundingStrategyRequests.filter(
         (request) => request.payment_status === 'paid'
       ).length,
+      totalFundingAssistantProfiles: fundingProfiles.length,
+      totalFundingAssistantRecommendations: fundingRecommendations.length,
+      totalFundingAssistantApprovals: fundingAssistantApprovedItems.length,
+      totalFundingAssistantPaidPlans: fundingPayments.filter((payment) =>
+        ['paid', 'completed'].includes(String(payment.status))
+      ).length,
+      totalFundingAssistantAmountApproved: fundingAssistantAmountApproved,
       totalOpenTasks: tasks.filter((task) =>
         ['open', 'in_progress', 'waiting'].includes(String(task.status))
       ).length,
@@ -527,7 +1087,7 @@ export async function GET() {
     users: userManagement,
     alerts: {
       emailEvents,
-      failedEmailEvents: emailEvents.filter((event) => event.status === 'failed'),
+      failedEmailEvents,
       newReportAlerts: emailEvents.filter(
         (event) => event.event_type === 'admin_credit_report_uploaded'
       ),
@@ -625,6 +1185,104 @@ export async function GET() {
           purpose:
             'Sends dispute-letter mailing reminders, secondary bureau reminders, and bureau response-window follow-ups.',
         },
+        {
+          label: 'Daily content publisher',
+          path: '/api/cron/content-publisher',
+          schedule: '30 17 * * *',
+          purpose:
+            'Publishes a small daily batch of SEO pages, prioritizing existing drafts and then filling service gaps with AEO topic pages.',
+        },
+        {
+          label: 'Growth scoreboard monitor',
+          path: '/api/cron/growth-scoreboard-monitor',
+          schedule: '0 */6 * * *',
+          purpose:
+            'Checks the hard scoreboard, identifies missed daily quotas, and creates red-flag admin tasks when growth or revenue cadence falls behind.',
+        },
+        {
+          label: 'Partner send autopilot',
+          path: '/api/cron/partners-send-autopilot',
+          schedule: '5 */2 * * *',
+          purpose:
+            'Sends approved lender and buyer outreach automatically, and creates admin tasks when autopilot is blocked or a send fails.',
+        },
+        {
+          label: 'PR target discovery',
+          path: '/api/cron/pr-engine-discovery',
+          schedule: '15 18 * * *',
+          purpose:
+            'Seeds new PR targets across priority cities and business-owner categories such as minority, chamber, and small-business outlets.',
+        },
+        {
+          label: 'PR city expansion',
+          path: '/api/cron/pr-engine-city-expansion',
+          schedule: '30 18 * * *',
+          purpose:
+            'Pushes the visibility engine into additional cities using market momentum and local category fit.',
+        },
+        {
+          label: 'PR pitch generation',
+          path: '/api/cron/pr-engine-pitch-generation',
+          schedule: '45 18 * * *',
+          purpose:
+            'Generates fresh PR drafts automatically for the highest-fit queued targets.',
+        },
+        {
+          label: 'PR follow-up monitor',
+          path: '/api/cron/pr-engine-monitor',
+          schedule: '0 18 * * *',
+          purpose:
+            'Enforces PR follow-up deadlines and creates admin tasks when strong opportunities are stalling.',
+        },
+        {
+          label: 'PR weekly learning',
+          path: '/api/cron/pr-engine-weekly-learning',
+          schedule: '0 19 * * 0',
+          purpose:
+            'Summarizes which cities, categories, and pitch angles are actually getting traction so the queue can self-improve.',
+        },
+        {
+          label: 'SAM opportunity ingest',
+          path: '/api/cron/sam-opportunity-ingest',
+          schedule: '10 11 * * *',
+          purpose:
+            'Pulls public contract opportunities from official SAM/GSA APIs and stores normalized opportunity plus document records.',
+        },
+        {
+          label: 'SAM match scoring',
+          path: '/api/cron/sam-match-scoring',
+          schedule: '25 11 * * *',
+          purpose:
+            'Scores active SAM opportunities against watchlists and lead fit, creates admin tasks, and links high-fit opportunities into lead workflows.',
+        },
+        {
+          label: 'SAM exclusion rechecks',
+          path: '/api/cron/sam-exclusion-rechecks',
+          schedule: '35 11 * * *',
+          purpose:
+            'Re-screens tracked entities and watchlists against public SAM exclusions to surface compliance risk quickly.',
+        },
+        {
+          label: 'SAM award monitor',
+          path: '/api/cron/sam-award-monitor',
+          schedule: '50 11 * * *',
+          purpose:
+            'Captures award notices for tracked niches and competitors so operators can watch who is winning and where.',
+        },
+        {
+          label: 'SAM assistance refresh',
+          path: '/api/cron/sam-assistance-refresh',
+          schedule: '55 11 * * *',
+          purpose:
+            'Refreshes federal assistance listing matches related to active government watchlists.',
+        },
+        {
+          label: 'SAM alert delivery',
+          path: '/api/cron/sam-alert-delivery',
+          schedule: '10 18 * * *',
+          purpose:
+            'Sends the government intelligence digest with hot opportunities, exclusion hits, awards, and assistance matches.',
+        },
       ],
       lifecycleEmails: {
         total: lifecycleEmailEvents.length,
@@ -634,6 +1292,45 @@ export async function GET() {
       },
       recentAutomationActivity: automationActivity,
     },
+    actionCenter: {
+      counts: {
+        staleReports: staleReports.length,
+        failedReports: failedReports.length,
+        urgentTasks: urgentTasks.length,
+        failedEmails: failedEmailEvents.length,
+        readyContent: readyContent.length,
+        leadFollowups: leadFollowups.length,
+        fundingNeedsReview: fundingNeedsReview.length,
+        dataSourceOutages: dataSourceOutages.length,
+      },
+      staleReports,
+      failedReports,
+      urgentTasks,
+      readyContent,
+      leadFollowups,
+      fundingNeedsReview,
+      dataSourceOutages,
+    },
+    insights: {
+      hardScoreboard,
+      revenueSnapshot,
+      onboardingWatchlist,
+      disputeMethodMix,
+      taskLanes,
+      weeklyVelocity,
+    },
     recentActivity,
   });
+}
+
+function formatRelativeAdminTime(value?: string | null) {
+  if (!value) return 'recently';
+  const hours = hoursSince(value);
+  if (!Number.isFinite(hours)) return 'recently';
+  if (hours < 1) return 'less than 1h ago';
+  if (hours < 24) return `${Math.round(hours)}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.round(days / 7);
+  return `${weeks}w ago`;
 }

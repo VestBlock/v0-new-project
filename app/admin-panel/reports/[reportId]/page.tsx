@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
@@ -92,8 +92,7 @@ export default function AdminReportDetailPage({
   params: Promise<{ reportId: string }>;
 }) {
   const { reportId } = use(params);
-  const { user, userProfile, isAuthenticated, isLoading: authLoading } =
-    useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [status, setStatus] = useState('');
@@ -105,11 +104,7 @@ export default function AdminReportDetailPage({
   const [taskStatusDrafts, setTaskStatusDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
 
-  const isAdminEmail =
-    user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isAdmin = userProfile?.role === 'admin' || Boolean(isAdminEmail);
-
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -118,6 +113,14 @@ export default function AdminReportDetailPage({
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          router.replace(`/login?redirect=/admin-panel/reports/${reportId}`);
+          return;
+        }
+        if (response.status === 403) {
+          router.replace('/dashboard');
+          return;
+        }
         throw new Error(result.error || 'Unable to load report.');
       }
       setData(result);
@@ -128,7 +131,7 @@ export default function AdminReportDetailPage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [reportId, router]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -136,13 +139,8 @@ export default function AdminReportDetailPage({
       router.push(`/login?redirect=/admin-panel/reports/${reportId}`);
       return;
     }
-    if (!isAdmin) {
-      setError('Admin access required.');
-      setLoading(false);
-      return;
-    }
     loadReport();
-  }, [authLoading, isAuthenticated, isAdmin, reportId, router]);
+  }, [authLoading, isAuthenticated, loadReport, reportId, router]);
 
   const saveStatus = async () => {
     setSaving(true);

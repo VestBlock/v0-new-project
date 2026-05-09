@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import {
   AlertCircle,
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock3,
   ClipboardList,
+  Copy,
   CreditCard,
   DollarSign,
   FileText,
@@ -52,6 +53,16 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { SamIntelligenceDashboard } from '@/components/admin/sam-intelligence-dashboard';
+import { MarketCommandCard } from '@/components/admin/market-command-card';
+import { adminDiagnosticSections } from '@/lib/admin/diagnostics';
+import {
+  adminNavGroups,
+  adminNavItems,
+  adminPanelTabGroups,
+  adminPanelTabs,
+  type AdminPanelTab,
+} from '@/lib/admin/navigation';
 import { vestblockMarketingServices } from '@/lib/content/marketingServices';
 
 type AdminDashboard = {
@@ -66,6 +77,11 @@ type AdminDashboard = {
     totalFundingLeads: number;
     totalFundingStrategyRequests: number;
     totalPaidFundingStrategyRequests: number;
+    totalFundingAssistantProfiles: number;
+    totalFundingAssistantRecommendations: number;
+    totalFundingAssistantApprovals: number;
+    totalFundingAssistantPaidPlans: number;
+    totalFundingAssistantAmountApproved: number;
     totalOpenTasks: number;
     totalContentAssets: number;
     totalPublishedContent: number;
@@ -291,6 +307,117 @@ type AdminDashboard = {
       recommendedNextContent: string;
     }>;
   };
+  actionCenter: {
+    counts: {
+      staleReports: number;
+      failedReports: number;
+      urgentTasks: number;
+      failedEmails: number;
+      readyContent: number;
+      leadFollowups: number;
+      fundingNeedsReview: number;
+      dataSourceOutages: number;
+    };
+    staleReports: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      ageHours?: number;
+      href?: string;
+    }>;
+    failedReports: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      href?: string;
+    }>;
+    urgentTasks: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      href?: string;
+    }>;
+    readyContent: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      href?: string;
+    }>;
+    leadFollowups: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      ageHours?: number;
+      href?: string;
+    }>;
+    fundingNeedsReview: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      href?: string;
+    }>;
+    dataSourceOutages: Array<{
+      source: string;
+      status: 'available' | 'unavailable';
+      message?: string | null;
+    }>;
+  };
+  insights: {
+    hardScoreboard: {
+      monthlyRevenueTarget: number;
+      trailing30Revenue: number;
+      revenueGap: number;
+      immediateRevenueAngle: string;
+      dailyCadence: {
+        newLeads24h: { actual: number; target: number; status: 'on_track' | 'behind' };
+        totalOutreach24h: { actual: number; target: number; status: 'on_track' | 'behind' };
+        partnerOutreach24h: { actual: number; target: number; status: 'on_track' | 'behind' };
+        replySignals7d: { actual: number; target: number; status: 'on_track' | 'behind' };
+        bookedOrWon7d: { actual: number; target: number; status: 'on_track' | 'behind' };
+      };
+      pipeline: {
+        leadEmailSends24h: number;
+        lenderOutreach24h: number;
+        buyerOutreach24h: number;
+        activeLenderConversations: number;
+        activeBuyerConversations: number;
+        approvedPartnerMessagesReady: number;
+        overduePartnerFollowups: number;
+        hotFundingRequests: number;
+      };
+    };
+    revenueSnapshot: {
+      completedPaymentVolume: number;
+      paidFundingRequests: number;
+      approvedFundingAmount: number;
+      openHighPriorityTasks: number;
+      overdueTasks: number;
+      noUploadUsers: number;
+    };
+    onboardingWatchlist: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      href?: string;
+    }>;
+    disputeMethodMix: Array<{
+      letterType: string;
+      count: number;
+    }>;
+    taskLanes: Array<{
+      taskType: string;
+      total: number;
+      open: number;
+      urgent: number;
+    }>;
+    weeklyVelocity: {
+      newUsers7d: number;
+      uploads7d: number;
+      analyses7d: number;
+      publishedSeo7d: number;
+      paidCustomers7d: number;
+    };
+  };
 };
 
 const statuses = [
@@ -331,9 +458,10 @@ const leadStatusLabels: Record<string, string> = {
 const leadTypeLabels: Record<string, string> = {
   sell_house: 'Sell House',
   real_estate: 'Real Estate Funding',
-  ai_assistant: 'AI Assistant',
+  ai_assistant: 'AI Receptionist',
   business_funding: 'Business Funding',
   credit_card_funding_strategy: 'Business Funding Strategy',
+  website_upgrade: 'Website Upgrade',
 };
 
 const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
@@ -385,10 +513,19 @@ function searchable(values: Array<unknown>, query: string) {
     .some((value) => String(value).toLowerCase().includes(normalized));
 }
 
-export default function AdminPanelPage() {
-  const { user, userProfile, isAuthenticated, isLoading: authLoading } =
-    useAuth();
+function isAdminPanelTab(value: string | null | undefined): value is AdminPanelTab {
+  return Boolean(value && adminPanelTabs.includes(value as AdminPanelTab));
+}
+
+function AdminPanelPageContent() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentAdminRedirect = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -427,19 +564,29 @@ export default function AdminPanelPage() {
   const [contentPrompt, setContentPrompt] = useState('');
   const [savingContentId, setSavingContentId] = useState<string | null>(null);
   const [generatingContent, setGeneratingContent] = useState(false);
-  const [activeTab, setActiveTab] = useState('reports');
+  const [seedingContent, setSeedingContent] = useState(false);
+  const [seedingTopicContent, setSeedingTopicContent] = useState(false);
+  const [contentNotice, setContentNotice] = useState('');
+  const activeTab = useMemo<AdminPanelTab>(() => {
+    const requestedTab = searchParams.get('tab');
+    return isAdminPanelTab(requestedTab) ? requestedTab : 'tasks';
+  }, [searchParams]);
 
-  const isAdminEmail =
-    user?.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isAdmin = userProfile?.role === 'admin' || Boolean(isAdminEmail);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const response = await fetch('/api/admin/dashboard', { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          router.replace(`/login?redirect=${encodeURIComponent(currentAdminRedirect)}`);
+          return;
+        }
+        if (response.status === 403) {
+          router.replace('/dashboard');
+          return;
+        }
         throw new Error(data.error || 'Unable to load admin dashboard.');
       }
       setDashboard(data);
@@ -450,21 +597,29 @@ export default function AdminPanelPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentAdminRedirect, router]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated) {
-      router.push('/login?redirect=/admin-panel');
+      router.push(`/login?redirect=${encodeURIComponent(currentAdminRedirect)}`);
       return;
     }
-    if (!isAdmin) {
-      setError('Admin access required.');
-      setLoading(false);
-      return;
-    }
-    loadDashboard();
-  }, [authLoading, isAuthenticated, isAdmin, router]);
+    const timeoutId = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [authLoading, currentAdminRedirect, isAuthenticated, loadDashboard, router]);
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      if (!isAdminPanelTab(value)) return;
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', value);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   const metrics = useMemo(() => {
     if (!dashboard) return [];
@@ -503,6 +658,16 @@ export default function AdminPanelPage() {
         icon: DollarSign,
       },
       {
+        label: 'Funding Profiles',
+        value: dashboard.overview.totalFundingAssistantProfiles,
+        icon: ShieldCheck,
+      },
+      {
+        label: 'Funding Approvals',
+        value: dashboard.overview.totalFundingAssistantApprovals,
+        icon: Bell,
+      },
+      {
         label: 'Open Tasks',
         value: dashboard.overview.totalOpenTasks,
         icon: ClipboardList,
@@ -511,11 +676,6 @@ export default function AdminPanelPage() {
         label: 'Content Drafts',
         value: dashboard.overview.totalContentAssets,
         icon: Megaphone,
-      },
-      {
-        label: 'AEO Topics',
-        value: dashboard.overview.totalAeoTopics,
-        icon: Globe2,
       },
     ];
   }, [dashboard]);
@@ -850,6 +1010,7 @@ export default function AdminPanelPage() {
   const generateContentAsset = async () => {
     setGeneratingContent(true);
     setError('');
+    setContentNotice('');
     try {
       const response = await fetch('/api/admin/content', {
         method: 'POST',
@@ -893,12 +1054,13 @@ export default function AdminPanelPage() {
     setContentPrompt(
       `Create a high-quality, compliance-safe SEO page for ${service.title}. Explain who it helps, when to use it, what VestBlock does, what documents or next steps matter, common questions, and a clear CTA to ${service.route}. Avoid guarantees and thin keyword stuffing.`
     );
-    setActiveTab('content');
+    handleTabChange('content');
   };
 
   const updateContentStatus = async (assetId: string, status: string) => {
     setSavingContentId(assetId);
     setError('');
+    setContentNotice('');
     try {
       const response = await fetch('/api/admin/content', {
         method: 'PATCH',
@@ -914,6 +1076,72 @@ export default function AdminPanelPage() {
       setError(err instanceof Error ? err.message : 'Unable to update content.');
     } finally {
       setSavingContentId(null);
+    }
+  };
+
+  const seedLaunchContent = async () => {
+    setSeedingContent(true);
+    setError('');
+    setContentNotice('');
+    try {
+      const response = await fetch('/api/admin/content/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publish: true, overwrite: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to seed launch content.');
+      }
+      setContentNotice(`Published ${data.seededCount || 0} launch content assets.`);
+      await loadDashboard();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to seed launch content.'
+      );
+    } finally {
+      setSeedingContent(false);
+    }
+  };
+
+  const seedAeoTopicLibrary = async () => {
+    setSeedingTopicContent(true);
+    setError('');
+    setContentNotice('');
+    try {
+      const response = await fetch('/api/admin/content/seed-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publish: true, overwrite: false }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to seed AEO topic pages.');
+      }
+      setContentNotice(
+        `Published ${data.seededCount || 0} AEO topic pages without overwriting existing edits.`
+      );
+      await loadDashboard();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to seed AEO topic pages.'
+      );
+    } finally {
+      setSeedingTopicContent(false);
+    }
+  };
+
+  const copyTextToClipboard = async (value: string, label: string) => {
+    if (!value) return;
+
+    setError('');
+    try {
+      await navigator.clipboard.writeText(value);
+      setContentNotice(`${label} copied to your clipboard.`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : `Unable to copy ${label.toLowerCase()}.`
+      );
     }
   };
 
@@ -946,14 +1174,22 @@ export default function AdminPanelPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">VestBlock Admin</h1>
             <p className="text-muted-foreground">
-              Credit repair operations, users, alerts, payments, and follow-up
-              work.
+              One command center for tasks, revenue flow, partner ops, growth work,
+              and diagnostics.
             </p>
           </div>
-          <Button variant="outline" onClick={loadDashboard} disabled={loading}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/admin/funding">Funding Pipeline</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/leads">Lead Management</Link>
+            </Button>
+            <Button variant="outline" onClick={loadDashboard} disabled={loading}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -980,19 +1216,605 @@ export default function AdminPanelPage() {
           ))}
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="flex h-auto flex-wrap justify-start">
-            <TabsTrigger value="reports">Credit Reports</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="alerts">Alerts</TabsTrigger>
-            <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            <TabsTrigger value="aeo">AEO / LLM</TabsTrigger>
-            <TabsTrigger value="content">Content</TabsTrigger>
-            <TabsTrigger value="automation">Automation</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-            <TabsTrigger value="funding-strategy">Funding Strategy</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-          </TabsList>
+        <Card>
+          <CardHeader>
+            <CardTitle>Operator Workspaces</CardTitle>
+            <CardDescription>
+              Jump into the exact admin area you need instead of hunting through tabs
+              or one-off tools.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 xl:grid-cols-3">
+            {adminNavGroups.map((group) => {
+              const links = adminNavItems.filter(
+                (item) => item.group === group.id && item.href !== '/admin-panel'
+              )
+              if (!links.length) return null
+
+              return (
+                <div key={group.id} className="rounded-2xl border p-4">
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold">{group.title}</p>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {links.map((link) => (
+                      <div
+                        key={link.href}
+                        className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{link.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {link.description}
+                          </p>
+                        </div>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={link.href}>Open</Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_.8fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Action Center</CardTitle>
+              <CardDescription>
+                Start here to see what needs attention first across credit reports,
+                tasks, leads, funding follow-up, and content.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Alert
+                  variant={
+                    dashboard.actionCenter.counts.failedReports > 0
+                      ? 'destructive'
+                      : 'success'
+                  }
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Failed analyses</AlertTitle>
+                  <AlertDescription>
+                    {dashboard.actionCenter.counts.failedReports} reports need review.
+                  </AlertDescription>
+                </Alert>
+                <Alert
+                  variant={
+                    dashboard.actionCenter.counts.staleReports > 0
+                      ? 'warning'
+                      : 'success'
+                  }
+                >
+                  <Clock3 className="h-4 w-4" />
+                  <AlertTitle>Stale reports</AlertTitle>
+                  <AlertDescription>
+                    {dashboard.actionCenter.counts.staleReports} stuck over 24h.
+                  </AlertDescription>
+                </Alert>
+                <Alert
+                  variant={
+                    dashboard.actionCenter.counts.urgentTasks > 0
+                      ? 'warning'
+                      : 'success'
+                  }
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  <AlertTitle>Urgent tasks</AlertTitle>
+                  <AlertDescription>
+                    {dashboard.actionCenter.counts.urgentTasks} high-priority tasks open.
+                  </AlertDescription>
+                </Alert>
+                <Alert
+                  variant={
+                    dashboard.actionCenter.counts.failedEmails > 0
+                      ? 'destructive'
+                      : 'success'
+                  }
+                >
+                  <Bell className="h-4 w-4" />
+                  <AlertTitle>Failed emails</AlertTitle>
+                  <AlertDescription>
+                    {dashboard.actionCenter.counts.failedEmails} alerts need attention.
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="font-semibold">Report issues</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Failed or stale analyses are the fastest trust-killers. Keep this queue short.
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleTabChange('reports')}>
+                      Open reports
+                    </Button>
+                  </div>
+                  {dashboard.actionCenter.failedReports.length === 0 &&
+                  dashboard.actionCenter.staleReports.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No failed or stale report items right now.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {[
+                        ...dashboard.actionCenter.failedReports,
+                        ...dashboard.actionCenter.staleReports,
+                      ]
+                        .slice(0, 6)
+                        .map((item) => (
+                          <div
+                            key={`report-action-${item.id}`}
+                            className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">{item.label}</p>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {item.detail}
+                                {'ageHours' in item && item.ageHours
+                                  ? ` · ${item.ageHours}h old`
+                                  : ''}
+                              </p>
+                            </div>
+                            {item.href && (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={item.href}>Open</Link>
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="font-semibold">Revenue and follow-up</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Paid opportunities, stale leads, urgent tasks, and ready content waiting on an operator.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleTabChange('funding-strategy')}>
+                        Funding
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/admin/leads?status=new">Leads</Link>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleTabChange('content')}>
+                        Content
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      ...dashboard.actionCenter.urgentTasks.slice(0, 2),
+                      ...dashboard.actionCenter.leadFollowups.slice(0, 2),
+                      ...dashboard.actionCenter.fundingNeedsReview.slice(0, 1),
+                      ...dashboard.actionCenter.readyContent.slice(0, 1),
+                    ].map((item) => (
+                      <div
+                        key={`ops-action-${item.id}`}
+                        className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium">{item.label}</p>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {item.detail}
+                            {'ageHours' in item && item.ageHours
+                              ? ` · ${item.ageHours}h old`
+                              : ''}
+                          </p>
+                        </div>
+                        {item.href && (
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={item.href}>Open</Link>
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    {dashboard.actionCenter.urgentTasks.length === 0 &&
+                      dashboard.actionCenter.leadFollowups.length === 0 &&
+                      dashboard.actionCenter.fundingNeedsReview.length === 0 &&
+                      dashboard.actionCenter.readyContent.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No urgent ops items right now.
+                        </p>
+                      )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>System Health</CardTitle>
+              <CardDescription>
+                Data-source and automation signals that can quietly break operator trust.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Alert
+                variant={
+                  dashboard.actionCenter.counts.dataSourceOutages > 0 ||
+                  dashboard.automation.lifecycleEmails.failed > 0
+                    ? 'warning'
+                    : 'success'
+                }
+              >
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>
+                  {dashboard.actionCenter.counts.dataSourceOutages > 0
+                    ? 'Attention needed'
+                    : 'Core systems look healthy'}
+                </AlertTitle>
+                <AlertDescription>
+                  {dashboard.actionCenter.counts.dataSourceOutages > 0
+                    ? `${dashboard.actionCenter.counts.dataSourceOutages} data sources are unavailable.`
+                    : 'No data-source outages detected in the admin dashboard queries.'}
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border p-3">
+                  <p className="text-sm font-medium">Lifecycle email failures</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.automation.lifecycleEmails.failed}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm font-medium">Ready content waiting</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.actionCenter.counts.readyContent}
+                  </p>
+                </div>
+              </div>
+
+              {dashboard.actionCenter.dataSourceOutages.length > 0 ? (
+                <div className="space-y-2">
+                  {dashboard.actionCenter.dataSourceOutages.map((issue) => (
+                    <div
+                      key={issue.source}
+                      className="rounded-md border border-amber-500/30 p-3"
+                    >
+                      <p className="font-medium">{issue.source}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {issue.message || 'Unavailable'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Dashboard query coverage looks stable. Use the Diagnostics tab for deeper troubleshooting.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Hard Scoreboard</CardTitle>
+              <CardDescription>
+                The non-negotiable scoreboard for daily cadence, near-term cash, and the fastest revenue angle.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Revenue last 30d</p>
+                  <p className="text-2xl font-bold">
+                    ${dashboard.insights.hardScoreboard.trailing30Revenue.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Goal: ${dashboard.insights.hardScoreboard.monthlyRevenueTarget.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Revenue gap</p>
+                  <p className="text-2xl font-bold">
+                    ${dashboard.insights.hardScoreboard.revenueGap.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Remaining to monthly target</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Active lender conversations</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.hardScoreboard.pipeline.activeLenderConversations}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Active buyer conversations</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.hardScoreboard.pipeline.activeBuyerConversations}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Hot funding requests</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.hardScoreboard.pipeline.hotFundingRequests}
+                  </p>
+                </div>
+              </div>
+
+              <Alert
+                variant={
+                  dashboard.insights.hardScoreboard.revenueGap > 0 ||
+                  Object.values(dashboard.insights.hardScoreboard.dailyCadence).some(
+                    (metric) => metric.status === 'behind'
+                  )
+                    ? 'warning'
+                    : 'success'
+                }
+              >
+                <Megaphone className="h-4 w-4" />
+                <AlertTitle>Best immediate money path</AlertTitle>
+                <AlertDescription>
+                  {dashboard.insights.hardScoreboard.immediateRevenueAngle}
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid gap-3 xl:grid-cols-[1.2fr_.8fr]">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {([
+                    { label: 'New leads (24h)', metric: dashboard.insights.hardScoreboard.dailyCadence.newLeads24h },
+                    { label: 'Real outreach emails (24h)', metric: dashboard.insights.hardScoreboard.dailyCadence.totalOutreach24h },
+                    { label: 'Partner outreach (24h)', metric: dashboard.insights.hardScoreboard.dailyCadence.partnerOutreach24h },
+                    { label: 'Reply signals (7d)', metric: dashboard.insights.hardScoreboard.dailyCadence.replySignals7d },
+                    { label: 'Booked or won (7d)', metric: dashboard.insights.hardScoreboard.dailyCadence.bookedOrWon7d },
+                  ] as const).map(({ label, metric }) => (
+                    <div key={label} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm text-muted-foreground">{label}</p>
+                        <Badge variant={metric.status === 'on_track' ? 'success' : 'warning'}>
+                          {metric.status === 'on_track' ? 'On track' : 'Behind'}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-2xl font-bold">
+                        {metric.actual} <span className="text-sm font-normal text-muted-foreground">/ {metric.target}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm font-medium">Outbound split (24h)</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Lead emails: {dashboard.insights.hardScoreboard.pipeline.leadEmailSends24h}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Lender emails: {dashboard.insights.hardScoreboard.pipeline.lenderOutreach24h}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Buyer emails: {dashboard.insights.hardScoreboard.pipeline.buyerOutreach24h}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-sm font-medium">Pipeline pressure</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Approved partner messages ready: {dashboard.insights.hardScoreboard.pipeline.approvedPartnerMessagesReady}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Overdue partner follow-ups: {dashboard.insights.hardScoreboard.pipeline.overduePartnerFollowups}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Operator Snapshot</CardTitle>
+              <CardDescription>
+                A tighter read on revenue, onboarding drag, and what moved in the last week.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Completed payment volume</p>
+                  <p className="text-2xl font-bold">
+                    ${dashboard.insights.revenueSnapshot.completedPaymentVolume.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Approved funding tracked</p>
+                  <p className="text-2xl font-bold">
+                    ${dashboard.insights.revenueSnapshot.approvedFundingAmount.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Paid funding reviews</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.revenueSnapshot.paidFundingRequests}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Overdue admin tasks</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.revenueSnapshot.overdueTasks}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">High-priority open tasks</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.revenueSnapshot.openHighPriorityTasks}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Users with no upload yet</p>
+                  <p className="text-2xl font-bold">
+                    {dashboard.insights.revenueSnapshot.noUploadUsers}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">New users (7d)</p>
+                  <p className="text-xl font-semibold">
+                    {dashboard.insights.weeklyVelocity.newUsers7d}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Uploads (7d)</p>
+                  <p className="text-xl font-semibold">
+                    {dashboard.insights.weeklyVelocity.uploads7d}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Analyses done (7d)</p>
+                  <p className="text-xl font-semibold">
+                    {dashboard.insights.weeklyVelocity.analyses7d}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">SEO pages published (7d)</p>
+                  <p className="text-xl font-semibold">
+                    {dashboard.insights.weeklyVelocity.publishedSeo7d}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm text-muted-foreground">Paid customers (7d)</p>
+                  <p className="text-xl font-semibold">
+                    {dashboard.insights.weeklyVelocity.paidCustomers7d}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Onboarding Watchlist</CardTitle>
+                <CardDescription>
+                  New customers with no uploaded report yet are the easiest drop-off point to rescue.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {dashboard.insights.onboardingWatchlist.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Everyone in the recent queue has already uploaded at least one report.
+                  </p>
+                ) : (
+                  dashboard.insights.onboardingWatchlist.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{user.label}</p>
+                        <p className="truncate text-sm text-muted-foreground">{user.detail}</p>
+                      </div>
+                      {user.href && (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={user.href}>Open</Link>
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Task Lanes</CardTitle>
+                  <CardDescription>
+                    Which kinds of work are stacking up the fastest.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {dashboard.insights.taskLanes.slice(0, 5).map((lane) => (
+                    <div key={lane.taskType} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium">{lane.taskType}</p>
+                        <Badge variant={lane.urgent > 0 ? 'destructive' : 'secondary'}>
+                          {lane.open} open
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {lane.total} total · {lane.urgent} urgent/high
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Dispute Method Mix</CardTitle>
+                  <CardDescription>
+                    The methods most active in your live dispute-letter pipeline.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {dashboard.insights.disputeMethodMix.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No generated dispute letters yet.
+                    </p>
+                  ) : (
+                    dashboard.insights.disputeMethodMix.slice(0, 5).map((item) => (
+                      <div
+                        key={item.letterType}
+                        className="flex items-center justify-between gap-3 rounded-md border p-3"
+                      >
+                        <p className="text-sm font-medium">{item.letterType}</p>
+                        <Badge variant="outline">{item.count}</Badge>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Command Center Sections</CardTitle>
+              <CardDescription>
+                Switch between the main admin views by workflow instead of one long
+                undifferentiated tab row.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {adminPanelTabGroups.map((group) => (
+                <div key={group.title} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    {group.title}
+                  </p>
+                  <TabsList className="flex h-auto flex-wrap justify-start">
+                    {group.tabs.map((tab) => (
+                      <TabsTrigger key={tab.value} value={tab.value}>
+                        {tab.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           <TabsContent value="reports">
             <Card>
@@ -1133,6 +1955,10 @@ export default function AdminPanelPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="government">
+            <SamIntelligenceDashboard />
           </TabsContent>
 
           <TabsContent value="users">
@@ -1779,6 +2605,36 @@ export default function AdminPanelPage() {
                       )}
                       Generate Draft
                     </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={seedLaunchContent}
+                      disabled={seedingContent}
+                      className="w-full"
+                    >
+                      {seedingContent ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Globe2 className="mr-2 h-4 w-4" />
+                      )}
+                      Seed And Publish Launch Content
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={seedAeoTopicLibrary}
+                      disabled={seedingTopicContent}
+                      className="w-full"
+                    >
+                      {seedingTopicContent ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileText className="mr-2 h-4 w-4" />
+                      )}
+                      Seed AEO Topic Library
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -1838,6 +2694,14 @@ export default function AdminPanelPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {contentNotice && (
+                    <Alert>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertTitle>Content update</AlertTitle>
+                      <AlertDescription>{contentNotice}</AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
                     <div className="relative">
                       <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -1924,6 +2788,57 @@ export default function AdminPanelPage() {
                             </div>
 
                             <div className="flex flex-wrap gap-2">
+                              {asset.publish_path && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyTextToClipboard(
+                                      `${window.location.origin}${asset.publish_path}`,
+                                      'Published page URL'
+                                    )
+                                  }
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy URL
+                                </Button>
+                              )}
+                              {asset.content_type === 'seo_page' &&
+                                asset.body_markdown && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      copyTextToClipboard(
+                                        asset.body_markdown || '',
+                                        'SEO page markdown'
+                                      )
+                                    }
+                                  >
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    Copy Markdown
+                                  </Button>
+                                )}
+                              {asset.content_type === 'social_post' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyTextToClipboard(
+                                      [
+                                        asset.social_caption,
+                                        asset.hashtags?.join(' '),
+                                      ]
+                                        .filter(Boolean)
+                                        .join('\n\n'),
+                                      'Social post copy'
+                                    )
+                                  }
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy Post
+                                </Button>
+                              )}
                               {contentStatuses.map((status) => (
                                 <Button
                                   key={status}
@@ -1995,6 +2910,8 @@ export default function AdminPanelPage() {
 
           <TabsContent value="automation">
             <div className="space-y-4">
+              <MarketCommandCard />
+
               <div className="grid gap-4 lg:grid-cols-4">
                 <Card>
                   <CardHeader>
@@ -2220,6 +3137,111 @@ export default function AdminPanelPage() {
                     )}
                   </CardContent>
                 </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="improvement">
+            <Card>
+              <CardHeader>
+                <CardTitle>Continuous Improvement Engine</CardTitle>
+                <CardDescription>
+                  Review daily learning runs, queued strategy updates, research briefs,
+                  and live tuning experiments without digging through raw tables.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Improvement Review</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Daily wins, losses, queued strategy updates, and operator actions.
+                      </p>
+                      <Button asChild size="sm">
+                        <Link href="/admin/improvement">Open improvement dashboard</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Research Briefs</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Curated research summaries for funding, credit, SEO, outreach, and automation.
+                      </p>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/research">Open research queue</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Experiments</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Live score adjustments, outreach variants, and recorded winners.
+                      </p>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/experiments">Open experiment view</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  Scheduled every morning after lead generation: market review, research digest,
+                  outreach optimization, content recommendations, and credit or funding workflow refinement.
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="diagnostics">
+            <div className="space-y-4">
+              <Alert>
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>Internal diagnostics only</AlertTitle>
+                <AlertDescription>
+                  These routes are protected and noindexed. Use them for QA,
+                  incident review, and operator troubleshooting, not for customer
+                  workflows or public sharing.
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                {adminDiagnosticSections.map((section) => (
+                  <Card key={section.id}>
+                    <CardHeader>
+                      <CardTitle>{section.title}</CardTitle>
+                      <CardDescription>{section.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {section.links.map((link) => (
+                        <div
+                          key={link.href}
+                          className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                        >
+                          <div className="space-y-1">
+                            <p className="font-medium">{link.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {link.description}
+                            </p>
+                          </div>
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={link.href}>Open</Link>
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
           </TabsContent>
@@ -2516,6 +3538,18 @@ export default function AdminPanelPage() {
                       <Button asChild size="sm" variant="outline">
                         <Link href="/admin/leads">Open Lead Manager</Link>
                       </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/buyers">Open Buyer Network</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/lenders">Open Lender Network</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/reports/daily">Open Daily Reports</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/admin/seo-opportunities">Open SEO Opportunities</Link>
+                      </Button>
                     </div>
                     {filteredLeads.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
@@ -2590,5 +3624,22 @@ export default function AdminPanelPage() {
         </Tabs>
       </div>
     </main>
+  );
+}
+
+export default function AdminPanelPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+          <p className="ml-3 text-sm text-muted-foreground">
+            Loading admin panel...
+          </p>
+        </div>
+      }
+    >
+      <AdminPanelPageContent />
+    </Suspense>
   );
 }
