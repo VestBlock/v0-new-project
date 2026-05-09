@@ -53,6 +53,10 @@ const protectedDiagnosticApis = [
   '/api/test-streaming',
 ];
 
+function diagnosticsEnabled() {
+  return process.env.ENABLE_INTERNAL_DIAGNOSTICS === 'true' || process.env.NODE_ENV !== 'production';
+}
+
 type SupabaseUser = {
   id: string;
   email?: string | null;
@@ -75,6 +79,13 @@ function isProtectedApi(pathname: string) {
   return matchProtectedPath(pathname, protectedDiagnosticApis);
 }
 
+function isDiagnosticPath(pathname: string) {
+  return (
+    matchProtectedPath(pathname, protectedDiagnostics) ||
+    matchProtectedPath(pathname, protectedDiagnosticApis)
+  );
+}
+
 function requiresAdmin(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
@@ -94,13 +105,14 @@ function shouldNoIndex(pathname: string) {
 function withNoIndex(response: NextResponse, pathname: string) {
   if (shouldNoIndex(pathname)) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   }
 
   return response;
 }
 
 function configuredAdminEmails() {
-  return [process.env.ADMIN_ALERT_EMAIL, process.env.NEXT_PUBLIC_ADMIN_EMAIL]
+  return [process.env.ADMIN_ALERT_EMAIL]
     .filter(Boolean)
     .flatMap((value) => String(value).split(','))
     .map((value) => value.trim().toLowerCase())
@@ -311,6 +323,10 @@ export async function middleware(request: NextRequest) {
     dashboardUrl.pathname = '/dashboard';
     dashboardUrl.search = '';
     return withNoIndex(NextResponse.redirect(dashboardUrl), pathname);
+  }
+
+  if (isDiagnosticPath(pathname) && !diagnosticsEnabled()) {
+    return withNoIndex(new NextResponse('Not found', { status: 404 }), pathname);
   }
 
   return withNoIndex(NextResponse.next(), pathname);

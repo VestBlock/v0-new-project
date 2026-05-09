@@ -19,7 +19,6 @@ export default function CreditReportDebugPage() {
   const [rawResponse, setRawResponse] = useState('');
   const [activeTab, setActiveTab] = useState('file');
   const [manualText, setManualText] = useState('');
-  const [apiKey, setApiKey] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,27 +72,6 @@ export default function CreditReportDebugPage() {
             fileName: 'manual-text.txt',
           }),
         });
-      } else if (activeTab === 'direct' && manualText && apiKey) {
-        // Send directly to OpenAI (bypassing our API)
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: [
-              {
-                role: 'system',
-                content:
-                  'Extract credit information from the following text. Return a JSON object with creditScore, negativeItems, accounts, etc.',
-              },
-              { role: 'user', content: manualText },
-            ],
-            temperature: 0.7,
-          }),
-        });
       } else {
         throw new Error('Invalid input configuration');
       }
@@ -104,11 +82,11 @@ export default function CreditReportDebugPage() {
         try {
           const errorData = await response.json();
           errorText = `${errorText}: ${JSON.stringify(errorData)}`;
-        } catch (e) {
+        } catch {
           try {
             const text = await response.text();
             errorText = `${errorText}: ${text}`;
-          } catch (e2) {
+          } catch {
             // Ignore
           }
         }
@@ -122,8 +100,6 @@ export default function CreditReportDebugPage() {
       // Store raw response if available
       if (data.rawAnalysis) {
         setRawResponse(data.rawAnalysis);
-      } else if (activeTab === 'direct') {
-        setRawResponse(JSON.stringify(data, null, 2));
       }
     } catch (error) {
       console.error('Analysis error:', error);
@@ -150,10 +126,9 @@ export default function CreditReportDebugPage() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid grid-cols-3 mb-4">
+                <TabsList className="grid grid-cols-2 mb-4">
                   <TabsTrigger value="file">File Upload</TabsTrigger>
                   <TabsTrigger value="text">Text Input</TabsTrigger>
-                  <TabsTrigger value="direct">Direct API</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="file" className="space-y-4">
@@ -209,41 +184,11 @@ export default function CreditReportDebugPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="direct" className="space-y-4">
-                  <div>
-                    <Label htmlFor="apiKey">OpenAI API Key</Label>
-                    <Input
-                      id="apiKey"
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-..."
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This key is used only for this request and not stored.
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="directText">Credit Report Text</Label>
-                    <Textarea
-                      id="directText"
-                      value={manualText}
-                      onChange={(e) => setManualText(e.target.value)}
-                      placeholder="Paste credit report text here..."
-                      className="h-40"
-                    />
-                  </div>
-                </TabsContent>
               </Tabs>
 
               <Button
                 onClick={analyzeFile}
-                disabled={
-                  isLoading ||
-                  (!file && !manualText) ||
-                  (activeTab === 'direct' && !apiKey)
-                }
+                disabled={isLoading || (!file && !manualText)}
                 className="w-full mt-4"
               >
                 {isLoading ? (

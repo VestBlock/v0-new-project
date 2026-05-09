@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'contact@vestblock.io';
+const ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL?.trim().toLowerCase() || null;
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if admin
-    if (user.email !== ADMIN_EMAIL) {
+    if (!ADMIN_EMAIL || user.email?.toLowerCase() !== ADMIN_EMAIL) {
       const { data: profile } = await supabaseAdmin
         .from('user_profiles')
         .select('role')

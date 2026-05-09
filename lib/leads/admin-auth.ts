@@ -4,7 +4,7 @@ import { checkAdminAccess } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 function configuredAdminEmails() {
-  return [process.env.ADMIN_ALERT_EMAIL, process.env.NEXT_PUBLIC_ADMIN_EMAIL]
+  return [process.env.ADMIN_ALERT_EMAIL]
     .filter(Boolean)
     .flatMap((value) => String(value).split(','))
     .map((value) => value.trim().toLowerCase())

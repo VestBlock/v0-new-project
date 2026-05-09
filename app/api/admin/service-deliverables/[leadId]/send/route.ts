@@ -13,7 +13,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
 
 function configuredAdminEmails() {
-  return [process.env.ADMIN_ALERT_EMAIL, process.env.NEXT_PUBLIC_ADMIN_EMAIL]
+  return [process.env.ADMIN_ALERT_EMAIL]
     .filter(Boolean)
     .flatMap((value) => String(value).split(','))
     .map((value) => value.trim().toLowerCase())
