@@ -1,5 +1,513 @@
 # VestBlock Changelog
 
+## 2026-05-02 Buyer + Lender Partner Portals
+
+## Files Changed
+
+- `db/migrations/044-create-partner-portal-access.sql`
+- `lib/partners/portal.ts`
+- `app/api/admin/partner-portal/route.ts`
+- `app/api/portal/lenders/[token]/route.ts`
+- `app/api/portal/buyers/[token]/route.ts`
+- `app/partners/lenders/[token]/page.tsx`
+- `app/partners/buyers/[token]/page.tsx`
+- `components/partners/lender-partner-portal.tsx`
+- `components/partners/buyer-partner-portal.tsx`
+- `components/admin/partner-portal-link.tsx`
+- `components/admin/lender-detail-client.tsx`
+- `components/admin/buyer-detail-client.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added an invite-only partner portal layer for both lenders and buyers.
+- Added a dedicated `partner_portal_access` table with revocable access tokens, last-viewed timestamps, and submission tracking.
+- Added admin-side portal link creation/rotation from lender and buyer detail pages.
+- Added public partner dashboards at:
+  - `/partners/lenders/[token]`
+  - `/partners/buyers/[token]`
+- Lender partners can now:
+  - update contact info
+  - update states served
+  - update borrower box / fit notes
+  - update credit, revenue, timing, DSCR, and loan range criteria
+  - respond to borrower-fit opportunities
+- Buyer partners can now:
+  - update contact info
+  - update markets served
+  - update buy-box criteria
+  - update price, ARV, distress, occupancy, and deal-type preferences
+  - respond to property opportunities
+- Portal submissions now feed back into the network engine by updating:
+  - relationship stage
+  - outreach status
+  - partner profile metadata
+  - lender/buyer match status
+
+## Verification
+
+- Applied `db/migrations/044-create-partner-portal-access.sql` to live Supabase.
+- `corepack pnpm build`
+- `npx tsc --noEmit`
+- Production deploy passed:
+  - `https://vestblock.io`
+  - `dpl_HnQBYUyJ1W4nXaBizYzfdfND7Bgu`
+- Live portal smoke tests passed for:
+  - lender portal page load
+  - buyer portal page load
+  - lender portal API payload
+  - buyer portal API payload
+  - lender portal profile save
+  - buyer portal profile save
+
+## 2026-04-30 Legacy Analyze Report Retirement
+
+## Files Changed
+
+- `app/enhanced-credit-analyzer/page.tsx`
+- `components/debug-report-analyzer.tsx`
+- `docs/VESTBLOCK_SYSTEM_AUDIT.md`
+- `docs/VESTBLOCK_CHANGELOG.md`
+- deleted `app/api/analyze-report/route.ts`
+
+## Features Added
+
+- Retired the legacy `/api/analyze-report` route, which was no longer part of the production credit workflow and was still emitting misleading build-time Supabase configuration warnings.
+- Redirected `/enhanced-credit-analyzer` to the maintained `/credit-upload` experience so older links keep working without duplicating credit-analysis logic.
+- Rewired the admin-only `DebugReportAnalyzer` utility to use `/api/analyze-credit-direct` and format the structured response for easier manual QA.
+
+## Verification
+
+- `npx tsc --noEmit`
+- `corepack pnpm build`
+
+## 2026-04-30 Admin Dashboard Operator Snapshot
+
+## Files Changed
+
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added an operator snapshot section to the main admin dashboard with:
+  - completed payment volume
+  - approved funding tracked
+  - paid funding reviews
+  - overdue task count
+  - high-priority task count
+  - users who still have not uploaded a report
+- Added weekly velocity tracking for new users, uploads, completed analyses, published SEO pages, and paid customers.
+- Added an onboarding watchlist so admins can quickly open recent signups who still have zero uploads.
+- Added task-lane summaries so the dashboard shows which work categories are piling up first.
+- Added dispute-method mix visibility so the admin dashboard shows the live spread of generated credit-repair methods, not just total dispute-letter volume.
+
+## Verification
+
+- `npx tsc --noEmit`
+- `corepack pnpm build`
+
+## 2026-04-30 Method-Aware Credit Repair Alerts
+
+## Files Changed
+
+- `lib/email/sendEmail.ts`
+- `lib/workflows/disputeLetterAutomation.ts`
+- `lib/workflows/processCreditReportAnalysis.ts`
+- `lib/admin/tasks.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Upgraded dispute-letter customer/admin alerts so they no longer use the same generic language for every method.
+- Added method-aware guidance for:
+  - `Direct Furnisher Dispute`
+  - `Method Of Verification`
+  - `Statement Of Dispute`
+  - `Identity Theft Block`
+  - `Mixed File`
+  - `Outdated Information`
+  - `Personal Information Correction`
+- Updated ready, mailing, secondary-bureau, bureau-response, and admin follow-up alerts to carry the active `letter_type` through the automation flow.
+- Updated dispute-letter task metadata so admin task queues retain the selected letter method, not just the bureau and reminder stage.
+- Updated the dispute-letters-ready email to include the methods generated for the customer instead of only a letter count.
+
+## Verification
+
+- `npx tsc --noEmit`
+- `corepack pnpm build`
+
+## 2026-04-28 Admin Queue + Funding Ops Cleanup
+
+## Files Changed
+
+- `app/admin/leads/page.tsx`
+- `components/funding-admin-dashboard.tsx`
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Reworked the lead-management page into a real action queue with quick filters, stale-follow-up visibility, revenue-pipeline counts, and faster status progression for operators.
+- Added last-touch timing to the lead table so overdue follow-up is visible without opening each record.
+- Upgraded the funding admin view with a priority queue, operator-lane summaries, payment follow-up visibility, and quick preset filters for repair-first, build-first, apply-now, and pending-payment records.
+- Tightened Action Center links so stale leads and funding-review items open closer to the actual work instead of dropping admins onto generic pages.
+
+## Verification
+
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- `npx tsc --noEmit` after build artifacts were regenerated
+- Live protected-route smoke checks on `/admin-panel` and `/admin/leads`
+
+## 2026-04-28 Admin Action Center + System Health
+
+## Files Changed
+
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added an `actionCenter` payload to the admin dashboard API with failed analyses, stale reports, urgent tasks, failed emails, stale lead follow-up, funding items needing review, ready content, and data-source outage visibility.
+- Added an Action Center block to the admin dashboard so operators can see failed report work, revenue follow-up, and queue health before diving into tabs.
+- Added a System Health panel that surfaces automation failures and data-source outages more directly.
+
+## Verification
+
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- Live smoke checks on `/admin-panel` and `/api/admin/dashboard`
+
+## 2026-04-28 Admin Diagnostics Consolidation
+
+## Files Changed
+
+- `lib/admin/diagnostics.ts`
+- `app/admin/test/page.tsx`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Created a shared internal diagnostics registry so admin QA routes are grouped intentionally instead of living as disconnected operator pages.
+- Rebuilt `/admin/test` into a proper admin diagnostics hub with grouped internal tools, operator guidance, and protected-route framing.
+- Added a `Diagnostics` tab to the main admin panel so operators can reach auth, credit, upload, and system QA tools from one place.
+
+## Verification
+
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- live smoke checks on `/admin/test`, `/admin-panel`, and protected diagnostic redirects
+
+## 2026-04-28 Protected Route Indexing Cleanup
+
+## Files Changed
+
+- `middleware.ts`
+- `app/sitemap.ts`
+- `app/robots.ts`
+- `components/analysis-result-client-view.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Removed authenticated-only routes like `/credit-upload` and protected tool pages from the public sitemap so search engines only get truly public discovery paths.
+- Tightened `robots.txt` to disallow protected tool, dashboard, and internal analyzer routes from indexing.
+- Added `X-Robots-Tag: noindex, nofollow, noarchive` headers to protected admin, dashboard, authenticated, and diagnostic pages at middleware level.
+- Protected `/enhanced-credit-analyzer` behind authentication and routed failed-analysis retry CTA back to the main `/credit-upload` path instead of a side-route.
+
+## Verification
+
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- live smoke checks on `/robots.txt`, `/sitemap.xml`, `/credit-upload`, and `/enhanced-credit-analyzer`
+
+## 2026-04-28 Seller Metadata Alignment
+
+## Files Changed
+
+- `app/sell/layout.tsx`
+- `app/sell/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Replaced the old `/sell` metadata so title, description, canonical, Open Graph, and Twitter copy now match the safer property-review funnel used in the page body.
+- Removed an unused `MapPin` import while tightening the seller route.
+
+## Verification
+
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- Live smoke checks were run after deployment on `/sell`
+
+## 2026-04-28 Real Estate And Seller Funnel Cleanup
+
+## Files Changed
+
+- `app/real-estate-funding/page.tsx`
+- `app/sell/page.tsx`
+- `app/services/financial-growth/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Reframed the public real-estate funding page around deal review and funding routing instead of aggressive approval-style language.
+- Added a clearer three-step explanation to the real-estate page so investors understand submit -> review -> route before they reach the form.
+- Reframed the seller page around property review and sale-path evaluation instead of immediate cash-offer positioning.
+- Tightened the seller trust copy so it focuses on fit, route, and follow-up instead of hard promises.
+- Strengthened `/services/financial-growth` as the main paid-service upsell hub for funding, credit, grants, and real-estate cases that need manual review.
+
+## Verification
+
+- `corepack pnpm build`
+- `corepack pnpm lint` passed with the existing warning-only repo profile
+- Live smoke checks were run after deployment on `/real-estate-funding`, `/sell`, and `/services/financial-growth`
+
+## 2026-04-28 Funding And Services Positioning Cleanup
+
+## Files Changed
+
+- `app/funding/page.tsx`
+- `app/services/page.tsx`
+- `lib/services/serviceDirectory.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Reframed the public funding page around a more defensible ladder: free readiness check, paid prep when needed, and partner routing only after review.
+- Removed weaker public trust signals from the funding page such as broad “funding facilitated” style metrics and replaced them with workflow explanation.
+- Tightened the partner section copy so outside funding options are presented as partner paths, not implied approvals.
+- Simplified the services page around a clearer offer ladder and more customer-facing “what happens next” language.
+- Renamed the last public-facing short label from `Card Stacking` to `Funding Strategy` for consistency with the broader business-funding terminology shift.
+
+## Verification
+
+- `corepack pnpm build`
+- `corepack pnpm lint` passed with existing warning-only output
+- Live smoke checks were run after deployment on the updated funding and services routes
+
+## 2026-04-28 Pricing + Navigation Simplification
+
+## Files Changed
+
+- `app/pricing/page.tsx`
+- `components/navigation.tsx`
+- `components/hero-section.tsx`
+- `components/cta-footer.tsx`
+- `app/robots.ts`
+- `app/sitemap.ts`
+- `lib/seo/llmFeed.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a public `/pricing` page that explains VestBlock's free-first, paid-review, and assisted-support offer ladder.
+- Simplified the public navigation to clearer customer-facing paths: credit repair, business funding, business setup, real estate, pricing, and learn.
+- Updated the homepage hero and footer CTA copy so the site leads with credit repair, funding readiness, and business growth instead of older AI-assistant-first framing.
+- Added `/pricing` to sitemap and robots coverage, and included it in the LLM-facing route map.
+
+## Verification
+
+- `corepack pnpm build`
+- `corepack pnpm lint` passed with existing warning-only output
+- `npx tsc --noEmit` needs to be run after build artifacts are present; the repo still has the same `.next/types` timing sensitivity when run concurrently
+
+## 2026-04-28 Route Audit + Access Hardening
+
+## Files Changed
+
+- `app/access/page.tsx`
+- `app/auth-debug/page.tsx`
+- `components/auth-debug.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Replaced the old `/access` bypass screen with a server-side redirect to `/login` so it can no longer be used as a public entry point.
+- Removed stale bypass-auth guidance and actions from the auth debug surfaces.
+- Re-ran a production route audit covering public pages, protected dashboard routes, admin routes, diagnostic routes, and legacy funding/service redirects.
+
+## Verification
+
+- `corepack pnpm build`
+- Production deploy completed at `https://vestblock.io`
+- Live route checks confirmed `/access` now redirects to `/login`
+- Live route checks confirmed protected dashboard/admin/debug routes redirect to login when unauthenticated
+- Live route checks confirmed legacy redirects still forward to `/funding/business-funding-strategy` and `/services/business-funding-strategy`
+
+## 2026-04-28 AEO Topic Publishing + Content Ops
+
+## Files Changed
+
+- `lib/content/topicSeedAssets.ts`
+- `app/api/admin/content/seed-topics/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a deterministic AEO topic publishing system driven by `lib/aeo/topics.ts` so topic pages can be published without waiting on OpenAI generation.
+- Added `/api/admin/content/seed-topics` for admin-triggered topic-library publishing.
+- Added a `Seed AEO Topic Library` action in `/admin-panel` -> `Content`.
+- Added content-queue quick actions to copy published URLs, copy SEO markdown, and copy social post copy directly from the admin dashboard.
+- Defaulted AEO topic seeding to non-destructive behavior so existing slugs are skipped unless an overwrite is explicitly requested.
+
+## Verification
+
+- Build/typecheck/lint verification was rerun after the new topic seeding and dashboard changes.
+- Public resource pages and sitemap coverage were rechecked after publishing the topic library.
+
+## 2026-04-28 Batch Content Publishing
+
+## Files Changed
+
+- `lib/content/seedAssets.ts`
+- `app/api/admin/content/seed/route.ts`
+- `app/admin-panel/page.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added a reusable VestBlock batch content seeding system for launch-ready SEO pages and social posts.
+- Added `/api/admin/content/seed` so admins can seed and publish curated content assets without depending on OpenAI generation.
+- Added a `Seed And Publish Launch Content` action in `/admin-panel` -> `Content`.
+- Published launch content directly into Supabase `content_assets` so public `/resources/[slug]` pages are available immediately.
+
+## Content Published
+
+Published SEO pages:
+
+- `/resources/business-funding-readiness-checklist`
+- `/resources/business-credit-building-starter-guide`
+- `/resources/grant-readiness-for-small-businesses`
+- `/resources/real-estate-funding-readiness-guide`
+- `/resources/business-funding-strategy-working-capital-guide`
+- `/resources/financiamiento-para-negocios-requisitos-clave`
+
+Published social content assets:
+
+- `business-funding-documents-instagram-post`
+- `business-credit-mistakes-linkedin-post`
+- `financiamiento-en-espanol-post`
+
+## Verification
+
+- `corepack pnpm build` passed and generated `112` pages.
+- `npx tsc --noEmit` passed when run after build.
+- `corepack pnpm lint` passed with existing warning-only output.
+- Live public checks passed:
+  - `https://www.vestblock.io/resources/business-funding-readiness-checklist`
+  - `https://www.vestblock.io/resources/business-credit-building-starter-guide`
+  - `https://www.vestblock.io/resources/financiamiento-para-negocios-requisitos-clave`
+- Live sitemap includes the new resource URLs.
+
+## 2026-04-28 Admin + Build Hardening Pass
+
+## Files Changed
+
+- `lib/supabase/client.ts`
+- `app/api/admin/dashboard/route.ts`
+- `app/admin-panel/page.tsx`
+- `app/admin/funding/page.tsx`
+- `components/funding-admin-dashboard.tsx`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Hardened the browser Supabase client so static prerendering no longer crashes when routes are rendered on the server during build collection.
+- Expanded the main admin dashboard data API to include Funding Assistant profile, recommendation, approval, payment-plan, and approved-dollar metrics.
+- Added Funding Assistant visibility to `/admin-panel` so the main operator dashboard now reflects the newer funding system instead of only the older funding-strategy flow.
+- Added summary cards to `/admin/funding` for profiles, apply-now readiness, approvals, approved total, and active payment plans.
+- Added safer query handling on `/admin/funding` so partial funding-table issues do not take down the whole page.
+- Added the missing `hybrid_sequence` filter option in the funding admin pipeline.
+
+## Verification
+
+- `corepack pnpm build` passed with the current local environment state and generated `111` pages.
+- `npx tsc --noEmit` passed when run after build completed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- Local runtime smoke passed:
+  - `/es/vestblock` returns `200`
+  - `/admin-panel` redirects to `/login?redirect=%2Fadmin-panel`
+  - `/admin/funding` redirects to `/login?redirect=%2Fadmin%2Ffunding`
+  - `/dashboard/funding` redirects to `/login?redirect=%2Fdashboard%2Ffunding`
+  - `/api/admin/dashboard` returns `401` when unauthenticated
+  - `/test-openai-simple` now loads through middleware protection instead of breaking build prerender
+
+## 2026-04-28 Funding Assistant
+
+## Files Changed
+
+- `db/migrations/028-create-funding-assistant.sql`
+- `app/dashboard/funding/page.tsx`
+- `app/admin/page.tsx`
+- `app/admin/funding/page.tsx`
+- `app/admin/leads/page.tsx`
+- `app/admin-panel/page.tsx`
+- `app/login/page.tsx`
+- `app/register/page.tsx`
+- `app/api/funding/profile/route.ts`
+- `app/api/funding/recommendation/route.ts`
+- `app/api/funding/products/route.ts`
+- `app/api/funding/applications/route.ts`
+- `app/api/funding/applications/[id]/route.ts`
+- `app/api/funding/approvals/route.ts`
+- `app/api/funding/progress/route.ts`
+- `app/api/funding/payment-plan/route.ts`
+- `components/funding-assistant-dashboard.tsx`
+- `components/funding-admin-dashboard.tsx`
+- `components/navigation.tsx`
+- `app/dashboard/page.tsx`
+- `lib/funding/types.ts`
+- `lib/funding/strategy-engine.ts`
+- `lib/funding/payment-plans.ts`
+- `lib/funding/mock-data.ts`
+- `lib/funding/repository.ts`
+- `lib/funding/schemas.ts`
+- `lib/funding/server.ts`
+- `lib/funding/events.ts`
+- `lib/auth/client-admin.ts`
+- `lib/system/logEvent.ts`
+- `middleware.ts`
+- `docs/VESTBLOCK_CHANGELOG.md`
+
+## Features Added
+
+- Added the authenticated user route `/dashboard/funding` as the new VestBlock Funding Assistant experience.
+- Added the protected admin route `/admin/funding` with funding-pipeline filters, approved-total tracking, and CSV export.
+- Added an `/admin` landing route that cleanly redirects to `/admin-panel` instead of leaving a protected dead end.
+- Added cross-links between `/admin-panel`, `/admin/funding`, and `/admin/leads` so the admin surfaces operate like one workspace.
+- Added redirect-aware login and register pages so protected routes can send users back to the page they originally tried to open.
+- Added middleware protection for core authenticated routes like `/dashboard`, `/profile`, `/roadmap`, `/user-hub`, and key tools, reducing client-side auth flicker.
+- Added a shared client-side admin email helper so admin detection is consistent across navigation, dashboard, funding, grants, and dispute-letter screens.
+- Added deterministic funding strategy scoring with mode-aware paths for `business`, `personal`, `hybrid`, `build_first`, and `repair_first`.
+- Added tracked funding profile, recommendation, sequence item, payment-plan, and funding event APIs under `/api/funding/*`.
+- Added manual approval logging, progress summaries, and sequence-status actions without auto-submitting any lender applications.
+- Added funding payment-plan calculation for `software_access`, `strategy_report`, `assisted_funding_package`, and `custom_plan`.
+- Added development mock profiles for strong business, weak personal, hybrid, and repair-first testing.
+- Added a new Supabase migration that creates `funding_profiles`, `funding_products`, `funding_recommendations`, `funding_sequence_items`, `funding_payments`, and `funding_events` with RLS and seed products.
+- Added build-safe hardening for several older OpenAI and Supabase route handlers so the app can build cleanly without eager runtime client initialization.
+- Fixed the logged-out `/dashboard` experience so users are redirected toward login instead of getting stuck on a permanent loading state.
+- Fixed protected-route return flow so a user sent to `/login?redirect=...` is no longer dropped into the wrong post-login page.
+
+## Setup Required
+
+- Run `db/migrations/028-create-funding-assistant.sql` in Supabase.
+- Make sure Vercel has `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `OPENAI_API_KEY`.
+- Stripe is not wired for this feature yet. Payment-plan records are saved, but checkout remains a placeholder until a Stripe helper is connected.
+
+## Verification
+
+- `npx tsc --noEmit` passed.
+- `corepack pnpm lint` passed with existing warning-only output.
+- `NEXT_PUBLIC_SUPABASE_URL=<configured> NEXT_PUBLIC_SUPABASE_ANON_KEY=<configured> SUPABASE_SERVICE_ROLE_KEY=<configured> OPENAI_API_KEY=<configured> corepack pnpm build` passed and generated `111` pages, including `/admin`, `/dashboard/funding`, and `/admin/funding`.
+- Production smoke passed for protected-route redirects on `/dashboard`, `/dashboard/funding`, `/profile`, `/admin`, `/admin/funding`, and `/admin/leads`.
+
 ## 2026-04-28 Business Funding Terminology Cleanup
 
 ## Files Changed
@@ -1441,3 +1949,641 @@ They add:
 - Regenerate Supabase types.
 - Remove legacy setup/debug routes after production recovery workflows are no longer needed.
 - Add abandoned checkout and upload reminder automations.
+
+## 2026-04-28 - Priced Offer Routing And Rendering
+
+- Added a new shared priced-offer catalog in `lib/services/pricedOffers.ts`.
+- Attached every current priced offer to a canonical VestBlock service route, public service-guide slug, and CTA path.
+- Expanded `/services/[slug]` so paid offers can render as first-class service guides with price badges and structured data.
+- Updated `/pricing` so higher-touch packages and Funding Assistant plans link to real service pages and action routes.
+- Updated `/services/financial-growth` so each package can be opened as its own service page and preselect itself in the request form.
+- Added query-driven package preselection to the financial-service request form.
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - `corepack pnpm build` passed.
+
+## 2026-04-28 - AI Service Deliverables
+
+- Added `db/migrations/029-create-service-deliverables.sql` for durable paid-service deliverable storage.
+- Added `lib/services/aiServiceDeliverables.ts` to generate first-pass AI deliverables for every financial service package using the existing OpenAI setup.
+- Updated `app/api/service-interest/route.ts` so new paid service requests now trigger AI generation automatically after lead creation.
+- Added `app/api/admin/service-deliverables/[leadId]/route.ts` so admins can load and regenerate deliverables safely.
+- Updated `app/admin/leads/page.tsx` so service-package leads show deliverable status, summary, recommended actions, review focus, and a regenerate control.
+- Added fallback storage to `leads.form_data.aiServiceDeliverable` so the automation still works before migration `029` is run.
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - `corepack pnpm build` passed.
+
+## 2026-04-28 - Service Deliverable Lifecycle, Email Delivery, And Customer Dashboard
+
+- Added `db/migrations/030-service-deliverable-lifecycle.sql` to support the customer-delivery lifecycle on `service_deliverables`.
+- Expanded the service deliverable status flow to `requested -> generating -> ready_for_review -> sent_to_client -> failed`.
+- Added `markServiceDeliverableSent(...)` and persisted `customer_sent_at` / `provider_message_id` metadata where supported.
+- Added `sendUserServiceDeliverableReadyEmail(...)` so paid service deliverables can be emailed to clients with a dashboard link and next actions.
+- Added `app/api/admin/service-deliverables/[leadId]/send/route.ts` so admins can send ready deliverables to customers from the lead workflow.
+- Added `app/api/service-deliverables/route.ts` and `app/dashboard/services/page.tsx` so customers can view delivered services inside the authenticated dashboard.
+- Updated dashboard navigation and the main dashboard homepage to surface the new `My Services` area.
+- Updated `app/admin/leads/page.tsx` so operators can send deliverables to clients and see delivery timestamps from the lead detail view.
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - `corepack pnpm build` passed.
+  - Production deploy passed on `https://vestblock.io`.
+  - `/dashboard/services` redirects unauthenticated users to login.
+  - `/api/service-deliverables` returns `401 Authentication required.` when unauthenticated.
+  - `/api/admin/service-deliverables/[leadId]/send` returns `401 Admin access required.` when unauthenticated.
+
+## 2026-04-28 - Spanish Funding Cluster Expansion
+
+- Expanded `lib/aeo/topics.ts` with six new Spanish funding and business-credit topics:
+  - `requisitos-para-financiamiento-comercial`
+  - `credito-comercial-para-negocios`
+  - `documentos-para-solicitar-financiamiento`
+  - `como-mejorar-la-elegibilidad-para-financiamiento`
+  - `lineas-de-credito-comercial`
+  - `subvenciones-para-pequenos-negocios-en-espanol`
+- Added first-class topic language support so Spanish topic pages no longer seed with English section headings.
+- Updated `lib/content/topicSeedAssets.ts` to generate Spanish body copy, Spanish CTA labels, and better localized resource-page presentation.
+- Updated `app/es/vestblock/page.tsx` to work as a stronger cluster hub by linking directly to the Spanish resource guides.
+- Updated `app/resources/[slug]/page.tsx` so published Spanish resources render with Spanish-facing badges and CTA language.
+- Updated `app/learn/[slug]/page.tsx` so Spanish guide routes use Spanish labels, Spanish CTA copy, and `og:locale` / `inLanguage` metadata instead of English wrapper text.
+- Published the six new Spanish resource pages into `content_assets` using the production environment and live Supabase content store.
+- Verification:
+  - `corepack pnpm build` passed.
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - Production deploy passed on `https://vestblock.io`.
+  - Live `200` checks passed for `/es/vestblock` and the new Spanish resource URLs.
+  - Live `sitemap.xml` now includes the new Spanish `learn` and `resources` URLs.
+
+## 2026-04-29 - Lead Intelligence Engine
+
+- Added `db/migrations/031-create-lead-intelligence-engine.sql`.
+- Expanded the existing `leads` table to support source-aware lead intelligence fields:
+  - `source`
+  - `source_url`
+  - `category`
+  - `external_id`
+  - `business_name`
+  - `property_address`
+  - `mailing_address`
+  - `website`
+  - `city`
+  - `state`
+  - `zip`
+  - `language_signal`
+  - `pain_signal`
+  - `best_offer`
+  - `lead_score`
+  - `status_detail`
+  - `unsubscribe_note`
+  - `last_contacted_at`
+  - `metadata_json`
+- Added new lead-intelligence tables with admin-only RLS:
+  - `lead_sources`
+  - `lead_scores`
+  - `outreach_messages`
+  - `scrape_runs`
+  - `lead_notes`
+- Seeded example lead sources for:
+  - Wisconsin DFI business filings
+  - Cincinnati code enforcement
+  - Milwaukee Accela enforcement
+  - Google Places business search
+  - SAM.gov opportunities
+- Added lead intelligence libraries:
+  - `lib/leads/scoring.ts`
+  - `lib/leads/outreach.ts`
+  - `lib/leads/repository.ts`
+  - `lib/leads/service.ts`
+  - `lib/leads/website-analysis.ts`
+  - `lib/leads/connectors/*`
+- Added admin auth helper for lead-intelligence APIs:
+  - `lib/leads/admin-auth.ts`
+- Added lead-intelligence API routes:
+  - `/api/leads/scrape/new-businesses`
+  - `/api/leads/scrape/code-violations`
+  - `/api/leads/scrape/google-places`
+  - `/api/leads/scrape/sam`
+  - `/api/leads/score`
+  - `/api/leads/generate-outreach`
+  - `/api/leads/export`
+- Rebuilt `/admin/leads` into a lead-intelligence dashboard with:
+  - source / offer / city / status / score filtering
+  - inline status updates
+  - outreach regeneration
+  - CSV export
+  - lead detail routing
+- Added:
+  - `/admin/leads/[id]`
+  - `/admin/lead-sources`
+  - `/admin/scrape-runs`
+- Added lead-intelligence setup doc:
+  - `docs/VESTBLOCK_LEAD_INTELLIGENCE_README.md`
+- Added `db/migrations/032-add-outscraper-lead-source.sql` to seed an optional Outscraper Google Maps source.
+- Added `db/migrations/033-fix-lead-upsert-conflict.sql` to align lead upserts with a real `UNIQUE (source, external_id)` constraint.
+- Added `.agents/skills/vestblock/lead-intelligence-operator.md` for future Codex/operator sessions.
+- Added `lib/leads/connectors/outscraper-google-maps.ts` and upgraded `/api/leads/scrape/google-places` to support:
+  - `provider: auto`
+  - `provider: google`
+  - `provider: outscraper`
+- Upgraded `/admin/lead-sources` with:
+  - direct scrape-run controls
+  - provider readiness cards for Google Places, Outscraper, and SAM.gov
+- Fixed the Cincinnati code-enforcement connector so the live Socrata date filter returns real results instead of `400`.
+- Fixed lead ingestion so source/external-id upserts work against the live database instead of failing on `ON CONFLICT`.
+- Upgraded provider-backed scrape routes to return `503` readiness payloads when keys are missing instead of generic `500`s.
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - `corepack pnpm build` passed.
+  - Local production server QA with Supabase-backed temp admin auth passed:
+    - `GET /api/admin/leads` -> `200`
+    - `POST /api/leads/scrape/new-businesses` -> `200`
+    - `POST /api/leads/score` -> `200`
+    - `POST /api/leads/generate-outreach` -> `200`
+    - `POST /api/leads/scrape/google-places` -> `503` with missing-provider detail when no key is configured
+    - `POST /api/leads/scrape/sam` -> `503` with missing-provider detail when no key is configured
+
+## 2026-04-29 - Daily Content Publisher
+
+- Added `lib/content/dailyPublisher.ts`.
+- Added `app/api/cron/content-publisher/route.ts`.
+- Added a daily Vercel cron in `vercel.json`:
+  - `/api/cron/content-publisher` at `30 17 * * *`
+- Daily publisher behavior:
+  - publishes existing SEO drafts / ready assets first
+  - then seeds and publishes a small batch of missing AEO topic pages
+  - defaults to `2` pages per day
+  - prefers Spanish content by default
+  - avoids duplicate slug creation
+- Added roadmap documentation for:
+  - `DAILY_CONTENT_PUBLISH_LIMIT`
+  - `DAILY_CONTENT_PUBLISH_PREFER_SPANISH`
+  - `DAILY_CONTENT_PUBLISH_CLUSTERS`
+
+## 2026-04-30 - AI Receptionist, Booking, And Website Offer Audit
+
+- Added `lib/services/automationPackages.ts` as the shared source of truth for:
+  - `AI Receptionist Launch`
+  - `AI Receptionist + Appointment Booking`
+  - `Website Upgrade Sprint`
+- Updated `lib/services/pricedOffers.ts` to attach those offers to the central priced-offer system so each priced service now has:
+  - a canonical service slug
+  - a public service-guide page
+  - a primary request route
+- Rebuilt `app/ai-assistant/page.tsx` into a real offer page with:
+  - unified pricing
+  - package selection by query param
+  - a request form that stores the selected package in the lead record
+  - clearer customer language for lead capture, booking, and website upgrades
+- Updated `app/api/ai-assistant-request/route.ts` to:
+  - validate input with `zod`
+  - save `business_name`, `website`, `best_offer`, `category`, and package metadata into `leads`
+  - return an actual `500` when the request cannot be stored instead of falsely reporting success
+- Updated pricing and service discovery copy across:
+  - `app/pricing/page.tsx`
+  - `app/services/page.tsx`
+  - `lib/services/serviceDirectory.ts`
+  - `lib/content/marketingServices.ts`
+  - `lib/seo/serviceSeoPages.ts`
+  - `app/ai-assistant/layout.tsx`
+  - `components/how-it-works.tsx`
+  - `app/admin-panel/page.tsx`
+- Fixed duplicate service-page title tags on priced service routes by removing the extra brand suffix from generated priced-offer SEO titles.
+- Verification:
+  - `corepack pnpm lint` passed with existing warning-only repo output.
+  - `corepack pnpm build` passed.
+  - `npx tsc --noEmit` passed after build.
+  - Local production QA passed on:
+    - `/ai-assistant`
+    - `/pricing`
+    - `/services/ai-receptionist-launch`
+    - `/services/website-upgrade-sprint`
+  - Invalid `/api/ai-assistant-request` payload returns `400`.
+  - Valid `/api/ai-assistant-request` payload succeeds when run with production Vercel env vars loaded.
+
+## 2026-04-30 - Credit Repair Methods Audit
+
+- Added `docs/VESTBLOCK_CREDIT_METHODS_AUDIT.md` to document the current VestBlock credit repair method stack, missing methods, and safe positioning rules.
+- Added `.agents/skills/vestblock/credit-repair-methods-operator.md` so future Codex/operator sessions keep credit-method content grounded in real consumer-rights workflows.
+- Added `docs/VESTBLOCK_CREDIT_BOOST_STACK.md` and `.agents/skills/vestblock/credit-boost-pack-operator.md` to capture the 30-90 day positive-history boost-pack logic for future operator sessions.
+- Added `lib/credit/side-hustle-playbook.ts` to mix curated side hustles from the VestBlock side-hustle playbook directly into product recommendations and fallback UI.
+- Expanded `lib/aeo/topics.ts` with new compliance-safe credit repair topics:
+  - `credit-repair-methods`
+  - `direct-furnisher-dispute`
+  - `statement-of-dispute`
+  - `identity-theft-block-and-fraud-alerts`
+  - `reinserted-information-after-dispute`
+  - `mixed-file-and-personal-info-disputes`
+  - `outdated-negative-information`
+- These topics are now live through the existing `/learn/[slug]` dynamic route and are eligible for SEO/resource seeding through VestBlock’s content automation system.
+- Expanded the backend dispute workflow in:
+  - `lib/letters/templates.tsx`
+  - `lib/letters/ai.ts`
+  - `lib/extract-negative-items.ts`
+  so automated dispute generation can now support direct furnisher disputes, method-of-verification follow-up, statement-of-dispute requests, identity-theft block framing, mixed-file disputes, outdated-information review, and personal-information correction.
+- Added deterministic credit-analysis enrichment in:
+  - `lib/credit/recommendation-engine.ts`
+  - `app/api/job-status/[jobId]/route.ts`
+  - `lib/prompt-utils.ts`
+  so completed analyses now get a boost-pack action sequence, richer credit-builder/card recommendations, and side-hustle recommendations even when AI output is sparse.
+- Added `components/credit-boost-pack.tsx` and wired `components/analysis-result-client-view.tsx` to show a dedicated `Boost Pack` tab, plus always-rendered score-based card and income guidance.
+- Added a post-signup onboarding email flow in:
+  - `app/api/auth/post-signup/route.ts`
+  - `lib/email/sendEmail.ts`
+  - `contexts/auth-context.tsx`
+  so new users immediately receive a “download your free credit report” email pointing them to `AnnualCreditReport.com`, and the delayed upload reminder now repeats that official source.
+- Reframed `app/super-dispute/page.tsx` to remove unsupported “maximum results / higher success rate / proven” language and replace it with compliance-safe workflow copy.
+- Reframed `app/tools/dispute-letters/page.tsx` so the advanced dispute tool is described as more tailored and organized, not as a guaranteed superior-results engine.
+- Verification:
+  - `corepack pnpm lint` passed with warning-only output.
+  - `corepack pnpm build` passed.
+  - `npx tsc --noEmit` passed after build.
+  - `/learn` static generation increased to include the new credit-method pages.
+  - The build also passed after wiring the boost-pack enrichment and result tabs.
+  - Production smoke checks passed on:
+    - `/super-dispute`
+    - `/learn/credit-repair-methods`
+    - `/learn/direct-furnisher-dispute`
+    - `/learn/statement-of-dispute`
+    - `/learn/identity-theft-block-and-fraud-alerts`
+    - `/learn/reinserted-information-after-dispute`
+    - `/learn/mixed-file-and-personal-info-disputes`
+    - `/learn/outdated-negative-information`
+
+## 2026-05-01 - Growth Automation Engine Upgrade
+
+- Added `db/migrations/034-growth-automation-upgrade.sql`.
+- Expanded the lead schema with:
+  - urgency/contactability/language/outreach fields
+  - follow-up scheduling fields
+  - richer website audit storage
+  - outreach send status tracking
+- Added `outreach_send_events` with admin-only RLS.
+- Expanded lead scoring in:
+  - `lib/leads/scoring.ts`
+  - `lib/leads/types.ts`
+  - `lib/leads/schemas.ts`
+- Expanded website weakness detection in:
+  - `lib/leads/website-analysis.ts`
+- Expanded lead-source and offer constants in:
+  - `lib/leads/constants.ts`
+- Expanded outreach generation in:
+  - `lib/leads/outreach.ts`
+  - `lib/leads/service.ts`
+  - `lib/leads/repository.ts`
+- Added outbound provider support in:
+  - `lib/leads/outbound.ts`
+  supporting:
+  - Gmail / Google Workspace via OAuth refresh token
+  - Resend fallback
+- Added daily growth automation orchestrator:
+  - `lib/leads/dailyAutomation.ts`
+- Added daily cron routes:
+  - `/api/cron/leads-scrape`
+  - `/api/cron/leads-score`
+  - `/api/cron/leads-outreach`
+  - `/api/cron/leads-followup`
+- Updated `vercel.json` to schedule the new lead cron jobs.
+- Added outreach approval/send admin routes:
+  - `/api/admin/leads/[id]/outreach`
+  - `/api/admin/leads/bulk`
+- Expanded `/api/admin/leads` to support:
+  - source / offer / city / state / language / outreach filters
+  - queue summary metrics
+  - failed scrape visibility
+- Enriched direct lead intake routes so funding, service, automation, and real-estate hand-raisers map back into the unified lead model:
+  - `/api/funding-lead`
+  - `/api/service-interest`
+  - `/api/real-estate-lead`
+  - `/api/sell-lead`
+- Upgraded admin leads UI with:
+  - queue summary cards
+  - automation health
+  - outreach approval bulk actions
+  - source / offer / state / language filtering
+  - send-ready indicators
+- Added operator docs:
+  - `docs/VESTBLOCK_GROWTH_AUTOMATION_AUDIT.md`
+  - `docs/VESTBLOCK_OUTREACH_SYSTEM.md`
+  - `docs/VESTBLOCK_LEAD_SOURCES.md`
+- Added reusable operator skills:
+  - `.agents/skills/vestblock/growth-automation-operator.md`
+  - `.agents/skills/vestblock/urban-business-outreach.md`
+  - `.agents/skills/vestblock/website-weakness-audit.md`
+  - `.agents/skills/vestblock/real-estate-distress-outreach.md`
+  - `.agents/skills/vestblock/spanish-business-growth.md`
+  - `.agents/skills/vestblock/lead-scoring-and-offer-matching.md`
+  - `.agents/skills/vestblock/compliant-outreach-operations.md`
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm build` passed.
+
+## 2026-05-01 - Market Expansion Engine + CSV Lead Ops
+
+- Added `db/migrations/035-market-expansion-and-csv-ops.sql` and applied it to Supabase.
+- Added national market expansion support with:
+  - `target_markets`
+  - `lead_suppressions`
+  - market scoring, rotation, and performance feedback
+- Added `lib/leads/marketExpansion.ts` for:
+  - daily city discovery
+  - large / mid / small market rotation
+  - niche rotation
+  - 30-day re-scrape controls
+  - performance-based re-queueing
+- Expanded `lib/leads/dailyAutomation.ts` so daily lead runs now:
+  - discover and queue new markets
+  - scrape city-by-city
+  - tag leads with market / niche / expansion batch data
+  - enforce suppression, score, bounce-risk, and approval checks before send
+  - send an operator daily market report
+- Added new cron routes:
+  - `/api/cron/discover-markets`
+  - `/api/cron/daily-lead-run`
+  - `/api/cron/send-outreach`
+  - `/api/cron/update-market-performance`
+- Updated `vercel.json` with the new market-expansion schedules.
+- Added CSV lead management:
+  - `/api/admin/leads/import`
+  - expanded `/api/leads/export`
+  - bulk campaign / pause / delete actions
+  - dashboard import/export flows
+- Expanded lead detail and dashboard UI with:
+  - niche
+  - campaign
+  - delivery status
+  - website audit detail
+  - score explanation
+  - market context
+- Added market admin page:
+  - `/admin/market-expansion`
+- Added reusable operator skill:
+  - `.agents/skills/vestblock/market-expansion-operator.md`
+- Verification:
+  - `npx tsc --noEmit` passed.
+  - `corepack pnpm lint` passed with warning-only repo output.
+  - `corepack pnpm build` passed.
+
+## 2026-05-01 - Growth Focus Tightening
+
+- Disabled SAM.gov matching by default in the live lead engine unless `LEADS_ENABLE_SAM=true`.
+- Updated `/api/leads/scrape/sam` to return a clean disabled response instead of behaving like an unfinished required source.
+- Updated growth-source docs to reflect that VestBlock can continue expanding through:
+  - state business filings
+  - city / county licensing data
+  - code-enforcement and property datasets
+  - CSV lead imports
+  even without Google Places or Outscraper.
+
+## 2026-05-01 - Google Growth Automation Activation
+
+- Created and wired Google production credentials for VestBlock outreach automation:
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `GOOGLE_REFRESH_TOKEN`
+  - `GOOGLE_WORKSPACE_SENDER`
+  - corrected `GOOGLE_PLACES_API_KEY`
+- Enabled `Places API (New)` in the `VestBlock Outreach` Google Cloud project so live maps scraping can run against the production key.
+- Verified the Gmail OAuth refresh-token exchange works against Google.
+- Verified the production daily lead engine now completes with real Google Places market results instead of failing on provider setup.
+- Optimized `searchGooglePlaces()` and the daily lead automation so the cron no longer times out by deferring expensive website audits out of the hot scrape path.
+- Verified:
+  - `corepack pnpm build` passed
+  - `npx tsc --noEmit` passed
+
+## 2026-05-02 - Buyer Network Engine
+
+- Added migration `041-create-buyer-network-engine.sql` to create the buyer network schema:
+  - `buyers`
+  - `buyer_buy_boxes`
+  - `buyer_markets`
+  - `buyer_contacts`
+  - `buyer_outreach_messages`
+  - `buyer_outreach_runs`
+  - `buyer_notes`
+  - `buyer_matches`
+  - `buyer_performance`
+  - `buyer_relationship_events`
+- Added the core buyer engine under `lib/buyers/`:
+  - public buyer discovery
+  - buyer website analysis
+  - scoring
+  - outreach generation
+  - property-to-buyer matching
+  - automation helpers
+- Added buyer admin APIs:
+  - `/api/admin/buyers`
+  - `/api/admin/buyers/[id]`
+  - `/api/admin/buyers/[id]/notes`
+  - `/api/admin/buyers/[id]/outreach`
+  - `/api/admin/buyers/bulk`
+- Added property match API:
+  - `/api/buyers/match`
+- Added buyer cron routes:
+  - `/api/cron/buyers-discover`
+  - `/api/cron/buyers-score`
+  - `/api/cron/buyers-outreach`
+  - `/api/cron/buyers-followup`
+  - `/api/cron/buyers-performance`
+- Added buyer admin pages:
+  - `/admin/buyers`
+  - `/admin/buyers/[id]`
+  - `/admin/buyer-outreach`
+  - `/admin/buyer-matches`
+- Added buyer-network navigation into the main admin dashboard.
+- Integrated buyer matching into `/api/sell-lead` and `/api/real-estate-lead` so live property intake can persist buyer matches automatically.
+- Added buyer cron schedules to `vercel.json`.
+- Added operator docs:
+  - `docs/VESTBLOCK_BUYER_NETWORK_STRATEGY.md`
+  - `docs/VESTBLOCK_BUYER_AUTOMATION.md`
+  - `docs/VESTBLOCK_BUYER_MATCHING.md`
+
+## 2026-05-02 - Daily Intelligence And Entity SEO Expansion
+
+- Added migration `042-daily-intelligence-and-entity-seo.sql` to create:
+  - `daily_growth_reports`
+  - `daily_growth_report_sections`
+  - `entity_seo_opportunities`
+  - `entity_seo_runs`
+  - `entity_seo_performance_snapshots`
+- Added the daily reporting engine in `lib/reporting/dailyIntelligence.ts`.
+- Added reporting repository/types under `lib/reporting/`.
+- Added the entity SEO expansion engine in `lib/content/entitySeoExpansion.ts`.
+- Added cron routes:
+  - `/api/cron/entity-seo-expansion`
+  - `/api/cron/daily-ops-report`
+- Added admin SEO opportunity API:
+  - `/api/admin/seo-opportunities`
+- Added admin surfaces:
+  - `/admin/reports/daily`
+  - `/admin/reports/daily/[date]`
+  - `/admin/seo-opportunities`
+- Added admin-panel links for daily reporting and SEO opportunities.
+- Wired safe entity-driven SEO pages to create/publish `content_assets` automatically.
+- Added operator docs:
+  - `docs/VESTBLOCK_DAILY_INTELLIGENCE_AUDIT.md`
+  - `docs/VESTBLOCK_DAILY_REPORTING.md`
+  - `docs/VESTBLOCK_ENTITY_SEO_EXPANSION.md`
+
+## 2026-05-01 - Real Estate Seller Messaging and Email Guardrails
+
+- Repositioned real-estate and code-violation outreach so VestBlock speaks like a buyer/operator:
+  - direct-sale conversations
+  - investor review
+  - practical seller options
+- Removed cleanup-style phrasing from seller-facing lead messaging and scoring angles.
+- Updated Milwaukee and Cincinnati property-source connectors to bias toward seller motivation and direct-sale options.
+- Improved admin lead outreach errors so missing-email leads explain that phone, SMS, or DM should be used instead of failing with a vague send error.
+- Disabled the admin email `Send now` action when a lead does not have a usable email address and surfaced an inline warning in the lead detail view.
+- Verified:
+  - `corepack pnpm build` passed
+  - `npx tsc --noEmit` passed
+  - `corepack pnpm lint` passed with warning-only output
+
+## 2026-05-02 - Public Lead Email Enrichment
+
+- Added public website email enrichment in `lib/leads/email-enrichment.ts`.
+- Added a new cron route, `/api/cron/leads-enrich-email`, to harvest public contact emails from business websites and contact/about pages before scoring and outreach.
+- Wired enrichment results into lead records, including:
+  - primary email when a strong public match is found
+  - ranked public email candidates
+  - enrichment confidence, status, and source URLs
+- Added conservative robots.txt checks and same-domain/business-stem scoring so the extractor prefers real business emails over stray third-party addresses.
+- Added the daily cron schedule for email enrichment in `vercel.json`.
+  - production deploy passed
+  - `/api/cron/daily-lead-run?dryRun=1` returned successful Google Places lead batches in production
+
+## 2026-05-01 - Morning Lead Engine Reliability Pass
+
+- Moved expensive lead enrichment out of the scrape ingest path so the daily market scrape can stay fast under Google Places volume.
+- Updated `lib/leads/service.ts` so daily lead ingestion can skip scoring during scrape and let the scheduled scoring pass handle enrichment.
+- Added `scoreAndPersistLead()` to centralize:
+  - scoring
+  - website-audit persistence
+  - email validity tagging
+  - bounce-risk estimation
+  - high-intent lead automation triggers
+- Updated `lib/leads/scoring.ts` to reuse cached website-audit data when available instead of re-fetching the same site on every re-score.
+- Tightened `listLeadsForScoring()` so the morning scoring pass prioritizes unscored / stale leads instead of churning the full table.
+- Split lead follow-up and outbound email send behavior:
+  - `/api/cron/leads-followup` now focuses on follow-up queue creation
+  - `/api/cron/send-outreach` now focuses on approved send attempts
+- Removed the duplicate scheduled scrape path from `vercel.json` so VestBlock does not run two identical market scrapes every morning.
+- Increased the default outreach draft generation cap from `100` to `250` to better match real scrape volume.
+- Added admin morning digests for:
+  - enrichment/scoring
+  - outreach draft generation
+  - send queue status
+- Hardened boolean env parsing so values like `false` with trailing whitespace do not accidentally behave strangely.
+- Verified:
+  - `corepack pnpm build` passed
+  - `npx tsc --noEmit` passed
+
+## 2026-05-01 - Email-Ready Lead Prioritization
+
+- Updated `/api/admin/leads` so the lead queue can prioritize usable-email records first or filter to email-ready-only mode.
+- Added email readiness summary counting to the admin lead dashboard.
+- Added an `Email ready first / Email ready only / All leads` control in `/admin/leads`.
+- Added visible readiness badges on each lead row so operators can start with sendable leads immediately.
+- Extended `/api/leads/export` and `exportLeadsSchema` so email-ready-only exports match the outreach queue view.
+- Verified:
+  - `corepack pnpm build` passed
+  - `npx tsc --noEmit` passed
+  - production deploy passed at `https://vestblock.io`
+
+## 2026-05-01 - Continuous Improvement Engine
+
+- Added migration `036-continuous-improvement-engine.sql` to create VestBlock's daily learning layer:
+  - `improvement_runs`
+  - `improvement_insights`
+  - `research_briefs`
+  - `strategy_updates`
+  - `experiment_results`
+  - `prompt_versions`
+  - `score_adjustments`
+  - `outreach_variants`
+  - `market_performance_snapshots`
+  - `method_performance_snapshots`
+  - `daily_operator_reports`
+- Extended `content_assets` with indexing / refresh fields.
+- Extended `service_deliverables` with customer-view / response / upgrade signals.
+- Added `lib/improvement/continuous-improvement.ts` to analyze recent results, record insights, queue strategy changes, auto-apply low-risk adjustments, and store a daily operator report.
+- Added curated research ingestion and recommendation storage.
+- Wired live score adjustments into `lib/leads/scoring.ts`.
+- Wired live outreach variants into `lib/leads/outreach.ts`.
+- Added admin review surfaces:
+  - `/admin/improvement`
+  - `/admin/research`
+  - `/admin/experiments`
+- Added strategy approval/apply API:
+  - `/api/admin/improvement/strategy-updates/[id]`
+- Added scheduled optimization routes:
+  - `/api/cron/improvement-review`
+  - `/api/cron/research-digest`
+  - `/api/cron/optimize-outreach`
+  - `/api/cron/optimize-markets`
+  - `/api/cron/optimize-content`
+  - `/api/cron/optimize-credit-funding`
+- Added admin-panel links for the new improvement surfaces.
+- Added operator docs and skills for keeping the learning loop stable and understandable.
+
+## 2026-05-02 - Lender Network Engine
+
+- Added migration `039-create-lender-network-engine.sql` to create the lender network schema:
+  - `lenders`
+  - `lender_products`
+  - `lender_markets`
+  - `lender_programs`
+  - `lender_contacts`
+  - `lender_outreach_messages`
+  - `lender_outreach_runs`
+  - `lender_notes`
+  - `lender_matches`
+  - `lender_performance`
+  - `lender_relationship_events`
+- Added the core lender engine under `lib/lenders/`:
+  - public lender discovery
+  - site analysis
+  - scoring
+  - outreach generation
+  - borrower-to-lender matching
+  - automation helpers
+- Added lender admin APIs:
+  - `/api/admin/lenders`
+  - `/api/admin/lenders/[id]`
+  - `/api/admin/lenders/[id]/notes`
+  - `/api/admin/lenders/[id]/outreach`
+  - `/api/admin/lenders/bulk`
+- Added borrower match API:
+  - `/api/lenders/match`
+- Added lender cron routes:
+  - `/api/cron/lenders-discover`
+  - `/api/cron/lenders-score`
+  - `/api/cron/lenders-outreach`
+  - `/api/cron/lenders-followup`
+  - `/api/cron/lenders-performance`
+- Added admin lender pages:
+  - `/admin/lenders`
+  - `/admin/lenders/[id]`
+  - `/admin/lender-programs`
+  - `/admin/lender-outreach`
+  - `/admin/lender-matches`
+- Integrated lender matching into `/api/funding/recommendation` so funding recommendations can persist lender matches automatically.
+- Added lender cron schedules to `vercel.json`.
+- Added operator docs:
+  - `docs/VESTBLOCK_LENDER_NETWORK_STRATEGY.md`
+  - `docs/VESTBLOCK_LENDER_AUTOMATION.md`
+  - `docs/VESTBLOCK_LENDER_MATCHING.md`
+- Upgraded lender outreach so the first touch stays focused on fit and relationship-building, while follow-up drafts now include:
+  - lender qualification questions
+  - partner-intake prompts
+  - softer referral-program / compensation discovery language where legally appropriate
+- Saved lender outreach qualification and economics guidance into outreach message metadata so it renders in the admin lender detail view.
+- Added lender-detail UI safeguards so email send actions stay disabled when no usable lender email exists.
+- Verified:
+  - `corepack pnpm build` passed
+  - `npx tsc --noEmit` passed

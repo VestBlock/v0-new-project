@@ -53,7 +53,6 @@ Important operating routes include:
 
 - `/api/upload-credit-report`
 - `/api/initiate-analysis`
-- `/api/analyze-report`
 - `/api/background-analyzer`
 - `/api/dispute-letters/**`
 - `/api/generate-letter`
@@ -190,7 +189,7 @@ Risk fixed: upload and PayPal webhook routes no longer log raw report text, extr
 - Raw SQL and legacy database setup APIs are admin-gated and disabled unless explicit env flags are enabled.
 - Supabase schema/type definitions do not fully match later migrations.
 - Several routes rely on service-role Supabase access and need careful production env setup.
-- Local builds fail without build-time env vars because older routes instantiate OpenAI/Supabase clients at module import. Vercel must have `OPENAI_API_KEY`, Supabase URL, anon key, and service-role key configured before deployment builds.
+- Local builds still need build-time env vars for active analysis routes. The legacy `/api/analyze-report` path has been retired in favor of `/api/upload-credit-report` and `/api/analyze-credit-direct`, which removes one misleading build-time Supabase warning path.
 
 ## Recommended Next Improvements
 

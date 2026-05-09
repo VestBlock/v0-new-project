@@ -85,6 +85,17 @@ Implemented dispute-letter reminder automation:
 - Store generated drafts in `content_assets` with status `draft`, `ready`, `published`, or `archived`.
 - Let admins generate content from `/admin-panel` by choosing service, content type, language, platform, post style, audience, and prompt.
 - Public SEO pages are published at `/resources/[slug]` only after the admin marks an SEO asset as `published`.
+- Daily `/api/cron/content-publisher` can now publish a small controlled batch of SEO pages automatically.
+- The daily publisher:
+  - publishes existing `draft` or `ready` SEO pages first
+  - seeds missing AEO topic pages only when the batch still has room
+  - defaults to `2` pages per day
+  - prefers Spanish pages by default
+  - avoids duplicate slug creation
+- Optional tuning:
+  - `DAILY_CONTENT_PUBLISH_LIMIT=2`
+  - `DAILY_CONTENT_PUBLISH_PREFER_SPANISH=true`
+  - `DAILY_CONTENT_PUBLISH_CLUSTERS=credit-repair,funding`
 - Social posts and campaigns remain manual-post assets for now so the operator can review and post them safely.
 - Future: scheduled content creation, social platform API posting, approval workflows, and analytics feedback loops.
 
