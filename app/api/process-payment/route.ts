@@ -8,6 +8,19 @@ import {
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_LEGACY_PAYMENT_PROCESSING !== "true"
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "This legacy payment endpoint is disabled in production. Use the PayPal checkout capture flow.",
+      },
+      { status: 410 },
+    )
+  }
+
   let amount: string | number | null = null
   let userId: string | null = null
   let reportId: string | null = null

@@ -6,6 +6,7 @@ import type {
   RoadmapData,
   AiCreditCardRecommendation,
   AiSideHustleRecommendation,
+  AiDetailedAnalysis,
 } from '@/types/supabase';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -31,6 +32,7 @@ import InteractiveRoadmap from '@/components/interactive-roadmap'; // Ensure thi
 import CreditCardsTab from '@/components/credit-cards-tab'; // Ensure this component exists and is robust
 import SideHustlesTab from '@/components/side-hustles-tab'; // Ensure this component exists and is robust
 import { ChatInterface } from '@/components/chat-interface'; // Ensure this component exists and is robust
+import CreditBoostPack from '@/components/credit-boost-pack';
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
 
@@ -53,6 +55,7 @@ export default function AnalysisResultClientView({
     initialJobDetails.status !== 'completed' &&
       initialJobDetails.status !== 'failed'
   );
+  const [pollingAttempts, setPollingAttempts] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const pollingAttemptsRef = useRef(0);
   const supabase = getSupabaseClient();
@@ -60,7 +63,6 @@ export default function AnalysisResultClientView({
 
   const fetchJobStatus = useCallback(async () => {
     if (!supabase) {
-      console.error('[Client View] Supabase client not available for polling.');
       setError(
         'Connection issue: Could not update analysis status. Please refresh.'
       );
@@ -69,9 +71,7 @@ export default function AnalysisResultClientView({
     }
 
     pollingAttemptsRef.current += 1;
-    console.log(
-      `[Client View] Polling for job status. Attempt: ${pollingAttemptsRef.current}`
-    );
+    setPollingAttempts(pollingAttemptsRef.current);
 
     try {
       const { data, error: fetchError } = await supabase
@@ -94,7 +94,6 @@ export default function AnalysisResultClientView({
       }
 
       if (data) {
-        console.log('[Client View] Fetched job data. Status:', data.status);
         setJobDetails(data as AnalysisJob);
         if (data.status === 'completed' || data.status === 'failed') {
           setIsLoadingJob(false);
@@ -153,6 +152,8 @@ export default function AnalysisResultClientView({
     };
   }, [isLoadingJob, fetchJobStatus]);
 
+  const progressWidth = `${(pollingAttempts / MAX_POLLING_ATTEMPTS) * 50 + 25}%`;
+
   const getStatusMessage = (status: string | null): string => {
     if (!status) return 'Status unknown...';
     switch (status) {
@@ -200,7 +201,7 @@ export default function AnalysisResultClientView({
             </p>
           </AlertDescription>
           <Button asChild className="mt-4">
-            <Link href="/enhanced-credit-analyzer">Try New Analysis</Link>
+            <Link href="/credit-upload">Try New Analysis</Link>
           </Button>
         </Alert>
       );
@@ -246,11 +247,7 @@ export default function AnalysisResultClientView({
           <div className="w-full max-w-md bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
             <div
               className="bg-blue-600 h-2.5 rounded-full animate-pulse"
-              style={{
-                width: `${
-                  (pollingAttemptsRef.current / MAX_POLLING_ATTEMPTS) * 50 + 25
-                }%`,
-              }}
+              style={{ width: progressWidth }}
             ></div>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -297,6 +294,11 @@ export default function AnalysisResultClientView({
       | null;
   const analysisSummary = jobDetails.ai_summary;
   const detailedAnalysis = jobDetails.ai_detailed_analysis; // Assuming this is a JSON object or string
+  const creditScore =
+    typeof (detailedAnalysis as AiDetailedAnalysis | null)?.credit_score_analysis?.score ===
+    'number'
+      ? ((detailedAnalysis as AiDetailedAnalysis).credit_score_analysis?.score ?? null)
+      : null;
 
   if (jobDetails.status === 'completed' && (!roadmapData || !analysisSummary)) {
     // This case indicates a potential issue with the AI processing or data saving step.
@@ -361,8 +363,9 @@ export default function AnalysisResultClientView({
       )}
 
       <Tabs defaultValue="roadmap" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-6">
           <TabsTrigger value="roadmap">Action Plan</TabsTrigger>
+          <TabsTrigger value="boost_pack">Boost Pack</TabsTrigger>
           <TabsTrigger value="credit_cards">Card Ideas</TabsTrigger>
           <TabsTrigger value="side_hustles">Income Ideas</TabsTrigger>
           <TabsTrigger value="ask_vestbot">
@@ -382,28 +385,30 @@ export default function AnalysisResultClientView({
           )}
         </TabsContent>
 
+        <TabsContent value="boost_pack">
+          <CreditBoostPack
+            extractedText={jobDetails.extracted_text}
+            financialGoalTitle={jobDetails.financial_goal_title}
+            detailedAnalysis={
+              typeof detailedAnalysis === 'object' && detailedAnalysis
+                ? (detailedAnalysis as AiDetailedAnalysis)
+                : null
+            }
+          />
+        </TabsContent>
+
         <TabsContent value="credit_cards">
-          {creditCardRecommendations && creditCardRecommendations.length > 0 ? (
-            <CreditCardsTab recommendations={creditCardRecommendations} />
-          ) : (
-            <Card>
-              <CardContent className="pt-6 text-muted-foreground">
-                No specific credit card recommendations generated.
-              </CardContent>
-            </Card>
-          )}
+          <CreditCardsTab
+            creditScore={creditScore}
+            recommendations={creditCardRecommendations || undefined}
+          />
         </TabsContent>
 
         <TabsContent value="side_hustles">
-          {sideHustleRecommendations && sideHustleRecommendations.length > 0 ? (
-            <SideHustlesTab recommendations={sideHustleRecommendations} />
-          ) : (
-            <Card>
-              <CardContent className="pt-6 text-muted-foreground">
-                No specific side hustle recommendations generated.
-              </CardContent>
-            </Card>
-          )}
+          <SideHustlesTab
+            recommendations={sideHustleRecommendations || undefined}
+            goals={jobDetails.financial_goal_title || undefined}
+          />
         </TabsContent>
 
         <TabsContent value="ask_vestbot">

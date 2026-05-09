@@ -1,7 +1,5 @@
-import OpenAI from 'openai';
 import type { BizAnswers, CatalogItem, Roadmap } from '@/lib/bizcredit/match';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+import { getOpenAIClient } from '@/lib/openai-server';
 
 type ModelOut = {
   steps: {
@@ -56,6 +54,11 @@ export async function rewriteReasonsJSON(
   });
 
   try {
+    const openai = getOpenAIClient();
+    if (!openai) {
+      throw new Error('OpenAI client is not configured.');
+    }
+
     // IMPORTANT: Chat Completions JSON mode, not the Responses API.
     const chat = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -22,6 +23,7 @@ import {
   ShieldCheck,
   Star,
   UploadCloud,
+  Sparkles,
 } from 'lucide-react';
 import { InteractiveRoadmap } from '@/components/interactive-roadmap';
 import { CreditCardsTab } from '@/components/credit-cards-tab';
@@ -29,6 +31,8 @@ import { SideHustlesTab } from '@/components/side-hustles-tab';
 import { CreditScoreTab } from '@/components/credit-score-tab';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditReportStatusCard } from '@/components/credit-report-status-card';
+import { AccessStatusCard } from '@/components/access-status-card';
+import { getAccessProfile } from '@/lib/auth/access';
 
 type DashboardCreditReport = {
   id: string;
@@ -43,9 +47,15 @@ type DashboardCreditReport = {
   dispute_letters_json?: unknown;
 };
 
-export default function DashboardPage() {
-  const { user, userProfile, fetchUserProfile } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
+function DashboardPageContent() {
+  const {
+    user,
+    userProfile,
+    fetchUserProfile,
+    isAuthenticated,
+    isLoading: authLoading,
+  } = useAuth();
+  const userId = user?.id;
   const params = useSearchParams();
   const token = params.get('token');
   const router = useRouter();
@@ -58,26 +68,26 @@ export default function DashboardPage() {
   const [reportsError, setReportsError] = useState('');
 
   useEffect(() => {
-    if (!token || !user) return;
-    setPaymentLoading(true);
-    // Call capture endpoint and update DB
-    fetch('/api/capture-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderID: token, userId: user.id }),
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          // Refresh your auth/userProfile context
-          fetchUserProfile(user);
-          // Remove ?token= from URL
-          router.replace('/credit-upload');
-        } else throw new Error(json.error);
+    if (!token || !user || !userId) return;
+
+    queueMicrotask(() => {
+      setPaymentLoading(true);
+      fetch('/api/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID: token, userId }),
       })
-      .catch(console.error)
-      .finally(() => setPaymentLoading(false));
-  }, [token, user, fetchUserProfile, router]);
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            fetchUserProfile(user);
+            router.replace('/credit-upload');
+          } else throw new Error(json.error);
+        })
+        .catch(console.error)
+        .finally(() => setPaymentLoading(false));
+    });
+  }, [token, user, userId, fetchUserProfile, router]);
 
   const handleCheckout = useCallback(async () => {
     setLoading(true);
@@ -85,7 +95,8 @@ export default function DashboardPage() {
       const res = await fetch('/api/create-order', {
         method: 'POST',
         body: JSON.stringify({
-          userId: user?.id,
+          userId,
+          productType: 'vestblock_pro',
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -122,16 +133,22 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [router, userId]);
 
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.push('/login?redirect=/dashboard');
     }
-  }, [user]);
+  }, [authLoading, isAuthenticated, router]);
 
-  const isProMember = userProfile?.is_subscribed || isAdmin;
+  const access = getAccessProfile({
+    email: user?.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  });
+  const isProMember = access.hasPaidAccess;
 
   useEffect(() => {
     if (!user) return;
@@ -173,7 +190,25 @@ export default function DashboardPage() {
     };
   }, [user]);
 
-  if (!userProfile || paymentLoading) {
+  if (authLoading || paymentLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading your dashboard...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Redirecting to login...</p>
+      </div>
+    );
+  }
+
+  if (!userProfile) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -201,6 +236,12 @@ export default function DashboardPage() {
           </Badge>
         )}
       </div>
+
+      <AccessStatusCard
+        access={access}
+        title="Account access"
+        description="Your current VestBlock access tier, including paid and admin permissions."
+      />
 
       {!isProMember && (
         <Alert>
@@ -230,6 +271,48 @@ export default function DashboardPage() {
           </div>
         </Alert>
       )}
+
+      <Card className="border-cyan-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.15),_transparent_45%),rgba(15,23,42,0.92)] text-white">
+        <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-cyan-200">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm font-medium">VestBlock Funding Assistant</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold">Build a funding strategy before you apply.</h3>
+              <p className="mt-1 text-sm text-slate-300">
+                Compare business, personal, hybrid, or build-first paths with a readiness score, tracked sequence,
+                approval logging, and payment-plan options.
+              </p>
+            </div>
+          </div>
+          <Button asChild className="bg-cyan-500 text-slate-950 hover:bg-cyan-400">
+            <Link href="/dashboard/funding">Open Funding Assistant</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-cyan-500/20">
+        <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-cyan-600">
+              <FileText className="h-4 w-4" />
+              <span className="text-sm font-medium">Paid Service Deliverables</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold">Review your prepared service packages in one place.</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                When VestBlock finishes a funding snapshot, grant prep review, business credit sprint,
+                utilization plan, or real-estate package, it will appear in your service dashboard.
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/services">Open My Services</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -332,6 +415,21 @@ export default function DashboardPage() {
         </TabsContent>
       </Tabs>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="ml-2">Loading your dashboard...</p>
+        </div>
+      }
+    >
+      <DashboardPageContent />
+    </Suspense>
   );
 }
 

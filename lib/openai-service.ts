@@ -8,6 +8,10 @@ export type OpenAIChatMessage = {
   content: string
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 type CompletionRequest = {
   model: string
   messages: OpenAIChatMessage[]
@@ -98,7 +102,7 @@ export async function createChatCompletion(
         if (errorJson && errorJson.error && errorJson.error.message) {
           detailedMessage = errorJson.error.message
         }
-      } catch (jsonParseError) {
+      } catch {
         // errorText was not JSON
       }
       throw new Error(`OpenAI API Error (${response.status}): ${detailedMessage}`)
@@ -115,10 +119,7 @@ export async function createChatCompletion(
       console.error("[OpenAI Service] OpenAI request timed out after", requestTimeout, "ms")
       throw new Error(`OpenAI request timed out after ${requestTimeout / 1000} seconds.`)
     }
-    console.error(
-      "[OpenAI Service] Error in createChatCompletion:",
-      error instanceof Error ? error.message : String(error),
-    )
+    console.error("[OpenAI Service] Error in createChatCompletion:", getErrorMessage(error))
     throw error
   }
 }
@@ -143,14 +144,14 @@ export async function listModels() {
         if (errorJson && errorJson.error && errorJson.error.message) {
           detailedMessage = errorJson.error.message
         }
-      } catch (jsonParseError) {
+      } catch {
         // errorText was not JSON
       }
       throw new Error(`OpenAI API Error (listModels, ${response.status}): ${detailedMessage}`)
     }
     return response.json()
   } catch (error) {
-    console.error("[OpenAI Service] List models error:", error instanceof Error ? error.message : String(error))
+    console.error("[OpenAI Service] List models error:", getErrorMessage(error))
     throw error
   }
 }
@@ -198,7 +199,7 @@ export async function testOpenAIConnection(): Promise<{
         const errorJson = JSON.parse(errorText)
         errorMessage = errorJson.error?.message || errorText
         errorData = errorJson
-      } catch (e) {
+      } catch {
         // errorText was not JSON
       }
       return {
@@ -210,7 +211,6 @@ export async function testOpenAIConnection(): Promise<{
     }
 
     const data = await response.json()
-    console.log("[OpenAI Service] testOpenAIConnection: Successfully fetched models.")
     return {
       success: true,
       status: response.status,
@@ -221,7 +221,7 @@ export async function testOpenAIConnection(): Promise<{
       console.error("[OpenAI Service] testOpenAIConnection: Request timed out.")
       return { success: false, error: "OpenAI connection test timed out." }
     }
-    console.error("[OpenAI Service] testOpenAIConnection: General error -", error)
+    console.error("[OpenAI Service] testOpenAIConnection: General error -", getErrorMessage(error))
     return {
       success: false,
       error: error.message || "An unexpected error occurred during the connection test.",

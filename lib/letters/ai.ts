@@ -1,7 +1,5 @@
 // lib/letters/ai.ts
-import OpenAI from 'openai';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+import { getOpenAIClient } from '@/lib/openai-server';
 
 type NegativeItem = {
   creditor?: string;
@@ -30,7 +28,14 @@ export async function generateLetterBodyHTML(opts: {
     | '609'
     | 'Debt Validation'
     | 'Incorrect Information'
-    | 'Cease & Desist';
+    | 'Cease & Desist'
+    | 'Direct Furnisher Dispute'
+    | 'Method Of Verification'
+    | 'Statement Of Dispute'
+    | 'Identity Theft Block'
+    | 'Mixed File'
+    | 'Outdated Information'
+    | 'Personal Information Correction';
   items: NegativeItem[];
   dateISO: string;
   version: number; // used to rotate style
@@ -38,10 +43,6 @@ export async function generateLetterBodyHTML(opts: {
 }) {
   const {
     fullName,
-    addressLine1,
-    city,
-    state,
-    zip,
     bureau,
     letterType,
     items,
@@ -92,9 +93,19 @@ ${bullets || '(none)'}
 Task:
 Compose a fresh dispute letter body in HTML (no outer <html>), tailored to ${bureau} and ${letterType}.
 Include a short opening, a bulleted/numbered list referencing the items, and a clear, time-bound request.
-Reference FCRA/FDCPA where relevant; do not include a physical signature block or consumer address (header handled elsewhere).
+Reference FCRA/FDCPA where relevant, and keep claims factual and reviewable.
+If the type is "Statement Of Dispute", make it clear that the consumer is asking for a dispute notation if the issue remains unresolved.
+If the type is "Identity Theft Block", frame the request around unauthorized activity, supporting documentation, and blocking/removing fraudulent reporting where appropriate.
+If the type is "Mixed File" or "Personal Information Correction", focus on incorrect identifiers, merged data, and separating the consumer's file from unrelated information.
+If the type is "Outdated Information", focus on dates, reporting period review, and removal of information that should no longer appear.
+Do not include a physical signature block or consumer address (header handled elsewhere).
 Vary phrasing from any prior draft; avoid exact sentences used before.
 `;
+
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error('OpenAI client is not configured.');
+  }
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini', // or your preferred model
@@ -106,9 +117,7 @@ Vary phrasing from any prior draft; avoid exact sentences used before.
       { role: 'user', content: user },
     ],
   });
-  console.log('🚀 ~ generateLetterBodyHTML ~ completion:', completion);
 
   const html = completion.choices?.[0]?.message?.content?.trim() || '';
-  console.log('🚀 ~ generateLetterBodyHTML ~ html:', html);
   return html;
 }

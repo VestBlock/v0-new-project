@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Briefcase, ExternalLink, DollarSign, Clock, BarChart, Zap, Users, Palette } from "lucide-react"
+import { getPlaybookSideHustles } from "@/lib/credit/side-hustle-playbook"
 
 interface SideHustleRecommendation {
   name: string
@@ -24,130 +25,7 @@ interface SideHustleProps {
 }
 
 export function SideHustlesTab({ income, goals, recommendedHustles, recommendations }: SideHustleProps) {
-  const defaultSideHustles: SideHustleRecommendation[] = [
-    {
-      name: "Virtual Assistant Services",
-      description:
-        "Provide administrative, technical, or creative assistance to clients remotely. Tasks include email management, scheduling, social media, and customer service.",
-      potentialEarnings: "$15-50/hour",
-      timeCommitment: "10-30 hours/week",
-      difficulty: "Medium",
-      startupCost: "Low ($0-$100)",
-      skills: ["Organization", "Communication", "Tech Savvy", "Time Management"],
-      platforms: [
-        { name: "Upwork", url: "https://www.upwork.com" },
-        { name: "Fiverr", url: "https://www.fiverr.com" },
-        { name: "Belay", url: "https://belaysolutions.com/" },
-      ],
-      category: "Remote Admin",
-    },
-    {
-      name: "Freelance Content Writing",
-      description:
-        "Create blog posts, articles, website copy, and marketing materials for businesses. Specialize in a niche for higher rates.",
-      potentialEarnings: "$50-500+/article",
-      timeCommitment: "Flexible",
-      difficulty: "Medium",
-      startupCost: "None",
-      skills: ["Writing", "Research", "SEO Basics", "Grammar"],
-      platforms: [
-        { name: "Contently", url: "https://contently.com" },
-        { name: "ProBlogger Jobs", url: "https://problogger.com/jobs" },
-        { name: "ClearVoice", url: "https://www.clearvoice.com/" },
-      ],
-      category: "Creative/Writing",
-    },
-    {
-      name: "Online Tutoring / Teaching",
-      description:
-        "Teach students K-12, college, or adults in subjects you're proficient in. ESL teaching is also popular.",
-      potentialEarnings: "$15-60/hour",
-      timeCommitment: "5-20 hours/week",
-      difficulty: "Medium",
-      startupCost: "Low (Good internet & webcam)",
-      skills: ["Subject Matter Expert", "Patience", "Communication"],
-      platforms: [
-        { name: "VIPKid", url: "https://www.vipkid.com/" },
-        { name: "TutorMe", url: "https://tutorme.com/" },
-        { name: "Outschool", url: "https://outschool.com/" },
-      ],
-      category: "Education",
-    },
-    {
-      name: "Graphic Design Services",
-      description: "Create logos, branding materials, social media graphics, and website designs for clients.",
-      potentialEarnings: "$25-100+/hour",
-      timeCommitment: "Project-based",
-      difficulty: "Medium-Hard",
-      startupCost: "Medium (Software like Adobe CC)",
-      skills: ["Design Software", "Creativity", "Visual Communication"],
-      platforms: [
-        { name: "99designs", url: "https://99designs.com/" },
-        { name: "Dribbble Hiring", url: "https://dribbble.com/hiring" },
-        { name: "DesignCrowd", url: "https://www.designcrowd.com/" },
-      ],
-      category: "Creative/Design",
-    },
-    {
-      name: "Social Media Management",
-      description:
-        "Manage social media accounts for small businesses, including content creation, scheduling, and engagement.",
-      potentialEarnings: "$200-2000+/month per client",
-      timeCommitment: "10-20 hours/week",
-      difficulty: "Medium",
-      startupCost: "Low (Scheduling tools optional)",
-      skills: ["Social Media Platforms", "Content Creation", "Analytics"],
-      platforms: [
-        { name: "LinkedIn ProFinder", url: "https://www.linkedin.com/profinder" },
-        { name: "Facebook Groups", url: "#" }, // General search
-      ],
-      category: "Marketing",
-    },
-    {
-      name: "Delivery Driver (Food/Groceries)",
-      description: "Deliver food, groceries, or packages using your own vehicle. Flexible hours.",
-      potentialEarnings: "$15-25/hour (before expenses)",
-      timeCommitment: "Flexible",
-      difficulty: "Easy",
-      startupCost: "Low (Vehicle, smartphone)",
-      skills: ["Driving", "Navigation", "Customer Service"],
-      platforms: [
-        { name: "DoorDash", url: "https://dasher.doordash.com/" },
-        { name: "Uber Eats", url: "https://www.uber.com/us/en/drive/delivery/" },
-        { name: "Instacart", url: "https://shoppers.instacart.com/" },
-      ],
-      category: "Gig Economy",
-    },
-    {
-      name: "Pet Sitting / Dog Walking",
-      description: "Care for pets while their owners are away or walk dogs for busy professionals.",
-      potentialEarnings: "$20-50/visit or $15-30/walk",
-      timeCommitment: "Flexible",
-      difficulty: "Easy-Medium",
-      startupCost: "Very Low",
-      skills: ["Animal Lover", "Reliability", "Responsibility"],
-      platforms: [
-        { name: "Rover", url: "https://www.rover.com/" },
-        { name: "Wag!", url: "https://wagwalking.com/" },
-      ],
-      category: "Services",
-    },
-    {
-      name: "Notary Public Services",
-      description:
-        "Become a certified notary and offer document notarization services. Can be especially lucrative as a mobile notary for real estate closings.",
-      potentialEarnings: "$75-200/signing (Mobile)",
-      timeCommitment: "Part-time/By appointment",
-      difficulty: "Low",
-      startupCost: "Medium ($100-500 for certification/supplies)",
-      skills: ["Attention to detail", "Reliability", "Basic legal understanding"],
-      platforms: [
-        { name: "National Notary Association", url: "https://www.nationalnotary.org/" },
-        { name: "Snapdocs", url: "https://www.snapdocs.com" },
-      ],
-      category: "Professional Services",
-    },
-  ]
+  const defaultSideHustles: SideHustleRecommendation[] = getPlaybookSideHustles(10)
 
   let hustlesToDisplay: SideHustleRecommendation[] = []
 

@@ -1,5 +1,4 @@
 import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
-import { sendNewLeadAlertEmail } from '@/lib/email/sendEmail';
 import { logEvent } from '@/lib/system/logEvent';
 
 type FundingStrategyAutomationInput = {
@@ -20,16 +19,10 @@ export async function runFundingStrategySubmittedAutomation(
   input: FundingStrategyAutomationInput
 ) {
   const [emailResult, taskResult, logResult] = await Promise.allSettled([
-    sendNewLeadAlertEmail({
-      leadId: input.requestId,
-      leadType: 'credit_card_funding_strategy',
-      name: input.fullName || input.businessName,
-      email: input.userEmail,
-      phone: input.phone,
-      sourcePath: '/funding/business-funding-strategy',
-      summary:
-        input.summary ||
-        `Readiness score ${input.readinessScore ?? 'n/a'} (${input.readinessTier || 'unknown'}).`,
+    Promise.resolve({
+      ok: true,
+      skipped: true,
+      reason: 'intake_alert_replaced_by_send_alerts',
     }),
     createFundingStrategyReviewTask({
       requestId: input.requestId,

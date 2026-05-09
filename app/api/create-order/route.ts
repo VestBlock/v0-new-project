@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { getPaypalApiUrl } from '@/lib/paypal/config';
-import { getVestBlockProduct, safeReturnPath } from '@/lib/payments/products';
+import {
+  getVestBlockProduct,
+  isVestBlockProductType,
+  safeReturnPath,
+} from '@/lib/payments/products';
 import { logEvent } from '@/lib/system/logEvent';
 
 function getSiteOrigin() {
@@ -21,17 +25,29 @@ function getSiteOrigin() {
 }
 
 export async function POST(req: Request) {
-  const {
-    userId,
-    productType,
-    requestId,
-    returnPath,
-  }: {
+  const body = await req.json().catch(() => null);
+
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json(
+      { success: false, error: 'A valid checkout request is required.' },
+      { status: 400 }
+    );
+  }
+
+  const { userId, productType, requestId, returnPath } = body as {
     userId?: string;
     productType?: string;
     requestId?: string;
     returnPath?: string;
-  } = await req.json();
+  };
+
+  if (!isVestBlockProductType(productType)) {
+    return NextResponse.json(
+      { success: false, error: 'Choose a valid VestBlock product before checkout.' },
+      { status: 400 }
+    );
+  }
+
   const product = getVestBlockProduct(productType);
 
   const getData = await generatePaypalAccessToken();

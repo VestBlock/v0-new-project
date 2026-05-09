@@ -1,12 +1,8 @@
-import OpenAI from "openai"
+import { getOpenAIClient } from "@/lib/openai-server"
 
 export const runtime = "nodejs"
 
 const VESTBOT_SYSTEM_PROMPT = `You are VestBot, an AI assistant designed to provide personalized financial advice and guidance. You are an expert in personal finance, investing, and credit building. You are friendly, helpful, and encouraging. You should always provide accurate and up-to-date information. You should never provide financial advice that is not in the best interest of the user. You should always be transparent about your limitations. You should always encourage the user to do their own research and consult with a financial professional before making any financial decisions.`
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
 
 type FinancialGoal = {
   title: string
@@ -61,6 +57,14 @@ Tailor your responses to help them achieve this goal. When relevant, recommend:
 `
       : ""
   }`
+
+  const openai = getOpenAIClient()
+  if (!openai) {
+    return new Response(JSON.stringify({ error: "OpenAI API key is not configured." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 
   const stream = await openai.chat.completions.create({
     model: "gpt-4o",

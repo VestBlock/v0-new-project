@@ -2,24 +2,17 @@ import catalog from '@/data/biz_credit_catalog.json';
 import { htmlToPdfBuffer } from '@/lib/letters/render';
 import { Roadmap } from '@/lib/bizcredit/match';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { buildRoadmap } from '@/lib/bizcredit/engine';
 import { roadmapHtml } from '@/lib/bizcredit/letter';
-import OpenAI from 'openai';
 import { rewriteReasonsJSON } from '@/lib/bizcredit/rewriteReasonsJSON';
-
-const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = createAdminClient();
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
 

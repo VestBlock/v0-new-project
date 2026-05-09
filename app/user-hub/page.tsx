@@ -14,6 +14,11 @@ import type { FinancialGoal } from "@/components/financial-goals-selector"
 import { predefinedGoals } from "@/components/financial-goals-selector"
 import { Loader2, AlertTriangle, Target, MessageSquare, FileText } from "lucide-react"
 import dynamic from "next/dynamic"
+import { WorkspaceActivityPanel } from "@/components/workspace-activity-panel"
+import { captureClientEvent } from "@/lib/analytics/client"
+import { analyticsEvents } from "@/lib/analytics/events"
+import { AccessStatusCard } from "@/components/access-status-card"
+import { getAccessProfile } from "@/lib/auth/access"
 
 const DisputeLetterGenerator = dynamic(
   () => import("@/components/dispute-letter-generator").then((mod) => mod.DisputeLetterGenerator),
@@ -39,6 +44,9 @@ interface UserProfileData {
   address_zip?: string | null
   phone_number?: string | null
   email?: string | null
+  role?: string | null
+  is_subscribed?: boolean | string | number | null
+  paypal_order_product?: string | null
 }
 
 interface RoadmapStepData {
@@ -67,6 +75,7 @@ export default function UserHubPage() {
   const [isLoadingProfileAndRoadmap, setIsLoadingProfileAndRoadmap] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false)
+  const [chatSessionId] = useState(() => crypto.randomUUID())
 
   const {
     messages,
@@ -78,9 +87,10 @@ export default function UserHubPage() {
     setMessages,
     setInput,
   } = useChat({
+    id: chatSessionId,
     api: "/api/chat",
+    streamProtocol: "text",
     body: {
-      // @ts-ignore
       creditScore: userProfile?.credit_score,
       financialGoal: userProfile?.financial_goal
         ? {
@@ -90,6 +100,7 @@ export default function UserHubPage() {
             customDetails: userProfile.financial_goal.customDetails,
           }
         : null,
+      assistantType: 'user-hub',
     },
     onError: (err) => {
       console.error("Chat API error:", err)
@@ -115,7 +126,7 @@ export default function UserHubPage() {
         const { data: profileData, error: profileError } = await supabase
           .from("user_profiles")
           .select(
-            "id, full_name, credit_score, financial_goal, address_street, address_city, address_state, address_zip, phone_number",
+            "id, full_name, credit_score, financial_goal, address_street, address_city, address_state, address_zip, phone_number, role, is_subscribed, paypal_order_product",
           )
           .eq("id", user.id)
           .single()
@@ -212,6 +223,10 @@ export default function UserHubPage() {
       }
       const newRoadmap = await response.json()
       setRoadmap(newRoadmap as UserRoadmap)
+      captureClientEvent(analyticsEvents.roadmapGenerated, {
+        goal_id: userProfile.financial_goal.id,
+        has_credit_score: typeof userProfile.credit_score === 'number',
+      })
     } catch (err: any) {
       console.error("Error generating roadmap:", err)
       setError(err.message || "An unexpected error occurred while generating the roadmap.")
@@ -306,13 +321,27 @@ Can you give me more details or advice on this?`
     )
   }
 
+  const access = getAccessProfile({
+    email: user.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  })
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       
       <main className="pt-20 md:pt-24 px-2 pb-16 flex-grow">
         <div className="container mx-auto max-w-5xl h-full">
+          <div className="mb-4">
+            <AccessStatusCard
+              access={access}
+              title="Workspace access"
+              description="Your current VestBlock access tier and product status inside the user hub."
+            />
+          </div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-3 mb-4 sticky top-16 z-10 bg-background/90 backdrop-blur-sm py-2">
+            <TabsList className="grid w-full grid-cols-4 mb-4 sticky top-16 z-10 bg-background/90 backdrop-blur-sm py-2">
               <TabsTrigger
                 value="roadmap"
                 className="flex items-center gap-2 data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm"
@@ -333,6 +362,13 @@ Can you give me more details or advice on this?`
               >
                 <FileText className="h-4 w-4" />
                 Dispute Letters
+              </TabsTrigger>
+              <TabsTrigger
+                value="workspace"
+                className="flex items-center gap-2 data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Workspace
               </TabsTrigger>
             </TabsList>
 
@@ -455,6 +491,13 @@ Can you give me more details or advice on this?`
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent
+              value="workspace"
+              className="flex-grow overflow-y-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <WorkspaceActivityPanel />
             </TabsContent>
           </Tabs>
         </div>

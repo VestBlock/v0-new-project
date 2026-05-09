@@ -9,8 +9,11 @@ export const maxDuration = 30 // Reduced duration as no external PDF processing
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export async function POST(request: NextRequest) {
-  console.log("[API /initiate-analysis] Request received for client-side extracted text.")
   const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
   try {
@@ -39,16 +42,12 @@ export async function POST(request: NextRequest) {
     let financialGoal: FinancialGoal
     try {
       financialGoal = JSON.parse(financialGoalString) as FinancialGoal
-    } catch (e) {
+    } catch {
       return NextResponse.json({ success: false, message: "Invalid financial goal format." }, { status: 400 })
     }
 
     const fileSizeBytes = Number.parseInt(fileSizeBytesString, 10)
     const isLikelyCreditReport = isLikelyCreditReportString === "true"
-
-    console.log(
-      `[API /initiate-analysis] User: ${clientUserId}, File: ${originalFileName}, Goal: ${financialGoal.title}, Text length: ${extractedText.length}`,
-    )
 
     const jobDataToInsert: Partial<AnalysisJob> & { user_id: string; status: string } = {
       user_id: clientUserId,
@@ -74,18 +73,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: `Database error: ${dbError.message}` }, { status: 500 })
     }
 
-    console.log(
-      `[API /initiate-analysis] New analysis job created in DB. Job ID: ${newJob.id}. Status: pending_ai_analysis`,
-    )
     return NextResponse.json({
       success: true,
       jobId: newJob.id,
       message: "Analysis job created. AI processing will begin shortly.",
     })
-  } catch (error: any) {
-    console.error("[API /initiate-analysis] CATCH BLOCK ERROR:", error)
+  } catch (error) {
+    console.error("[API /initiate-analysis] Unexpected error:", getErrorMessage(error))
     return NextResponse.json(
-      { success: false, message: error.message || "An unexpected error occurred.", details: String(error) },
+      { success: false, message: getErrorMessage(error) || "An unexpected error occurred.", details: String(error) },
       { status: 500 },
     )
   }

@@ -24,14 +24,6 @@ interface UserProfileData {
   financial_goal: FinancialGoal | null;
 }
 
-interface UserRoadmap {
-  id: string;
-  user_id: string;
-  financial_goal_id?: string;
-  roadmap_data: { steps: RoadmapStep[] };
-  created_at: string;
-}
-
 export default function RoadmapPage() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const supabase = getSupabaseClient();
@@ -43,8 +35,6 @@ export default function RoadmapPage() {
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState('premade');
-  const [chatQuery, setChatQuery] = useState('');
-  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -104,7 +94,6 @@ export default function RoadmapPage() {
     };
 
     if (user) fetchData();
-    else if (!authLoading) setIsLoading(false);
   }, [user, authLoading, isAuthenticated, supabase, router]);
 
   const handleGenerateRoadmap = async () => {
@@ -152,11 +141,11 @@ export default function RoadmapPage() {
   };
 
   const handleAskAboutStep = (step: RoadmapStep) => {
-    setChatQuery(
-      `Tell me more about this step: "${step.title}". What are the best strategies to accomplish this?`
+    router.push(
+      `/chat?message=${encodeURIComponent(
+        `Tell me more about this step: "${step.title}". What are the best strategies to accomplish this?`
+      )}`
     );
-    setIsChatOpen(true);
-    console.log('Asking about step:', step.title);
   };
 
   if (authLoading || isLoading) {
@@ -244,9 +233,7 @@ export default function RoadmapPage() {
 
             <TabsContent value="premade" className="mt-6">
               <PremadeRoadmapGenerator
-                onRoadmapSelect={(roadmap) =>
-                  console.log('Selected roadmap:', roadmap)
-                }
+                onRoadmapSelect={() => setActiveTab('custom')}
               />
             </TabsContent>
 

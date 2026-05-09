@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,7 +21,6 @@ import {
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 // Dynamically import the generator to avoid SSR issues with its dependencies
 const DisputeLetterGenerator = dynamic(
@@ -64,7 +64,7 @@ const letterTypes = [
   },
 ];
 
-export default function DisputeLettersToolPage() {
+function DisputeLettersToolPageContent() {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -170,8 +170,8 @@ export default function DisputeLettersToolPage() {
                       </CardTitle>
                       <CardDescription>
                         Our most advanced tool. AI analyzes your report and
-                        generates highly effective, personalized dispute letters
-                        for maximum results.
+                        helps generate more tailored dispute-letter drafts and
+                        follow-up structure than generic templates.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="mt-auto">
@@ -219,5 +219,21 @@ export default function DisputeLettersToolPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function DisputeLettersToolPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex flex-col">
+          <main className="flex-grow flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
+          </main>
+        </div>
+      }
+    >
+      <DisputeLettersToolPageContent />
+    </Suspense>
   );
 }

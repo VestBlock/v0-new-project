@@ -191,6 +191,7 @@ export async function notifyDisputeLettersReady(input: {
   userId?: string | null;
   userEmail?: string | null;
   generatedLetterCount?: number | null;
+  letterTypes?: string[] | null;
 }) {
   if (!input.generatedLetterCount) return { skipped: true };
 
@@ -309,6 +310,7 @@ export async function runDisputeLetterReminderAutomation(rows: DisputeLetterAuto
             userId: row.user_id,
             userEmail: row.user_email,
             bureau: row.bureau,
+            letterType: row.letter_type,
             ageHours: ageHours(generatedBase),
           }),
           sendUserSecondaryBureauReminderEmail({
@@ -316,6 +318,7 @@ export async function runDisputeLetterReminderAutomation(rows: DisputeLetterAuto
             userEmail: row.user_email,
             letterId: row.id,
             bureau: row.bureau,
+            letterType: row.letter_type,
           }),
         ]);
 
@@ -352,6 +355,7 @@ export async function runDisputeLetterReminderAutomation(rows: DisputeLetterAuto
             userId: row.user_id,
             userEmail: row.user_email,
             bureau: row.bureau,
+            letterType: row.letter_type,
             mailedAt,
             ageHours: ageHours(mailedAt),
           }),
@@ -360,12 +364,14 @@ export async function runDisputeLetterReminderAutomation(rows: DisputeLetterAuto
             userEmail: row.user_email,
             letterId: row.id,
             bureau: row.bureau,
+            letterType: row.letter_type,
           }),
           sendAdminDisputeLetterFollowupEmail({
             userId: row.user_id,
             userEmail: row.user_email,
             letterId: row.id,
             bureau: row.bureau,
+            letterType: row.letter_type,
             reason: 'Bureau response review window reached.',
           }),
         ]);

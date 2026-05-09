@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase/server"
+import { registerUserDocument } from "@/lib/documents/service"
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
@@ -68,17 +68,18 @@ export async function POST(req: Request) {
 
     // If userId is provided, save the PDF URL to the user's account
     if (userId) {
-      const supabase = getSupabaseServer()
-
-      const { error: dbError } = await supabase.from("user_documents").insert({
-        user_id: userId,
-        document_name: fileName,
-        document_url: data.url,
-        document_type: "dispute_letter",
-        created_at: new Date().toISOString(),
-      })
-
-      if (dbError) {
+      try {
+        await registerUserDocument({
+          userId,
+          documentName: fileName,
+          documentUrl: data.url,
+          documentType: "dispute_letter",
+          status: "ready",
+          metadataJson: {
+            source: "generate-pdf",
+          },
+        })
+      } catch (dbError) {
         console.error("Supabase error saving document:", dbError)
         // Non-critical error for the PDF generation itself, but good to log
         // You might decide if this should return an error to the client or not

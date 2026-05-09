@@ -9,7 +9,14 @@ export type LetterType =
   | '609'
   | 'Debt Validation'
   | 'Incorrect Information'
-  | 'Cease & Desist';
+  | 'Cease & Desist'
+  | 'Direct Furnisher Dispute'
+  | 'Method Of Verification'
+  | 'Statement Of Dispute'
+  | 'Identity Theft Block'
+  | 'Mixed File'
+  | 'Outdated Information'
+  | 'Personal Information Correction';
 
 // Keep this aligned with your NegativeItem shape.
 // We only read a few optional fields below.
@@ -50,7 +57,14 @@ export type LetterPayload = {
     | '609'
     | 'Debt Validation'
     | 'Incorrect Information'
-    | 'Cease & Desist';
+    | 'Cease & Desist'
+    | 'Direct Furnisher Dispute'
+    | 'Method Of Verification'
+    | 'Statement Of Dispute'
+    | 'Identity Theft Block'
+    | 'Mixed File'
+    | 'Outdated Information'
+    | 'Personal Information Correction';
   items: NegativeItem[];
   bodyHtml?: string;
 };
@@ -111,14 +125,93 @@ function defaultBodyHtml(
     ? `<ol class="items-list">${items.map(formatItemLine).join('')}</ol>`
     : `<p>No specific entries were detected in the uploaded report. Please conduct a full reinvestigation.</p>`;
 
-  // A concise, legally-safe default body that works for all 4 types
+  const openingByType: Record<LetterType, string> = {
+    '609':
+      'I am writing to dispute entries in my credit file that I believe are inaccurate, incomplete, or unverifiable. Under the Fair Credit Reporting Act, please reinvestigate the items listed below and remove or correct any information that cannot be verified.',
+    'Debt Validation':
+      'I am writing to dispute collector-related information that I believe requires validation. Please review the items below and verify the basis, ownership, and accuracy of the reported information.',
+    'Incorrect Information':
+      'I am writing to dispute entries in my credit file that I believe are inaccurate, incomplete, or unverifiable. Please reinvestigate the items listed below and correct any information that does not match your records.',
+    'Cease & Desist':
+      'I am writing to document my dispute and request that all future communication related to the items below be handled in writing. Please review the reporting carefully and update the file if the information cannot be verified.',
+    'Direct Furnisher Dispute':
+      'I am writing to dispute information that appears to have been furnished inaccurately. Please conduct a reasonable investigation of the reporting source details below and correct any balance, status, date, ownership, or payment-history information that is inaccurate or incomplete.',
+    'Method Of Verification':
+      'I am writing as a follow-up to a prior dispute result. Please provide the method of verification used for the items below, including the furnisher information relied upon during the investigation, and correct or delete anything that cannot be substantiated.',
+    'Statement Of Dispute':
+      'I am writing to document that I continue to dispute the items below. If this dispute is not otherwise resolved, please add a brief statement of dispute to my file and ensure it is included or summarized in future reports as required.',
+    'Identity Theft Block':
+      'I am writing to report information that resulted from identity theft or unauthorized activity. Please review the items below, block reporting where appropriate, and update the file based on the supporting documentation I have provided.',
+    'Mixed File':
+      'I am writing to dispute information in my file that appears to belong to another person or to a mixed file. Please separate any incorrect personal identifiers or account information from my report and delete information that is not mine.',
+    'Outdated Information':
+      'I am writing to dispute information that appears to be reported beyond the normal reporting period or with inaccurate dates. Please review the timeline for each item below and remove or correct anything that should no longer appear.',
+    'Personal Information Correction':
+      'I am writing to dispute inaccurate personal identifying information in my file. Please correct any wrong names, addresses, employers, or other identifying details and review any related accounts that may be attached to those errors.',
+  };
+
+  const requestedActionsByType: Record<LetterType, string[]> = {
+    '609': [
+      'Conduct a reasonable reinvestigation and delete or correct any unverified or inaccurate information.',
+      'Provide the method of verification, including the furnisher’s name and address, upon completion.',
+      'Send me an updated copy of my credit report reflecting the results of your investigation.',
+    ],
+    'Debt Validation': [
+      'Verify the collector-related information and the basis for the reporting.',
+      'Delete or correct any information that cannot be validated or is reported inaccurately.',
+      'Send me a written response describing the results of your review.',
+    ],
+    'Incorrect Information': [
+      'Conduct a reasonable reinvestigation and delete or correct any unverified or inaccurate information.',
+      'Provide the source used to verify the disputed reporting, if applicable.',
+      'Send me an updated copy of my credit report reflecting the results of your investigation.',
+    ],
+    'Cease & Desist': [
+      'Note that I prefer written communication related to the disputed reporting.',
+      'Review the underlying reporting for accuracy and completeness.',
+      'Send me a written response reflecting the results of your review.',
+    ],
+    'Direct Furnisher Dispute': [
+      'Conduct a reasonable investigation of the reported balances, dates, status, and ownership details.',
+      'Correct or delete any information that is inaccurate, incomplete, or cannot be substantiated.',
+      'Send me a written explanation of the investigation results.',
+    ],
+    'Method Of Verification': [
+      'Provide the method of verification used for each disputed item.',
+      'Identify the furnisher or source used to verify the information.',
+      'Correct or delete any reporting that still cannot be substantiated after review.',
+    ],
+    'Statement Of Dispute': [
+      'Review the disputed reporting again for accuracy and completeness.',
+      'If the dispute remains unresolved, add a brief statement of dispute to my file.',
+      'Confirm in writing how the dispute notation will appear in future reports.',
+    ],
+    'Identity Theft Block': [
+      'Review the disputed information as potential identity-theft related reporting.',
+      'Block or remove any information tied to unauthorized accounts or activity when supported.',
+      'Confirm the results of your review in writing and send an updated report if changes are made.',
+    ],
+    'Mixed File': [
+      'Review whether the file contains mixed or merged information belonging to another person.',
+      'Delete or separate any incorrect personal identifiers or accounts not associated with me.',
+      'Send me a corrected report after the reinvestigation is complete.',
+    ],
+    'Outdated Information': [
+      'Review the reporting timeline and delete information that should no longer appear.',
+      'Correct any date fields that are inaccurate or misleading.',
+      'Send me an updated copy of my credit report reflecting the results.',
+    ],
+    'Personal Information Correction': [
+      'Correct inaccurate personal identifying information in my file.',
+      'Review whether the incorrect identifiers caused unrelated accounts or addresses to be associated with me.',
+      'Send me an updated report once the corrections are complete.',
+    ],
+  };
+
   return `
     <p>Dear ${esc(bureau)} Disputes Department,</p>
     <p>
-      I am writing to dispute entries in my credit file that I believe are inaccurate,
-      incomplete, or unverifiable. Under the Fair Credit Reporting Act (15 U.S.C. §1681i),
-      please reinvestigate the items listed below and remove or correct any information
-      that cannot be verified.
+      ${esc(openingByType[letterType])}
     </p>
 
     <h3>Items in Dispute</h3>
@@ -126,9 +219,9 @@ function defaultBodyHtml(
 
     <h3>Requested Actions</h3>
     <ul>
-      <li>Conduct a reasonable reinvestigation and delete or correct any unverified or inaccurate information.</li>
-      <li>Provide the method of verification, including the furnisher’s name and address, upon completion.</li>
-      <li>Send me an updated copy of my credit report reflecting the results of your investigation.</li>
+      ${requestedActionsByType[letterType]
+        .map((action) => `<li>${esc(action)}</li>`)
+        .join('')}
     </ul>
 
     <p>

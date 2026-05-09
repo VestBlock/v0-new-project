@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { createChatCompletion } from "@/lib/openai-service"
 import type { FinancialGoal } from "@/components/financial-goals-selector" // Ensure path is correct
 import type { RoadmapData } from "@/types/supabase" // Import new types
 
-// Initialize Supabase Admin Client
-const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error"
+}
 
 interface RoadmapGenerationRequest {
   creditScore: number | null
@@ -143,11 +143,8 @@ Example of a "steps" array item (general, adapt for business content as per abov
 }
 
 function cleanJsonResponse(jsonString: string): string {
-  // Remove Markdown code block fences (\`\`\`json ... \`\`\` or just \`\`\` ... \`\`\`)
   let cleaned = jsonString.replace(/^```json\s*/, "").replace(/```$/, "")
   cleaned = cleaned.replace(/^```\s*/, "").replace(/```$/, "") // For cases without 'json' specified
-
-  // Trim whitespace
   cleaned = cleaned.trim()
   return cleaned
 }
@@ -155,14 +152,7 @@ function cleanJsonResponse(jsonString: string): string {
 export async function POST(req: Request) {
   try {
     const { creditScore, financialGoal, userId: clientUserId } = (await req.json()) as RoadmapGenerationRequest
-
-    // User ID handling (ensure you have a robust way to get the authenticated user's ID)
-    // const { data: { user: authUser } } = await supabaseAdmin.auth.getUser(); // Example using Supabase auth
-    // const userId = authUser?.id || clientUserId;
-    // if (!userId) {
-    //   return NextResponse.json({ error: "User authentication is required." }, { status: 401 });
-    // }
-    // For now, assuming userId will be handled if saving to DB is implemented.
+    void clientUserId
 
     if (!financialGoal || !financialGoal.id || !financialGoal.title) {
       return NextResponse.json({ error: "Financial goal with id and title is required." }, { status: 400 })
@@ -184,13 +174,11 @@ export async function POST(req: Request) {
     )
 
     if (typeof aiResponse === "string" || !("choices" in aiResponse)) {
-      console.error("Invalid AI response format (not a CompletionResponse):", aiResponse)
       throw new Error("Invalid AI response format for roadmap generation.")
     }
 
     const roadmapJsonString = aiResponse.choices[0]?.message?.content
     if (!roadmapJsonString) {
-      console.error("AI did not return any content in choices[0].message.content")
       throw new Error("AI did not return roadmap content.")
     }
 
@@ -200,49 +188,24 @@ export async function POST(req: Request) {
     try {
       roadmapDataParsed = JSON.parse(cleanedJsonString)
       if (!roadmapDataParsed.steps || !Array.isArray(roadmapDataParsed.steps) || !roadmapDataParsed.overview) {
-        console.error("AI response JSON is missing required fields (steps, overview):", cleanedJsonString)
         throw new Error("AI response JSON is not in the expected format (missing steps array or overview).")
       }
-      // Ensure goal identifiers are present
       roadmapDataParsed.generated_for_goal_title = roadmapDataParsed.generated_for_goal_title || financialGoal.title
       roadmapDataParsed.generated_for_goal_id = roadmapDataParsed.generated_for_goal_id || financialGoal.id
     } catch (e: any) {
-      console.error("Failed to parse AI response JSON for roadmap:", e.message)
-      console.error("Raw AI response string (after cleaning attempt):", cleanedJsonString)
-      console.error("Original AI response string from API:", roadmapJsonString)
-      // Include more details from the error object if available
-      const errorMessage = e.message || "Unknown parsing error."
-      const errorStack = e.stack || "No stack trace available."
-      console.error(`Parse Error Details: ${errorMessage}\nStack: ${errorStack}`)
+      const errorMessage = getErrorMessage(e)
+      console.error("[API generate-roadmap] Invalid AI JSON payload.", {
+        errorMessage,
+        cleanedPreview: cleanedJsonString.slice(0, 500),
+      })
       throw new Error(`AI returned invalid JSON for the roadmap. Parse error: ${errorMessage}`)
     }
 
-    // TODO: Implement saving the generated roadmap to `user_roadmaps` table
-    // const { data: savedRoadmap, error: saveError } = await supabaseAdmin
-    //   .from("user_roadmaps")
-    //   .insert({
-    //     user_id: userId, // Actual authenticated user ID
-    //     financial_goal_id: financialGoal.id,
-    //     financial_goal_title: financialGoal.title,
-    //     financial_goal_custom_details: financialGoal.customDetails,
-    //     credit_score_at_generation: creditScore,
-    //     roadmap_data: roadmapDataParsed,
-    //     // is_primary: true // if this is for their main profile goal
-    //   })
-    //   .select()
-    //   .single();
-    // if (saveError) {
-    //   console.error("Error saving roadmap to DB:", saveError);
-    //   throw new Error(`Failed to save the generated roadmap: ${saveError.message}`);
-    // }
-    // return NextResponse.json(savedRoadmap);
-
-    // For now, returning the parsed data directly, wrapped as expected by the client
     return NextResponse.json({ roadmap_data: roadmapDataParsed })
   } catch (error: any) {
-    console.error("[API generate-roadmap] Error:", error.message, error.stack)
+    console.error("[API generate-roadmap] Error:", getErrorMessage(error))
     const responseError = {
-      message: error.message || "Failed to generate roadmap.",
+      message: getErrorMessage(error),
       ...(process.env.NODE_ENV === "development" && { stack: error.stack }), // Include stack in dev
     }
     return NextResponse.json({ error: responseError }, { status: 500 })

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -40,6 +40,16 @@ const initialAnswers = {
   useOfFunds: '',
 };
 
+export type FundingEligibilityAnswers = typeof initialAnswers;
+
+type FundingEligibilityCheckerProps = {
+  onAssessmentChange?: (payload: {
+    answers: FundingEligibilityAnswers;
+    readiness: ReturnType<typeof evaluateCardFundingReadiness> | null;
+    submitted: boolean;
+  }) => void;
+};
+
 function resultCopy(tier?: string) {
   if (tier === 'strong_candidate') {
     return {
@@ -62,15 +72,17 @@ function resultCopy(tier?: string) {
   }
 
   return {
-    headline: 'Not ready yet',
-    description:
-      'This profile should improve readiness before applying. VestBlock can help organize the credit, business setup, and documentation work.',
-    action: 'Join The $300 Readiness Plan',
+      headline: 'Not ready yet',
+      description:
+      'This profile should improve a few funding factors before applying. VestBlock can help organize the credit, business setup, and documentation work.',
+    action: 'Join The $300 Funding Prep Plan',
     variant: 'outline' as const,
   };
 }
 
-export function FundingEligibilityChecker() {
+export function FundingEligibilityChecker({
+  onAssessmentChange,
+}: FundingEligibilityCheckerProps) {
   const [answers, setAnswers] = useState(initialAnswers);
   const [submitted, setSubmitted] = useState(false);
 
@@ -97,13 +109,21 @@ export function FundingEligibilityChecker() {
     setAnswers((current) => ({ ...current, [name]: value }));
   };
 
+  useEffect(() => {
+    onAssessmentChange?.({
+      answers,
+      readiness,
+      submitted,
+    });
+  }, [answers, onAssessmentChange, readiness, submitted]);
+
   return (
     <Card className="border-2 border-cyan-500/20">
       <CardHeader>
         <Badge className="w-fit bg-cyan-600 text-white">Free instant check</Badge>
-        <CardTitle className="text-2xl">See If Your Business Is Funding-Ready</CardTitle>
+        <CardTitle className="text-2xl">See If Your Business Is Ready To Apply</CardTitle>
         <CardDescription>
-          Answer a few questions and get an instant readiness score before you pay for anything.
+          Answer a few questions and get an instant funding-prep score before you pay for anything.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
@@ -227,7 +247,7 @@ export function FundingEligibilityChecker() {
               id="useOfFunds"
               value={answers.useOfFunds}
               onChange={(event) => updateField('useOfFunds', event.target.value)}
-              placeholder="Inventory, equipment, ads, payroll bridge, expansion, real estate deal costs..."
+              placeholder="Inventory, equipment, ads, payroll bridge, new location, real estate deal costs..."
               rows={3}
             />
           </div>
@@ -244,7 +264,7 @@ export function FundingEligibilityChecker() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>No payment required</AlertTitle>
               <AlertDescription>
-                This free check helps you decide whether to apply now or use VestBlock to get funding-ready first.
+                This free check helps you decide whether to apply now or use VestBlock to prepare first.
               </AlertDescription>
             </Alert>
           ) : (

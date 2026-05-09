@@ -8,9 +8,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pd
 
 // Force the PDF.js library to use the same version
 // This is a workaround to prevent version mismatch errors
-if (typeof window !== "undefined") {
-  console.log("Initializing PDF.js with version:", PDFJS_VERSION)
-}
 
 export interface ExtractionResult {
   text: string
@@ -28,7 +25,6 @@ export interface ExtractionResult {
  */
 export async function extractTextWithFallback(file: File): Promise<ExtractionResult> {
   const startTime = Date.now()
-  console.log("Starting text extraction for file:", file.name, file.type, file.size)
 
   try {
     // Check file type
@@ -38,7 +34,6 @@ export async function extractTextWithFallback(file: File): Promise<ExtractionRes
       if (!text || text.trim().length < 100) {
         throw new Error("The text file contains insufficient data for analysis.")
       }
-      console.log(`Successfully extracted ${text.length} characters from text file`)
       return {
         text,
         metadata: {
@@ -56,7 +51,6 @@ export async function extractTextWithFallback(file: File): Promise<ExtractionRes
         const pdfText = await extractWithPDFJS(file)
 
         if (pdfText && pdfText.length > 100) {
-          console.log(`Successfully extracted ${pdfText.length} characters using PDF.js`)
           return {
             text: pdfText,
             metadata: {
@@ -105,8 +99,6 @@ async function extractWithPDFJS(file: File): Promise<string> {
     })
 
     const pdf = await loadingTask.promise
-
-    console.log(`PDF loaded with ${pdf.numPages} pages`)
 
     let extractedText = ""
 

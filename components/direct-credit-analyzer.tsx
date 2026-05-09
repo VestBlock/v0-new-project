@@ -40,7 +40,6 @@ export function DirectCreditAnalyzer() {
       const result = await extractTextWithFallback(selectedFile)
       const text = result.text
       setExtractedText(text)
-      console.log(`Extracted ${text.length} characters from document`)
       setProgress(50)
     } catch (err) {
       console.error("Error extracting text:", err)
@@ -220,8 +219,8 @@ export function DirectCreditAnalyzer() {
             <CardTitle>Credit Report Analysis</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, "<br/>") }} />
+            <div className="prose prose-sm max-w-none whitespace-pre-wrap break-words dark:prose-invert">
+              {analysis}
             </div>
           </CardContent>
         </Card>

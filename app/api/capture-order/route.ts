@@ -4,12 +4,18 @@ import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { getPaypalApiUrl } from '@/lib/paypal/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
-import { getVestBlockProduct } from '@/lib/payments/products';
+import {
+  getDefaultVestBlockProduct,
+  getVestBlockProduct,
+  isVestBlockProductType,
+} from '@/lib/payments/products';
 import {
   runPaymentCompletedAutomation,
   runPaymentFailedAutomation,
 } from '@/lib/payments/paymentAutomation';
 import { logEvent } from '@/lib/system/logEvent';
+import { captureServerEvent } from '@/lib/analytics/server';
+import { analyticsEvents } from '@/lib/analytics/events';
 
 export async function POST(req: Request) {
   let orderID: string | null = null;
@@ -30,6 +36,17 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    if (requestedProductType && !isVestBlockProductType(requestedProductType)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid product type for this checkout.' },
+        { status: 400 }
+      );
+    }
+
+    const validRequestedProductType = isVestBlockProductType(requestedProductType)
+      ? requestedProductType
+      : null;
 
     // 1) Capture payment
     const token = await generatePaypalAccessToken();
@@ -59,12 +76,27 @@ export async function POST(req: Request) {
       )
       .maybeSingle();
     const product =
-      fundingRequest?.id || requestedProductType === 'funding_strategy_review'
+      fundingRequest?.id || validRequestedProductType === 'funding_strategy_review'
         ? getVestBlockProduct('funding_strategy_review')
-        : getVestBlockProduct(requestedProductType);
+        : validRequestedProductType
+          ? getVestBlockProduct(validRequestedProductType)
+          : getDefaultVestBlockProduct();
     requestId = requestId || fundingRequest?.id || null;
 
     if (status !== 'COMPLETED') {
+      void captureServerEvent({
+        distinctId: userId,
+        event: analyticsEvents.paymentCaptureFailed,
+        properties: {
+          amount: Number.parseFloat(amount),
+          provider: 'PayPal',
+          status: status || 'unknown',
+          orderID,
+          productType: product.type,
+          requestId,
+        },
+      });
+
       await runPaymentFailedAutomation({
         userId,
         amount,
@@ -187,6 +219,36 @@ export async function POST(req: Request) {
         transactionId,
         source: 'capture-order',
         metadata: { orderID, productType: product.type, requestId },
+      });
+
+      void captureServerEvent({
+        distinctId: userId,
+        event: analyticsEvents.paymentCaptureCompleted,
+        properties: {
+          paymentId,
+          amount: Number.parseFloat(amount),
+          provider: 'PayPal',
+          transactionId,
+          orderID,
+          productType: product.type,
+          requestId,
+          duplicate: false,
+        },
+      });
+    } else {
+      void captureServerEvent({
+        distinctId: userId,
+        event: analyticsEvents.paymentCaptureCompleted,
+        properties: {
+          paymentId,
+          amount: Number.parseFloat(amount),
+          provider: 'PayPal',
+          transactionId,
+          orderID,
+          productType: product.type,
+          requestId,
+          duplicate: true,
+        },
       });
     }
 

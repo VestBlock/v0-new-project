@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Failed to process chat request",
-        details: error.message,
+        details: process.env.NODE_ENV === "production" ? undefined : error.message,
       },
       { status: 500 },
     )

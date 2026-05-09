@@ -2,11 +2,7 @@ import { pdfjs } from "react-pdf"
 
 // The pdfjs object from react-pdf is version "3.11.174".
 // We MUST use a worker that matches this version.
-const PDFJS_API_VERSION = pdfjs.version || "3.11.174" // Get version from pdfjs object, fallback if undefined
 const PDFJS_WORKER_VERSION_TO_LOAD = "3.11.174" // Explicitly set worker to match observed API version
-
-console.log(`PDF.js API version (from react-pdf): ${PDFJS_API_VERSION}`)
-console.log(`PDF.js Worker version being loaded: ${PDFJS_WORKER_VERSION_TO_LOAD}`)
 
 // Initialize PDF.js worker with the version that matches the API
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_WORKER_VERSION_TO_LOAD}/pdf.worker.min.js`
@@ -27,7 +23,6 @@ export interface ExtractionResult {
  */
 export async function extractTextWithFallback(file: File): Promise<ExtractionResult> {
   const startTime = Date.now()
-  console.log("Starting text extraction for file (pdf-extraction-service.ts):", file.name, file.type, file.size)
 
   try {
     // Check file type
@@ -36,7 +31,6 @@ export async function extractTextWithFallback(file: File): Promise<ExtractionRes
       if (!text || text.trim().length < 100) {
         throw new Error("The text file contains insufficient data for analysis.")
       }
-      console.log(`Successfully extracted ${text.length} characters from text file`)
       return {
         text,
         metadata: {
@@ -52,7 +46,6 @@ export async function extractTextWithFallback(file: File): Promise<ExtractionRes
         const pdfText = await extractWithPDFJS(file)
 
         if (pdfText && pdfText.length > 100) {
-          console.log(`Successfully extracted ${pdfText.length} characters using PDF.js`)
           return {
             text: pdfText,
             metadata: {
@@ -98,8 +91,6 @@ async function extractWithPDFJS(file: File): Promise<string> {
     standardFontDataUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_WORKER_VERSION_TO_LOAD}/standard_fonts/`,
   })
   const pdf = await loadingTask.promise
-
-  console.log(`PDF loaded with ${pdf.numPages} pages (pdf-extraction-service.ts)`)
 
   let extractedText = ""
   for (let i = 1; i <= pdf.numPages; i++) {

@@ -153,7 +153,7 @@ export function evaluateCardFundingReadiness(
       strengths,
       risks,
       nextSteps: [
-        'Use the $300 readiness plan if you want help improving eligibility before applying.',
+        'Use the $300 funding prep plan if you want help improving eligibility before applying.',
         'Resolve the highest-risk items before submitting applications.',
         'Confirm all costs, APRs, fees, inquiries, and repayment obligations before applying.',
         ...nextSteps,
@@ -170,9 +170,9 @@ export function evaluateCardFundingReadiness(
     strengths,
     risks,
     nextSteps: [
-      'Start with credit cleanup, utilization reduction, and business setup readiness.',
+      'Start with credit cleanup, utilization reduction, and business setup preparation.',
       'Organize EIN, banking, revenue records, and use-of-funds documentation.',
-      'Use the $300 readiness plan if you want VestBlock to help organize the prep work.',
+      'Use the $300 funding prep plan if you want VestBlock to help organize the prep work.',
       ...nextSteps,
     ],
   };

@@ -7,8 +7,6 @@ import type { Answers, GrantCard } from './match';
 // }) {
 //   const { user, cards, dateISO = new Date().toISOString().slice(0, 10) } = opts;
 //   const biz = user.business_name || 'your business';
-
-//   console.log('🚀 ~ grantLetterHtml ~ user:', user, cards);
 //   return `
 //   <div style="font-family:Arial, sans-serif;line-height:1.5;color:#fff;">
 //     <div style="text-align:right;>${dateISO}</div>
@@ -93,6 +91,7 @@ export function grantLetterHtml({
 
   return `
   <div style="color:#fff">
+  <div style="text-align:right;">${esc(dateISO)}</div>
   <p>To the Grant Committee,</p>
   <p>
     I’m writing on behalf of <strong>${esc(biz)}</strong> in ${esc(user.state)}

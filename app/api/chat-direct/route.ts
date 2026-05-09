@@ -4,12 +4,14 @@ import { VESTBOT_SYSTEM_PROMPT } from "@/lib/openai-server" // Still useful for 
 
 export const dynamic = "force-dynamic" // Ensures fresh execution
 
-export async function POST(req: Request) {
-  console.log("[API /chat-direct] Received request")
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
+export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) {
     console.error("[API /chat-direct] FATAL - OPENAI_API_KEY is not set.")
-    return new Response(JSON.stringify({ error: "Server Configuration Error", details: "API key missing." }), {
+    return new Response(JSON.stringify({ error: "Server Configuration Error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })
@@ -18,9 +20,10 @@ export async function POST(req: Request) {
   let requestBody
   try {
     requestBody = await req.json()
-  } catch (parseError: any) {
-    console.error("[API /chat-direct] Invalid JSON in request:", parseError.message)
-    return new Response(JSON.stringify({ error: "Invalid request format.", details: parseError.message }), {
+  } catch (parseError) {
+    const message = getErrorMessage(parseError)
+    console.error("[API /chat-direct] Invalid JSON in request:", message)
+    return new Response(JSON.stringify({ error: "Invalid request format." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
@@ -75,20 +78,17 @@ export async function POST(req: Request) {
       allMessages.push(...validClientMessages)
     }
 
-    console.log(
-      `[API /chat-direct] Sending to OpenAI. System prompt length: ${systemPrompt.length}, User messages: ${clientMessages?.length || 0}`,
-    )
-
-    // Use the direct createChatCompletion from openai-service
-    const streamResponse = await createChatCompletion(allMessages, true, { temperature: 0.5 }) // Stream enabled
-    return streamResponse // Return the Response object directly for streaming
-  } catch (error: any) {
-    console.error("[API /chat-direct] Error in main try-catch block:", error.message, error.stack)
-    // Ensure a JSON response for errors when not streaming
+    const streamResponse = await createChatCompletion(allMessages, true, { temperature: 0.5 })
+    return streamResponse
+  } catch (error) {
+    console.error("[API /chat-direct] Request failed:", getErrorMessage(error))
     return new Response(
       JSON.stringify({
         error: "Internal Server Chat Error",
-        details: error.message || "An unexpected error occurred.",
+        details:
+          process.env.NODE_ENV === "production"
+            ? undefined
+            : getErrorMessage(error) || "An unexpected error occurred.",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     )

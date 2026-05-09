@@ -37,6 +37,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
+import { getAccessProfile } from '@/lib/auth/access';
 
 /* ---------------- Types to match the API ---------------- */
 
@@ -95,6 +96,90 @@ const DEFAULT_ANSWERS: Answers = {
   monthly_revenue: '',
 };
 
+async function fetchSavedAnswers(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string
+) {
+  const { data } = await supabase
+    .from('user_tool_answers')
+    .select('answers')
+    .eq('user_id', userId)
+    .eq('tool', 'biz_credit')
+    .maybeSingle();
+  return (data?.answers as Partial<Answers>) ?? null;
+}
+
+async function upsertSavedAnswers(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string,
+  answers: Answers
+) {
+  const { error } = await supabase.from('user_tool_answers').upsert(
+    [{ user_id: userId, tool: 'biz_credit', answers }],
+    { onConflict: 'user_id,tool' }
+  );
+  if (error) throw error;
+}
+
+function StepsList({
+  title,
+  items,
+}: {
+  title: string;
+  items: CatalogItem[];
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.length === 0 && (
+          <p className="text-sm text-muted-foreground">No suggestions yet.</p>
+        )}
+
+        {items.map((it) => (
+          <div
+            key={it.id}
+            className="
+            grid grid-cols-[1fr_auto] gap-3 items-start
+            rounded-md border p-3 bg-card
+          "
+          >
+            <div className="min-w-0">
+              <div className="font-medium leading-5 break-words">{it.name}</div>
+
+              {it.notes && (
+                <div className="text-sm text-muted-foreground mt-1 break-words">
+                  {it.notes}
+                </div>
+              )}
+
+              {it.link && (
+                <a
+                  href={it.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs underline text-primary mt-1 inline-block max-w-full break-all"
+                  title={it.link}
+                >
+                  {it.link}
+                </a>
+              )}
+            </div>
+
+            <div className="shrink-0 self-start">
+              <Badge variant="outline" className="whitespace-nowrap">
+                Recommended
+              </Badge>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ---------------- Page ---------------- */
 
 export default function BusinessCreditPage() {
@@ -119,9 +204,13 @@ export default function BusinessCreditPage() {
   // history
   const [history, setHistory] = useState<RoadmapRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const isAdmin =
-    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
+  const access = getAccessProfile({
+    email: user?.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  });
+  const isProMember = access.hasPaidAccess;
 
   /* -------- Auth gate & initial load -------- */
 
@@ -162,28 +251,6 @@ export default function BusinessCreditPage() {
       router.push('/credit-upload');
     }
   }, [authLoading, isAuthenticated, isProMember, router]);
-
-  async function fetchSavedAnswers(supabase: any, userId: string) {
-    const { data } = await supabase
-      .from('user_tool_answers')
-      .select('answers')
-      .eq('user_id', userId)
-      .eq('tool', 'biz_credit')
-      .maybeSingle();
-    return (data?.answers as Partial<Answers>) ?? null;
-  }
-
-  async function upsertSavedAnswers(
-    supabase: any,
-    userId: string,
-    answers: Answers
-  ) {
-    const { error } = await supabase.from('user_tool_answers').upsert(
-      [{ user_id: userId, tool: 'biz_credit', answers }],
-      { onConflict: 'user_id,tool' } // use the PK for conflict resolution
-    );
-    if (error) throw error;
-  }
 
   /* -------- Validation -------- */
 
@@ -308,7 +375,6 @@ export default function BusinessCreditPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      console.log('🚀 ~ handleRegenerate ~ data:', data);
       toast({
         title: 'Updated',
         description: 'Roadmap regenerated with new wording.',
@@ -349,65 +415,6 @@ export default function BusinessCreditPage() {
       </main>
     );
   }
-
-  const StepsList = ({
-    title,
-    items,
-  }: {
-    title: string;
-    items: CatalogItem[];
-  }) => (
-    <Card className="overflow-hidden">
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {items.length === 0 && (
-          <p className="text-sm text-muted-foreground">No suggestions yet.</p>
-        )}
-
-        {items.map((it) => (
-          <div
-            key={it.id}
-            className="
-            grid grid-cols-[1fr_auto] gap-3 items-start
-            rounded-md border p-3 bg-card
-          "
-          >
-            {/* LEFT: text block that can wrap */}
-            <div className="min-w-0">
-              <div className="font-medium leading-5 break-words">{it.name}</div>
-
-              {it.notes && (
-                <div className="text-sm text-muted-foreground mt-1 break-words">
-                  {it.notes}
-                </div>
-              )}
-
-              {it.link && (
-                <a
-                  href={it.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs underline text-primary mt-1 inline-block max-w-full break-all"
-                  title={it.link}
-                >
-                  {it.link}
-                </a>
-              )}
-            </div>
-
-            {/* RIGHT: badge that never wraps or overflows */}
-            <div className="shrink-0 self-start">
-              <Badge variant="outline" className="whitespace-nowrap">
-                Recommended
-              </Badge>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="min-h-screen bg-background">

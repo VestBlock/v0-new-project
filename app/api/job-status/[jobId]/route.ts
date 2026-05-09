@@ -4,7 +4,8 @@ import type { Database, AnalysisJob, AiDetailedAnalysis, RoadmapData } from "@/t
 // Removed PDF.co specific imports: checkPdfCoJobStatus, downloadTextFile
 // import { isLikelyCreditReport } from "@/lib/text-utils"; // This is now in pdf-extraction-service or handled client side
 import { getComprehensiveAnalysisPrompt } from "@/lib/prompt-utils"
-import { OpenAI } from "openai"
+import { getOpenAIClient } from "@/lib/openai-server"
+import { enrichCreditAnalysisResults } from "@/lib/credit/recommendation-engine"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -12,26 +13,19 @@ export const maxDuration = 60
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const openaiApiKey = process.env.OPENAI_API_KEY!
 
-const openai = new OpenAI({ apiKey: openaiApiKey })
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 async function triggerAiAnalysis(
   job: AnalysisJob,
-  supabaseAdmin: ReturnType<typeof createClient<Database>>,
 ): Promise<Partial<AnalysisJob>> {
-  console.log(`[Job ${job.id}] Triggering AI analysis. Text length: ${job.extracted_text?.length}`)
   if (!job.extracted_text) {
     return { status: "failed", error_message: "Cannot perform AI analysis: Extracted text is missing." }
   }
 
-  // isLikelyCreditReport check is now done client-side and stored in job.is_likely_credit_report
   if (job.is_likely_credit_report === false) {
-    // Check boolean false explicitly
-    console.log(`[Job ${job.id}] Document was marked as not a likely credit report by client-side check.`)
-    // Proceed with analysis but AI prompt might need to be adjusted or expect different results
-    // Or, you could choose to return a specific message here.
-    // For now, we'll let the AI try, but the prompt might need to be robust.
   }
 
   const prompt = getComprehensiveAnalysisPrompt({
@@ -44,6 +38,11 @@ async function triggerAiAnalysis(
   })
 
   try {
+    const openai = getOpenAIClient()
+    if (!openai) {
+      throw new Error("OpenAI API key is not configured.")
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
       messages: [
@@ -62,10 +61,9 @@ async function triggerAiAnalysis(
     const parsedAiResponse = JSON.parse(aiResponseContent) as {
       detailedAnalysis: AiDetailedAnalysis
       roadmap: RoadmapData
-      // Add other expected fields like summary, cardRecs, sideHustles if your prompt generates them
       summary?: string
-      creditCardRecommendations?: any[] // Define specific types later
-      sideHustleRecommendations?: any[] // Define specific types later
+      creditCardRecommendations?: any[]
+      sideHustleRecommendations?: any[]
     }
 
     if (!parsedAiResponse.detailedAnalysis || !parsedAiResponse.roadmap || !parsedAiResponse.roadmap.steps) {
@@ -73,30 +71,44 @@ async function triggerAiAnalysis(
       throw new Error("AI response JSON structure is invalid.")
     }
 
-    console.log(`[Job ${job.id}] AI analysis successful.`)
+    const enriched = enrichCreditAnalysisResults({
+      extractedText: job.extracted_text,
+      financialGoalTitle: job.financial_goal_title,
+      detailedAnalysis: parsedAiResponse.detailedAnalysis,
+      roadmap: parsedAiResponse.roadmap,
+      existingCards: Array.isArray(parsedAiResponse.creditCardRecommendations)
+        ? parsedAiResponse.creditCardRecommendations
+        : null,
+      existingSideHustles: Array.isArray(parsedAiResponse.sideHustleRecommendations)
+        ? parsedAiResponse.sideHustleRecommendations
+        : null,
+    })
+
+    const summaryBase =
+      parsedAiResponse.summary || parsedAiResponse.detailedAnalysis.overall_summary || "AI analysis complete."
+
     return {
       status: "completed",
-      ai_summary:
-        parsedAiResponse.summary || parsedAiResponse.detailedAnalysis.overall_summary || "AI analysis complete.",
+      ai_summary: `${summaryBase}\n\n${enriched.boostSummaryNote}`,
       ai_detailed_analysis: parsedAiResponse.detailedAnalysis,
-      ai_roadmap_data: parsedAiResponse.roadmap,
-      ai_credit_card_recommendations: parsedAiResponse.creditCardRecommendations || null,
-      ai_side_hustle_recommendations: parsedAiResponse.sideHustleRecommendations || null,
+      ai_roadmap_data: enriched.roadmap || parsedAiResponse.roadmap,
+      ai_credit_card_recommendations: enriched.cards,
+      ai_side_hustle_recommendations: enriched.sideHustles,
       ai_analysis_completed_at: new Date().toISOString(),
       error_message: null,
     }
-  } catch (aiError: any) {
-    console.error(`[Job ${job.id}] AI Analysis Error:`, aiError)
-    return { status: "failed", error_message: `AI analysis failed: ${aiError.message}` }
+  } catch (aiError) {
+    console.error(`[Job ${job.id}] AI analysis failed:`, getErrorMessage(aiError))
+    return { status: "failed", error_message: `AI analysis failed: ${getErrorMessage(aiError)}` }
   }
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
+  void request
   const { jobId } = await params
   if (!jobId) {
     return NextResponse.json({ error: "Job ID is required" }, { status: 400 })
   }
-  console.log(`[API /job-status/${jobId}] Request received.`)
   const supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
   const { data: job, error: fetchError } = await supabaseAdmin
@@ -114,10 +126,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let currentJobState = { ...job }
 
   try {
-    // No more PDF.co status check.
-    // Directly check if job is pending AI analysis.
     if (currentJobState.status === "pending_ai_analysis") {
-      console.log(`[Job ${jobId}] Status is pending_ai_analysis. Triggering AI analysis.`)
       updatedFields = { ...updatedFields, status: "ai_processing" }
 
       const { error: preAiUpdateError } = await supabaseAdmin
@@ -127,13 +136,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (preAiUpdateError) throw preAiUpdateError
       currentJobState = { ...currentJobState, ...updatedFields }
 
-      const aiResults = await triggerAiAnalysis(currentJobState, supabaseAdmin)
+      const aiResults = await triggerAiAnalysis(currentJobState)
       updatedFields = { ...updatedFields, ...aiResults }
-      console.log(`[Job ${jobId}] AI analysis attempt completed. New status: ${aiResults.status}`)
     }
 
     if (Object.keys(updatedFields).length > 0 && updatedFields.status && updatedFields.status !== job.status) {
-      console.log(`[Job ${jobId}] Updating job in DB with final results/status:`, Object.keys(updatedFields))
       const { data: finalUpdatedJob, error: updateError } = await supabaseAdmin
         .from("analysis_jobs")
         .update(updatedFields)
@@ -149,16 +156,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     return NextResponse.json({ job: currentJobState })
-  } catch (error: any) {
-    console.error(`[API /job-status/${jobId}] CATCH BLOCK ERROR:`, error)
+  } catch (error) {
+    console.error(`[API /job-status/${jobId}] processing failed:`, getErrorMessage(error))
     try {
       await supabaseAdmin
         .from("analysis_jobs")
-        .update({ status: "failed", error_message: `Job status processing error: ${error.message}` })
+        .update({ status: "failed", error_message: `Job status processing error: ${getErrorMessage(error)}` })
         .eq("id", jobId)
     } catch (dbUpdateError) {
       console.error(`[API /job-status/${jobId}] Failed to update job status to failed in DB:`, dbUpdateError)
     }
-    return NextResponse.json({ error: `Job status processing error: ${error.message}` }, { status: 500 })
+    return NextResponse.json({ error: `Job status processing error: ${getErrorMessage(error)}` }, { status: 500 })
   }
 }

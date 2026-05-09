@@ -794,7 +794,8 @@ export function PremadeRoadmapGenerator({ onRoadmapSelect }: PremadeRoadmapGener
 
   const handleStepToggle = (roadmapId: string, stepIndex: number) => {
     // This would typically update the completion status in a database
-    console.log(`Toggled step ${stepIndex} for roadmap ${roadmapId}`)
+    void roadmapId
+    void stepIndex
   }
 
   return (

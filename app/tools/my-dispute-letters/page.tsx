@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { getAccessProfile } from '@/lib/auth/access';
 
 import { Database } from '@/types/supabase';
 
@@ -95,9 +96,13 @@ export default function MyDisputeLettersPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [isLoadingLetters, setIsLoadingLetters] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isAdmin =
-    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
+  const access = getAccessProfile({
+    email: user?.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  });
+  const isProMember = access.hasPaidAccess;
 
   useEffect(() => {
     if (authLoading) return;
@@ -117,7 +122,6 @@ export default function MyDisputeLettersPage() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
-        console.log('🚀 ~ fetchLetters ~ data:', data);
         if (dbError) throw dbError;
         setLetters(data || []);
       } catch (err: any) {

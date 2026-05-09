@@ -2,10 +2,9 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { OpenAI } from 'openai';
 // import pdfParse from 'pdf-parse';
 // import sharp from 'sharp';
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+import { getOpenAIClient } from '@/lib/openai-server';
 
 export type NegativeItem = {
   creditor: string;
@@ -18,7 +17,14 @@ export type NegativeItem = {
     | '609'
     | 'Debt Validation'
     | 'Incorrect Information'
-    | 'Cease & Desist';
+    | 'Cease & Desist'
+    | 'Direct Furnisher Dispute'
+    | 'Method Of Verification'
+    | 'Statement Of Dispute'
+    | 'Identity Theft Block'
+    | 'Mixed File'
+    | 'Outdated Information'
+    | 'Personal Information Correction';
 };
 
 // export async function extractTextFromPdf(
@@ -79,7 +85,6 @@ export type NegativeItem = {
 
 //   // NOTE: First run downloads eng.traineddata (~10–15MB) and caches it.
 //   const result = await Tesseract.recognize(prepped, 'eng', {
-//     // logger: (m) => console.log(m), // uncomment for debugging
 //   });
 
 //   const text = (result.data?.text || '').trim();
@@ -289,6 +294,11 @@ export async function ocrImageToText(
 export async function extractNegativeItemsFromText(
   text: string
 ): Promise<NegativeItem[]> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error('OpenAI client is not configured.');
+  }
+
   const system = `You are a credit dispute expert. Read the given credit report text and extract ONLY negative or disputable items. 
 Return strict JSON array of items with keys:
 - creditor
@@ -297,7 +307,17 @@ Return strict JSON array of items with keys:
 - bureaus (array from ["Experian","Equifax","TransUnion"])
 - reason (short)
 - status ("Open" | "Closed")
-- suggested_letter_type: one of ["609","Debt Validation","Incorrect Information","Cease & Desist"].
+- suggested_letter_type: one of ["609","Debt Validation","Incorrect Information","Cease & Desist","Direct Furnisher Dispute","Method Of Verification","Statement Of Dispute","Identity Theft Block","Mixed File","Outdated Information","Personal Information Correction"].
+
+Letter-type guidance:
+- Use "Debt Validation" for collector or collection-agency reporting issues.
+- Use "Identity Theft Block" for clearly unauthorized accounts, inquiries, or fraud signals.
+- Use "Mixed File" when the item appears to belong to another person or the report looks merged.
+- Use "Personal Information Correction" for wrong names, addresses, employers, or identity-layer errors.
+- Use "Outdated Information" when the item appears to be beyond normal reporting time limits or has suspicious date reporting.
+- Use "Direct Furnisher Dispute" for lender, servicer, or original-creditor reporting problems involving balance, status, payment history, dates, or ownership.
+- Prefer "Incorrect Information" as the fallback for ordinary accuracy problems.
+- Only use "Method Of Verification" or "Statement Of Dispute" if the text explicitly suggests prior dispute history or a verified-but-still-disputed issue.
 
 If nothing found, return [].`;
 

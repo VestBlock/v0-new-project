@@ -11,6 +11,7 @@ import {
   sendUserAnalysisCompletedEmail,
   sendUserCreditReportReceivedEmail,
 } from '@/lib/email/sendEmail';
+import { updateUserDocumentByRelatedItem } from '@/lib/documents/service';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
 
@@ -212,6 +213,26 @@ export async function attachAnalysisResult(
     entityType: 'credit_report',
     entityId: reportId,
   });
+
+  try {
+    await updateUserDocumentByRelatedItem({
+      userId: details?.userId,
+      relatedItemId: reportId,
+      updates: {
+        status: 'ready',
+        metadataJson:
+          typeof analysisJson === 'object' && analysisJson !== null
+            ? ({
+                ...(analysisJson as Record<string, unknown>),
+                completedAt: new Date().toISOString(),
+              } as any)
+            : { completedAt: new Date().toISOString() },
+      },
+    });
+  } catch (error) {
+    console.warn('[credit-workflow] document ready update skipped:', error);
+  }
+
   return result;
 }
 
@@ -253,4 +274,17 @@ export async function markCreditReportFailed(
     entityId: reportId,
     metadata: { message },
   });
+
+  try {
+    await updateUserDocumentByRelatedItem({
+      userId: details?.userId,
+      relatedItemId: reportId,
+      updates: {
+        status: 'failed',
+        metadataJson: { errorMessage: message, failedAt: new Date().toISOString() },
+      },
+    });
+  } catch (documentError) {
+    console.warn('[credit-workflow] document failure update skipped:', documentError);
+  }
 }

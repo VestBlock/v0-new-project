@@ -1,4 +1,9 @@
-export type VestBlockProductType = 'vestblock_pro' | 'funding_strategy_review';
+export const vestBlockProductTypes = [
+  'vestblock_pro',
+  'funding_strategy_review',
+] as const;
+
+export type VestBlockProductType = (typeof vestBlockProductTypes)[number];
 
 export type VestBlockProduct = {
   type: VestBlockProductType;
@@ -18,19 +23,23 @@ export const vestblockProducts: Record<VestBlockProductType, VestBlockProduct> =
   },
   funding_strategy_review: {
     type: 'funding_strategy_review',
-    label: 'Business Funding Readiness Plan',
+    label: 'Business Funding Prep Plan',
     amount: '300',
     defaultReturnPath: '/funding/business-funding-strategy',
     description:
-      'One-time readiness plan for business funding eligibility, credit cleanup, and application preparation.',
+      'One-time prep plan for business funding eligibility, credit cleanup, and application preparation.',
   },
 };
 
-export function getVestBlockProduct(type?: string | null) {
-  if (type && type in vestblockProducts) {
-    return vestblockProducts[type as VestBlockProductType];
-  }
+export function isVestBlockProductType(type?: string | null): type is VestBlockProductType {
+  return Boolean(type && type in vestblockProducts);
+}
 
+export function getVestBlockProduct(type: VestBlockProductType) {
+  return vestblockProducts[type];
+}
+
+export function getDefaultVestBlockProduct() {
   return vestblockProducts.vestblock_pro;
 }
 

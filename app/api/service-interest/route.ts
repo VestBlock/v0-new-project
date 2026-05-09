@@ -7,8 +7,8 @@ import {
   financialSkillsetPackageKeys,
   getFinancialSkillsetPackage,
 } from '@/lib/services/financialSkillsets';
-import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { queueGrowthServiceRequest } from '@/lib/inngest/events';
 
 const serviceInterestSchema = z.object({
   packageKey: z.enum(financialSkillsetPackageKeys),
@@ -54,9 +54,15 @@ export async function POST(req: Request) {
     .insert({
       lead_type: 'business_funding',
       status: 'new',
+      source: 'financial_service_request',
+      source_url: '/services/financial-growth',
+      category: 'business_funding',
       name: data.name,
       email: data.email,
       phone: data.phone,
+      business_name: data.businessName || null,
+      best_offer: servicePackage.title,
+      pain_signal: data.primaryGoal,
       contact_info: {
         name: data.name,
         email: data.email,
@@ -71,6 +77,8 @@ export async function POST(req: Request) {
         packageDeliverables: servicePackage.deliverables,
         complianceNote: servicePackage.complianceNote,
       },
+      market_segment: 'financial_growth_services',
+      outreach_angle: 'Paid service follow-through and delivery',
       notes: data.notes || summary,
     })
     .select('id')
@@ -84,15 +92,22 @@ export async function POST(req: Request) {
     );
   }
 
-  await runNewLeadAutomation({
+  const workflowResult = await queueGrowthServiceRequest({
     leadId: lead.id,
     leadType: 'business_funding',
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
     sourcePath: '/services/financial-growth',
     summary,
-    metadata: {
+    packageKey: data.packageKey,
+    leadName: data.name,
+    leadEmail: data.email,
+    phone: data.phone,
+    businessName: data.businessName || null,
+    primaryGoal: data.primaryGoal,
+    monthlyRevenueRange: data.monthlyRevenueRange || null,
+    creditScoreRange: data.creditScoreRange || null,
+    timeline: data.timeline || null,
+    notes: data.notes || null,
+    automationMetadata: {
       serviceCategory: 'financial_growth_services',
       packageKey: data.packageKey,
       packageTitle: servicePackage.title,
@@ -101,7 +116,21 @@ export async function POST(req: Request) {
       primaryGoal: data.primaryGoal,
       timeline: data.timeline || null,
     },
+    deliverableFormData: {
+      ...data,
+      serviceCategory: 'financial_growth_services',
+      packageTitle: servicePackage.title,
+      packagePrice: servicePackage.price,
+      packageDeliverables: servicePackage.deliverables,
+      complianceNote: servicePackage.complianceNote,
+    },
   });
 
-  return NextResponse.json({ success: true, leadId: lead.id });
+  return NextResponse.json({
+    success: true,
+    leadId: lead.id,
+    automationTriggered: workflowResult.automationTriggered,
+    deliverableStatus: workflowResult.deliverableStatus,
+    processingMode: workflowResult.processingMode,
+  });
 }

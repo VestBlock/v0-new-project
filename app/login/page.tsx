@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,25 +14,37 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginPageContent() {
+  const defaultRedirectTarget = '/get-started';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn, isLoading, authError, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
 
   useEffect(() => {
     // Redirect if the user is already authenticated
     if (isAuthenticated) {
-      router.push('/credit-upload');
+      router.replace(redirectTarget);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, redirectTarget, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signIn(email, password);
+    setIsSubmitting(true);
+    try {
+      const didSignIn = await signIn(email, password);
+      if (didSignIn) {
+        window.location.assign(redirectTarget);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -55,7 +67,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="grid gap-2">
@@ -76,7 +88,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             {authError && (
@@ -84,8 +96,12 @@ export default function LoginPage() {
                 {authError}
               </p>
             )}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmitting || (!email && !password && isLoading)}
+            >
+              {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 'Login'
@@ -94,7 +110,14 @@ export default function LoginPage() {
           </form>
           <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{' '}
-            <Link href="/register" passHref>
+            <Link
+              href={
+                redirectTarget && redirectTarget !== defaultRedirectTarget
+                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}`
+                  : '/register'
+              }
+              passHref
+            >
               <Button variant="link" className="p-0">
                 Sign up
               </Button>
@@ -103,5 +126,19 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

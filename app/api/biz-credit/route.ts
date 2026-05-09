@@ -2,11 +2,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import type { BizAnswers } from '@/lib/bizcredit/match';
 import { buildRoadmap } from '@/lib/bizcredit/match';
 import { roadmapHtml } from '@/lib/bizcredit/letter';
 import catalog from '@/data/biz_credit_catalog.json';
+import { createAdminClient } from '@/lib/supabase/admin';
 // lazy pdf (same renderer you already use)
 const toPdf = async (html: string) => {
   try {
@@ -17,14 +17,9 @@ const toPdf = async (html: string) => {
   }
 };
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-
 export async function POST(req: NextRequest) {
   try {
+    const supabaseAdmin = createAdminClient();
     const a = (await req.json()) as BizAnswers;
     if (!a?.user_id)
       return NextResponse.json({ error: 'user_id required' }, { status: 400 });

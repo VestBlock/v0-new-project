@@ -81,6 +81,9 @@ export async function processCreditReportAnalysis({
       ? await extractNegativeItemsFromText(reportText)
       : [];
     const grouped = groupNegativeItems(items);
+    const generatedLetterTypes = Array.from(
+      new Set(items.map((item) => item.suggested_letter_type).filter(Boolean))
+    );
 
     const supabase = createAdminClient();
     const { data: profileRow } = await supabase
@@ -194,6 +197,7 @@ export async function processCreditReportAnalysis({
       userId,
       userEmail,
       generatedLetterCount: generatedLetters,
+      letterTypes: generatedLetterTypes,
     });
 
     return {

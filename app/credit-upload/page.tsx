@@ -35,8 +35,21 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { AccessStatusCard } from '@/components/access-status-card';
+import { getAccessProfile } from '@/lib/auth/access';
 
 function CreditUploadContent() {
+  interface RecentDocument {
+    id: string;
+    documentName: string;
+    documentType: string;
+    status: string;
+    relatedItemId?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    accessUrl?: string | null;
+  }
+
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -46,37 +59,40 @@ function CreditUploadContent() {
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [uploadedReportId, setUploadedReportId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user, userProfile, isAuthenticated, fetchUserProfile } = useAuth();
+  const userId = user?.id;
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get('token');
 
   useEffect(() => {
-    if (!token || !user) return;
-    setPaymentLoading(true);
-    // Call capture endpoint and update DB
-    fetch('/api/capture-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderID: token, userId: user.id }),
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          // Refresh your auth/userProfile context
-          fetchUserProfile(user);
-          // Remove ?token= from URL
-          router.replace('/credit-upload');
-        } else throw new Error(json.error);
+    if (!token || !user || !userId) return;
+
+    queueMicrotask(() => {
+      setPaymentLoading(true);
+      fetch('/api/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID: token, userId }),
       })
-      .catch(console.error)
-      .finally(() => setPaymentLoading(false));
-  }, [token, user, fetchUserProfile, router]);
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            fetchUserProfile(user);
+            router.replace('/credit-upload');
+          } else throw new Error(json.error);
+        })
+        .catch(console.error)
+        .finally(() => setPaymentLoading(false));
+    });
+  }, [token, user, userId, fetchUserProfile, router]);
 
   const handleCheckout = useCallback(async () => {
     setLoading(true);
@@ -84,7 +100,8 @@ function CreditUploadContent() {
       const res = await fetch('/api/create-order', {
         method: 'POST',
         body: JSON.stringify({
-          userId: user?.id,
+          userId,
+          productType: 'vestblock_pro',
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +138,31 @@ function CreditUploadContent() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [router, userId]);
+
+  const fetchRecentDocuments = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setDocumentsLoading(true);
+      setDocumentsError('');
+      const response = await fetch('/api/documents?type=credit_report&limit=8');
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load recent credit documents');
+      }
+
+      setRecentDocuments(result.documents || []);
+    } catch (err) {
+      console.error('Recent documents load failed:', err);
+      const message =
+        err instanceof Error ? err.message : 'Failed to load recent credit documents';
+      setDocumentsError(message);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, [isAuthenticated]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -231,6 +272,7 @@ function CreditUploadContent() {
         description:
           'Your credit report has been uploaded successfully to secure storage.',
       });
+      await fetchRecentDocuments();
     } catch (err) {
       console.error('Upload error:', err);
       const errorMessage =
@@ -260,11 +302,11 @@ function CreditUploadContent() {
   };
 
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (user && user.email === adminEmail) {
-      setIsAdmin(true);
-    }
-  }, [user]);
+    if (!isAuthenticated) return;
+    queueMicrotask(() => {
+      void fetchRecentDocuments();
+    });
+  }, [isAuthenticated, fetchRecentDocuments]);
 
   if (!isAuthenticated) {
     return (
@@ -292,7 +334,13 @@ function CreditUploadContent() {
     );
   }
 
-  const isProMember = userProfile?.is_subscribed || isAdmin;
+  const access = getAccessProfile({
+    email: user?.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  });
+  const isProMember = access.hasPaidAccess;
 
   if (!userProfile || paymentLoading) {
     return (
@@ -352,6 +400,11 @@ function CreditUploadContent() {
             </div>
           </Alert>
         )}
+        <AccessStatusCard
+          access={access}
+          title="Upload access"
+          description="Credit upload stays available to signed-in customers, with paid tools unlocked once access is active."
+        />
       </main>
       <main className="pt-32 px-4 pb-16">
         <div className="container mx-auto max-w-4xl">
@@ -619,6 +672,81 @@ function CreditUploadContent() {
                   enterprise-grade security.
                 </AlertDescription>
               </Alert>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Credit Documents</CardTitle>
+                  <CardDescription>
+                    Track your uploaded reports and open the latest file when it is ready.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {documentsLoading ? (
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading recent documents...
+                    </div>
+                  ) : recentDocuments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Your uploaded credit reports will appear here after your first successful upload.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentDocuments.map((document) => (
+                        <div
+                          key={document.id}
+                          className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground truncate">
+                              {document.documentName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Uploaded {new Date(document.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge
+                              variant="outline"
+                              className={
+                                document.status === 'ready'
+                                  ? 'border-green-200 text-green-700'
+                                  : document.status === 'failed'
+                                  ? 'border-red-200 text-red-700'
+                                  : 'border-amber-200 text-amber-700'
+                              }
+                            >
+                              {document.status}
+                            </Badge>
+                            {document.relatedItemId ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  router.push(`/credit-dashboard/${document.relatedItemId}`)
+                                }
+                              >
+                                Status
+                              </Button>
+                            ) : null}
+                            {document.accessUrl ? (
+                              <Button asChild variant="outline" size="sm">
+                                <a href={document.accessUrl} target="_blank" rel="noreferrer">
+                                  Open File
+                                </a>
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {documentsError ? (
+                    <p className="mt-3 text-sm text-destructive">{documentsError}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>

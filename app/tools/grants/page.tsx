@@ -22,6 +22,7 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { fundingReadinessPillars } from '@/lib/business-readiness/fundingCompliance';
+import { getAccessProfile } from '@/lib/auth/access';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import {
   CheckCircle2,
@@ -166,12 +167,15 @@ export default function GrantsPage() {
   const [errors, setErrors] = React.useState<FieldErrors>({});
 
   const [loading, setLoading] = React.useState(false);
-  const [savingProfile, setSavingProfile] = React.useState(false);
   const [autoSave, setAutoSave] = React.useState(true);
   const [profileLoaded, setProfileLoaded] = React.useState(false);
-  const isAdmin =
-    Boolean(user?.email) && user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isProMember = Boolean(userProfile?.is_subscribed || isAdmin);
+  const access = getAccessProfile({
+    email: user?.email,
+    role: userProfile?.role,
+    is_subscribed: userProfile?.is_subscribed,
+    paypal_order_product: userProfile?.paypal_order_product,
+  });
+  const isProMember = access.hasPaidAccess;
 
   const [answers, setAnswers] = React.useState<Answers>({
     state: 'GA',
@@ -228,7 +232,6 @@ export default function GrantsPage() {
 
   async function upsertProfile(next: Answers) {
     if (!user) return;
-    setSavingProfile(true);
     const payload: Partial<GrantProfileRow> = {
       user_id: user.id,
       state: next.state,
@@ -243,7 +246,6 @@ export default function GrantsPage() {
     const { error } = await supabase
       .from('user_grant_profile')
       .upsert(payload, { onConflict: 'user_id' });
-    setSavingProfile(false);
     if (error) {
       toast({
         title: 'Could not save profile',

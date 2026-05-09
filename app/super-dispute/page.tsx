@@ -6,7 +6,7 @@ import { Shield, Zap, FileText, CheckCircle } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "Super Dispute - VestBlock",
-  description: "Advanced AI-powered credit dispute system for maximum results",
+  description: "Advanced credit dispute workflow for organizing report issues, letter drafts, and follow-up steps.",
 }
 
 export default function SuperDisputePage() {
@@ -19,8 +19,8 @@ export default function SuperDisputePage() {
           <h1 className="text-4xl font-bold gradient-text">Super Dispute System</h1>
         </div>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Our most advanced AI-powered dispute system that analyzes your credit report and generates highly effective,
-          personalized dispute letters
+          Our most advanced dispute workflow for analyzing your credit report, organizing possible reporting problems,
+          and generating draft letters you can review before sending.
         </p>
         <Badge variant="secondary" className="mt-4">
           <Zap className="h-4 w-4 mr-1" />
@@ -39,8 +39,8 @@ export default function SuperDisputePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Advanced AI analyzes your credit report to identify the most disputable items and creates targeted
-              strategies for each negative entry.
+              VestBlock analyzes your credit report to identify possible inaccuracies, mixed information, collection
+              issues, and other reporting concerns that may need documentation or follow-up.
             </p>
           </CardContent>
         </Card>
@@ -54,8 +54,8 @@ export default function SuperDisputePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Generates professional, legally compliant dispute letters with specific language proven to be effective
-              with credit bureaus.
+              Generates professional draft letters for review so you can prepare bureau, collector, or follow-up
+              disputes more efficiently.
             </p>
           </CardContent>
         </Card>
@@ -64,13 +64,13 @@ export default function SuperDisputePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
-              Higher Success Rate
+              Better Organization
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Our AI-powered approach has shown significantly higher success rates compared to generic dispute
-              templates.
+              The goal is a cleaner workflow: clearer reasons, better document tracking, and more disciplined
+              follow-up than generic one-size-fits-all templates.
             </p>
           </CardContent>
         </Card>
@@ -83,7 +83,7 @@ export default function SuperDisputePage() {
       <Card className="mt-8">
         <CardHeader>
           <CardTitle>How Super Dispute Works</CardTitle>
-          <CardDescription>Our advanced 4-step process for maximum dispute effectiveness</CardDescription>
+          <CardDescription>Our advanced 4-step process for clearer dispute preparation</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -103,7 +103,7 @@ export default function SuperDisputePage() {
               </div>
               <h3 className="font-semibold mb-2">AI Analysis</h3>
               <p className="text-sm text-muted-foreground">
-                Advanced algorithms identify disputable items and violation patterns
+                The workflow identifies possible reporting issues, mixed data, duplicate items, and follow-up needs
               </p>
             </div>
 
@@ -113,7 +113,7 @@ export default function SuperDisputePage() {
               </div>
               <h3 className="font-semibold mb-2">Generate Letters</h3>
               <p className="text-sm text-muted-foreground">
-                Creates personalized dispute letters with specific legal language
+                Creates tailored draft letters with factual language based on the issue type
               </p>
             </div>
 
@@ -127,6 +127,36 @@ export default function SuperDisputePage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle>Methods VestBlock Supports Best</CardTitle>
+          <CardDescription>
+            Strong credit repair work usually matches the method to the actual reporting problem.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              "Bureau disputes for inaccurate, incomplete, or duplicated report data",
+              "Direct furnisher disputes when the source of the reporting needs to correct its own data",
+              "Debt validation follow-up for collector-related accounts",
+              "Method of verification follow-up after a verified dispute result still looks wrong",
+              "Identity theft block and fraud-alert paths for unauthorized accounts",
+              "Mixed-file and personal-information correction when the file itself is contaminated",
+            ].map((item) => (
+              <div key={item} className="flex gap-3 rounded-lg border p-4">
+                <CheckCircle className="mt-0.5 h-5 w-5 text-cyan-500" />
+                <p className="text-sm text-muted-foreground">{item}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-sm text-muted-foreground">
+            VestBlock does not promise deletion of accurate negative information, guaranteed score increases,
+            or legal outcomes. The workflow is built around documentation, user review, and practical follow-up.
+          </p>
         </CardContent>
       </Card>
     </div>

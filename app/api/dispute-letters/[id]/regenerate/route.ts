@@ -2,19 +2,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabaseAdmin = createAdminClient();
     const { id } = await params;
     const { userId } = await req.json();
     if (!userId)
@@ -40,7 +35,6 @@ export async function POST(
       .select('full_name,address_street,address_city,address_state,address_zip')
       .eq('id', userId)
       .maybeSingle();
-    console.log('🚀 ~ POST ~ profile:', profile);
 
     const fullName = profile?.full_name || 'Your Name';
     const addressLine1 = profile?.address_street || 'Address Street';

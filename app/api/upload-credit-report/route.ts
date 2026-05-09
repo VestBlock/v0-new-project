@@ -2,25 +2,24 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
+import { registerUserDocument } from '@/lib/documents/service';
+import { requireLeadAdmin } from '@/lib/leads/admin-auth';
 import { createCreditReportRecord } from '@/lib/workflows/creditRepairWorkflow';
 import { processCreditReportAnalysis } from '@/lib/workflows/processCreditReportAnalysis';
-
-// Server-side Supabase client with service role key (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getSupabaseServer } from '@/lib/supabase/server';
+import { captureServerEvent } from '@/lib/analytics/server';
+import { analyticsEvents } from '@/lib/analytics/events';
 
 export async function GET() {
   try {
+    const adminCheck = await requireLeadAdmin();
+    if (adminCheck.response) {
+      return adminCheck.response;
+    }
+
+    const supabaseAdmin = adminCheck.admin;
     const { data: reports, error } = await supabaseAdmin
       .from('credit_reports')
       .select('id, user_id, file_name, file_path, uploaded_at')
@@ -64,20 +63,26 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAdmin = createAdminClient();
+    const supabase = getSupabaseServer();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Get the form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const userId = formData.get('userId') as string;
     const username = formData.get('username') as string;
     // const additionalInfo = formData.get('additionalInfo') as string;
-    const email = formData.get('email') as string;
+    const userId = user.id;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
     console.info('[credit-upload] Upload received:', {
@@ -146,13 +151,28 @@ export async function POST(request: NextRequest) {
       userId,
     });
 
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-    const userEmail = email || authUser?.user?.email || null;
+    const userEmail = user.email || null;
     const reportId = await createCreditReportRecord({
       userId,
       userEmail,
       fileName: file.name,
       filePath: uploadData.path,
+    });
+
+    const documentRecord = await registerUserDocument({
+      userId,
+      documentName: file.name,
+      documentType: 'credit_report',
+      storageBucket: 'credit-reports',
+      storagePath: uploadData.path,
+      relatedItemId: reportId,
+      status: 'processing',
+      metadataJson: {
+        contentType: file.type,
+        fileSize: file.size,
+        source: 'credit-upload',
+        reportId,
+      },
     });
 
     try {
@@ -169,11 +189,24 @@ export async function POST(request: NextRequest) {
       console.error('Credit analysis/dispute generation failed:', letterErr);
     }
 
+    void captureServerEvent({
+      distinctId: user.id,
+      event: analyticsEvents.creditReportUploaded,
+      properties: {
+        reportId,
+        documentId: documentRecord.id,
+        contentType: file.type,
+        fileSize: file.size,
+        sourcePath: '/credit-upload',
+      },
+    });
+
     return NextResponse.json({
       success: true,
       reportId,
       filePath: uploadData.path,
       fileName: file.name,
+      documentId: documentRecord.id,
       bucket: 'credit-reports',
       uploadedAt: new Date().toISOString(),
       message: 'File uploaded successfully to credit-reports bucket',

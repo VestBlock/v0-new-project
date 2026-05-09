@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { requirePaidToolAccess } from '@/lib/auth/access-server';
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function GrantsLayout({ children }: { children: ReactNode }) {
+export default async function GrantsLayout({ children }: { children: ReactNode }) {
+  await requirePaidToolAccess('/tools/grants');
   return children;
 }
-
