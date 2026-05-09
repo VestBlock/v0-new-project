@@ -10,6 +10,12 @@
 # production
 /build
 
+# generated local output
+/artifacts/
+/cache/
+automation-run-results.json
+/vendor/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

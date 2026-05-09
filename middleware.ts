@@ -1,9 +1,29 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const protectedDiagnostics = [
+const protectedAdminPages = [
   '/admin',
   '/admin-panel',
   '/admin/test',
+];
+
+const protectedAuthenticatedPages = [
+  '/analysis/results',
+  '/chat',
+  '/credit-dashboard',
+  '/credit-upload',
+  '/dashboard',
+  '/enhanced-credit-analyzer',
+  '/profile',
+  '/roadmap',
+  '/tools/business-credit',
+  '/tools/dispute-letters',
+  '/tools/grants',
+  '/tools/my-dispute-letters',
+  '/tools/upload-report',
+  '/user-hub',
+];
+
+const protectedDiagnostics = [
   '/auth-debug',
   '/credit-report-debug',
   '/credit-report-diagnostic',
@@ -19,6 +39,9 @@ const protectedDiagnostics = [
 ];
 
 const protectedDiagnosticApis = [
+  '/api/analyze-credit-direct',
+  '/api/analyze-pdf-direct',
+  '/api/background-analyzer',
   '/api/execute-sql',
   '/api/run-db-setup',
   '/api/setup-database',
@@ -35,16 +58,45 @@ type SupabaseUser = {
   email?: string | null;
 };
 
+function matchProtectedPath(pathname: string, paths: string[]) {
+  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 function matchesProtectedPath(pathname: string) {
-  return [...protectedDiagnostics, ...protectedDiagnosticApis].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  return (
+    matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedAuthenticatedPages) ||
+    matchProtectedPath(pathname, protectedDiagnostics) ||
+    matchProtectedPath(pathname, protectedDiagnosticApis)
   );
 }
 
 function isProtectedApi(pathname: string) {
-  return protectedDiagnosticApis.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  return matchProtectedPath(pathname, protectedDiagnosticApis);
+}
+
+function requiresAdmin(pathname: string) {
+  return (
+    matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedDiagnostics) ||
+    matchProtectedPath(pathname, protectedDiagnosticApis)
   );
+}
+
+function shouldNoIndex(pathname: string) {
+  return (
+    matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedAuthenticatedPages) ||
+    matchProtectedPath(pathname, protectedDiagnostics)
+  );
+}
+
+function withNoIndex(response: NextResponse, pathname: string) {
+  if (shouldNoIndex(pathname)) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
+
+  return response;
 }
 
 function configuredAdminEmails() {
@@ -188,11 +240,14 @@ async function getUserProfileRole(input: {
 }
 
 export async function middleware(request: NextRequest) {
-  if (!matchesProtectedPath(request.nextUrl.pathname)) {
+  const pathname = request.nextUrl.pathname;
+
+  if (!matchesProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
-  const apiRequest = isProtectedApi(request.nextUrl.pathname);
+  const adminRequest = requiresAdmin(pathname);
+  const apiRequest = isProtectedApi(pathname);
   const config = getSupabaseConfig();
   const accessToken = config
     ? getSupabaseAccessToken(request, config.supabaseUrl)
@@ -205,16 +260,27 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     if (apiRequest) {
-      return NextResponse.json(
+      return withNoIndex(
+        NextResponse.json(
         { error: 'Authentication required.' },
         { status: 401 }
+        ),
+        pathname
       );
     }
 
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
-    loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    loginUrl.search = '';
+    loginUrl.searchParams.set(
+      'redirect',
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    );
+    return withNoIndex(NextResponse.redirect(loginUrl), pathname);
+  }
+
+  if (!adminRequest) {
+    return withNoIndex(NextResponse.next(), pathname);
   }
 
   const email = user.email?.toLowerCase();
@@ -232,31 +298,42 @@ export async function middleware(request: NextRequest) {
 
   if (!isAdmin) {
     if (apiRequest) {
-      return NextResponse.json(
+      return withNoIndex(
+        NextResponse.json(
         { error: 'Admin access required.' },
         { status: 403 }
+        ),
+        pathname
       );
     }
 
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = '/dashboard';
     dashboardUrl.search = '';
-    return NextResponse.redirect(dashboardUrl);
+    return withNoIndex(NextResponse.redirect(dashboardUrl), pathname);
   }
 
-  return NextResponse.next();
+  return withNoIndex(NextResponse.next(), pathname);
 }
 
 export const config = {
   matcher: [
+    '/analysis/results/:path*',
     '/admin/:path*',
     '/admin-panel/:path*',
     '/admin/test/:path*',
     '/auth-debug/:path*',
+    '/chat/:path*',
+    '/credit-dashboard/:path*',
     '/credit-report-debug/:path*',
     '/credit-report-diagnostic/:path*',
+    '/credit-upload/:path*',
     '/database-diagnostic/:path*',
+    '/dashboard/:path*',
+    '/enhanced-credit-analyzer/:path*',
     '/debug-analyzer/:path*',
+    '/profile/:path*',
+    '/roadmap/:path*',
     '/setup-database/:path*',
     '/test-analysis-debug/:path*',
     '/test-document-analysis/:path*',
@@ -264,7 +341,16 @@ export const config = {
     '/test-streaming/:path*',
     '/test-upload/:path*',
     '/test-upload-simple/:path*',
+    '/tools/business-credit/:path*',
+    '/tools/dispute-letters/:path*',
+    '/tools/grants/:path*',
+    '/tools/my-dispute-letters/:path*',
+    '/tools/upload-report/:path*',
+    '/user-hub/:path*',
     '/api/execute-sql/:path*',
+    '/api/analyze-credit-direct/:path*',
+    '/api/analyze-pdf-direct/:path*',
+    '/api/background-analyzer/:path*',
     '/api/run-db-setup/:path*',
     '/api/setup-database/:path*',
     '/api/test-analysis/:path*',

@@ -9,6 +9,12 @@ import {
   useCallback,
 } from 'react';
 import { getSupabaseClient } from '@/lib/supabase/client';
+import {
+  captureClientEvent,
+  identifyClientUser,
+  resetClientAnalytics,
+} from '@/lib/analytics/client';
+import { analyticsEvents } from '@/lib/analytics/events';
 import type { User, Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,7 +23,48 @@ interface UserProfile {
   id: string;
   full_name?: string;
   role?: string;
-  is_subscribed?: string;
+  is_subscribed?: boolean | string | number | null;
+  paypal_order_product?: string | null;
+}
+
+const AUTH_BOOT_TIMEOUT_MS = 8000;
+const AUTH_COOKIE_WAIT_TIMEOUT_MS = 5000;
+
+function hasSupabaseAuthCookie() {
+  if (typeof document === 'undefined') return false;
+
+  return document.cookie
+    .split(';')
+    .some((cookie) => {
+      const normalized = cookie.trim();
+      return normalized.startsWith('sb-') || normalized.startsWith('__Host-sb-');
+    });
+}
+
+async function waitForSupabaseAuthCookie(timeoutMs: number = AUTH_COOKIE_WAIT_TIMEOUT_MS) {
+  if (typeof document === 'undefined') return false;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (hasSupabaseAuthCookie()) {
+      return true;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
+
+  return hasSupabaseAuthCookie();
+}
+
+async function withAuthTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out after ${AUTH_BOOT_TIMEOUT_MS}ms`));
+      }, AUTH_BOOT_TIMEOUT_MS);
+    }),
+  ]);
 }
 
 interface AuthContextType {
@@ -27,9 +74,14 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   authError: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    redirectTo?: string
+  ) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   fetchUserProfile: (user: User) => Promise<void>;
@@ -52,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('id, full_name, role,is_subscribed')
+          .select('id, full_name, role, is_subscribed, paypal_order_product')
           .eq('id', user.id)
           .single();
 
@@ -61,7 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (data) {
-          console.debug('🚀 ~ AuthProvider ~ data:', data);
           setUserProfile(data);
         }
       } catch (error: any) {
@@ -73,35 +124,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const hydrate = async () => {
-      // 1) If Supabase redirected you here with ?code=…, turn it into a real session:
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      if (code) {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          console.error('PKCE code-exchange failed:', error);
-        } else {
-          if (session) {
+      try {
+        // If Supabase redirected here with ?code=..., exchange it without letting
+        // the whole app stay in a permanent loading state on failure or timeout.
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+          const {
+            data: { session },
+            error,
+          } = await withAuthTimeout(
+            supabase.auth.exchangeCodeForSession(code),
+            'Auth code exchange'
+          );
+          if (error) {
+            console.error('PKCE code-exchange failed:', error);
+          } else if (session) {
             setSession(session);
-            setUser(session?.user);
-            await fetchUserProfile(session?.user);
+            setUser(session.user);
+            await fetchUserProfile(session.user);
           }
+          window.history.replaceState({}, '', window.location.pathname);
         }
-        // clean up the URL bar
-        window.history.replaceState({}, '', window.location.pathname);
-      }
 
-      // 2) Then your normal “getSession() / onAuthStateChange” logic:
-      const {
-        data: { session: stored },
-      } = await supabase.auth.getSession();
-      setSession(stored);
-      setUser(stored?.user ?? null);
-      if (stored?.user) await fetchUserProfile(stored.user);
-      setIsLoading(false);
+        const {
+          data: { session: stored },
+        } = await withAuthTimeout(supabase.auth.getSession(), 'Auth session lookup');
+        setSession(stored);
+        setUser(stored?.user ?? null);
+        if (stored?.user) {
+          await fetchUserProfile(stored.user);
+        }
+      } catch (error: any) {
+        console.error('Auth hydration error:', error);
+        setAuthError('Authentication is taking longer than expected. You can still try signing in.');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     hydrate();
@@ -116,21 +175,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchUserProfile]);
+  }, [fetchUserProfile, supabase]);
+
+  useEffect(() => {
+    if (user) {
+      identifyClientUser(user.id, {
+        email: user.email || null,
+        full_name: userProfile?.full_name || null,
+        role: userProfile?.role || null,
+        subscribed: Boolean(userProfile?.is_subscribed),
+      });
+      return;
+    }
+
+    resetClientAnalytics();
+  }, [
+    user,
+    userProfile?.full_name,
+    userProfile?.is_subscribed,
+    userProfile?.role,
+  ]);
 
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
     setAuthError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw error;
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+        await fetchUserProfile(data.session.user);
+        await waitForSupabaseAuthCookie();
+        captureClientEvent(analyticsEvents.authSignInSucceeded, {
+          email_domain: email.split('@')[1] || 'unknown',
+        });
+      }
       toast({
         title: 'Success',
         description: 'Signed in successfully. Redirecting...',
       });
+      return true;
     } catch (error: any) {
       console.error('Sign in error:', error);
       setAuthError(error.message);
@@ -139,6 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error.message,
         variant: 'destructive',
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -156,13 +245,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       } else {
         toast({ title: 'Success', description: 'Signed out successfully.' });
+        captureClientEvent(analyticsEvents.authSignOutCompleted);
       }
       setUser(null);
       setUserProfile(null);
       setSession(null);
       router.push('/');
-    } catch (error) {
-      console.debug('🚀 ~ signOut ~ error:', error);
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+      toast({
+        title: 'Sign Out Error',
+        description: error?.message || 'Unable to sign out cleanly.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -220,7 +315,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    redirectTo?: string
+  ) => {
     setIsLoading(true);
     setAuthError(null);
     try {
@@ -238,11 +338,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!authData.user)
         throw new Error('Sign up succeeded but no user was returned.');
 
+      void fetch('/api/auth/post-signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          fullName,
+          userId: authData.user.id,
+        }),
+      }).catch((emailError) => {
+        console.warn('Post-signup email request failed:', emailError);
+      });
+
+      captureClientEvent(analyticsEvents.authSignUpCompleted, {
+        email_domain: email.split('@')[1] || 'unknown',
+        redirect_to: redirectTo || '/login',
+      });
+
       toast({
         title: 'Success',
         description: 'Account created. Please check your email to verify.',
       });
-      router.push('/login');
+      router.push(redirectTo || '/login');
     } catch (error: any) {
       console.error('Sign up error:', error);
       setAuthError(error.message);
