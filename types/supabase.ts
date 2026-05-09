@@ -46,7 +46,12 @@ export interface AiCreditCardRecommendation {
   bestFor?: string
   minimumCredit?: string
   link?: string
-  // Add other relevant fields
+  annualFee?: string
+  category?: string
+  features?: string[]
+  featured?: boolean
+  providerType?: "credit_builder" | "secured_card" | "unsecured_card" | "rent_reporting" | "alternative_underwriting" | "general"
+  complianceNote?: string
 }
 
 export interface AiSideHustleRecommendation {
@@ -55,7 +60,10 @@ export interface AiSideHustleRecommendation {
   potentialEarnings?: string
   timeCommitment?: string
   difficulty?: "easy" | "medium" | "hard" | string
-  // Add other relevant fields
+  category?: string
+  startupCost?: string
+  skills?: string[]
+  platforms?: Array<{ name: string; url: string }>
 }
 
 export interface AiDetailedAnalysis {
@@ -130,18 +138,27 @@ export interface Database {
           user_id: string
           messages: Json
           created_at: string
+          updated_at: string
+          title: string | null
+          assistant_type: string
         }
         Insert: {
           id?: string
           user_id: string
           messages: Json
           created_at?: string
+          updated_at?: string
+          title?: string | null
+          assistant_type?: string
         }
         Update: {
           id?: string
           user_id?: string
           messages?: Json
           created_at?: string
+          updated_at?: string
+          title?: string | null
+          assistant_type?: string
         }
       }
       user_documents: {
@@ -149,25 +166,43 @@ export interface Database {
           id: string
           user_id: string
           document_name: string
-          document_url: string
+          document_url: string | null
           document_type: string
+          storage_bucket: string | null
+          storage_path: string | null
+          related_item_id: string | null
+          status: string
+          metadata_json: Json
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
           document_name: string
-          document_url: string
+          document_url?: string | null
           document_type: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          related_item_id?: string | null
+          status?: string
+          metadata_json?: Json
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           document_name?: string
-          document_url?: string
+          document_url?: string | null
           document_type?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          related_item_id?: string | null
+          status?: string
+          metadata_json?: Json
           created_at?: string
+          updated_at?: string
         }
       }
       credit_reports: {
