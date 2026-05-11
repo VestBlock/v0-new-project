@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
+import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { updateOutreachMessageSchema } from '@/lib/leads/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getLeadById, insertOutreachSendEvent, listSuppressions, updateLeadRecord, updateOutreachMessage } from '@/lib/leads/repository'
@@ -72,6 +73,29 @@ export async function PATCH(
         detail.outreach.find((item) => item.id === parsed.data.messageId) || message
       const suppressions = await listSuppressions().catch(() => [])
       const decision = getLeadEmailAutopilotDecision(lead, suppressions)
+      const qualityIssue = validateOutreachMessageQuality({ lead, message: updatedMessage })
+
+      if (qualityIssue) {
+        await insertOutreachSendEvent({
+          leadId: id,
+          outreachMessageId: message.id,
+          channel: message.channel,
+          status: 'skipped',
+          recipient: lead.email,
+          subject: updatedMessage.subject,
+          metadata: {
+            actorUserId: user?.id || null,
+            action: 'send_now_blocked',
+            guardrail: 'message_quality',
+            reason: qualityIssue,
+            skippedReason: qualityIssue,
+          },
+        })
+        return NextResponse.json(
+          { error: `This draft needs cleanup before sending: ${qualityIssue.replaceAll('_', ' ')}.` },
+          { status: 400 }
+        )
+      }
 
       if (updatedMessage.status !== 'approved' && decision.eligible) {
         await updateOutreachMessage(message.id, {

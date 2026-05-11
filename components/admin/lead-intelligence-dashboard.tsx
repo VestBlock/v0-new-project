@@ -33,6 +33,15 @@ type LeadSummary = {
   emailBlockers: Array<{ reason: string; value: number }>
 }
 
+type BulkActionResult = {
+  count?: number
+  approvedMessages?: number
+  skipped?: number
+  generated?: number
+  skippedReasons?: Record<string, number>
+  error?: string
+}
+
 type LeadQueueRow = LeadRecord & {
   email_autopilot_eligible?: boolean | null
   email_autopilot_reason?: string | null
@@ -189,6 +198,14 @@ function formatAutopilotReason(reason?: string | null) {
       return 'Do not contact'
     case 'auto_approval_disabled':
       return 'Auto-approval disabled'
+    case 'below_min_score':
+      return 'Below score floor'
+    case 'non_primary_campaign':
+      return 'Manual offer review'
+    case 'missing_business_identity':
+      return 'Missing business name'
+    case 'weak_personalization_signal':
+      return 'Needs better context'
     case 'unknown':
       return 'Unknown blocker'
     default:
@@ -347,8 +364,9 @@ export function LeadIntelligenceDashboard() {
     }
   }
 
-  const bulkAction = async (action: string) => {
-    if (selectedIds.length === 0) {
+  const bulkAction = async (action: string, overrideIds?: string[]) => {
+    const ids = overrideIds || selectedIds
+    if (ids.length === 0) {
       toast({ title: 'Select leads first', description: 'Choose at least one lead to run this action.' })
       return
     }
@@ -363,10 +381,29 @@ export function LeadIntelligenceDashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ leadIds: selectedIds, action, campaignName: campaignName || undefined }),
+        body: JSON.stringify({ leadIds: ids, action, campaignName: campaignName || undefined }),
       })
-      if (!response.ok) throw new Error('Bulk action failed.')
-      toast({ title: 'Bulk action complete', description: `${selectedIds.length} leads updated.` })
+      const data = await response.json().catch(() => ({} as BulkActionResult)) as BulkActionResult
+      if (!response.ok) throw new Error(data.error || 'Bulk action failed.')
+
+      const skipped = Number(data.skipped || 0)
+      const approved = Number(data.approvedMessages || 0)
+      const generated = Number(data.generated || 0)
+      const updated = Number(data.count || 0)
+      const topSkipReason = Object.entries(data.skippedReasons || {})
+        .sort((left, right) => right[1] - left[1])
+        .map(([reason, value]) => `${formatAutopilotReason(reason)} (${value})`)
+        .at(0)
+
+      toast({
+        title: 'Bulk action complete',
+        description:
+          action === 'approve_outreach'
+            ? `${approved} message${approved === 1 ? '' : 's'} approved. ${skipped} skipped by guardrails${topSkipReason ? `, top reason: ${topSkipReason}` : ''}.`
+            : action === 'generate_outreach'
+              ? `${generated || updated} draft${(generated || updated) === 1 ? '' : 's'} generated.`
+              : `${updated || ids.length} lead${(updated || ids.length) === 1 ? '' : 's'} updated.`,
+      })
       await fetchLeads()
     } catch (error) {
       toast({
@@ -595,7 +632,7 @@ export function LeadIntelligenceDashboard() {
               </label>
             </div>
             <p className="md:col-span-5 text-xs text-slate-500">
-              The live queue now defaults to email-ready leads only. Use “Export no-email backlog” to move website-only and missing-email records into an offline Google Sheet research lane instead of keeping them in the active operator queue.
+              The live queue now defaults to email-ready leads only. Use “Export no-email backlog” to move website-only and missing-email records into an offline research sheet instead of keeping them in the active send queue.
             </p>
           </CardContent>
         </Card>
@@ -754,9 +791,19 @@ export function LeadIntelligenceDashboard() {
                             {runningOutreachFor === lead.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                             Draft
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => { setSelectedIds([lead.id]); void bulkAction('approve_outreach') }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => bulkAction('approve_outreach', [lead.id])}
+                            disabled={Boolean(bulkLoading) || !lead.email_autopilot_eligible}
+                            title={
+                              lead.email_autopilot_eligible
+                                ? 'Approve this safe email draft'
+                                : `Blocked: ${autopilotReason}`
+                            }
+                          >
                             <ShieldCheck className="mr-2 h-4 w-4" />
-                            Approve
+                            Approve safe
                           </Button>
                           {lead.source_url ? (
                             <Button asChild size="sm" variant="ghost">

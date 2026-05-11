@@ -10,7 +10,7 @@ import { searchApifyYelp } from '@/lib/leads/connectors/apify-yelp'
 import { searchSamOpportunities } from '@/lib/leads/connectors/sam'
 import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
 import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
-import { classifyLeadRevenueCampaign, getRevenueCampaignAllocation, REVENUE_CAMPAIGN_ORDER } from '@/lib/leads/revenueCampaigns'
+import { classifyLeadRevenueCampaign, getRevenueCampaignAllocation, REVENUE_CAMPAIGN_ORDER, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
 import { discoverMarkets, listMarketsForExpansionLane, listMarketsForDailyRun, markMarketRunResult, pickDiscoveryTermsForMarket, updateMarketPerformance } from '@/lib/leads/marketExpansion'
 import {
@@ -894,6 +894,24 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         decision = getLeadEmailAutopilotDecision(currentLead, suppressions)
         enrichedInQueueCount += 1
       }
+    }
+
+    const qualityIssue = validateOutreachMessageQuality({ lead: currentLead, message: currentRow })
+    if (qualityIssue) {
+      incrementCount(skipReasonCounts, qualityIssue)
+      await persistSkippedSendEvent({
+        dryRun: options.dryRun,
+        lead: currentLead,
+        outreachMessageId: currentRow.id,
+        subject: currentRow.subject,
+        reason: qualityIssue,
+      })
+      sendResults.push({
+        leadId: currentLead.id,
+        status: 'blocked',
+        detail: qualityIssue,
+      })
+      continue
     }
 
     if (!options.dryRun && row.status === 'needs_review' && decision.eligible) {

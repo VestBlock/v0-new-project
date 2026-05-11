@@ -89,7 +89,7 @@ function leadCta(lead: LeadRecord) {
     return 'Reply if you want a short DealVault walkthrough for agreement tracking, payout visibility, or milestone proof.'
   }
   if ((lead.best_offer || '').toString().includes('Gov Contract')) {
-    return 'Reply if you want a short contract-readiness overview.'
+    return 'Reply if you want a short contract-prep review.'
   }
   return 'Reply if you want a short practical next-step review.'
 }
@@ -112,9 +112,9 @@ function shouldMentionFundingBridge(lead: LeadRecord) {
 function fundingBridgeLine(lead: LeadRecord, language: 'en' | 'es') {
   if (!shouldMentionFundingBridge(lead)) return ''
   if (language === 'es') {
-    return 'Si mejorar captacion, reservas, o presencia web abre una oportunidad mas grande, VestBlock tambien puede ayudarte a ordenar la preparacion para financiamiento sin promesas infladas.'
+    return 'Si mejorar captacion, reservas, o presencia web abre una oportunidad mas grande, VestBlock tambien puede ayudarte a prepararte para conversaciones de financiamiento sin promesas infladas.'
   }
-  return 'If stronger lead capture, booking, or web conversion opens a larger growth opportunity, VestBlock can also help organize funding readiness without inflated promises.'
+  return 'If stronger lead capture, booking, or web conversion opens a larger growth opportunity, VestBlock can also help prepare you for funding conversations without inflated promises.'
 }
 
 function bodyMentionsFunding(body: string) {
@@ -142,17 +142,17 @@ function publicOfferLabel(lead: LeadRecord, fallbackOffer?: string | null) {
 
   const offer = (fallbackOffer || lead.best_offer || '').toString()
 
-  if (!offer) return 'practical operator support'
+  if (!offer) return 'practical business support'
   if (offer.includes('AI Appointment Booking')) return 'appointment-booking automation'
   if (offer.includes('AI Receptionist')) return 'AI receptionist setup'
   if (offer.includes('Website')) return 'visibility expansion support'
   if (offer.includes('DealVault') || offer.includes('Operator Accountability')) {
-    return 'DealVault agreement tracking, payout records, and milestone proof'
+    return 'DealVault records for agreements, payouts, and milestones'
   }
-  if (offer.includes('Business Funding')) return 'funding-readiness support'
+  if (offer.includes('Business Funding')) return 'funding prep support'
   if (offer.includes('Business Credit')) return 'business-credit support'
   if (offer.includes('Grant')) return 'grant and funding roadmap support'
-  if (offer.includes('Gov Contract')) return 'contract-readiness support'
+  if (offer.includes('Gov Contract')) return 'contract prep support'
   if (offer.includes('Spanish Funding')) return 'Spanish funding support'
   if (offer.includes('Business Setup')) return 'business setup and compliance help'
 
@@ -217,7 +217,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
         ? 'property ownership details that suggest a possible sale or investor conversation'
         : lead.category === 'new_business_formation'
           ? 'a newly formed business profile'
-          : 'growth and funding readiness signals')
+          : 'growth and funding prep signals')
   const realEstateOfferText =
     language === 'es'
       ? 'conversaciones de venta directa, revision de inversionista y opciones practicas para vender la propiedad'
@@ -282,7 +282,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
           variantEmail?.body_guidance ||
           (isSellerAcquisitionLead(lead)
             ? strategySpecificSupportText
-            : 'Ayudamos a negocios a ordenar acuerdos, mejorar captura de leads y tomar mejores siguientes pasos sin inflar promesas.')
+          : 'Ayudamos a negocios a ordenar acuerdos, mejorar captura de leads y tomar mejores siguientes pasos sin inflar promesas.')
         } ${fundingBridgeLine(lead, language)}\n\nSegún lo que encontramos, la mejor conversación inicial parece ser: ${
           isSellerAcquisitionLead(lead) ? strategySpecificOfferText : publicOffer
         }.\n\n${cta}\n\nSaludos,\n${OUTREACH_SIGNATURE}`,
@@ -315,7 +315,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
   return {
     sms: {
       body: truncate(
-        `Hi ${business}, ${variantSms?.opener || `I came across ${reason} in ${city || 'your market'}`}. VestBlock helps owners with ${publicOffer} and next-step readiness. ${cta}`,
+        `Hi ${business}, ${variantSms?.opener || `I came across ${reason} in ${city || 'your market'}`}. VestBlock helps business owners with ${publicOffer} and a clear next step. ${cta}`,
         300
       ),
       complianceNote: OUTREACH_UNSUBSCRIBE_NOTES.sms,
@@ -338,7 +338,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
         variantEmail?.body_guidance ||
         (isSellerAcquisitionLead(lead)
           ? strategySpecificSupportText
-          : 'We help businesses track agreements, improve lead capture, and choose cleaner next steps without overpromising.')
+          : 'We help businesses track agreements, capture more leads, and choose cleaner next steps without overpromising.')
       } ${fundingBridgeLine(lead, language)}\n\nBased on what we found, the best next conversation looks like: ${
         isSellerAcquisitionLead(lead) ? strategySpecificOfferText : publicOffer
       }.\n\n${cta}\n\nBest,\n${OUTREACH_SIGNATURE}`,
@@ -348,7 +348,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
     },
     facebook_dm: {
       body: `Hi ${business} — ${variantFacebook?.opener || `I found ${reason}${city ? ` in ${city}` : ''} and thought you might want a quick outside read.`} VestBlock helps with ${
-        isSellerAcquisitionLead(lead) ? 'direct-sale and investor option reviews' : `${publicOffer} and the systems around it`
+        isSellerAcquisitionLead(lead) ? 'direct-sale and investor option reviews' : `${publicOffer}, follow-up, booking, and tracking`
       }. ${cta}`,
       complianceNote: OUTREACH_UNSUBSCRIBE_NOTES.facebook_dm,
       cta,

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { pathToFileURL } from 'node:url'
 
 const BASIC_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,24}$/
 const DOMAIN_LABEL_RE = /^[a-z0-9-]+$/
@@ -56,19 +57,29 @@ const PRIMARY_CAMPAIGNS = [
       'agreement tracking',
       'agreement tracker',
       'approval record',
+      'approval history',
       'audit trail',
       'proof record',
       'proof of completion',
       'referral payout',
       'referral fee',
+      'referral partner',
+      'referral chain',
       'partner split',
+      'commission split',
       'milestone',
       'milestone approval',
+      'milestone tracking',
       'draw request',
       'draw schedule',
+      'progress billing',
+      'subcontractor',
       'contractor payout',
+      'restoration',
+      'mitigation',
       'vendor deliverable',
       'work order approval',
+      'maintenance vendor',
       'retainer deliverable',
       'statement of work',
       'scope approval',
@@ -77,12 +88,17 @@ const PRIMARY_CAMPAIGNS = [
       'recruiter split',
       'co-broker split',
       'property management',
+      'turnover',
       'rehab draw',
       'private lending',
       'hard money',
+      'loan packaging',
       'funding referral',
       'joint venture',
       'creative finance',
+      'guarantee period',
+      'permit expeditor',
+      'owner rep',
     ],
   },
   {
@@ -302,7 +318,7 @@ function pickAction(metrics) {
   }
 }
 
-function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages) {
+function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages, adminTasks) {
   const offerMix = new Map()
   const campaignMix = new Map()
   let usableEmailCount = 0
@@ -310,6 +326,7 @@ function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages) {
   let badLeadCount = 0
   let replySignalCount = 0
   let bookedSignalCount = 0
+  let adminTaskSignalCount = 0
   let serviceFitCount = 0
   let primaryCampaignFitCount = 0
 
@@ -337,6 +354,9 @@ function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages) {
   const approvedOrQueuedMessages = messages.filter((message) =>
     ['approved', 'queued', 'needs_review', 'sent'].includes(String(message.status).toLowerCase())
   ).length
+  adminTaskSignalCount = adminTasks.filter((task) =>
+    ['open', 'in_progress', 'waiting', 'completed'].includes(String(task.status).toLowerCase())
+  ).length
 
   const metrics = {
     sourceKey,
@@ -351,6 +371,7 @@ function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages) {
     followUpSignalVolume: approvedOrQueuedMessages,
     bookedSignalRate: safeDivide(bookedSignalCount, leads.length),
     bookedSignalCount,
+    adminTaskSignalCount,
     badLeadRate: safeDivide(badLeadCount, leads.length),
     serviceFitRate: safeDivide(serviceFitCount, leads.length),
     primaryCampaignFitRate: safeDivide(primaryCampaignFitCount, leads.length),
@@ -373,6 +394,7 @@ function summarizeSource(sourceKey, sourceName, leads, sendEvents, messages) {
     followUpSignalVolume: metrics.followUpSignalVolume,
     bookedTaskSignals: metrics.bookedSignalCount,
     bookedSignalRate: toPercent(metrics.bookedSignalRate),
+    adminTaskSignals: metrics.adminTaskSignalCount,
     badLeadRate: toPercent(metrics.badLeadRate),
     serviceFitRate: toPercent(metrics.serviceFitRate),
     primaryCampaignFitRate: toPercent(metrics.primaryCampaignFitRate),
@@ -405,6 +427,97 @@ function sortSources(rows) {
   })
 }
 
+function getEventSkipReason(event) {
+  const metadata = event?.metadata_json && typeof event.metadata_json === 'object' ? event.metadata_json : {}
+  return (
+    metadata.skippedReason ||
+    metadata.reason ||
+    event?.error_message ||
+    'unspecified'
+  )
+}
+
+function summarizeOutreachThroughput(leads, sendEvents, messages, adminTasks, lookbackDays) {
+  const dailyTarget = envInt('LEADS_DAILY_SEND_LIMIT', envInt('LEADS_DAILY_SEND_TARGET', 100))
+  const last24hMs = Date.now() - 24 * 60 * 60 * 1000
+  const createdInLast24h = (row) => {
+    const createdAt = Date.parse(row?.created_at || row?.updated_at || '')
+    return Number.isFinite(createdAt) && createdAt >= last24hMs
+  }
+
+  const sentLast24h = sendEvents.filter(
+    (event) => String(event.status).toLowerCase() === 'sent' && createdInLast24h(event)
+  ).length
+  const sentInWindow = sendEvents.filter((event) => String(event.status).toLowerCase() === 'sent').length
+  const skippedLast24h = sendEvents.filter(
+    (event) => String(event.status).toLowerCase() === 'skipped' && createdInLast24h(event)
+  )
+  const approvedQueue = messages.filter((message) =>
+    ['approved', 'queued'].includes(String(message.status).toLowerCase())
+  ).length
+  const needsReviewQueue = messages.filter((message) =>
+    String(message.status).toLowerCase() === 'needs_review'
+  ).length
+  const noEmailManualQueue = leads.filter(
+    (lead) => !isUsableContactEmail(lead.email) && getLeadContactFormUrls(lead).length > 0
+  ).length
+  const noUsableEmailCount = leads.filter((lead) => !isUsableContactEmail(lead.email)).length
+  const usableEmailCount = leads.length - noUsableEmailCount
+  const replySignals = leads.filter(isPositiveReplySignal).length
+  const bookedSignals = leads.filter(isBookedSignal).length
+  const openAdminTasks = adminTasks.filter((task) =>
+    ['open', 'in_progress', 'waiting'].includes(String(task.status).toLowerCase())
+  ).length
+
+  const skipReasonCounts = new Map()
+  for (const event of skippedLast24h) {
+    incrementCount(skipReasonCounts, String(getEventSkipReason(event)))
+  }
+  const topSkipReasons = topEntries(skipReasonCounts, 5)
+  const topSkipReason = topSkipReasons[0]?.label || null
+
+  let bottleneck = 'quality_candidate_shortage'
+  let bestNextRevenueAction = 'Find or enrich better-fit leads before increasing send volume.'
+
+  if (sentLast24h >= dailyTarget) {
+    bottleneck = 'target_hit'
+    bestNextRevenueAction = 'Work replies and booked calls first, then refill tomorrow morning queue.'
+  } else if (approvedQueue > 0) {
+    bottleneck = 'send_execution_or_auto_send_disabled'
+    bestNextRevenueAction = 'Run the send queue for approved messages, or confirm auto-send is intentionally disabled.'
+  } else if (needsReviewQueue >= Math.min(dailyTarget, 25)) {
+    bottleneck = 'review_queue_needs_approval'
+    bestNextRevenueAction = 'Review the top 25 email-ready drafts and approve only messages that pass the guardrails.'
+  } else if (noEmailManualQueue >= Math.min(dailyTarget, 25)) {
+    bottleneck = 'missing_email_or_contact_form_backlog'
+    bestNextRevenueAction = 'Export no-email leads to the offline research sheet and enrich the strongest matches.'
+  } else if (topSkipReason) {
+    bottleneck = 'guardrail_skips'
+    bestNextRevenueAction = `Fix the dominant skip reason before scaling volume: ${topSkipReason}.`
+  }
+
+  return {
+    dailyTarget,
+    sentLast24h,
+    targetGap24h: Math.max(0, dailyTarget - sentLast24h),
+    onPaceForDailyTarget: sentLast24h >= dailyTarget,
+    sentInWindow,
+    averageSentPerDay: Number(safeDivide(sentInWindow, lookbackDays).toFixed(1)),
+    approvedOrQueuedMessages: approvedQueue,
+    needsReviewMessages: needsReviewQueue,
+    skippedLast24h: skippedLast24h.length,
+    topSkipReasons,
+    usableEmailLeads: usableEmailCount,
+    noUsableEmailLeads: noUsableEmailCount,
+    noEmailManualQueue,
+    repliesOrPositiveSignals: replySignals,
+    bookedSignals,
+    openAdminTasks,
+    bottleneck,
+    bestNextRevenueAction,
+  }
+}
+
 function formatError(error) {
   if (!error) return { message: 'Unknown error' }
   if (error instanceof Error) {
@@ -426,6 +539,96 @@ function formatError(error) {
   return { message: String(error) }
 }
 
+function runSelfTest() {
+  const sourceSummary = summarizeSource(
+    'google_places_businesses',
+    'Google Places Businesses',
+    [
+      {
+        id: 'lead-1',
+        email: 'owner@example.org',
+        contact_info: { contactFormUrls: [] },
+        best_offer: 'AI Receptionist Launch',
+        status: 'qualified',
+        delivery_status: 'booked',
+        category: 'ai receptionist',
+      },
+      {
+        id: 'lead-2',
+        email: '',
+        contact_info: { contactFormUrls: ['https://example.org/contact'] },
+        best_offer: 'Website Upgrade Sprint',
+        status: 'new',
+        delivery_status: 'not_sent',
+        category: 'website upgrade',
+      },
+    ],
+    [
+      { lead_id: 'lead-1', status: 'sent' },
+      { lead_id: 'lead-2', status: 'skipped' },
+    ],
+    [{ lead_id: 'lead-1', status: 'approved' }],
+    [{ entity_id: 'lead-2', status: 'open', entity_type: 'lead', task_type: 'lead_contact_form_outreach' }]
+  )
+
+  if (sourceSummary.adminTaskSignals !== 1) {
+    throw new Error(`Self-test failed: expected adminTaskSignals=1, received ${sourceSummary.adminTaskSignals}`)
+  }
+  if (sourceSummary.contactFormOnlyRate !== 50) {
+    throw new Error(`Self-test failed: expected contactFormOnlyRate=50, received ${sourceSummary.contactFormOnlyRate}`)
+  }
+  if (sourceSummary.bookedTaskSignals !== 1) {
+    throw new Error(`Self-test failed: expected bookedTaskSignals=1, received ${sourceSummary.bookedTaskSignals}`)
+  }
+
+  const throughput = summarizeOutreachThroughput(
+    [
+      {
+        id: 'lead-1',
+        email: 'owner@example.org',
+        contact_info: { contactFormUrls: [] },
+        status: 'qualified',
+        delivery_status: 'booked',
+      },
+      {
+        id: 'lead-2',
+        email: '',
+        contact_info: { contactFormUrls: ['https://example.org/contact'] },
+        status: 'new',
+        delivery_status: 'not_sent',
+      },
+    ],
+    [
+      { lead_id: 'lead-1', status: 'sent', created_at: new Date().toISOString() },
+      {
+        lead_id: 'lead-2',
+        status: 'skipped',
+        created_at: new Date().toISOString(),
+        metadata_json: { reason: 'missing_email' },
+      },
+    ],
+    [{ lead_id: 'lead-1', status: 'approved', updated_at: new Date().toISOString() }],
+    [{ entity_id: 'lead-2', status: 'open', entity_type: 'lead', task_type: 'lead_contact_form_outreach' }],
+    30
+  )
+
+  if (throughput.sentLast24h !== 1) {
+    throw new Error(`Self-test failed: expected sentLast24h=1, received ${throughput.sentLast24h}`)
+  }
+  if (throughput.noEmailManualQueue !== 1) {
+    throw new Error(`Self-test failed: expected noEmailManualQueue=1, received ${throughput.noEmailManualQueue}`)
+  }
+
+  console.log(
+    JSON.stringify({
+      ok: true,
+      checked: ['adminTaskSignals', 'contactFormOnlyRate', 'bookedTaskSignals', 'outreachThroughput'],
+      sample: sourceSummary,
+      throughput,
+    }, null, 2)
+  )
+}
+
 async function main() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -441,7 +644,7 @@ async function main() {
   const leadLimit = envInt('LEAD_SOURCE_SCORECARD_LIMIT', 5000)
   const startedAt = getDateWindowStart(lookbackDays)
 
-  const [sourcesResult, leadsResult, sendEventsResult, messagesResult] = await Promise.all([
+  const [sourcesResult, leadsResult, sendEventsResult, messagesResult, adminTasksResult] = await Promise.all([
     admin.from('lead_sources').select('source_key,name,is_active'),
     admin
       .from('leads')
@@ -450,7 +653,7 @@ async function main() {
       .limit(leadLimit),
     admin
       .from('outreach_send_events')
-      .select('lead_id,status,channel,created_at')
+      .select('lead_id,status,channel,created_at,error_message,metadata_json')
       .eq('channel', 'email')
       .gte('created_at', startedAt)
       .limit(leadLimit * 3),
@@ -460,12 +663,19 @@ async function main() {
       .eq('channel', 'email')
       .gte('updated_at', startedAt)
       .limit(leadLimit * 2),
+    admin
+      .from('admin_tasks')
+      .select('entity_id,entity_type,status,task_type,created_at')
+      .eq('entity_type', 'lead')
+      .gte('created_at', startedAt)
+      .limit(leadLimit * 2),
   ])
 
   if (sourcesResult.error) throw sourcesResult.error
   if (leadsResult.error) throw leadsResult.error
   if (sendEventsResult.error) throw sendEventsResult.error
   if (messagesResult.error) throw messagesResult.error
+  if (adminTasksResult.error) throw adminTasksResult.error
 
   const sourceNameByKey = new Map(
     (sourcesResult.data || []).map((row) => [String(row.source_key), row.name || String(row.source_key)])
@@ -473,6 +683,7 @@ async function main() {
   const leads = leadsResult.data || []
   const sendEvents = sendEventsResult.data || []
   const messages = messagesResult.data || []
+  const adminTasks = adminTasksResult.data || []
   const leadById = new Map(leads.map((lead) => [lead.id, lead]))
 
   const grouped = new Map()
@@ -480,31 +691,50 @@ async function main() {
   for (const lead of leads) {
     const sourceKey = getSourceFamily(lead.source)
     if (!grouped.has(sourceKey)) {
-      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [] })
+      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [], adminTasks: [] })
     }
     grouped.get(sourceKey).leads.push(lead)
   }
 
   for (const event of sendEvents) {
     const lead = leadById.get(event.lead_id)
+    if (!lead) continue
     const sourceKey = getSourceFamily(lead?.source)
     if (!grouped.has(sourceKey)) {
-      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [] })
+      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [], adminTasks: [] })
     }
     grouped.get(sourceKey).sendEvents.push(event)
   }
 
   for (const message of messages) {
     const lead = leadById.get(message.lead_id)
+    if (!lead) continue
     const sourceKey = getSourceFamily(lead?.source)
     if (!grouped.has(sourceKey)) {
-      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [] })
+      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [], adminTasks: [] })
     }
     grouped.get(sourceKey).messages.push(message)
   }
 
+  for (const task of adminTasks) {
+    const lead = leadById.get(task.entity_id)
+    if (!lead) continue
+    const sourceKey = getSourceFamily(lead.source)
+    if (!grouped.has(sourceKey)) {
+      grouped.set(sourceKey, { leads: [], sendEvents: [], messages: [], adminTasks: [] })
+    }
+    grouped.get(sourceKey).adminTasks.push(task)
+  }
+
   const sourceRows = Array.from(grouped.entries()).map(([sourceKey, rows]) =>
-    summarizeSource(sourceKey, sourceNameByKey.get(sourceKey) || sourceKey, rows.leads, rows.sendEvents, rows.messages)
+    summarizeSource(
+      sourceKey,
+      sourceNameByKey.get(sourceKey) || sourceKey,
+      rows.leads,
+      rows.sendEvents,
+      rows.messages,
+      rows.adminTasks
+    )
   )
 
   const actionCounts = new Map()
@@ -516,19 +746,26 @@ async function main() {
     leadCount: leads.length,
     sourceCount: sourceRows.length,
     recommendedMix: Object.fromEntries(Array.from(actionCounts.entries()).sort()),
+    outreachThroughput: summarizeOutreachThroughput(leads, sendEvents, messages, adminTasks, lookbackDays),
     sources: sortSources(sourceRows),
   }
 
   console.log(JSON.stringify(summary, null, 2))
 }
 
-main().catch((error) => {
-  const formatted = formatError(error)
-  if (/fetch failed/i.test(formatted.message || '')) {
-    formatted.hint =
-      formatted.hint ||
-      'Supabase could not be reached from this environment. Re-run where outbound network access to the project is available.'
-  }
-  console.error(JSON.stringify(formatted, null, 2))
-  process.exit(1)
-})
+const isDirectExecution = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false
+
+if (process.env.LEAD_SOURCE_SCORECARD_SELF_TEST === '1') {
+  runSelfTest()
+} else if (isDirectExecution) {
+  main().catch((error) => {
+    const formatted = formatError(error)
+    if (/fetch failed/i.test(formatted.message || '')) {
+      formatted.hint =
+        formatted.hint ||
+        'Supabase could not be reached from this environment. Re-run where outbound network access to the project is available.'
+    }
+    console.error(JSON.stringify(formatted, null, 2))
+    process.exit(1)
+  })
+}

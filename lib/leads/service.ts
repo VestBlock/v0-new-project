@@ -1,6 +1,7 @@
 import { enrichLeadEmailFromWebsite } from '@/lib/leads/email-enrichment'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision, isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
+import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
@@ -451,7 +452,26 @@ export async function generateAndStoreOutreachForLead(lead: LeadRecord) {
     const suppressions = await listSuppressions().catch(() => [])
     const decision = getLeadEmailAutopilotDecision(lead, suppressions)
 
-    if (decision.eligible) {
+    const qualityIssue = validateOutreachMessageQuality({ lead, message: emailMessage })
+
+    if (decision.eligible && qualityIssue) {
+      await insertOutreachSendEvent({
+        leadId: lead.id,
+        outreachMessageId: emailMessage.id,
+        channel: 'email',
+        status: 'skipped',
+        recipient: lead.email,
+        subject: emailMessage.subject,
+        metadata: {
+          action: 'auto_approval_skipped',
+          guardrail: 'message_quality',
+          reason: qualityIssue,
+          skippedReason: qualityIssue,
+          leadScore: lead.lead_score,
+          bounceRiskScore: lead.bounce_risk_score,
+        },
+      })
+    } else if (decision.eligible) {
       const approvedAt = new Date().toISOString()
       const approvedMessage = await updateOutreachMessage(emailMessage.id, {
         status: 'approved',
