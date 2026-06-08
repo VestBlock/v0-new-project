@@ -208,7 +208,7 @@ export function NetworkIntakePanel() {
             Tell VestBlock what you need routed.
           </h3>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            Sellers, buyers, lenders, operators, and DealVault teams can start from the right intake path. These details feed the Growth System and make follow-up cleaner.
+            Sellers, buyers, lenders, operators, and DealVault teams can start from the right intake path. These details keep follow-up and partner routing cleaner.
           </p>
         </div>
         <Button asChild variant="outline" className="w-full md:w-auto">

@@ -47,7 +47,7 @@ const workspaceCards: WorkspaceCard[] = [
     bullets: [
       'No login required to submit the property',
       'Captures timeline, condition, price, payoff, liens, and preferred sale path',
-      'Helps send follow-up toward fast cash, creative, novation, or partner-fit review',
+      'Helps send follow-up toward fast cash, creative, novation, or partner review',
     ],
   },
   {
@@ -79,7 +79,7 @@ const workspaceCards: WorkspaceCard[] = [
   {
     title: 'Real Estate Funding Review',
     description:
-      'For investors or property owners with a DSCR, rental, flip, bridge, or hard-money scenario that needs lender-fit review.',
+      'For investors or property owners with a DSCR, rental, flip, bridge, or hard-money scenario that needs lender criteria review.',
     icon: Building2,
     primaryHref: '/real-estate-funding',
     primaryLabel: 'Review My Deal',

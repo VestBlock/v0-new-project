@@ -112,7 +112,7 @@ const scaleRevenuePlans = [
   {
     name: 'DealFlow Growth Support',
     price: '$2,500 setup + $997/mo',
-    audience: 'Operators who need seller intake, buyer/lender fit review, AI response, and follow-through working together.',
+    audience: 'Operators who need seller intake, buyer and lender criteria review, AI response, and follow-through working together.',
     route: '/dealflow-growth-system',
     cta: 'View Support',
     points: [
@@ -281,7 +281,7 @@ export default function PricingPage() {
               Plans designed for recurring revenue, not one-off form submissions.
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              The clearest path is to turn active real estate operators into recurring DealVault customers, then add higher-touch support when a team needs intake, partner fit review, and network follow-up.
+              The clearest path is to turn active real estate operators into recurring DealVault customers, then add higher-touch support when a team needs intake, partner review, and network follow-up.
             </p>
           </div>
 
@@ -336,7 +336,7 @@ export default function PricingPage() {
               <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40 hover:shadow-[0_14px_38px_rgba(8,145,178,0.12)]">
                 <p className="font-medium">Seller property review</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  A direct route for sellers to submit a property for fast cash, creative structure, novation, or partner-fit review.
+                  A direct route for sellers to submit a property for fast cash, creative structure, novation, or partner review.
                 </p>
                 <div className="mt-3">
                   <Button asChild size="sm">
@@ -347,7 +347,7 @@ export default function PricingPage() {
               <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40 hover:shadow-[0_14px_38px_rgba(8,145,178,0.12)]">
                 <p className="font-medium">Real estate funding and buyer/lender routing</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Review DSCR, rental, flip, hard-money, and partner-fit details before routing the conversation.
+                  Review DSCR, rental, flip, hard-money, and partner details before routing the conversation.
                 </p>
                 <div className="mt-3">
                   <Button asChild size="sm">

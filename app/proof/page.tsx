@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'VestBlock Deal Record Library',
     description:
-      'Sample trust snapshot, verified buy-box, lender-fit, DealVault, and deal-review records for real estate operators.',
+      'Sample trust snapshot, verified buy-box, lender criteria, DealVault, and deal-review records for real estate operators.',
     url: absoluteUrl('/proof'),
     images: [
       {

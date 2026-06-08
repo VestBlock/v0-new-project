@@ -25,13 +25,13 @@ const steps = [
     icon: ClipboardCheck,
   },
   {
-    title: "Build a lender profile",
-    body: "Your lending box becomes a cleaner partner profile for program clarity, borrower fit, and deal review.",
+    title: "Clarify what you fund",
+    body: "Your lending box helps VestBlock understand which deals should reach you and which should not.",
     icon: Network,
   },
   {
     title: "Review aligned deals",
-    body: "When a seller, borrower, or operator looks aligned, VestBlock can introduce the opportunity to your team for review.",
+    body: "When a seller, borrower, or operator fits your criteria, VestBlock can send the opportunity to your team for review.",
     icon: Banknote,
   },
 ] as const
@@ -134,10 +134,10 @@ export function LenderSignupPage() {
             </div>
             <div>
               <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-white md:text-6xl">
-                Join the lender network for better-fit real estate opportunities.
+                Get real estate deals routed to your lending box.
               </h1>
               <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-                Private lenders, hard money lenders, DSCR lenders, bridge lenders, and commercial capital providers share their lending box once. VestBlock reviews seller, borrower, and property opportunities, then introduces better-fit deals to your team for manual review.
+                Private lenders, hard money lenders, DSCR lenders, bridge lenders, and commercial capital providers can share criteria once. VestBlock uses that lending box to route seller, buyer, borrower, and operator opportunities that appear worth your review.
               </p>
             </div>
 
@@ -158,7 +158,7 @@ export function LenderSignupPage() {
             </div>
 
             <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.055] p-5 text-sm leading-6 text-amber-50/85">
-              VestBlock does not guarantee deal volume, approvals, terms, funding outcomes, or closed referrals. The purpose is to keep lender criteria clean so opportunities and partnerships can be handled more clearly.
+              VestBlock does not guarantee deal volume, approvals, terms, funding outcomes, or closed referrals. The purpose is to keep lender criteria clear so opportunities are routed to the right capital partner faster.
             </div>
           </div>
 
@@ -166,14 +166,14 @@ export function LenderSignupPage() {
             <div>
               <h2 className="text-2xl font-semibold text-white">Lender signup</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Share enough criteria for VestBlock to understand your lending lane, partner fit, and borrower profile.
+                Share enough criteria for VestBlock to understand what you fund, where you fund, and what should never be sent to you.
               </p>
             </div>
 
             {success ? (
               <div className="flex gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
-                <span>Your lender profile was received. VestBlock can review it before introducing matching opportunities.</span>
+                <span>Your lender profile was received. VestBlock can now use your criteria when routing matching real estate opportunities for review.</span>
               </div>
             ) : null}
 

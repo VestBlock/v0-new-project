@@ -17,7 +17,7 @@ export const sellFaqs: FaqItem[] = [
   {
     question: 'How do I sell my property through VestBlock?',
     answer:
-      'Submit your property at vestblock.io/sell with the address, condition, timeline, payoff context, asking price, and your situation. VestBlock routes the details to acquisitions review so the follow-up can be shaped around fast cash, creative structure, novation, or another partner-fit sale conversation.',
+      'Submit your property at vestblock.io/sell with the address, condition, timeline, payoff context, asking price, and your situation. VestBlock routes the details to acquisitions review so the follow-up can be shaped around fast cash, creative structure, novation, or another partner sale conversation.',
   },
   {
     question: 'Does it cost anything to submit my property for review?',
@@ -78,7 +78,7 @@ export const lenderFaqs: FaqItem[] = [
   {
     question: 'How do lenders join the VestBlock network?',
     answer:
-      'Lenders share their lending box at vestblock.io/lenders: states served, loan amount range, preferred deal types, minimum credit or DSCR requirements, and no-go items. VestBlock introduces better-fit real estate borrower and deal opportunities to your team for manual review.',
+      'Lenders share their lending box at vestblock.io/lenders: states served, loan amount range, preferred deal types, minimum credit or DSCR requirements, and no-go items. VestBlock introduces better-fit real estate borrower and deal opportunities to your team for review.',
   },
   {
     question: 'What types of lenders does VestBlock work with?',
@@ -88,7 +88,7 @@ export const lenderFaqs: FaqItem[] = [
   {
     question: 'How do lender introductions work?',
     answer:
-      'When a seller, borrower, or operator opportunity matches your stated lending box, VestBlock can introduce it to your team for review. Introductions are based on your stated criteria and manual review, so you see fewer, better-fit conversations instead of unfiltered volume.',
+      'When a seller, borrower, or operator opportunity matches your stated lending box, VestBlock can introduce it to your team for review. Introductions are based on your stated criteria, so you see fewer, better-fit conversations instead of unfiltered volume.',
   },
   {
     question: 'Does VestBlock guarantee funded deals or referrals?',

@@ -208,8 +208,8 @@ export function SellPage({ market }: SellPageProps) {
 
               <p className="text-lg md:text-xl text-slate-200 mb-7 max-w-2xl mx-auto">
                 {market
-                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.city} property review. VestBlock routes the submission to our acquisitions review for fast cash, creative structure, novation, or another partner-fit path.`
-                  : "Share the property details, timeline, occupancy, and selling situation so VestBlock can route the submission to our acquisitions review for fast cash, creative structure, novation, or a partner-fit path."}
+                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.city} property review. VestBlock routes the submission to our acquisitions review for fast cash, creative structure, novation, or another partner path.`
+                  : "Share the property details, timeline, occupancy, and selling situation so VestBlock can route the submission to our acquisitions review for fast cash, creative structure, novation, or a partner path."}
               </p>
 
               <Button
@@ -270,7 +270,7 @@ export function SellPage({ market }: SellPageProps) {
                     Request Your Property Review
                   </CardTitle>
                   <p className="text-muted-foreground mt-2">
-                    Fill out the form below so your property can be routed for fast cash, creative, novation, or partner-fit review.
+                    Fill out the form below so your property can be routed for fast cash, creative, novation, or partner review.
                   </p>
                 </CardHeader>
 

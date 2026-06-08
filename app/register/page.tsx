@@ -56,7 +56,7 @@ function RegisterPageContent() {
         <CardHeader>
           <CardTitle className="text-xl">Create your VestBlock account</CardTitle>
           <CardDescription>
-            Your Growth System dashboard will be ready after signup.
+            Your VestBlock workspace will be ready after signup.
           </CardDescription>
         </CardHeader>
         <CardContent>

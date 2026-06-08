@@ -380,7 +380,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     title: 'Small Business Grants And Application Prep',
     seoTitle: 'Small Business Grant Finder And Application Prep',
     metaDescription:
-      'Use VestBlock to review grant requirements, match business details to opportunities, and draft stronger application language for manual review.',
+      'Use VestBlock to review grant requirements, match business details to opportunities, and draft stronger application language for hands-on review.',
     excerpt:
       'VestBlock helps business owners organize grant details, deadlines, documents, and application language without promising awards.',
     audience:
@@ -551,9 +551,9 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     title: 'Seller Property Review For Fast Cash, Creative, Or Novation Paths',
     seoTitle: 'Seller Property Review For Fast Cash, Creative Finance, And Novation Paths',
     metaDescription:
-      'Use VestBlock to submit property details for fast cash buyer, creative structure, novation, or partner-fit seller review without a promised offer.',
+      'Use VestBlock to submit property details for fast cash buyer, creative structure, novation, or partner seller review without a promised offer.',
     excerpt:
-      'VestBlock helps property owners submit the details needed to compare fast cash, creative, novation, and partner-fit sale conversations.',
+      'VestBlock helps property owners submit the details needed to compare fast cash, creative, novation, and partner sale conversations.',
     audience:
       'Property owners who want a fast cash buyer review, creative structure review, novation review, or another better-fit sale conversation.',
     primaryRoute: '/sell',

@@ -14,11 +14,11 @@ import {
 } from "lucide-react"
 
 const roles = [
-  { label: "Sellers", body: "Submit a property for review and the right next conversation.", href: "/sell", icon: Home },
+  { label: "Sellers", body: "Submit a property and review possible paths without guessing who to call first.", href: "/sell", icon: Home },
   { label: "Buyers", body: "Share your buy box and review opportunities aligned with your acquisition criteria.", href: "/buyers", icon: Users },
-  { label: "Wholesalers", body: "Move inventory toward qualified buyers, lenders, and proof-backed partner conversations.", href: "/get-started", icon: Repeat },
+  { label: "Wholesalers", body: "Move inventory toward qualified buyers, lenders, and clearer partner conversations.", href: "/get-started", icon: Repeat },
   { label: "Investors", body: "Source on-criteria opportunities and stay close to the markets, assets, and partners that fit your lane.", href: "/buyers", icon: Building2 },
-  { label: "Acquisition teams", body: "Run a sharper desk with clear criteria, proof records, and partner introductions.", href: "/get-started", icon: Briefcase },
+  { label: "Acquisition teams", body: "Keep criteria, partner introductions, and deal records easier to manage.", href: "/get-started", icon: Briefcase },
   { label: "Lenders", body: "Join the lender network and receive opportunities that fit your lending box.", href: "/lenders", icon: Landmark },
   { label: "Developers & contractors", body: "Share capacity, markets, project fit, and partnership criteria.", href: "/get-started", icon: CircleDollarSign },
 ]
@@ -42,7 +42,7 @@ export function NetworkSection() {
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-300/85">
             Sellers, buyers, lenders, capital partners, developers, contractors, and operators get clearer paths to the
-            right conversations, without turning the site into a pile of side offers.
+            right conversations without digging through unrelated services.
           </p>
         </motion.div>
 

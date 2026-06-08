@@ -22,7 +22,7 @@ const buyerCategories = [
 
 const proofStatuses = [
   "Proof ready",
-  "Can provide after fit review",
+  "Can provide after deal review",
   "Needs update",
   "Not applicable yet",
 ] as const
@@ -34,18 +34,18 @@ const steps = [
     icon: ClipboardCheck,
   },
   {
-    title: "Build a buyer profile",
-    body: "Your criteria becomes a cleaner buyer profile for partner review, funding conversations, and seller fit.",
+    title: "Stay ready for matches",
+    body: "Your criteria gives VestBlock a clear way to decide which seller opportunities are worth sending to you.",
     icon: Network,
   },
   {
     title: "Review better-fit deals",
-    body: "When seller or deal context matches your box, VestBlock can introduce the opportunity for your review.",
+    body: "When a property fits your box, VestBlock can introduce the opportunity for your review.",
     icon: BadgeDollarSign,
   },
   {
     title: "Package capital when needed",
-    body: "Qualified buyer deals can be organized for No Limit Capital or another funding partner when proof or leverage is the blocker.",
+    body: "If funding is the blocker, qualified deals can be organized for No Limit Capital or another funding partner.",
     icon: BadgeDollarSign,
   },
 ] as const
@@ -88,7 +88,7 @@ const initialForm: FormState = {
   priceMin: "",
   priceMax: "",
   closingSpeed: "",
-  proofOfFundsStatus: "Can provide after fit review",
+  proofOfFundsStatus: "Can provide after deal review",
   preferredDeals: "",
   noGoItems: "",
   referralNotes: "",
@@ -176,7 +176,7 @@ export function BuyerSignupPage() {
                 Bring your buy box into VestBlock.
               </h1>
               <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-                Real estate buyers, fix-and-flip operators, landlords, multifamily investors, and institutional teams share acquisition criteria once. VestBlock can introduce better-fit seller opportunities, help package qualified buyer deals for No Limit Capital funding review, and keep your criteria ready for serious partner review.
+                Real estate buyers, fix-and-flip operators, landlords, multifamily investors, and institutional teams can share acquisition criteria once. VestBlock uses that buy box to route better-fit seller opportunities, organize qualified deals for funding review when needed, and keep your criteria ready for serious partner introductions.
               </p>
             </div>
 
@@ -197,7 +197,7 @@ export function BuyerSignupPage() {
             </div>
 
             <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.055] p-5 text-sm leading-6 text-amber-50/85">
-              VestBlock does not guarantee deal volume, exclusivity, assignments, pricing, or closed transactions. The purpose is to keep buyer criteria clear so better-fit opportunities and partnerships can be handled with more discipline.
+              VestBlock does not guarantee deal volume, exclusivity, assignments, pricing, or closed transactions. The purpose is to keep your buy box clear so real opportunities can be routed with more discipline.
             </div>
           </div>
 
@@ -205,7 +205,7 @@ export function BuyerSignupPage() {
             <div>
               <h2 className="text-2xl font-semibold text-white">Buyer buy-box intake</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Share enough detail for VestBlock to understand your acquisition lane, partner fit, and funding needs.
+                Share enough detail for VestBlock to understand what you buy, where you buy, and when funding help may be useful.
               </p>
             </div>
 
@@ -218,9 +218,9 @@ export function BuyerSignupPage() {
                     <p>
                       {successState?.growthSystemReady
                         ? successState.growthSystemEmailSent
-                        ? `Your Growth System email was sent to ${successState.email}.`
-                        : "Your Growth System is ready for this buyer profile, and account access can be connected with the same email."
-                        : "Your buyer profile is saved. VestBlock is still preparing the Growth System side of your intake."}
+                        ? `Your buyer follow-up email was sent to ${successState.email}.`
+                        : "Your buyer profile is ready, and account access can be connected with the same email."
+                        : "Your buyer profile is saved. VestBlock is preparing your follow-up workspace."}
                     </p>
                     <p>
                       Use the same email to create an account or sign in so your dashboard can show your saved intake and next steps.

@@ -152,10 +152,10 @@ export default function DashboardServicesPage() {
       <div className="container mx-auto max-w-6xl space-y-8">
         <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <Badge className="mb-3 bg-cyan-600 text-white">Growth System</Badge>
-            <h1 className="text-4xl font-bold tracking-tight">Your VestBlock Growth System</h1>
+            <Badge className="mb-3 bg-cyan-600 text-white">Network workspace</Badge>
+            <h1 className="text-4xl font-bold tracking-tight">Your VestBlock deal workspace</h1>
             <p className="mt-3 max-w-3xl text-muted-foreground">
-              Review your starter workspace, saved requests, partner-path notes, DealVault next steps, and AI visibility recommendations.
+              Review saved requests, seller or buyer criteria, lender notes, DealVault next steps, and partner follow-up.
             </p>
           </div>
           <div className="flex gap-2">
@@ -193,7 +193,7 @@ export default function DashboardServicesPage() {
               <div>
                 <p className="font-medium">Your starter workspace is being prepared.</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Refresh in a moment. If this is a new account, VestBlock is creating your starter Growth System item now.
+                  Refresh in a moment. If this is a new account, VestBlock is preparing your starter workspace now.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">

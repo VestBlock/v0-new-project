@@ -27,14 +27,14 @@ import { absoluteUrl } from '@/lib/seo/site';
 export const metadata: Metadata = {
   title: 'DealFlow Growth Support | VestBlock Real Estate Deal Support',
   description:
-    'VestBlock DealFlow Growth Support combines seller intake, buyer and lender fit review, DealVault records, response support, and follow-through support for real estate operators.',
+    'VestBlock DealFlow Growth Support combines seller intake, buyer and lender criteria review, DealVault records, response support, and follow-through support for real estate operators.',
   alternates: {
     canonical: '/dealflow-growth-system',
   },
   openGraph: {
     title: 'DealFlow Growth Support | VestBlock',
     description:
-      'High-touch support for real estate teams that need cleaner intake, partner fit review, deal records, and lead response.',
+      'High-touch support for real estate teams that need cleaner intake, partner review, deal records, and lead response.',
     url: absoluteUrl('/dealflow-growth-system'),
     images: [
       {
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'DealFlow Growth Support | VestBlock',
     description:
-      'Seller intake, buyer and lender fit review, DealVault records, AI response, and follow-through support for real estate operators.',
+      'Seller intake, buyer and lender criteria review, DealVault records, AI response, and follow-through support for real estate operators.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
@@ -143,7 +143,7 @@ export default function DealFlowGrowthSystemPage() {
                 DealFlow Growth Support for real estate teams ready to handle more opportunities.
               </h1>
               <p className="max-w-3xl text-lg leading-8 text-muted-foreground">
-                VestBlock combines seller intake, buyer and lender fit review, DealVault records,
+                VestBlock combines seller intake, buyer and lender criteria review, DealVault records,
                 AI response, and follow-through support into one high-touch service for serious
                 real estate operators.
               </p>
@@ -184,7 +184,7 @@ export default function DealFlowGrowthSystemPage() {
                 {[
                   'Seller and funding intake path',
                   'Deal Trust Snapshot structure',
-                  'Verified buy-box and lender-fit criteria',
+                  'Verified buy-box and lender criteria',
                   'DealVault rollout guidance',
                   'AI response and booking support',
                   'Follow-through support tied to real estate demand',

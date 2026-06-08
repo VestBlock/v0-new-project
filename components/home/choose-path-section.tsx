@@ -6,7 +6,7 @@ const paths = [
   {
     label: "Sellers",
     title: "Submit a property",
-    body: "Share the address, condition, timeline, and price. We review the situation and route the strongest sale path.",
+    body: "Share the address, condition, timeline, and price. We review whether fast cash, creative, novation, or a partner route makes sense.",
     href: "/sell",
     cta: "Submit a Property",
     icon: Home,
@@ -17,7 +17,7 @@ const paths = [
   {
     label: "Buyers",
     title: "Share your buy box",
-    body: "Tell us your markets, asset types, price range, and proof. Matching seller opportunities come to you.",
+    body: "Tell us your markets, asset types, price range, and proof. We use that box to route seller opportunities worth reviewing.",
     href: "/buyers",
     cta: "Share Buy Box",
     icon: Users,
@@ -27,8 +27,8 @@ const paths = [
   },
   {
     label: "Lenders",
-    title: "Join the lender network",
-    body: "Share your states, loan range, and criteria. Receive routed deals that match what you actually fund.",
+    title: "Receive fundable deals",
+    body: "Share your states, loan range, and criteria. We route opportunities that fit what you actually fund.",
     href: "/lenders",
     cta: "Join Lender Network",
     icon: Landmark,
@@ -39,7 +39,7 @@ const paths = [
   {
     label: "Operators",
     title: "Join the partner network",
-    body: "Developers, contractors, and operators share where they fit so the right projects route their way.",
+    body: "Developers, contractors, and operators share capacity, markets, and project fit so the right opportunities can reach them.",
     href: "/get-started",
     cta: "Join Partner Network",
     icon: Hammer,
@@ -59,7 +59,7 @@ export function ChoosePathSection() {
             One network. Four ways in.
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-300/90">
-            Tell us who you are and you are one click from the right intake — no hunting through menus.
+            Pick the role that matches what you need today. Each path goes straight to the right intake.
           </p>
         </MarketingReveal>
 

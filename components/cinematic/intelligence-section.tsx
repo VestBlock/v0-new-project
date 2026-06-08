@@ -5,7 +5,7 @@ import { Activity, Database, Layers, MapPin, ShieldCheck } from "lucide-react"
 
 const partnerView = [
   { stage: "Shared", status: "Received", tint: "text-cyan-200", bar: "78%" },
-  { stage: "Reviewed", status: "Partner fit", tint: "text-sky-200", bar: "61%" },
+  { stage: "Reviewed", status: "Good fit", tint: "text-sky-200", bar: "61%" },
   { stage: "Introduced", status: "In motion", tint: "text-amber-200", bar: "44%" },
   { stage: "Recorded", status: "DealVault", tint: "text-emerald-200", bar: "29%" },
 ]
@@ -31,12 +31,12 @@ export function IntelligenceSection() {
             </h2>
             <p className="mt-4 max-w-xl text-lg leading-8 text-slate-300/85">
               VestBlock organizes scattered real estate conversations so the right people can understand the opportunity,
-              review the fit, document important records, and move the deal forward with cleaner next steps.
+              review the details, document important records, and move forward with cleaner next steps.
             </p>
             <ul className="mt-8 space-y-4">
               {[
-                { icon: Layers, text: "One clear entry path for sellers, buyers, lenders, developers, contractors, and operators" },
-                { icon: Activity, text: "Warm partner introductions based on market, asset type, capital needs, and capacity" },
+                { icon: Layers, text: "Clear entry paths for sellers, buyers, lenders, developers, contractors, and operators" },
+                { icon: Activity, text: "Warm introductions based on market, asset type, capital needs, and partner capacity" },
                 { icon: ShieldCheck, text: "DealVault records for proof, accountability, and follow-through" },
               ].map((item) => {
                 const Icon = item.icon
@@ -77,7 +77,7 @@ export function IntelligenceSection() {
               {/* opportunity panel */}
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 sm:col-span-2">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">Opportunity path</span>
+                  <span className="text-sm font-semibold text-white">Opportunity review</span>
                   <span className="vb-mono text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">active</span>
                 </div>
                 <div className="space-y-3">

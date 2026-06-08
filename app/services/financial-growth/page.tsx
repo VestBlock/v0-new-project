@@ -342,7 +342,7 @@ export default function FinancialGrowthServicesPage() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <p>Choose this after a funding check shows the business needs cleanup before applying.</p>
-                <p>Use it when a real-estate deal or grant opportunity needs a more manual review.</p>
+                <p>Use it when a real-estate deal or grant opportunity needs a more hands-on review.</p>
                 <p>Start here when you want a prep review with a clear scope and next step before payment.</p>
               </CardContent>
             </Card>

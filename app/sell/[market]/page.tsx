@@ -11,7 +11,7 @@ const sellerMarkets = {
     stateName: 'Wisconsin',
     title: 'Sell a Property in Milwaukee - Fast Cash, Creative, or Novation Review',
     description:
-      'Milwaukee property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner-fit review.',
+      'Milwaukee property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
   },
   toledo: {
     city: 'Toledo',
@@ -19,7 +19,7 @@ const sellerMarkets = {
     stateName: 'Ohio',
     title: 'Sell a Property in Toledo - Fast Cash, Creative, or Novation Review',
     description:
-      'Toledo property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner-fit review.',
+      'Toledo property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
   },
   memphis: {
     city: 'Memphis',
@@ -27,7 +27,7 @@ const sellerMarkets = {
     stateName: 'Tennessee',
     title: 'Sell a Property in Memphis - Fast Cash, Creative, or Novation Review',
     description:
-      'Memphis property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner-fit review.',
+      'Memphis property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
   },
 } as const
 

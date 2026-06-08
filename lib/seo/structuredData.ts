@@ -403,7 +403,7 @@ export function homepageFaqJsonLd() {
         name: 'How do sellers submit a property to VestBlock?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Sellers visit vestblock.io/sell to submit their property address, condition, timeline, asking price, mortgage balance, preferred sale path, and situation. VestBlock routes the details to acquisitions review for fast cash buyer review, creative structure review, novation review, or another partner-fit follow-up.',
+          text: 'Sellers visit vestblock.io/sell to submit their property address, condition, timeline, asking price, mortgage balance, preferred sale path, and situation. VestBlock routes the details to acquisitions review for fast cash buyer review, creative structure review, novation review, or another partner follow-up.',
         },
       },
       {
@@ -462,7 +462,7 @@ export function realEstatePartnerServiceJsonLd() {
           '@type': 'Offer',
           name: 'Seller Property Review',
           url: absoluteUrl('/sell'),
-          description: 'Sellers submit property details for fast cash buyer, creative structure, novation, or partner-fit sale review.',
+          description: 'Sellers submit property details for fast cash buyer, creative structure, novation, or partner sale review.',
           availability: 'https://schema.org/InStock',
           price: '0',
           priceCurrency: 'USD',

@@ -19,14 +19,14 @@ const revenuePaths = [
   },
   {
     title: 'DealFlow Growth Support',
-    body: 'See the premium support package that combines seller intake, buyer/lender fit review, DealVault, and response support.',
+    body: 'See the premium support package that combines seller intake, buyer and lender criteria review, DealVault, and response support.',
     href: '/dealflow-growth-system',
     cta: 'View support',
     icon: Network,
   },
   {
     title: 'Real estate funding review',
-    body: 'Open the capital path for DSCR, bridge, fix-and-flip, rental, and construction scenarios that need lender-fit review.',
+    body: 'Open the capital path for DSCR, bridge, fix-and-flip, rental, and construction scenarios that need lender criteria review.',
     href: '/real-estate-funding',
     cta: 'Open funding path',
     icon: Building2,

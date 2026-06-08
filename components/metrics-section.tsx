@@ -22,7 +22,7 @@ const signals = [
   {
     icon: HandCoins,
     label: "Member visibility support",
-    note: "SEO/AEO visibility, AI intake, funding prep, and credit help stay available when they support a real estate relationship.",
+    note: "Visibility, lead intake, funding prep, and credit help stay available when they support a real estate relationship.",
   },
 ] as const
 

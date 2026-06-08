@@ -280,17 +280,17 @@ function DashboardPageContent() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-cyan-200">
               <Sparkles className="h-4 w-4" />
-              <span className="text-sm font-medium">VestBlock Growth System</span>
+              <span className="text-sm font-medium">VestBlock Network Workspace</span>
             </div>
             <div>
               <h3 className="text-xl font-semibold">Start with the right real estate partner path.</h3>
               <p className="mt-1 text-sm text-slate-300">
-                Review your starter workspace, seller or buyer criteria, lender fit, DealVault records, and AI visibility next steps in one place.
+                Review seller or buyer criteria, lender notes, DealVault records, and partner follow-up in one place.
               </p>
             </div>
           </div>
           <Button asChild className="bg-cyan-500 text-slate-950 hover:bg-cyan-400">
-            <Link href="/dashboard/services">Open Growth System</Link>
+            <Link href="/dashboard/services">Open Workspace</Link>
           </Button>
         </CardContent>
       </Card>

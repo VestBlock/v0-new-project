@@ -12,7 +12,7 @@ import { sellFaqs } from '@/lib/seo/faqContent'
 export const metadata: Metadata = {
   title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
   description:
-    'Submit your property online for review. VestBlock routes condition, timeline, payoff, and seller context to acquisitions review for fast cash, creative structure, novation, or partner-fit sale paths.',
+    'Submit your property online for review. VestBlock routes condition, timeline, payoff, and seller context to acquisitions review for fast cash, creative structure, novation, or partner sale paths.',
   keywords: [
     'sell my house fast',
     'novation real estate review',
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
     description:
-      'Submit property details for review. VestBlock routes the submission to acquisitions review for fast cash, creative structure, novation, or another partner-fit sale path.',
+      'Submit property details for review. VestBlock routes the submission to acquisitions review for fast cash, creative structure, novation, or another partner sale path.',
     url: absoluteUrl('/sell'),
     images: [
       {
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
     description:
-      'Submit property details for review. VestBlock routes fast cash, creative, novation, and partner-fit review based on your situation.',
+      'Submit property details for review. VestBlock routes fast cash, creative, novation, and partner review based on your situation.',
     images: [absoluteUrl('/opengraph-image')],
   },
 }

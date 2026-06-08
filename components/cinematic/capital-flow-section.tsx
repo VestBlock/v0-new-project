@@ -4,10 +4,10 @@ import { motion, useReducedMotion } from "framer-motion"
 import { Building2, CircleDollarSign, Handshake, ShieldCheck } from "lucide-react"
 
 const stages = [
-  { label: "Share", title: "Sellers & opportunities", body: "Property details, timing, motivation, and deal context come in through a clear review path.", icon: Building2, tint: "text-cyan-200", ring: "border-cyan-300/30" },
-  { label: "Meet", title: "Buyers & operators", body: "Buyers and operators review opportunities that fit their markets, asset appetite, and capacity.", icon: Handshake, tint: "text-sky-200", ring: "border-sky-300/30" },
-  { label: "Fund", title: "Lenders & capital", body: "Lender and capital partners see opportunities aligned with their programs, market coverage, and risk appetite.", icon: CircleDollarSign, tint: "text-amber-200", ring: "border-amber-300/30" },
-  { label: "Verify", title: "Proof & records", body: "DealVault records help qualified members keep proof, accountability, and important history organized beyond one transaction.", icon: ShieldCheck, tint: "text-emerald-200", ring: "border-emerald-300/30" },
+  { label: "Share", title: "Sellers & opportunities", body: "Property details, timing, motivation, and deal context enter through a simple review path.", icon: Building2, tint: "text-cyan-200", ring: "border-cyan-300/30" },
+  { label: "Meet", title: "Buyers & operators", body: "Buyers and operators see opportunities that fit their markets, asset appetite, and capacity.", icon: Handshake, tint: "text-sky-200", ring: "border-sky-300/30" },
+  { label: "Fund", title: "Lenders & capital", body: "Lenders and capital partners receive opportunities aligned with their programs and risk appetite.", icon: CircleDollarSign, tint: "text-amber-200", ring: "border-amber-300/30" },
+  { label: "Verify", title: "Proof & records", body: "DealVault helps members keep agreements, milestones, payouts, and proof organized beyond one transaction.", icon: ShieldCheck, tint: "text-emerald-200", ring: "border-emerald-300/30" },
 ]
 
 export function CapitalFlowSection() {
@@ -28,7 +28,7 @@ export function CapitalFlowSection() {
             Start with the role. Move toward the right partner.
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-300/85">
-            VestBlock is built for the moments when seller situations, buyer demand, lender programs, operator capacity, and partner trust all need to line up.
+            VestBlock is built for the moments when seller needs, buyer demand, lender programs, operator capacity, and partner trust all need to line up.
           </p>
         </motion.div>
 

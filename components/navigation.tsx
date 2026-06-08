@@ -68,7 +68,7 @@ export function Navigation() {
 
   // User menu links (when logged in)
   const userMenuLinks = [
-    { href: '/dashboard/services', label: 'Growth System', icon: Sparkles },
+    { href: '/dashboard/services', label: 'Network Workspace', icon: Sparkles },
     { href: '/get-started', label: 'Network Hub', icon: LayoutDashboard },
     { href: '/profile', label: 'Profile', icon: User },
     { href: '/dashboard/funding', label: 'Funding Assistant', icon: Sparkles },

@@ -60,7 +60,7 @@ function LoginPageContent() {
         <CardHeader>
           <CardTitle className="text-2xl">Sign in to VestBlock</CardTitle>
           <CardDescription>
-            Open your Growth System, services, funding, and DealVault workspace.
+            Open your network workspace, saved requests, funding tools, and DealVault records.
           </CardDescription>
         </CardHeader>
         <CardContent>

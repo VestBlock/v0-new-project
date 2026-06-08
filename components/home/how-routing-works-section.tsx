@@ -5,7 +5,7 @@ const steps = [
   {
     step: "01",
     title: "Intake",
-    body: "Sellers submit properties. Buyers and lenders share criteria. Operators show where they fit. Every entry is structured the same way.",
+    body: "Sellers submit properties. Buyers and lenders share criteria. Operators show where they can help.",
     icon: ClipboardCheck,
     tint: "text-cyan-300",
     ring: "border-cyan-300/25",
@@ -13,7 +13,7 @@ const steps = [
   {
     step: "02",
     title: "Route",
-    body: "We match each opportunity to the right party by market, price, asset type, and criteria — then route the conversation that fits.",
+    body: "We compare the opportunity against market, price, asset type, capital needs, and partner criteria before making introductions.",
     icon: Route,
     tint: "text-blue-300",
     ring: "border-blue-300/25",
@@ -21,7 +21,7 @@ const steps = [
   {
     step: "03",
     title: "Verify",
-    body: "When a deal moves forward, DealVault records agreements, payouts, and milestones so every party has a clean, shared trail.",
+    body: "When a deal moves forward, DealVault can record agreements, payouts, and milestones so the relationship has a clean trail.",
     icon: ShieldCheck,
     tint: "text-violet-300",
     ring: "border-violet-300/25",
@@ -35,10 +35,10 @@ export function HowRoutingWorksSection() {
         <MarketingReveal className="mx-auto mb-14 max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300/80">How VestBlock routes deals</p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-5xl">
-            From intake to verified deal.
+            From intake to the next serious conversation.
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-300/90">
-            A single, repeatable path that keeps sellers, buyers, lenders, and operators moving in the same direction.
+            A clearer path for sellers, buyers, lenders, and operators to understand whether the opportunity is worth pursuing.
           </p>
         </MarketingReveal>
 

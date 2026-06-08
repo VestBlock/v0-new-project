@@ -262,7 +262,7 @@ export default function ServicesPage() {
               Choose the real estate path that matches the deal in front of you.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              Start with seller intake, buyer criteria, lender criteria, project partner fit, real estate funding review, or DealVault. SEO/AEO visibility, AI intake, funding prep, and credit support stay available when they support the deal.
+              Start with seller intake, buyer criteria, lender criteria, project partners, real estate funding review, or DealVault. Visibility, lead intake, funding prep, and credit support stay available when they help a real deal move forward.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
@@ -298,7 +298,7 @@ export default function ServicesPage() {
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
                 <p className="font-medium text-foreground">3. Add help when it matters</p>
-                <p>SEO/AEO visibility, AI intake, paid reviews, setup support, and specialist follow-up are there when the deal or network member needs more hands-on help.</p>
+                <p>Visibility, lead intake, paid reviews, setup support, and specialist follow-up are there when the deal or network member needs more hands-on help.</p>
               </div>
             </CardContent>
           </Card>
@@ -375,7 +375,7 @@ export default function ServicesPage() {
             <Badge variant="outline">Main products</Badge>
             <h2 className="mt-3 text-2xl font-bold tracking-tight">Real estate paths to start with</h2>
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              These are the primary VestBlock entry points: DealFlow Growth Support, DealVault records, seller opportunities, buyer/lender fit review, and project partner routing.
+              These are the primary VestBlock entry points: DealFlow Growth Support, DealVault records, seller opportunities, buyer and lender criteria review, and project partner routing.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

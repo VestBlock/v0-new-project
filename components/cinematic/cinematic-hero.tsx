@@ -26,15 +26,15 @@ const floatingCards = [
     delay: 0,
   },
   {
-    title: "Meet the right partners",
+    title: "Find the right match",
     meta: "Buyers · Capital · Operators",
     icon: TrendingUp,
     className: "hidden md:block md:right-8 md:top-[26%] lg:right-20",
     delay: 0.6,
   },
   {
-    title: "Keep the deal moving",
-    meta: "Review · records · next steps",
+    title: "Keep the record clean",
+    meta: "Terms · milestones · proof",
     icon: ShieldCheck,
     className: "hidden md:block md:bottom-[24%] md:right-16 lg:right-40",
     delay: 1.1,
@@ -176,9 +176,9 @@ export function CinematicHero() {
           transition={{ duration: 0.75, delay: 0.14 }}
           className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-slate-300/90 md:text-lg md:leading-8"
         >
-          VestBlock helps property owners, buyers, lenders, developers, contractors, operators, and capital partners find
-          the next serious conversation. Share what you want to sell, buy, fund, or build, then we organize the path, keep
-          important records in DealVault, and help the right partners review the opportunity clearly.
+          VestBlock connects property owners, buyers, lenders, developers, contractors, operators, and capital partners
+          around real estate opportunities. Share what you want to sell, buy, fund, or build, then we help organize the
+          next conversation and keep important deal records in DealVault.
         </motion.p>
 
         <motion.div
