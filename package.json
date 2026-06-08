@@ -136,7 +136,7 @@
     "openai": "latest",
     "outscraper": "^2.2.2",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "latest",
+    "pdf-parse": "1.1.1",
     "pdf2json": "^3.2.0",
     "pdfjs-dist": "^5.4.54",
     "posthog-js": "^1.372.8",
