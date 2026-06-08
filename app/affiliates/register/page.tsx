@@ -15,6 +15,11 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, Users } from "lucide-react"
 import Link from "next/link"
 
+type ExistingAffiliate = {
+  id: string
+  status: string | null
+}
+
 export default function AffiliateRegisterPage()
 
 {
@@ -63,11 +68,12 @@ export default function AffiliateRegisterPage()
     setIsSubmitting(true)
 
     try {
-      const { data: existingAffiliate, error: fetchError } = await supabase
+      const { data: existingAffiliateResult, error: fetchError } = await supabase
         .from("affiliates")
         .select("id, status")
         .eq("user_id", user.id)
         .maybeSingle()
+      const existingAffiliate = existingAffiliateResult as ExistingAffiliate | null
 
       if (fetchError && fetchError.code !== "PGRST116") {
         throw fetchError
