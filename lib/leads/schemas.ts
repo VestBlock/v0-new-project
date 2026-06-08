@@ -34,6 +34,7 @@ export const scrapeSourceSchema = z.enum([
   'milwaukee_accela_enforcement',
   'google_places_businesses',
   'outscraper_google_maps_businesses',
+  'weak_web_presence_businesses',
   'apify_yelp_businesses',
   'sam_contract_opportunities',
   'zillow_stale_listing_import',

@@ -200,7 +200,7 @@ No. Early-stage companies can still benefit from getting the structure and docum
 
 ## Next step
 
-If you want to build a stronger business profile before applying for funding, use the VestBlock business credit workflow and get a more practical roadmap.
+If you want to build a stronger business profile before applying for funding, use the VestBlock business credit tool and get a more practical roadmap.
 `,
   }),
   seoPage({
@@ -405,7 +405,7 @@ Because inquiry risk, utilization pressure, and repayment obligations should be 
 
 ## Next step
 
-Use the VestBlock business funding strategy workflow to see whether you should apply now, prepare first, or build a stronger file before creating more pressure.
+Use the VestBlock business funding strategy review to see whether you should apply now, prepare first, or build a stronger file before creating more pressure.
 `,
   }),
   seoPage({

@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
   title: 'DealVault Demo Record | Agreement Proof, Payouts, and Milestones',
@@ -55,6 +56,14 @@ export const metadata: Metadata = {
       'See a sample agreement become a hash-backed DealVault record with payouts, milestones, and certificate output.',
     images: [absoluteUrl('/dealvault/opengraph-image')],
   },
+  keywords: [
+    'DealVault demo record',
+    'agreement proof record',
+    'smart contract proof trail',
+    'milestone tracking demo',
+    'payout visibility record',
+    'business proof certificate',
+  ],
 };
 
 const proofCards = [
@@ -112,9 +121,65 @@ function statusLabel(status: string) {
     .join(' ');
 }
 
+function demoRecordJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: 'DealVault Demo Record',
+    url: absoluteUrl('/dealvault/demo-record'),
+    description:
+      'A public DealVault demo record showing how an agreement PDF becomes a hash-backed proof record with payout visibility and milestone history.',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'VestBlock',
+      url: absoluteUrl('/'),
+    },
+    about: [
+      'DealVault',
+      'agreement proof records',
+      'milestone tracking',
+      'payout visibility',
+      'smart contract records',
+    ],
+    mainEntity: {
+      '@type': 'CreativeWork',
+      name: 'Sample DealVault agreement proof record',
+      url: absoluteUrl('/dealvault/demo-record'),
+      identifier: demoPackage.demoDealId,
+    },
+  };
+}
+
 export default function DealVaultDemoRecordPage() {
   return (
     <main className="premium-page px-4 py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            organizationJsonLd(),
+            breadcrumbJsonLd([
+              { name: 'Home', path: '/' },
+              { name: 'DealVault', path: '/dealvault' },
+              { name: 'Demo Record', path: '/dealvault/demo-record' },
+            ]),
+            articleJsonLd({
+              headline: 'DealVault Demo Record',
+              description:
+                'A public walkthrough of a sample DealVault agreement proof record, payout splits, milestone status, and certificate-ready output.',
+              path: '/dealvault/demo-record',
+              keywords: [
+                'DealVault demo',
+                'agreement proof record',
+                'milestone tracking',
+                'payout visibility',
+                'smart contract records',
+              ],
+            }),
+            demoRecordJsonLd(),
+          ]),
+        }}
+      />
       <div className="container mx-auto max-w-7xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-6">
@@ -336,7 +401,7 @@ export default function DealVaultDemoRecordPage() {
             <CardHeader>
               <CardTitle>Certificate-ready output</CardTitle>
               <CardDescription>
-                The certificate gives non-technical buyers a simple artifact they can understand, share, and review.
+                The certificate gives non-technical buyers a simple record they can understand, share, and review.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -381,8 +446,8 @@ export default function DealVaultDemoRecordPage() {
                 what happened and when.
               </p>
               <p>
-                The blockchain layer is the proof layer. Supabase remains the application database.
-                Private documents stay off-chain.
+                The blockchain record helps verify the event history, while private application
+                records keep sensitive documents off-chain.
               </p>
               <Button asChild size="lg" className="w-full bg-cyan-600 hover:bg-cyan-700">
                 <Link href="/dealvault/demo#dealvault-demo">

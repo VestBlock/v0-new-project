@@ -122,7 +122,7 @@ export async function PATCH(
               ? 'This lead email does not look safe enough to send.'
               : decision.reason === 'suppressed'
                 ? 'Lead is on the suppression list.'
-                : decision.reason === 'below_score_threshold'
+                : decision.reason === 'below_min_score'
                   ? 'Lead score is below the auto-send threshold.'
                   : decision.reason === 'high_bounce_risk'
                     ? 'Lead bounce risk is too high to send.'

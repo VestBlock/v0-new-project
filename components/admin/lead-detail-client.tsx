@@ -51,6 +51,24 @@ type AiActionResult = {
   } | null
 }
 
+type RoughEstimateSnapshot = {
+  sourceLabel?: string
+  estimateValue?: number | null
+  lowEstimate?: number | null
+  highEstimate?: number | null
+  rentEstimate?: number | null
+  confidenceLabel?: string
+  equityEstimate?: number | null
+  ltvEstimate?: number | null
+  acquisitionRangeLow?: number | null
+  acquisitionRangeHigh?: number | null
+  suggestedExitPaths?: string[]
+  buyerPacketSummary?: string
+  lenderPacketSummary?: string
+  disclaimer?: string
+  warnings?: string[]
+}
+
 function pickRecordString(record: Record<string, unknown> | null | undefined, keys: string[]) {
   if (!record) return null
   for (const key of keys) {
@@ -94,6 +112,51 @@ function getLeadContactSnapshot(lead: LeadRecord) {
       pickRecordString(contact, ['website', 'websiteUrl']) ||
       pickRecordString(formData, ['website', 'websiteUrl']),
   }
+}
+
+function pickRecordObject(record: Record<string, unknown> | null | undefined, key: string) {
+  const value = record?.[key]
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function getLeadRoughEstimate(lead: LeadRecord): RoughEstimateSnapshot | null {
+  const estimate = pickRecordObject(lead.form_data, 'roughEstimate')
+  if (!estimate) return null
+
+  return {
+    sourceLabel: pickRecordString(estimate, ['sourceLabel', 'source']) || undefined,
+    estimateValue: typeof estimate.estimateValue === 'number' ? estimate.estimateValue : null,
+    lowEstimate: typeof estimate.lowEstimate === 'number' ? estimate.lowEstimate : null,
+    highEstimate: typeof estimate.highEstimate === 'number' ? estimate.highEstimate : null,
+    rentEstimate: typeof estimate.rentEstimate === 'number' ? estimate.rentEstimate : null,
+    confidenceLabel: pickRecordString(estimate, ['confidenceLabel']) || undefined,
+    equityEstimate: typeof estimate.equityEstimate === 'number' ? estimate.equityEstimate : null,
+    ltvEstimate: typeof estimate.ltvEstimate === 'number' ? estimate.ltvEstimate : null,
+    acquisitionRangeLow: typeof estimate.acquisitionRangeLow === 'number' ? estimate.acquisitionRangeLow : null,
+    acquisitionRangeHigh: typeof estimate.acquisitionRangeHigh === 'number' ? estimate.acquisitionRangeHigh : null,
+    suggestedExitPaths: Array.isArray(estimate.suggestedExitPaths)
+      ? estimate.suggestedExitPaths.filter((path): path is string => typeof path === 'string')
+      : [],
+    buyerPacketSummary: pickRecordString(estimate, ['buyerPacketSummary']) || undefined,
+    lenderPacketSummary: pickRecordString(estimate, ['lenderPacketSummary']) || undefined,
+    disclaimer: pickRecordString(estimate, ['disclaimer']) || undefined,
+    warnings: Array.isArray(estimate.warnings)
+      ? estimate.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
+  }
+}
+
+function formatMoney(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatExitPath(path: string) {
+  return path.replace(/_/g, ' ')
 }
 
 export function LeadDetailClient({ leadId }: { leadId: string }) {
@@ -226,33 +289,19 @@ export function LeadDetailClient({ leadId }: { leadId: string }) {
       router.replace(`/login?redirect=/admin/leads/${leadId}`)
       return
     }
-    if (isAuthenticated) void fetchLead()
+    if (isAuthenticated) {
+      queueMicrotask(() => {
+        void fetchLead()
+      })
+    }
   }, [authLoading, fetchLead, isAuthenticated, leadId, router])
 
   const generateOutreach = async () => {
     setIsGeneratingOutreach(true)
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.access_token) return
-
-      const response = await fetch('/api/leads/generate-outreach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ leadIds: [leadId] }),
-      })
-      if (!response.ok) throw new Error('Outreach generation failed.')
-      toast({ title: 'Outreach regenerated' })
-      await fetchLead()
-    } catch (error) {
       toast({
-        title: 'Outreach failed',
-        description: error instanceof Error ? error.message : 'Try again.',
-        variant: 'destructive',
+        title: 'Outreach runs off-platform',
+        description: 'Use npm run outreach:v4-workflow from Codex/operator mode to generate and review drafts.',
       })
     } finally {
       setIsGeneratingOutreach(false)
@@ -339,6 +388,7 @@ export function LeadDetailClient({ leadId }: { leadId: string }) {
   const emailChannelAvailable = Boolean(lead.email && lead.email_valid !== false)
   const formattedLeadAddress = formatLeadAddress(lead)
   const contactSnapshot = getLeadContactSnapshot(lead)
+  const roughEstimate = getLeadRoughEstimate(lead)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -369,6 +419,54 @@ export function LeadDetailClient({ leadId }: { leadId: string }) {
             <div>
               <div className="text-slate-400">Property / business address</div>
               <div>{formattedLeadAddress}</div>
+            </div>
+          ) : null}
+
+          {roughEstimate ? (
+            <div className="rounded-lg border border-cyan-400/20 bg-cyan-950/20 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-medium text-white">Property estimate and deal fit</div>
+                  <div className="text-xs text-slate-400">
+                    {roughEstimate.sourceLabel || 'Internal review'} · {roughEstimate.confidenceLabel || 'needs review'} confidence
+                  </div>
+                </div>
+                {roughEstimate.suggestedExitPaths?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {roughEstimate.suggestedExitPaths.slice(0, 4).map((path) => (
+                      <Badge key={path} variant="secondary">{formatExitPath(path)}</Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div><span className="text-slate-400">Rough value:</span> {formatMoney(roughEstimate.estimateValue)}</div>
+                <div><span className="text-slate-400">Value band:</span> {formatMoney(roughEstimate.lowEstimate)} - {formatMoney(roughEstimate.highEstimate)}</div>
+                <div><span className="text-slate-400">Rent estimate:</span> {formatMoney(roughEstimate.rentEstimate)}</div>
+                <div><span className="text-slate-400">Equity estimate:</span> {formatMoney(roughEstimate.equityEstimate)}</div>
+                <div><span className="text-slate-400">Estimated LTV:</span> {roughEstimate.ltvEstimate !== null && roughEstimate.ltvEstimate !== undefined ? `${roughEstimate.ltvEstimate}%` : '-'}</div>
+                <div><span className="text-slate-400">Cash review band:</span> {formatMoney(roughEstimate.acquisitionRangeLow)} - {formatMoney(roughEstimate.acquisitionRangeHigh)}</div>
+              </div>
+              {roughEstimate.buyerPacketSummary ? (
+                <div className="mt-3">
+                  <div className="text-slate-400">Buyer packet</div>
+                  <div>{roughEstimate.buyerPacketSummary}</div>
+                </div>
+              ) : null}
+              {roughEstimate.lenderPacketSummary ? (
+                <div className="mt-3">
+                  <div className="text-slate-400">Lender packet</div>
+                  <div>{roughEstimate.lenderPacketSummary}</div>
+                </div>
+              ) : null}
+              {roughEstimate.warnings?.length ? (
+                <div className="mt-3 text-xs text-amber-200">
+                  {roughEstimate.warnings.slice(0, 2).join(' ')}
+                </div>
+              ) : null}
+              {roughEstimate.disclaimer ? (
+                <div className="mt-2 text-xs text-slate-500">{roughEstimate.disclaimer}</div>
+              ) : null}
             </div>
           ) : null}
 

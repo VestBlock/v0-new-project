@@ -20,18 +20,22 @@ function getTopicLanguage(topic: AeoTopic): 'en' | 'es' {
 
 function getTopicServiceKey(topic: AeoTopic): VestBlockServiceKey {
   if (topic.offerPath === '/dealvault') return 'dealvault';
+  if (topic.offerPath === '/dealvault/demo') return 'dealvault';
+  if (topic.offerPath === '/dealvault/demo-record') return 'dealvault';
+  if (topic.offerPath === '/smart-contracts') return 'dealvault';
   if (topic.offerPath === '/tools/business-credit') return 'business_credit';
   if (topic.offerPath === '/tools/grants') return 'grants';
   if (topic.offerPath === '/business-setup') return 'business_setup';
   if (topic.offerPath === '/visibility-expansion') return 'visibility_expansion';
   if (topic.offerPath === '/ai-assistant') return 'ai_assistant';
+  if (topic.offerPath === '/services/ai-credit-analysis') return 'ai_credit_analysis';
+  if (topic.offerPath === '/funding/business-funding-strategy') return 'business_funding';
   if (topic.offerPath === '/real-estate-funding') return 'real_estate_funding';
   if (topic.offerPath === '/es/vestblock') return 'spanish_business_funding';
   if (topic.offerPath === '/funding') return 'business_funding';
   if (topic.offerPath === '/tools/my-dispute-letters') {
     return 'credit_dispute_letters';
   }
-  if (topic.offerPath === '/super-dispute') return 'credit_dispute_letters';
   if (topic.offerPath === '/dashboard') return 'financial_growth_services';
   return topic.cluster === 'business-credit'
     ? 'business_credit'
@@ -103,7 +107,7 @@ ${formatSectionList(topic.actionSteps)}
 
 ## How VestBlock fits in
 
-VestBlock helps you organize the next step before you rush into an application, dispute, or funding decision. This page is part of the ${clusterLabel} library, so the goal is to make the topic easier to understand and easier to act on with a real workflow behind it.
+VestBlock helps you organize the next step before you rush into an application, dispute, or funding decision. This page is part of the ${clusterLabel} library, so the goal is to make the topic easier to understand and easier to act on with a real process behind it.
 
 ## FAQ
 
@@ -196,7 +200,11 @@ export async function seedVestblockTopicContentAssets(input: {
     assetsToPersist = selectedAssets.filter((asset) => !existingSlugs.has(asset.slug));
   }
 
-  const payload = assetsToPersist.map((asset) => ({
+  const uniqueAssetsToPersist = Array.from(
+    new Map(assetsToPersist.map((asset) => [asset.slug, asset])).values()
+  );
+
+  const payload = uniqueAssetsToPersist.map((asset) => ({
     created_by: input.actorUserId ?? null,
     title: asset.title,
     slug: asset.slug,
@@ -204,7 +212,7 @@ export async function seedVestblockTopicContentAssets(input: {
     service_key: asset.serviceKey,
     language: asset.language,
     audience: asset.audience,
-    prompt: 'Seeded by VestBlock AEO topic automation.',
+    prompt: 'Seeded by VestBlock topic publishing.',
     status,
     platform: asset.platform,
     post_type: asset.postType,

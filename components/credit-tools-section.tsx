@@ -44,8 +44,8 @@ export function CreditToolsSection() {
                     When a business needs more preparation, VestBlock can still help with funding, credit, and setup. These services support the main job instead of competing with it.
                   </p>
                   <Button variant="outline" asChild className="mt-6 border-white/10 bg-transparent hover:bg-white/[0.04]">
-                    <Link href="/funding">
-                      Open support services
+                    <Link href="/services">
+                      Compare support services
                       <TrendingUp className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>

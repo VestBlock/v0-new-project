@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import { absoluteUrl } from "@/lib/seo/site"
+import { aiAssistantServiceJsonLd } from "@/lib/seo/structuredData"
 
 export const metadata: Metadata = {
-  title: "AI Receptionist, Booking, And Website Upgrades | VestBlock",
+  title: "AI Receptionist, Booking, And Website Upgrades",
   description:
     "Compare VestBlock AI receptionist, appointment-booking, and website-upgrade offers for service businesses that need stronger lead capture and conversion.",
   alternates: {
@@ -23,6 +24,14 @@ export const metadata: Metadata = {
       },
     ],
   },
+  keywords: [
+    "AI receptionist service",
+    "appointment booking automation",
+    "website lead capture service",
+    "small business website upgrade",
+    "service business chatbot setup",
+    "AI receptionist for local business",
+  ],
   twitter: {
     card: "summary_large_image",
     title: "AI Receptionist, Booking, And Website Upgrades | VestBlock",
@@ -37,5 +46,15 @@ export default function AIAssistantLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(aiAssistantServiceJsonLd()),
+        }}
+      />
+      {children}
+    </>
+  )
 }

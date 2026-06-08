@@ -93,6 +93,17 @@ When multiple options exist, prioritize in this order:
 - demote failing or low-signal channels instead of letting them waste cycles
 - treat errors as design feedback, not just bugs
 
+## Learning Log Format
+
+When a run teaches us something, capture it in this compact format:
+
+- Signal: the scorecard, report, user observation, browser failure, reply pattern, or production log.
+- Bottleneck: the one constraint that most directly blocks revenue, trust, visibility, or delivery.
+- Change: the code, config, docs, route, script, prompt, or admin visibility update made.
+- Verification: the command, browser check, scorecard, or live route result.
+- Durable memory target: the file or system updated so future sessions do not rediscover it.
+- Next experiment: the next safe test if the fix does not move the metric.
+
 ## Prompt to use on yourself
 
 Use this exact instruction set during a sprint:

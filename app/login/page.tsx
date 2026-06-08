@@ -18,14 +18,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 function LoginPageContent() {
-  const defaultRedirectTarget = '/get-started';
-  const [email, setEmail] = useState('');
+  const defaultRedirectTarget = '/dashboard/services';
+  const searchParams = useSearchParams();
+  const prefilledEmail = searchParams.get('email') || '';
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn, isLoading, authError, isAuthenticated } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
+
+  useEffect(() => {
+    if (prefilledEmail) {
+      setEmail((current) => current || prefilledEmail);
+    }
+  }, [prefilledEmail]);
 
   useEffect(() => {
     // Redirect if the user is already authenticated
@@ -51,9 +58,9 @@ function LoginPageContent() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardTitle className="text-2xl">Sign in to VestBlock</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Open your Growth System, services, funding, and DealVault workspace.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,8 +120,8 @@ function LoginPageContent() {
             <Link
               href={
                 redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}`
-                  : '/register'
+                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
+                  : `/register?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ''}`
               }
               passHref
             >

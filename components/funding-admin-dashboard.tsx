@@ -622,7 +622,7 @@ export function FundingAdminDashboard({
                   <div>Status: <span className="text-white">{titleCase(selected.payment?.status || 'not_started')}</span></div>
                   <div>Amount due: <span className="text-white">{money(selected.payment?.amount_due)}</span></div>
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-3 text-slate-400">
-                    Admin notes placeholder: funding notes are not editable from this view yet, but the record is ready for assisted-review workflow expansion.
+                    Review notes placeholder: funding notes are not editable from this view yet, but the record is ready for assisted-review expansion.
                   </div>
                 </CardContent>
               </Card>

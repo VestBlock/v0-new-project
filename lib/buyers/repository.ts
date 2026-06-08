@@ -456,7 +456,7 @@ export async function listActiveBuyersWithBuyBoxes(limit = 250) {
     admin
       .from('buyers')
       .select('*')
-      .in('relationship_stage', ['discovered', 'researched', 'outreach_ready', 'contacted', 'responded', 'active_buyer'])
+      .in('relationship_stage', ['discovered', 'researched', 'outreach_ready', 'contacted', 'responded', 'reviewing', 'active_buyer'])
       .order('confidence_score', { ascending: false })
       .limit(limit),
     admin.from('buyer_buy_boxes').select('*').eq('active', true),

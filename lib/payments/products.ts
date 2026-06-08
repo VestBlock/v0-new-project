@@ -16,10 +16,10 @@ export type VestBlockProduct = {
 export const vestblockProducts: Record<VestBlockProductType, VestBlockProduct> = {
   vestblock_pro: {
     type: 'vestblock_pro',
-    label: 'VestBlock Pro',
+    label: 'Credit Review Tools Access',
     amount: '75',
     defaultReturnPath: '/credit-upload',
-    description: 'Lifetime access to VestBlock Pro tools.',
+    description: 'Optional access to VestBlock credit review and dispute-letter tools.',
   },
   funding_strategy_review: {
     type: 'funding_strategy_review',

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, Loader2, Play, Plus, Sparkles } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
 import { getSupabaseClient } from '@/lib/supabase/client'
@@ -14,17 +14,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-
-function normalizeList(value: string) {
-  return Array.from(
-    new Set(
-      value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  )
-}
 
 export function MarketCommandCard() {
   const { isAuthenticated } = useAuth()
@@ -61,7 +50,7 @@ export function MarketCommandCard() {
     }
   }
 
-  const loadMarkets = async () => {
+  const loadMarkets = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch('/api/admin/markets?limit=16', { cache: 'no-store' })
@@ -79,11 +68,13 @@ export function MarketCommandCard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   useEffect(() => {
-    loadMarkets()
-  }, [])
+    queueMicrotask(() => {
+      void loadMarkets()
+    })
+  }, [loadMarkets])
 
   const addCity = async () => {
     if (!city.trim() || !state.trim() || !selectedPreset) {
@@ -161,7 +152,6 @@ export function MarketCommandCard() {
   }
 
   const runTopQueuedScrapes = async () => {
-    const headers = await getAuthHeaders()
     const targets = queuedMarkets.slice(0, 3)
     if (!targets.length) {
       toast({
@@ -172,62 +162,10 @@ export function MarketCommandCard() {
       return
     }
 
-    setWorking('run_top_scrapes')
-    try {
-      let totalSaved = 0
-      for (const market of targets) {
-        const niches = (market.niche_focus || []).slice(0, 4)
-        const scrapeResponse = await fetch('/api/leads/scrape/google-places', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            provider: 'auto',
-            city: market.city,
-            state: market.state,
-            language: 'en',
-            region: 'us',
-            limitPerNiche: 8,
-            niches,
-          }),
-        })
-
-        const scrapeData = await scrapeResponse.json().catch(() => ({}))
-        if (!scrapeResponse.ok) {
-          throw new Error(typeof scrapeData?.error === 'string' ? scrapeData.error : `Unable to scrape ${market.city}.`)
-        }
-
-        totalSaved += Number(scrapeData.count || 0)
-
-        await fetch(`/api/admin/markets/${market.id}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify({
-            status: Number(scrapeData.count || 0) > 0 ? 'scraped' : 'exhausted',
-            last_scraped_at: new Date().toISOString(),
-            performance_json: {
-              lastManualRunAt: new Date().toISOString(),
-              lastLeadCount: Number(scrapeData.count || 0),
-              lastProvider: scrapeData.provider || 'auto',
-              bestNiche: niches[0] || null,
-            },
-          }),
-        })
-      }
-
-      await loadMarkets()
-      toast({
-        title: 'Queued markets scraped',
-        description: `Saved ${totalSaved} leads across ${targets.length} queued cities.`,
-      })
-    } catch (error) {
-      toast({
-        title: 'Top queue scrape failed',
-        description: error instanceof Error ? error.message : 'Try again in a moment.',
-        variant: 'destructive',
-      })
-    } finally {
-      setWorking(null)
-    }
+    toast({
+      title: 'Outreach runs off-platform',
+      description: 'Use npm run outreach:v4-workflow from Codex/operator mode to scrape and score fresh markets.',
+    })
   }
 
   return (

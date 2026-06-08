@@ -6,22 +6,34 @@ import { findMarketPreset } from '@/lib/leads/marketPresets'
 import type { MarketDiscoverySummary, MarketSeed, TargetMarketRecord } from '@/lib/leads/types'
 
 const ROTATING_NICHES = [
-  'contractors',
-  'roofers',
-  'cleaning companies',
-  'trucking companies',
-  'restaurants',
-  'barbershops',
-  'salons',
-  'auto repair',
-  'real estate investors',
-  'property managers',
-  'tax preparers',
-  'insurance agencies',
-  'clinics',
-  'med spas',
-  'law firms',
-  'new LLCs',
+  'boutique property management companies',
+  'restoration and mitigation companies',
+  'residential remodeling companies',
+  'design-build remodelers',
+  'specialty trade subcontractors',
+  'construction draw and rehab contractors',
+  'construction project managers',
+  'permit expediting services',
+  'owner representative firms',
+  'public adjusters',
+  'staffing agencies',
+  'contingent search firms',
+  'marketing agencies with retainers',
+  'event production companies',
+  'sponsorship activation agencies',
+  'roofing subcontractors',
+  'hard money brokers',
+  'private lending brokers',
+  'business funding referral partners',
+  'invoice factoring companies',
+  'merchant cash advance ISOs',
+  'commercial cleaning companies',
+  'sign installation companies',
+  'parking lot striping companies',
+  'property preservation companies',
+  'real estate joint venture operators',
+  'vendor compliance service companies',
+  'insurance restoration companies',
   'Spanish-speaking businesses',
 ] as const
 
@@ -32,19 +44,19 @@ const MARKET_SEEDS: MarketSeed[] = [
   { city: 'Chicago', state: 'IL', metroArea: 'Chicago Metro', population: 2665000, primaryNiches: ['restaurants', 'salons', 'property managers'] },
   { city: 'Aurora', state: 'IL', metroArea: 'Chicago Metro', population: 180542, primaryNiches: ['cleaning companies', 'contractors', 'Spanish-speaking businesses'] },
   { city: 'Rockford', state: 'IL', metroArea: 'Rockford Metro', population: 146120, primaryNiches: ['roofers', 'auto repair', 'law firms'] },
-  { city: 'Indianapolis', state: 'IN', metroArea: 'Indianapolis Metro', population: 879293, primaryNiches: ['trucking companies', 'contractors', 'insurance agencies'] },
+  { city: 'Indianapolis', state: 'IN', metroArea: 'Indianapolis Metro', population: 879293, primaryNiches: ['construction project managers', 'contractors', 'insurance agencies'] },
   { city: 'Fort Wayne', state: 'IN', metroArea: 'Fort Wayne Metro', population: 269994, primaryNiches: ['cleaning companies', 'clinics', 'new LLCs'] },
   { city: 'Gary', state: 'IN', metroArea: 'Northwest Indiana', population: 68215, primaryNiches: ['property managers', 'roofers', 'real estate investors'] },
   { city: 'Detroit', state: 'MI', metroArea: 'Detroit Metro', population: 633218, primaryNiches: ['auto repair', 'restaurants', 'contractors'] },
   { city: 'Grand Rapids', state: 'MI', metroArea: 'Grand Rapids Metro', population: 198917, primaryNiches: ['med spas', 'law firms', 'cleaning companies'] },
   { city: 'Flint', state: 'MI', metroArea: 'Flint Metro', population: 79854, primaryNiches: ['property managers', 'roofers', 'tax preparers'] },
-  { city: 'Columbus', state: 'OH', metroArea: 'Columbus Metro', population: 905748, primaryNiches: ['clinics', 'law firms', 'trucking companies'] },
+  { city: 'Columbus', state: 'OH', metroArea: 'Columbus Metro', population: 905748, primaryNiches: ['clinics', 'law firms', 'commercial cleaning companies'] },
   { city: 'Cleveland', state: 'OH', metroArea: 'Cleveland Metro', population: 362656, primaryNiches: ['contractors', 'auto repair', 'property managers'] },
   { city: 'Cincinnati', state: 'OH', metroArea: 'Cincinnati Metro', population: 309513, primaryNiches: ['restaurants', 'tax preparers', 'Spanish-speaking businesses'] },
   { city: 'Atlanta', state: 'GA', metroArea: 'Atlanta Metro', population: 510823, primaryNiches: ['clinics', 'med spas', 'insurance agencies'] },
   { city: 'Savannah', state: 'GA', metroArea: 'Savannah Metro', population: 147748, primaryNiches: ['restaurants', 'cleaning companies', 'property managers'] },
   { city: 'Macon', state: 'GA', metroArea: 'Macon Metro', population: 157346, primaryNiches: ['roofers', 'contractors', 'tax preparers'] },
-  { city: 'Houston', state: 'TX', metroArea: 'Houston Metro', population: 2304580, primaryNiches: ['trucking companies', 'clinics', 'real estate investors'] },
+  { city: 'Houston', state: 'TX', metroArea: 'Houston Metro', population: 2304580, primaryNiches: ['construction project managers', 'clinics', 'real estate investors'] },
   { city: 'Dallas', state: 'TX', metroArea: 'Dallas-Fort Worth', population: 1304379, primaryNiches: ['law firms', 'insurance agencies', 'med spas'] },
   { city: 'San Antonio', state: 'TX', metroArea: 'San Antonio Metro', population: 1492510, primaryNiches: ['Spanish-speaking businesses', 'restaurants', 'auto repair'] },
   { city: 'Austin', state: 'TX', metroArea: 'Austin Metro', population: 979882, primaryNiches: ['new LLCs', 'clinics', 'salons'] },
@@ -52,7 +64,7 @@ const MARKET_SEEDS: MarketSeed[] = [
   { city: 'Orlando', state: 'FL', metroArea: 'Orlando Metro', population: 316081, primaryNiches: ['restaurants', 'property managers', 'cleaning companies'] },
   { city: 'Tampa', state: 'FL', metroArea: 'Tampa Metro', population: 403364, primaryNiches: ['roofers', 'contractors', 'law firms'] },
   { city: 'Nashville', state: 'TN', metroArea: 'Nashville Metro', population: 689447, primaryNiches: ['law firms', 'clinics', 'property managers'] },
-  { city: 'Memphis', state: 'TN', metroArea: 'Memphis Metro', population: 618639, primaryNiches: ['trucking companies', 'auto repair', 'tax preparers'] },
+  { city: 'Memphis', state: 'TN', metroArea: 'Memphis Metro', population: 618639, primaryNiches: ['commercial cleaning companies', 'auto repair', 'tax preparers'] },
   { city: 'Knoxville', state: 'TN', metroArea: 'Knoxville Metro', population: 198162, primaryNiches: ['roofers', 'cleaning companies', 'new LLCs'] },
   { city: 'Charlotte', state: 'NC', metroArea: 'Charlotte Metro', population: 911311, primaryNiches: ['insurance agencies', 'clinics', 'contractors'] },
   { city: 'Raleigh', state: 'NC', metroArea: 'Research Triangle', population: 482295, primaryNiches: ['new LLCs', 'law firms', 'med spas'] },
@@ -62,7 +74,7 @@ const MARKET_SEEDS: MarketSeed[] = [
   { city: 'Mesa', state: 'AZ', metroArea: 'Phoenix Metro', population: 511648, primaryNiches: ['salons', 'restaurants', 'insurance agencies'] },
   { city: 'Las Vegas', state: 'NV', metroArea: 'Las Vegas Metro', population: 660929, primaryNiches: ['med spas', 'restaurants', 'property managers'] },
   { city: 'Henderson', state: 'NV', metroArea: 'Las Vegas Metro', population: 337305, primaryNiches: ['law firms', 'clinics', 'roofers'] },
-  { city: 'Reno', state: 'NV', metroArea: 'Reno Metro', population: 274915, primaryNiches: ['trucking companies', 'contractors', 'new LLCs'] },
+  { city: 'Reno', state: 'NV', metroArea: 'Reno Metro', population: 274915, primaryNiches: ['roofing subcontractors', 'contractors', 'new LLCs'] },
   { city: 'St. Louis', state: 'MO', metroArea: 'St. Louis Metro', population: 281754, primaryNiches: ['property managers', 'law firms', 'auto repair'] },
   { city: 'Kansas City', state: 'MO', metroArea: 'Kansas City Metro', population: 508394, primaryNiches: ['contractors', 'roofers', 'insurance agencies'] },
   { city: 'Springfield', state: 'MO', metroArea: 'Springfield Metro', population: 170188, primaryNiches: ['cleaning companies', 'tax preparers', 'restaurants'] },
@@ -178,9 +190,15 @@ function presetIdsForLane(market: Pick<TargetMarketRecord, 'new_llc_score' | 're
   if (lane === 'small_business') ids.push('local_services')
   if (lane === 'new_business') ids.push('new_market_mix')
   if (lane === 'lenders') ids.push('professional_services')
+  if (lane === 'small_business' || lane === 'real_estate') ids.push('dealvault_workflows')
+  if (lane === 'lenders') ids.push('dealvault_partner_ops')
+  if (['small_business', 'new_business', 'lenders'].includes(lane)) ids.push('revenue_high_fit_services')
 
   if (market.new_llc_score >= 15 && lane !== 'buyers') ids.push('new_market_mix')
   if (market.real_estate_activity_score >= 14) ids.push('real_estate_money')
+  if (market.real_estate_activity_score >= 14 && ['small_business', 'lenders', 'real_estate'].includes(lane)) {
+    ids.push('dealvault_partner_ops')
+  }
   if (market.spanish_business_score >= 7) ids.push('minority_growth')
   if (market.ai_receptionist_opportunity_score >= 14 && ['small_business', 'new_business'].includes(lane)) ids.push('health_beauty')
   if (lane === 'small_business' || lane === 'lenders') ids.push('professional_services')

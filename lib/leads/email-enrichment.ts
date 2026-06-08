@@ -47,6 +47,7 @@ const BLOCKED_EMAIL_PATTERNS = [
   /wixpress\.com$/i,
   /squarespace\.com$/i,
   /godaddy\.com$/i,
+  /webador\.com$/i,
   /cloudflare\.com$/i,
   /google\.com$/i,
   /gstatic\.com$/i,

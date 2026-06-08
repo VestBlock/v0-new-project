@@ -1,8 +1,7 @@
 import { inngest } from '@/lib/inngest/client';
-import {
-  processGrowthServiceRequest,
-  type GrowthServiceRequestWorkflowInput,
-  type GrowthServiceRequestWorkflowResult,
+import type {
+  GrowthServiceRequestWorkflowInput,
+  GrowthServiceRequestWorkflowResult,
 } from '@/lib/inngest/serviceRequestWorkflow';
 import { logEvent } from '@/lib/system/logEvent';
 
@@ -17,11 +16,18 @@ function shouldUseInngest() {
   );
 }
 
+async function processGrowthServiceRequestDirect(
+  input: GrowthServiceRequestWorkflowInput
+): Promise<GrowthServiceRequestWorkflowResult> {
+  const { processGrowthServiceRequest } = await import('@/lib/inngest/serviceRequestWorkflow');
+  return processGrowthServiceRequest(input);
+}
+
 export async function queueGrowthServiceRequest(
   input: GrowthServiceRequestWorkflowInput
 ): Promise<QueueResult> {
   if (!shouldUseInngest()) {
-    const result = await processGrowthServiceRequest(input);
+    const result = await processGrowthServiceRequestDirect(input);
     return { ...result, processingMode: 'direct' };
   }
 
@@ -64,7 +70,7 @@ export async function queueGrowthServiceRequest(
       },
     });
 
-    const result = await processGrowthServiceRequest(input);
+    const result = await processGrowthServiceRequestDirect(input);
     return { ...result, processingMode: 'direct' };
   }
 }

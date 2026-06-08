@@ -3,6 +3,11 @@ import { Suspense } from 'react';
 
 import { VisibilityExpansionPage } from '@/components/visibility-expansion-page';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  breadcrumbJsonLd,
+  organizationJsonLd,
+  visibilityExpansionServiceJsonLd,
+} from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
   title: 'Search Visibility Service | SEO, AI Answers, and PR',
@@ -44,9 +49,26 @@ export const metadata: Metadata = {
 };
 
 export default function VisibilityExpansionRoute() {
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Search Visibility', path: '/visibility-expansion' },
+  ]);
+
   return (
-    <Suspense fallback={null}>
-      <VisibilityExpansionPage />
-    </Suspense>
+    <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            organizationJsonLd(),
+            breadcrumbs,
+            visibilityExpansionServiceJsonLd(),
+          ]),
+        }}
+      />
+      <Suspense fallback={null}>
+        <VisibilityExpansionPage />
+      </Suspense>
+    </main>
   );
 }

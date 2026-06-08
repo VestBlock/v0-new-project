@@ -90,6 +90,20 @@ export async function generateMetadata({
       description: asset.meta_description || asset.excerpt || undefined,
       url: absoluteUrl(`/resources/${asset.slug}`),
       type: 'article',
+      images: [
+        {
+          url: absoluteUrl('/opengraph-image'),
+          width: 1200,
+          height: 630,
+          alt: 'VestBlock resource preview',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: asset.seo_title || asset.title,
+      description: asset.meta_description || asset.excerpt || undefined,
+      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }
@@ -110,7 +124,7 @@ export default async function ResourcePage({
   const isSpanish = asset.language === 'es';
   const breadcrumbs = breadcrumbJsonLd([
     { name: 'Home', path: '/' },
-    { name: 'Learn', path: '/learn' },
+    { name: 'Resources', path: '/resources' },
     { name: asset.title, path: `/resources/${asset.slug}` },
   ]);
   const articleSchema = articleJsonLd({

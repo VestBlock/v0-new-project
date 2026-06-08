@@ -240,7 +240,7 @@ export async function persistBorrowerLenderMatches(input: BorrowerMatchInput) {
   const { data: lenders, error } = await admin
     .from('lenders')
     .select('*')
-    .in('relationship_stage', ['discovered', 'researched', 'outreach_ready', 'contacted', 'responded', 'active_partner'])
+    .in('relationship_stage', ['discovered', 'researched', 'outreach_ready', 'contacted', 'responded', 'reviewing', 'active_partner'])
     .order('confidence_score', { ascending: false })
     .limit(250)
 

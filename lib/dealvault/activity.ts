@@ -59,18 +59,14 @@ export function dealStatusToChainCode(value: DealVaultDealStatus): number {
 
 export function proofStatusToChainCode(value: DealVaultProofStatus): number {
   switch (value) {
-    case "pending":
-      return 0;
     case "active":
-      return 1;
-    case "revoked":
-      return 2;
-    case "superseded":
-      return 3;
-    case "failed":
-      return 4;
-    default:
       return 0;
+    case "revoked":
+      return 1;
+    case "superseded":
+      return 2;
+    default:
+      throw new Error(`Proof status "${value}" is not supported on-chain.`);
   }
 }
 

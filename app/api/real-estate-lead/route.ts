@@ -196,9 +196,12 @@ export async function POST(request: NextRequest) {
       .select('id')
       .single()
 
-    if (leadsError) {
+    if (leadsError || !lead?.id) {
       console.error('Leads table error:', leadsError)
-      // Do not fail the customer request if lead automation storage is unavailable.
+      return NextResponse.json(
+        { error: 'Unable to save your funding request right now.' },
+        { status: 500 }
+      )
     } else {
       void Promise.allSettled([
         runNewLeadAutomation({
@@ -250,7 +253,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ success: true, leadId: lead?.id ?? null })
+    return NextResponse.json({ success: true, leadId: lead.id })
   } catch (error: any) {
     console.error("Real estate lead submission error:", error)
     return NextResponse.json(

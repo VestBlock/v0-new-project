@@ -31,6 +31,10 @@ const spanishClusterLabels: Partial<Record<(typeof vestblockAeoTopics)[number]['
   'credit-builder': 'Construccion de credito',
   disputes: 'Disputas de credito',
   'credit-repair': 'Reparacion de credito',
+  dealvault: 'Registros de prueba DealVault',
+  'search-visibility': 'Visibilidad de busqueda',
+  'ai-receptionist': 'Recepcionista IA',
+  'website-conversion': 'Conversion web',
 };
 
 const spanishIntentLabels: Partial<Record<(typeof vestblockAeoTopics)[number]['intent'], string>> = {
@@ -68,6 +72,20 @@ export async function generateMetadata({
       url: absoluteUrl(`/learn/${topic.slug}`),
       type: 'article',
       locale: topic.language === 'es' ? 'es_US' : 'en_US',
+      images: [
+        {
+          url: absoluteUrl('/opengraph-image'),
+          width: 1200,
+          height: 630,
+          alt: 'VestBlock guide preview',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
+      description: topic.metaDescription,
+      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }
@@ -83,6 +101,22 @@ function buildFaqSchema(topic: NonNullable<ReturnType<typeof getAeoTopicBySlug>>
         '@type': 'Answer',
         text: faq.answer,
       },
+    })),
+  };
+}
+
+function buildHowToSchema(topic: NonNullable<ReturnType<typeof getAeoTopicBySlug>>) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: `${topic.title}: next steps`,
+    description: topic.metaDescription,
+    totalTime: 'PT15M',
+    step: topic.actionSteps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: index + 1,
+      name: step,
+      text: step,
     })),
   };
 }
@@ -104,6 +138,7 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
     : intentLabels[topic.intent];
   const relatedTopics = getRelatedAeoTopics(topic);
   const faqSchema = buildFaqSchema(topic);
+  const howToSchema = buildHowToSchema(topic);
   const articleSchema = articleJsonLd({
     headline: topic.title,
     description: topic.metaDescription,
@@ -127,7 +162,7 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([breadcrumbs, articleSchema, faqSchema]),
+          __html: JSON.stringify([breadcrumbs, articleSchema, faqSchema, howToSchema]),
         }}
       />
 
@@ -167,13 +202,13 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>
                 {isSpanish
-                  ? 'VestBlock ofrece educacion y herramientas de flujo de trabajo. No garantiza aprobaciones, eliminaciones, cambios de puntaje, subvenciones ni financiamiento.'
-                  : 'VestBlock provides education and practical tools. It does not guarantee approvals, deletions, score changes, grants, or funding.'}
+                  ? 'VestBlock ofrece educacion, preparacion y herramientas practicas. No garantiza aprobaciones, eliminaciones, cambios de puntaje, subvenciones, financiamiento, rankings, trafico, ingresos ni resultados legales.'
+                  : 'VestBlock provides education, preparation, and practical tools. It does not guarantee approvals, deletions, score changes, grants, funding, rankings, traffic, revenue, or legal outcomes.'}
               </p>
               <p>
                 {isSpanish
-                  ? 'Usa esta guia para preparar mejores preguntas, documentos y proximos pasos antes de usar la herramienta relacionada.'
-                  : 'Use this guide to prepare better questions, documents, and next steps before using the related tool.'}
+                  ? 'Usa esta guia para preparar mejores preguntas, registros y proximos pasos antes de abrir la ruta relacionada.'
+                  : 'Use this guide to prepare better questions, records, and next steps before opening the related VestBlock path.'}
               </p>
             </CardContent>
           </Card>
@@ -265,8 +300,8 @@ export default async function LearnTopicPage({ params }: LearnTopicPageProps) {
                 <CardTitle>{isSpanish ? 'Usa VestBlock' : 'Use VestBlock'}</CardTitle>
                 <CardDescription>
                   {isSpanish
-                    ? 'Pasa de la investigacion a una accion real de credito, financiamiento o credito comercial.'
-                    : 'Move from research to a real credit, funding, or business-credit action.'}
+                    ? 'Pasa de la investigacion a una accion practica de VestBlock.'
+                    : 'Move from research to a practical VestBlock next step.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>

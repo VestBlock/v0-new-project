@@ -21,16 +21,16 @@ The current stack includes:
   - `/admin/leads/[id]`
   - `/admin/lead-sources`
   - `/admin/scrape-runs`
-- scrape APIs:
+- retired scrape APIs:
   - `/api/leads/scrape/new-businesses`
   - `/api/leads/scrape/code-violations`
   - `/api/leads/scrape/google-places`
   - `/api/leads/scrape/sam`
-- scoring and outreach APIs:
+- retained scoring/export APIs and retired outreach route:
   - `/api/leads/score`
-  - `/api/leads/generate-outreach`
+  - `/api/leads/generate-outreach` retired
   - `/api/leads/export`
-- daily cron routes:
+- retired daily lead cron routes:
   - `/api/cron/leads-scrape`
   - `/api/cron/leads-score`
   - `/api/cron/leads-outreach`
@@ -98,14 +98,13 @@ The app now has a separate outbound layer:
 
 ### Daily automation
 
-The daily automation loop now supports:
+The daily legacy app-route loop has been removed. Daily work should now use the V4/offline scripts:
 
-1. scraping public/new leads
-2. rescoring leads
-3. generating outreach drafts
-4. queueing follow-up tasks
-5. optionally sending approved outreach
-6. notifying admins about follow-up backlog
+1. `npm run outreach:v4-workflow`
+2. `npm run outreach:v4-scorecard`
+3. `npm run buyers:kimi-outreach`
+4. `npm run buyers:kimi-send-preview`
+5. `npm run buyers:kimi-send-approved` after draft review
 
 ## What Was Incomplete Before This Upgrade
 
@@ -129,12 +128,13 @@ These parts are the right foundation going forward:
 - `lib/leads/repository.ts`
 - `lib/leads/scoring.ts`
 - `lib/leads/outreach.ts`
-- `lib/leads/dailyAutomation.ts`
+- `scripts/outreach-v4-workflow.mjs`
+- `scripts/kimi-buyer-outreach-pipeline.mjs`
 - `lib/leads/outbound.ts`
 - `components/admin/lead-intelligence-dashboard.tsx`
 - `components/admin/lead-detail-client.tsx`
 - `app/api/admin/leads/*`
-- `app/api/cron/leads-*`
+- `scripts/send-buyer-criteria-drafts.mjs`
 
 ## What Still Requires External Credentials
 
@@ -220,14 +220,13 @@ The lead engine is no longer limited to a small fixed city list.
 ### Safe to reuse
 
 - `lib/leads/marketExpansion.ts`
-- `lib/leads/dailyAutomation.ts`
 - `/api/cron/discover-markets`
-- `/api/cron/daily-lead-run`
-- `/api/cron/send-outreach`
 - `/api/cron/update-market-performance`
 - `/api/admin/leads/import`
 - `/api/leads/export`
 - `/admin/market-expansion`
+- `npm run outreach:v4-workflow`
+- `npm run buyers:kimi-outreach`
 
 ### Current operating model
 

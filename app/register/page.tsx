@@ -18,14 +18,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 function RegisterPageContent() {
-  const defaultRedirectTarget = '/get-started';
-  const [email, setEmail] = useState('');
+  const defaultRedirectTarget = '/dashboard/services';
+  const searchParams = useSearchParams();
+  const prefilledEmail = searchParams.get('email') || '';
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const { signUp, isLoading, authError, isAuthenticated } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
+
+  useEffect(() => {
+    if (prefilledEmail) {
+      setEmail((current) => current || prefilledEmail);
+    }
+  }, [prefilledEmail]);
 
   useEffect(() => {
     // Redirect if the user is already authenticated
@@ -47,9 +54,9 @@ function RegisterPageContent() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Sign Up</CardTitle>
+          <CardTitle className="text-xl">Create your VestBlock account</CardTitle>
           <CardDescription>
-            Enter your information to create an account
+            Your Growth System dashboard will be ready after signup.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -106,8 +113,8 @@ function RegisterPageContent() {
             <Link
               href={
                 redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/login?redirect=${encodeURIComponent(redirectTarget)}`
-                  : '/login'
+                  ? `/login?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
+                  : `/login?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ''}`
               }
               passHref
             >

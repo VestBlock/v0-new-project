@@ -5,7 +5,11 @@ const BLOCKED_SUBSTRINGS = [
   '@2x.',
   '@1x.',
   'user@domain.',
+  'your@email.com',
+  'youremail@',
+  'your.name@',
   'john@email.com',
+  'email@address.com',
   'example.com',
   'sentry',
   'wixpress',
@@ -24,12 +28,90 @@ const BLOCKED_LOCAL_PARTS = new Set([
   'do-not-reply',
   'mailer-daemon',
   'postmaster',
+  'info',
+  'hello',
+  'contact',
+  'support',
+  'admin',
+  'office',
+  'sales',
+  'team',
+  'accounts',
+  'accounting',
+  'billing',
+  'careers',
+  'employment',
+  'hiring',
+  'hr',
+  'jobs',
+  'help',
+  'helpdesk',
+  'developer',
+  'developers',
+  'development',
+  'project',
+  'projects',
+  'dispatch',
+  'operations',
+  'contactus',
+  'contact-us',
+  'estimate',
+  'estimates',
+  'quote',
+  'quotes',
+  'frontdesk',
+  'front-desk',
+  'leasing',
+  'residents',
+  'tenant',
+  'homebuyer',
+  'offers',
+  'main',
+  'service',
+  'services',
+  'customerservice',
+  'customer-service',
+  'filler',
+  'email',
+  'website',
+  'webmaster',
+  'mail',
+])
+
+const BLOCKED_DOMAINS = new Set([
+  'address.com',
+  'domain.com',
+  'email.com',
+  'example.com',
+  'example.org',
+  'example.net',
+  'facebook.com',
+  'fb.com',
+  'instagram.com',
+  'linkedin.com',
+  'messenger.com',
+  'tiktok.com',
+  'twitter.com',
+  'x.com',
+  'webador.com',
 ])
 
 const SUSPICIOUS_APPENDED_TLD_RE = /\.(com|net|org|co|io|biz|info|us)(office|branch|location|team|corp|group)$/i
 
 export function normalizeEmailAddress(value: string | null | undefined) {
-  return value?.trim().toLowerCase() || ''
+  let email = String(value || '')
+    .trim()
+    .toLowerCase()
+
+  email = email.replace(/^mailto:/i, '')
+  email = email.split('?')[0] || ''
+  email = email
+    .replace(/^(\\u003e|u003e|&#62;|&gt;|>)+/i, '')
+    .replace(/^(\\u003c|u003c|&#60;|&lt;|<)+/i, '')
+    .replace(/^[("'`]+/, '')
+    .replace(/[)"'`,.]+$/, '')
+
+  return email.trim()
 }
 
 export function getEmailQualityIssue(value: string | null | undefined) {
@@ -42,6 +124,10 @@ export function getEmailQualityIssue(value: string | null | undefined) {
   const [localPart, domain] = email.split('@')
   if (!localPart || !domain) return 'invalid_format'
   if (BLOCKED_LOCAL_PARTS.has(localPart)) return 'blocked_local_part'
+  if (localPart === 'example' || localPart === 'sample' || localPart.startsWith('test+')) {
+    return 'blocked_local_part'
+  }
+  if (BLOCKED_DOMAINS.has(domain)) return 'blocked_domain'
   if (domain.endsWith('.local')) return 'local_domain'
   if (SUSPICIOUS_APPENDED_TLD_RE.test(domain)) return 'suspicious_domain_suffix'
 

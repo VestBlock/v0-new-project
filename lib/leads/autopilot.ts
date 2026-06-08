@@ -1,5 +1,6 @@
 import type { LeadRecord, LeadSuppressionRecord } from '@/lib/leads/types'
 import { getLeadRevenueFitIssue, getRevenueCampaignMinAutoScore } from '@/lib/leads/revenueCampaigns'
+import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
 import { getEmailQualityIssue } from '@/lib/outreach/email-quality'
 
@@ -58,15 +59,25 @@ function isClosedLeadStatus(status: string | null | undefined) {
   )
 }
 
+function normalizeComparableValue(value: string | null | undefined) {
+  return String(value || '').trim().toLowerCase() || null
+}
+
 function matchesSuppression(lead: LeadEmailAutopilotInput, suppressions: LeadSuppressionRecord[]) {
+  const leadEmail = normalizeComparableValue(lead.email)
+  const leadPhone = normalizeComparableValue(lead.phone)
+  const leadWebsiteHost = extractHost(lead.website)
+  const leadBusinessName = normalizeComparableValue(lead.business_name)
+  const leadCity = normalizeComparableValue(lead.city)
+
   return suppressions.find((entry) =>
-    (entry.email && lead.email && entry.email.toLowerCase() === lead.email.toLowerCase()) ||
-    (entry.phone && lead.phone && entry.phone === lead.phone) ||
-    (entry.website && lead.website && entry.website === lead.website) ||
+    (normalizeComparableValue(entry.email) && leadEmail && normalizeComparableValue(entry.email) === leadEmail) ||
+    (normalizeComparableValue(entry.phone) && leadPhone && normalizeComparableValue(entry.phone) === leadPhone) ||
+    (extractHost(entry.website) && leadWebsiteHost && extractHost(entry.website) === leadWebsiteHost) ||
     (entry.business_name &&
-      lead.business_name &&
-      entry.business_name.toLowerCase() === lead.business_name.toLowerCase() &&
-      entry.city === lead.city)
+      leadBusinessName &&
+      normalizeComparableValue(entry.business_name) === leadBusinessName &&
+      normalizeComparableValue(entry.city) === leadCity)
   )
 }
 
@@ -80,6 +91,7 @@ const PLATFORM_DOMAINS = new Set([
   'x.com',
   'twitter.com',
   'tiktok.com',
+  'webador.com',
 ])
 
 function extractHost(value: string | null | undefined) {
@@ -126,7 +138,11 @@ export function getLeadEmailAutopilotDecision(
   if (isClosedLeadStatus(lead.status) || lead.outreach_status === 'do_not_contact') {
     return { autoApproveEnabled, autoSendEnabled, minScore, maxBounceRisk, eligible: false, reason: 'do_not_contact' }
   }
-  if (isSourceInFamily(lead.source, 'google_places_businesses') && isLegacyGooglePlacesPhaseOutEnabled()) {
+  if (
+    !isOutreachV2Enabled() &&
+    isSourceInFamily(lead.source, 'google_places_businesses') &&
+    isLegacyGooglePlacesPhaseOutEnabled()
+  ) {
     return {
       autoApproveEnabled,
       autoSendEnabled,

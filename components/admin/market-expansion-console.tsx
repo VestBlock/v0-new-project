@@ -21,13 +21,6 @@ type MarketExpansionConsoleProps = {
   initialMarkets: TargetMarketRecord[]
 }
 
-type RunnerResult = {
-  success: boolean
-  count?: number
-  provider?: string
-  error?: string
-}
-
 function normalizeList(value: string) {
   return Array.from(
     new Set(
@@ -37,21 +30,6 @@ function normalizeList(value: string) {
         .filter(Boolean)
     )
   )
-}
-
-async function parseResult(response: Response): Promise<RunnerResult> {
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    return {
-      success: false,
-      error: typeof data?.error === 'string' ? data.error : 'Request failed.',
-    }
-  }
-  return {
-    success: true,
-    count: typeof data?.count === 'number' ? data.count : 0,
-    provider: typeof data?.provider === 'string' ? data.provider : undefined,
-  }
 }
 
 export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsoleProps) {
@@ -93,7 +71,7 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
 
   const [savingCreate, setSavingCreate] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
-  const [runningScrape, setRunningScrape] = useState(false)
+  const runningScrape = false
   const [runningBulkAction, setRunningBulkAction] = useState<string | null>(null)
 
   const createPreset = useMemo(() => findMarketPreset(createPresetId), [createPresetId])
@@ -102,16 +80,18 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
 
   useEffect(() => {
     if (!selectedMarket && sortedMarkets[0]) {
-      setSelectedMarketId(sortedMarkets[0].id)
+      queueMicrotask(() => setSelectedMarketId(sortedMarkets[0].id))
     }
   }, [selectedMarket, sortedMarkets])
 
   useEffect(() => {
     if (!selectedMarket) return
-    setEditNiches((selectedMarket.niche_focus || []).join(', '))
-    setEditStatus(selectedMarket.status)
-    setEditScore(String(selectedMarket.final_score || 0))
-    setScrapeNiches((selectedMarket.niche_focus || []).join(', '))
+    queueMicrotask(() => {
+      setEditNiches((selectedMarket.niche_focus || []).join(', '))
+      setEditStatus(selectedMarket.status)
+      setEditScore(String(selectedMarket.final_score || 0))
+      setScrapeNiches((selectedMarket.niche_focus || []).join(', '))
+    })
   }, [selectedMarket])
 
   const marketCountLabel = `${sortedMarkets.length} tracked market${sortedMarkets.length === 1 ? '' : 's'}`
@@ -271,62 +251,10 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
       return
     }
 
-    setRunningScrape(true)
-    try {
-      const headers = await getAuthHeaders()
-      const scrapeResponse = await fetch('/api/leads/scrape/google-places', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          provider: scrapeProvider,
-          city: selectedMarket.city,
-          state: selectedMarket.state,
-          language: scrapeLanguage,
-          region: scrapeRegion.toLowerCase(),
-          limitPerNiche: Number(scrapeLimit),
-          niches,
-        }),
-      })
-
-      const scrapeResult = await parseResult(scrapeResponse)
-      if (!scrapeResult.success) {
-        throw new Error(scrapeResult.error)
-      }
-
-      const patchResponse = await fetch(`/api/admin/markets/${selectedMarket.id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          niche_focus: niches,
-          status: scrapeResult.count && scrapeResult.count > 0 ? 'scraped' : 'exhausted',
-          last_scraped_at: new Date().toISOString(),
-          performance_json: {
-            lastManualRunAt: new Date().toISOString(),
-            lastLeadCount: scrapeResult.count || 0,
-            lastProvider: scrapeResult.provider || scrapeProvider,
-            lastManualNiches: niches,
-          },
-        }),
-      })
-
-      const patchData = await patchResponse.json().catch(() => ({}))
-      if (!patchResponse.ok) {
-        throw new Error(typeof patchData?.error === 'string' ? patchData.error : 'Unable to record market run.')
-      }
-
-      refreshWithToast(
-        'Scrape completed',
-        `Saved ${scrapeResult.count || 0} leads for ${selectedMarket.city}, ${selectedMarket.state}${scrapeResult.provider ? ` via ${scrapeResult.provider}` : ''}.`
-      )
-    } catch (error) {
-      toast({
-        title: 'Scrape failed',
-        description: error instanceof Error ? error.message : 'Try again in a moment.',
-        variant: 'destructive',
-      })
-    } finally {
-      setRunningScrape(false)
-    }
+    toast({
+      title: 'Outreach runs off-platform',
+      description: 'Use npm run outreach:v4-workflow from Codex/operator mode to scrape and score fresh markets.',
+    })
   }
 
   const runTopQueuedScrapes = async () => {
@@ -340,60 +268,10 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
       return
     }
 
-    setRunningBulkAction('run_top_scrapes')
-    try {
-      const headers = await getAuthHeaders()
-      let totalSaved = 0
-
-      for (const market of targets) {
-        const niches = (market.niche_focus || []).slice(0, 4)
-        const scrapeResponse = await fetch('/api/leads/scrape/google-places', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            provider: 'auto',
-            city: market.city,
-            state: market.state,
-            language: 'en',
-            region: 'us',
-            limitPerNiche: 8,
-            niches,
-          }),
-        })
-
-        const scrapeData = await scrapeResponse.json().catch(() => ({}))
-        if (!scrapeResponse.ok) {
-          throw new Error(typeof scrapeData?.error === 'string' ? scrapeData.error : `Unable to scrape ${market.city}.`)
-        }
-
-        totalSaved += Number(scrapeData.count || 0)
-
-        await fetch(`/api/admin/markets/${market.id}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify({
-            status: Number(scrapeData.count || 0) > 0 ? 'scraped' : 'exhausted',
-            last_scraped_at: new Date().toISOString(),
-            performance_json: {
-              lastManualRunAt: new Date().toISOString(),
-              lastLeadCount: Number(scrapeData.count || 0),
-              lastProvider: scrapeData.provider || 'auto',
-              bestNiche: niches[0] || null,
-            },
-          }),
-        })
-      }
-
-      refreshWithToast('Queued markets scraped', `Saved ${totalSaved} leads across ${targets.length} queued cities.`)
-    } catch (error) {
-      toast({
-        title: 'Queued market scrape failed',
-        description: error instanceof Error ? error.message : 'Try again in a moment.',
-        variant: 'destructive',
-      })
-    } finally {
-      setRunningBulkAction(null)
-    }
+    toast({
+      title: 'Outreach runs off-platform',
+      description: 'Use npm run outreach:v4-workflow from Codex/operator mode to scrape and score fresh markets.',
+    })
   }
 
   return (

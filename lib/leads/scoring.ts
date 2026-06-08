@@ -7,6 +7,7 @@ import type {
   WebsiteWeaknessReport,
 } from '@/lib/leads/types'
 import { daysBetween } from '@/lib/leads/utils'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 
 function clamp(value: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Math.round(value)))
@@ -30,6 +31,39 @@ function businessTypeText(lead: LeadRecord) {
   }).toLowerCase()
 }
 
+const WEBMAIL_DOMAINS = new Set(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'aol.com'])
+
+function extractEmailDomain(email: string | null | undefined) {
+  const parts = String(email || '').trim().toLowerCase().split('@')
+  return parts.length === 2 ? parts[1] : null
+}
+
+function extractWebsiteHost(website: string | null | undefined) {
+  if (!website) return null
+  try {
+    const normalized = /^https?:\/\//i.test(website) ? website : `https://${website}`
+    return new URL(normalized).host.replace(/^www\./i, '').toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+function domainsLookAligned(emailDomain: string, websiteHost: string) {
+  return emailDomain === websiteHost || emailDomain.endsWith(`.${websiteHost}`) || websiteHost.endsWith(`.${emailDomain}`)
+}
+
+function hasDirectBusinessEmail(lead: LeadRecord) {
+  if (lead.email_valid === false || !isUsableContactEmail(lead.email)) return false
+  const emailDomain = extractEmailDomain(lead.email)
+  const websiteHost = extractWebsiteHost(lead.website)
+  return Boolean(emailDomain && websiteHost && domainsLookAligned(emailDomain, websiteHost))
+}
+
+function getContactFormCount(lead: LeadRecord) {
+  const urls = lead.contact_info?.contactFormUrls
+  return Array.isArray(urls) ? urls.filter((value) => typeof value === 'string' && value.trim()).length : 0
+}
+
 const dealVaultWorkflowSegments: Array<{
   niche: string
   marketSegment: string
@@ -40,55 +74,73 @@ const dealVaultWorkflowSegments: Array<{
     niche: 'Construction draw and milestone tracking',
     marketSegment: 'dealvault_construction_rehab',
     outreachAngle: 'Contractor milestones, draw approvals, and proof records',
-    pattern: /construction|contractor|rehab|renovation|remodel|draw request|scope of work|change order|subcontractor/,
+    pattern: /construction|contractor|rehab|renovation|remodel|remodeler|design-build|draw request|draw schedule|progress billing|retainage|scope of work|change order|subcontractor|solar installer|solar epc|pool builder|spa installer|fence contractor|deck builder|outdoor living contractor|abatement|asbestos|lead inspection|lead abatement|mold assessment|clearance testing|ff&e|millwork installer/,
   },
   {
     niche: 'Property management work-order accountability',
     marketSegment: 'dealvault_property_management',
     outreachAngle: 'Vendor deliverables, approvals, and service proof for managed properties',
-    pattern: /property management|property manager|turnover|maintenance vendor|work order|unit turn|repair coordination/,
+    pattern: /property management|property manager|turnover|maintenance vendor|maintenance coordination|vendor coordination|work order|unit turn|repair coordination|hoa|make ready|make-ready|grounds maintenance|snow removal|landscaping maintenance|apartment turn|turn service|leasing turnover|rental turn|home watch|property watch|vacant property service|seasonal home management|absentee home service|reserve study|reserve specialist/,
   },
   {
     niche: 'Referral payout and partner split tracking',
     marketSegment: 'dealvault_referral_partner_splits',
     outreachAngle: 'Referral payouts, split visibility, and partner accountability',
-    pattern: /referral fee|referral payout|bird dog|partner split|profit split|commission split|jv|joint venture|co-wholesale|dispo|assignment fee|partner payout/,
+    pattern: /referral fee|referral payout|bird dog|partner split|profit split|commission split|jv|joint venture|co-wholesale|dispo|assignment fee|partner payout|referral partner|intro fee|origination fee|dealer fee|channel partner|residual split|residual payout|manufacturer rep|manufacturers representative|rep agency|territory rep|independent sales rep/,
   },
   {
     niche: 'Agency retainer and deliverable proof',
     marketSegment: 'dealvault_agency_retainers',
     outreachAngle: 'Retainer scope tracking, approvals, and proof of delivered work',
-    pattern: /agency|marketing studio|creative studio|retainer|monthly scope|campaign deliverable|client approval|revision round/,
+    pattern: /agency|marketing studio|creative studio|seo agency|paid media|fractional cmo|video production|podcast production|content studio|ghostwriting agency|web design retainer|retainer|monthly scope|campaign deliverable|client approval|revision round|managed service provider|managed it|msp\b|it support company|outsourced it|help desk|monthly support plan|vcio|fractional cfo|virtual controller|bookkeeping service|monthly close|lead generation agency|appointment setting agency|sales development agency|outsourced sdr|white label lead generation|rev share agency|influencer marketing agency|creator campaign agency/,
   },
   {
     niche: 'Vendor deliverable and service proof',
     marketSegment: 'dealvault_vendor_deliverables',
     outreachAngle: 'Delivered-work records, approval proof, and payment readiness',
-    pattern: /vendor|supplier|field service|deliverable|install crew|service ticket|completion proof|completion photo/,
+    pattern: /vendor|supplier|field service|commercial cleaning|janitorial|facility services|sign installation|sign installer|sign shop|vehicle wrap|wall wrap|graphics installer|wayfinding|parking lot striping|deliverable|install crew|service ticket|completion proof|completion photo|low voltage|security system|access control|av integrator|audio visual|structured cabling|fire alarm|trade show display|experiential fabrication|promotional products|office furniture installation|furniture installer|cubicle installer|fixture installer|millwork installer|ff&e|cabinet installer|countertop installer|glass installer|shower door installer|finish carpentry|dumpster rental|roll off dumpster|portable toilet|portable sanitation|scaffold rental|site services/,
+  },
+  {
+    niche: 'Logistics handoff and delivery-proof tracking',
+    marketSegment: 'dealvault_logistics_dispatch',
+    outreachAngle: 'Load handoffs, delivery proof, exception tracking, and fee visibility',
+    pattern: /freight broker|freight brokerage|truck dispatch|dispatch service|3pl|third party logistics|logistics broker|broker agent|carrier packet|rate confirmation|proof of delivery|delivery receipt|load tender|carrier setup|lumper|detention|tonu/,
   },
   {
     niche: 'Sponsorship deliverable tracking',
     marketSegment: 'dealvault_sponsorship_deliverables',
     outreachAngle: 'Sponsor obligations, posting proof, and fulfillment tracking',
-    pattern: /sponsorship|sponsor package|brand partner|activation|deliverable schedule|event deliverable|podcast sponsor/,
+    pattern: /sponsorship|sponsor package|brand partner|activation|deliverable schedule|event deliverable|podcast sponsor|fulfillment report|makegood|sponsor proof|creator payout|proof of post|creator campaign|brand activation agency/,
   },
   {
     niche: 'Private lending and draw coordination',
     marketSegment: 'dealvault_private_lending',
     outreachAngle: 'Private-loan milestones, borrower updates, and draw documentation',
-    pattern: /private lender|hard money|bridge lender|note buyer|draw schedule|borrower update|loan servicing/,
+    pattern: /private lender|private lending broker|hard money|hard money broker|bridge lender|note buyer|draw schedule|borrower update|loan servicing|loan packaging|draw inspector|draw administration|rehab inspection|owner rep|rehab draw service|construction loan servicing|lender draw coordinator|private lender servicing/,
+  },
+  {
+    niche: 'Public adjuster and claims-vendor coordination',
+    marketSegment: 'dealvault_public_adjusters',
+    outreachAngle: 'Claim milestones, restoration proof, and fee visibility across owner, carrier, and vendor handoffs',
+    pattern: /public adjuster|insurance claim consultant|loss consultant|appraisal umpire|claim documentation|proof of loss|contents inventory|claim settlement/,
   },
   {
     niche: 'Funding referral and broker fee tracking',
     marketSegment: 'dealvault_funding_referrals',
     outreachAngle: 'Referral chains, intro fees, and funding-partner accountability',
-    pattern: /funding referral|loan broker|capital advisory|broker fee|placement fee|referral partner|iso|merchant cash advance/,
+    pattern: /funding referral|loan broker|capital advisory|equipment finance broker|commercial mortgage broker|sba packaging|sba loan packager|broker fee|placement fee|referral partner|iso|merchant cash advance|capital introduction|merchant services broker|payment processing agent|payroll broker|peo broker|benefits consultant/,
+  },
+  {
+    niche: 'Invoice factoring and receivables coordination',
+    marketSegment: 'dealvault_factoring_coordination',
+    outreachAngle: 'Referral accountability, receivables proof, and funding status visibility',
+    pattern: /invoice factoring|factoring company|accounts receivable finance|accounts receivable factoring|invoice finance|factor funding|purchase order finance/,
   },
   {
     niche: 'Staffing placement fee accountability',
     marketSegment: 'dealvault_staffing_placement_fees',
     outreachAngle: 'Candidate placement milestones, fee triggers, and proof trails',
-    pattern: /staffing|recruiting|recruiter|placement fee|temp-to-hire|candidate start date|commission schedule/,
+    pattern: /staffing|recruiting|recruiter|contingent search|placement fee|temp-to-hire|candidate start date|guarantee period|commission schedule|locum tenens|travel nurse|allied staffing|skilled trades staffing|therapy staffing/,
   },
   {
     niche: 'Agreement and milestone tracking',
@@ -98,7 +150,7 @@ const dealVaultWorkflowSegments: Array<{
   },
 ]
 
-function isDealVaultOperatorLead(lead: LeadRecord, typeText: string, pain: string) {
+function isDealVaultRecordLead(lead: LeadRecord, typeText: string, pain: string) {
   const category = String(lead.category || '').toLowerCase()
   const leadType = String(lead.lead_type || '').toLowerCase()
   const eligibleCategory =
@@ -117,7 +169,7 @@ function isDealVaultOperatorLead(lead: LeadRecord, typeText: string, pain: strin
     return false
   }
 
-  return /contractor|construction|rehab|milestone|property management|landlord|real estate investor|investor|acquisition|dispo|referral|partner|partnership|jv|joint venture|seller finance|lease option|subject-to|creative finance|portfolio|rental|staffing|recruiting|placement fee|agency|consulting|deliverable|vendor|subcontractor|project management|field service/.test(typeText)
+  return /contractor|construction|rehab|remodel|design-build|milestone|property management|landlord|real estate investor|investor|acquisition|dispo|referral|partner|partnership|jv|joint venture|seller finance|lease option|subject-to|creative finance|portfolio|rental|staffing|recruiting|placement fee|agency|consulting|deliverable|vendor|subcontractor|project management|field service|public adjuster|insurance claim|loss consultant|owner rep|permit expeditor|factoring|accounts receivable|purchase order finance|solar|low voltage|security installer|access control|av integrator|landscaping|snow removal|merchant services|payment processing|merchant cash advance|payroll broker|peo broker|pool builder|deck builder|fence contractor|promotional products|trade show display|experiential fabrication|make-ready|unit turn|apartment turn|vehicle wrap|sign shop|wayfinding|office furniture|ff&e|millwork|abatement|asbestos|locum tenens|travel nurse|sba packaging|commercial mortgage broker|managed service provider|managed it|msp\b|it support|fractional cfo|bookkeeping|monthly close|freight broker|truck dispatch|3pl|carrier packet|proof of delivery|cabinet installer|countertop installer|glass installer|shower door installer|dumpster rental|portable toilet|transaction coordinator|closing coordinator|home watch|property watch|reserve study|reserve specialist|manufacturer rep|independent sales rep|territory rep|lead generation agency|appointment setting agency|outsourced sdr|white label lead generation|influencer marketing agency|creator campaign agency|draw administration|private lender servicing/.test(typeText)
 }
 
 function getDealVaultWorkflowSegment(typeText: string, pain: string) {
@@ -160,8 +212,8 @@ function pickBestOffer(lead: LeadRecord, website: WebsiteWeaknessReport): LeadOf
   if (category.includes('code_violation') || pain.includes('vacant') || pain.includes('distress')) {
     return 'Real Estate Seller Lead'
   }
-  if (isDealVaultOperatorLead(lead, typeText, pain)) {
-    return 'DealVault / Operator Accountability'
+  if (isDealVaultRecordLead(lead, typeText, pain)) {
+    return 'DealVault Agreement & Milestone Records'
   }
   if (category.includes('government') || pain.includes('sam') || pain.includes('contract')) {
     return 'Gov Contract Readiness'
@@ -240,7 +292,7 @@ export async function scoreLead(
   const typeText = businessTypeText(lead)
   const pain = `${lead.pain_signal || ''} ${lead.notes || ''} ${lead.status_detail || ''}`.toLowerCase()
   const urbanBonus = isUrbanMarket(lead) ? 6 : 0
-  const dealVaultSegment = isDealVaultOperatorLead(lead, typeText, pain)
+  const dealVaultSegment = isDealVaultRecordLead(lead, typeText, pain)
     ? getDealVaultWorkflowSegment(typeText, pain)
     : null
 
@@ -316,7 +368,7 @@ export async function scoreLead(
   const monetizationPotentialScore =
     dealVaultSegment
       ? 10
-      : /contractor|trucking|restaurant|barber|salon|med spa|daycare|tax|immigration|auto repair|cleaning/.test(typeText)
+      : /contractor|restaurant|barber|salon|med spa|daycare|tax|immigration|auto repair|cleaning/.test(typeText)
       ? 10
       : /real estate|seller|property/.test(typeText)
         ? 9
@@ -324,11 +376,22 @@ export async function scoreLead(
           ? 10
           : 6
 
-  const contactabilityScore =
-    (lead.phone ? 8 : 0) +
-    (lead.email ? 8 : 0) +
-    (lead.website ? 4 : 0) +
-    (lead.source_url ? 2 : 0)
+  const emailDomain = extractEmailDomain(lead.email)
+  const hasUsableEmail = lead.email_valid !== false && isUsableContactEmail(lead.email)
+  const hasWebmailEmail = Boolean(hasUsableEmail && emailDomain && WEBMAIL_DOMAINS.has(emailDomain))
+  const hasDirectEmail = hasDirectBusinessEmail(lead)
+  const contactFormCount = getContactFormCount(lead)
+  const contactabilityScore = clamp(
+    (lead.phone ? 6 : 0) +
+      (hasUsableEmail ? 9 : lead.email ? 1 : 0) +
+      (hasDirectEmail ? 5 : 0) +
+      (hasWebmailEmail && !hasDirectEmail ? 1 : 0) +
+      (lead.website ? 4 : 0) +
+      (contactFormCount > 0 ? 4 : 0) +
+      (lead.source_url ? 2 : 0),
+    0,
+    22
+  )
 
   const estimatedValueScore =
     lead.category === 'government_contracts'
@@ -381,7 +444,7 @@ export async function scoreLead(
           ? 'medium'
           : 'low'
   const outreachAngle =
-    bestOffer === 'DealVault / Operator Accountability' && dealVaultSegment
+    bestOffer === 'DealVault Agreement & Milestone Records' && dealVaultSegment
       ? dealVaultSegment.outreachAngle
       : bestOffer === 'AI Receptionist Launch'
       ? 'Missed-call and lead-capture automation'
@@ -414,6 +477,8 @@ export async function scoreLead(
     languageNicheScore > 0 ? 'Spanish-language signal supports a localized outreach and offer path.' : null,
     contractFitScore > 0 ? 'Opportunity and category fit support government-contract readiness outreach.' : null,
     urbanBonus > 0 ? 'Urban market density supports stronger outreach and partner-fit potential.' : null,
+    hasDirectEmail ? 'Direct business email improves send confidence.' : null,
+    !hasUsableEmail && contactFormCount > 0 ? 'Contact form is available, so this should be handled manually instead of emailed.' : null,
     adjustments.delta !== 0 ? `Active improvement tuning adjusted this score by ${adjustments.delta > 0 ? '+' : ''}${adjustments.delta}.` : null,
   ]
     .filter(Boolean)
@@ -446,6 +511,9 @@ export async function scoreLead(
       businessAgeDays,
       monetizationPotentialScore,
       urbanBonus,
+      hasUsableEmail,
+      hasDirectEmail,
+      contactFormCount,
       dealVaultSegment,
       scoreAdjustments: adjustments.reasons,
       scoreAdjustmentDelta: adjustments.delta,

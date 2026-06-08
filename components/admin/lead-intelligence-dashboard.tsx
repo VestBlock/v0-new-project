@@ -340,24 +340,9 @@ export function LeadIntelligenceDashboard() {
   const generateOutreach = async (leadId: string) => {
     setRunningOutreachFor(leadId)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) return
-      const response = await fetch('/api/leads/generate-outreach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ leadIds: [leadId] }),
-      })
-      if (!response.ok) throw new Error('Outreach generation failed.')
-      toast({ title: 'Outreach ready', description: 'Draft outreach regenerated for this lead.' })
-      await fetchLeads()
-    } catch (error) {
       toast({
-        title: 'Could not generate outreach',
-        description: error instanceof Error ? error.message : 'Try again.',
-        variant: 'destructive',
+        title: 'Outreach runs off-platform',
+        description: 'Use npm run outreach:v4-workflow from Codex/operator mode to generate and review drafts.',
       })
     } finally {
       setRunningOutreachFor(null)

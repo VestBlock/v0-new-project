@@ -276,7 +276,7 @@ export default async function CreditDashboardPage({ params }: PageProps) {
                 </div>
               ) : (
                 <p className="text-muted-foreground">
-                  No detailed analysis text is available yet. Check the workflow
+                  No detailed analysis text is available yet. Check the review
                   status above for the current processing step.
                 </p>
               )}

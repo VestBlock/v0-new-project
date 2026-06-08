@@ -19,10 +19,6 @@ const nextConfig = {
     'tesseract.js',
     '@react-pdf/renderer',
   ],
-  webpack: (config, { dev }) => {
-    if (dev) config.devtool = 'source-map';
-    return config;
-  },
   async headers() {
     return [
       {

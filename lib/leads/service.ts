@@ -2,6 +2,7 @@ import { enrichLeadEmailFromWebsite } from '@/lib/leads/email-enrichment'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision, isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
+import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
@@ -10,11 +11,16 @@ import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { addLeadNote, finishScrapeRun, insertOutreachSendEvent, listSuppressions, saveLeadScore, saveOutreachMessages, startScrapeRun, updateOutreachMessage, upsertLead, updateLeadRecord } from '@/lib/leads/repository'
 import { scoreLead } from '@/lib/leads/scoring'
+import { safeUrl } from '@/lib/leads/utils'
 import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput, OutreachMessageRecord } from '@/lib/leads/types'
 
 type IngestLeadOptions = {
   scoreOnIngest?: boolean
   autoGenerateOutreach?: boolean
+}
+
+type GenerateOutreachOptions = {
+  allowImmediateAutoSend?: boolean
 }
 
 function shouldTriggerLeadAutomation(category: string | null | undefined, score: number) {
@@ -29,6 +35,43 @@ function isValidLeadEmail(value: string | null | undefined) {
   const email = normalizeEmail(value)
   if (!email) return null
   return isUsableContactEmail(email)
+}
+
+const WEBMAIL_EMAIL_DOMAINS = new Set(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'aol.com'])
+
+function extractEmailDomain(value: string | null | undefined) {
+  const email = normalizeEmail(value)
+  const parts = email?.split('@') || []
+  return parts.length === 2 ? parts[1] : null
+}
+
+function extractWebsiteHost(value: string | null | undefined) {
+  const normalized = safeUrl(value)
+  if (!normalized) return null
+
+  try {
+    return new URL(normalized).host.replace(/^www\./i, '').toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+function domainsLookAligned(emailDomain: string, websiteHost: string) {
+  return emailDomain === websiteHost || emailDomain.endsWith(`.${websiteHost}`) || websiteHost.endsWith(`.${emailDomain}`)
+}
+
+function shouldVerifyExistingLeadEmail(input: {
+  email?: string | null
+  website?: string | null
+  emailValid?: boolean | null
+}) {
+  if (!input.website || !isUsableContactEmail(input.email) || input.emailValid === false) return false
+
+  const emailDomain = extractEmailDomain(input.email)
+  const websiteHost = extractWebsiteHost(input.website)
+  if (!emailDomain || !websiteHost) return false
+
+  return WEBMAIL_EMAIL_DOMAINS.has(emailDomain) || !domainsLookAligned(emailDomain, websiteHost)
 }
 
 function estimateBounceRisk(lead: LeadRecord, emailValid: boolean | null) {
@@ -55,6 +98,7 @@ function estimateBounceRiskFromInput(
 }
 
 function shouldPhaseOutGooglePlacesSource(source: string | null | undefined) {
+  if (isOutreachV2Enabled()) return false
   return isSourceInFamily(source, 'google_places_businesses') && isLegacyGooglePlacesPhaseOutEnabled()
 }
 
@@ -171,7 +215,13 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
 }
 
 export async function enrichNormalizedLeadContact(input: NormalizedLeadInput) {
-  if (isUsableContactEmail(input.email) || !input.website) {
+  const shouldVerifyExistingEmail = shouldVerifyExistingLeadEmail({
+    email: input.email,
+    website: input.website,
+    emailValid: input.emailValid,
+  })
+
+  if ((isUsableContactEmail(input.email) && !shouldVerifyExistingEmail) || !input.website) {
     return {
       lead: input,
       updated: false,
@@ -231,7 +281,13 @@ export async function enrichNormalizedLeadContact(input: NormalizedLeadInput) {
 }
 
 export async function enrichLeadContactEmail(lead: LeadRecord) {
-  if (isUsableContactEmail(lead.email) || !lead.website) {
+  const shouldVerifyExistingEmail = shouldVerifyExistingLeadEmail({
+    email: lead.email,
+    website: lead.website,
+    emailValid: lead.email_valid,
+  })
+
+  if ((isUsableContactEmail(lead.email) && !shouldVerifyExistingEmail) || !lead.website) {
     return {
       lead,
       updated: false,
@@ -441,7 +497,11 @@ export async function ingestNormalizedLeads(
   }
 }
 
-export async function generateAndStoreOutreachForLead(lead: LeadRecord) {
+export async function generateAndStoreOutreachForLead(
+  lead: LeadRecord,
+  options: GenerateOutreachOptions = {}
+) {
+  const allowImmediateAutoSend = options.allowImmediateAutoSend ?? true
   const bundle = await generateLeadOutreach(lead)
   const rows = bundleToRows(bundle)
   const saved = await saveOutreachMessages(lead.id, rows)
@@ -507,7 +567,7 @@ export async function generateAndStoreOutreachForLead(lead: LeadRecord) {
         },
       })
 
-      if (decision.autoSendEnabled && !shouldPhaseOutGooglePlacesSource(lead.source)) {
+      if (allowImmediateAutoSend && decision.autoSendEnabled && !shouldPhaseOutGooglePlacesSource(lead.source)) {
         await autoSendApprovedLeadEmail(lead, {
           ...approvedMessage,
           subject: approvedMessage.subject || emailMessage.subject || null,

@@ -3,11 +3,15 @@
 import Link from 'next/link';
 import {
   ArrowRight,
-  Bot,
+  Building2,
   CircleDollarSign,
+  Hammer,
   Home,
+  Landmark,
   Search,
+  ShieldCheck,
   Sparkles,
+  Users,
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/auth-context';
@@ -34,59 +38,102 @@ type WorkspaceCard = {
 
 const workspaceCards: WorkspaceCard[] = [
   {
-    title: 'Visibility Plans',
+    title: 'Seller Property Review',
     description:
-      'For service businesses that want clearer search growth without a vague marketing retainer.',
-    icon: Search,
-    primaryHref: '/visibility-expansion',
-    primaryLabel: 'View Search Visibility',
+      'For property owners who want a sharper review of the address, condition, timeline, price, payoff, and sale context before a fast cash, creative, novation, or partner conversation.',
+    icon: Home,
+    primaryHref: '/sell',
+    primaryLabel: 'Submit Property',
     bullets: [
-      'Compare productized visibility packages',
-      'Preview sample page ideas and next-step recommendations',
-      'Save your request in your account if you want to come back later',
+      'No login required to submit the property',
+      'Captures timeline, condition, price, payoff, liens, and preferred sale path',
+      'Helps send follow-up toward fast cash, creative, novation, or partner-fit review',
     ],
   },
   {
-    title: 'AI Receptionist Preview',
+    title: 'Buyer Buy Box',
     description:
-      'For businesses that need better lead capture, booking, and a cleaner front-desk experience before buying more traffic.',
-    icon: Bot,
-    primaryHref: '/ai-assistant',
-    primaryLabel: 'View AI Receptionist',
+      'For cash buyers, landlords, flippers, institutional buyers, and acquisition teams that want better-fit opportunities introduced by criteria.',
+    icon: Users,
+    primaryHref: '/buyers',
+    primaryLabel: 'Share Buy Box',
     bullets: [
-      'Choose the package that fits your current need',
-      'Preview bot questions and website improvement ideas',
-      'Use the same email if you want to save your request in one place',
+      'Submit markets, asset types, price range, and no-go items',
+      'Keep proof status and close speed attached to your profile',
+      'Keep your buyer profile ready for better-fit introductions and funding conversations',
     ],
   },
   {
-    title: 'Business Funding',
+    title: 'Lender Network',
+    description:
+      'For lenders that want a cleaner partner channel for real estate opportunities that fit their lending box.',
+    icon: Landmark,
+    primaryHref: '/lenders',
+    primaryLabel: 'Join Lender Network',
+    bullets: [
+      'Share states, loan size, borrower fit, and no-go items',
+      'Keep your criteria clean before opportunities are introduced',
+      'Keep your lender profile ready for cleaner borrower review and introductions',
+    ],
+  },
+  {
+    title: 'Real Estate Funding Review',
+    description:
+      'For investors or property owners with a DSCR, rental, flip, bridge, or hard-money scenario that needs lender-fit review.',
+    icon: Building2,
+    primaryHref: '/real-estate-funding',
+    primaryLabel: 'Review My Deal',
+    secondaryHref: '/services/financial-growth#request-service',
+    secondaryLabel: 'Request Paid Review',
+    bullets: [
+      'Submit the deal, borrower, timeline, and property details',
+      'Use partner introductions after the deal context and capital fit are clear',
+      'Move into paid review when the file needs more prep',
+    ],
+  },
+  {
+    title: 'Developer / Construction Partner',
+    description:
+      'For developers, contractors, builders, and rehab crews that want project opportunities surfaced when property, capital, or operator fit makes sense.',
+    icon: Hammer,
+    primaryHref: '/real-estate-funding',
+    primaryLabel: 'Share Project Fit',
+    secondaryHref: '/services',
+    secondaryLabel: 'View Network Services',
+    bullets: [
+      'Share markets, project types, capacity, and preferred deal roles',
+      'Keep construction and developer fit separate from lender criteria',
+      'Pair project opportunities with cleaner partner review when useful',
+    ],
+  },
+  {
+    title: 'DealVault Demo',
+    description:
+      'For teams that need proof records, payout visibility, partner accountability, and milestone tracking in one deal-ready path.',
+    icon: ShieldCheck,
+    primaryHref: '/dealvault/demo',
+    primaryLabel: 'See DealVault Demo',
+    secondaryHref: '/smart-contracts',
+    secondaryLabel: 'View Smart Contracts',
+    bullets: [
+      'See the proof-record, payout, and milestone flow first',
+      'Review DealVault records without a wallet requirement',
+      'Use the same account if you want follow-up and demo requests saved',
+    ],
+  },
+  {
+    title: 'Business Funding Prep',
     description:
       'For founders and business owners who want a quick funding check, then guided help if they need more preparation.',
     icon: CircleDollarSign,
     primaryHref: '/funding',
-    primaryLabel: 'Check Funding',
-    secondaryHref: '/pricing#funding-assistant-plans',
-    secondaryLabel: 'See Funding Pricing',
+    primaryLabel: 'Check Funding Free',
+    secondaryHref: '/funding/business-funding-strategy',
+    secondaryLabel: 'See Funding Prep Pricing',
     bullets: [
       'Run the free eligibility check first',
-      'Move into a saved funding plan when you are ready',
-      'Keep lender-facing prep and key notes in one place',
-    ],
-  },
-  {
-    title: 'Real Estate Services',
-    description:
-      'For buyers, lenders, and sellers who need a cleaner place to start the conversation around property opportunities and funding.',
-    icon: Home,
-    primaryHref: '/real-estate-funding',
-    primaryLabel: 'Open Real Estate Services',
-    secondaryHref: '/sell',
-    secondaryLabel: 'Submit Property',
-    bullets: [
-      'Start with deal review, funding conversations, or property submissions',
-      'Keep real-estate visitors from feeling lost in a general small-business site',
-      'Use the pricing page when you need more hands-on support',
+      'Move into the $300 Business Funding Prep Plan only when needed',
+      'Use credit and prep tools only when the funding file needs more work',
     ],
   },
 ] as const;
@@ -101,23 +148,20 @@ export function GetStartedPage() {
           <div className="space-y-5">
             <Badge className="w-fit bg-cyan-600 text-white">Start Here</Badge>
             <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-5xl">
-              Choose the VestBlock service that fits what you need today.
+              Choose the VestBlock path that matches your role in the deal.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              Service businesses can preview visibility or AI receptionist options. Business owners can
-              start with funding. Buyers, lenders, and sellers can go straight to the real-estate pages.
+              Start as a seller, buyer, lender, developer, contractor, operator, capital partner, or DealVault team. Once fit is clear, VestBlock can support cleaner intake, funding prep, partner accountability, and follow-through.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
-                <Link href={isAuthenticated ? '/dashboard/services' : '/register?redirect=/get-started'}>
-                  {isAuthenticated ? 'Open My Dashboard' : 'Create Account'}
+                <a href="#paths">
+                  Choose a path below
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href={isAuthenticated ? '/pricing' : '/login?redirect=/get-started'}>
-                  {isAuthenticated ? 'Compare Pricing' : 'Sign In'}
-                </Link>
+                <Link href="/pricing">Compare Pricing</Link>
               </Button>
             </div>
             {isAuthenticated ? (
@@ -130,9 +174,9 @@ export function GetStartedPage() {
               </div>
             ) : (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Best setup for new clients</p>
+                <p className="font-medium text-foreground">No account needed to start</p>
                 <p className="mt-1">
-                  Create an account first if you want your requests, previews, and follow-up in one place.
+                  Submit the property, buy box, lender profile, deal review, or demo request first. Create an account later only when you want saved activity and dashboard access.
                 </p>
               </div>
             )}
@@ -145,33 +189,33 @@ export function GetStartedPage() {
                 What opens right away
               </CardTitle>
               <CardDescription>
-                Each option should give the client something useful right away, even before a higher-touch follow-up starts.
+                Each option gives a serious network member a clear next step before account creation or payment.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground">
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
-                <p className="font-medium text-foreground">Live offer previews</p>
+                <p className="font-medium text-foreground">Network-first entry</p>
                 <p className="mt-1">
-                  Visibility and AI receptionist pages now show sample recommendations before you submit anything.
+                  Seller, buyer, lender, project partner, funding, and DealVault paths all open before account creation.
                 </p>
               </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
-                <p className="font-medium text-foreground">Saved account activity</p>
+                <p className="font-medium text-foreground">Support path</p>
                 <p className="mt-1">
-                  If you use the same email, you can come back later and review saved requests and updates.
+                  Qualified members can add more support when they need stronger intake, partner materials, or funding prep.
                 </p>
               </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
-                <p className="font-medium text-foreground">A self-serve funding check</p>
+                <p className="font-medium text-foreground">Clear role paths</p>
                 <p className="mt-1">
-                  Funding already gives people a clear first step: free check first, saved recommendations second, extra help when needed.
+                  Buyer, lender, operator, and partner criteria stay separate, which makes introductions cleaner when a real opportunity appears.
                 </p>
               </div>
             </CardContent>
           </Card>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-2">
+        <section id="paths" className="grid gap-6 scroll-mt-24 xl:grid-cols-2">
           {workspaceCards.map((card) => {
             const Icon = card.icon;
 
@@ -198,17 +242,9 @@ export function GetStartedPage() {
                       <Link href={card.primaryHref}>{card.primaryLabel}</Link>
                     </Button>
                     {card.secondaryHref && card.secondaryLabel ? (
-                      <Button asChild variant="outline">
-                        <Link
-                          href={
-                            isAuthenticated && card.title === 'Business Funding'
-                              ? '/dashboard/funding'
-                              : card.secondaryHref
-                          }
-                        >
-                          {isAuthenticated && card.title === 'Business Funding'
-                            ? 'Open Funding Dashboard'
-                            : card.secondaryLabel}
+                    <Button asChild variant="outline">
+                        <Link href={card.secondaryHref}>
+                          {card.secondaryLabel}
                         </Link>
                       </Button>
                     ) : null}
@@ -222,25 +258,25 @@ export function GetStartedPage() {
         <section className="grid gap-6 lg:grid-cols-3">
           <Card className="premium-card">
             <CardHeader>
-              <CardTitle className="text-lg">For small businesses</CardTitle>
+              <CardTitle className="text-lg">For deal-driven teams</CardTitle>
               <CardDescription>
-                Visibility and AI receptionist are the cleanest productized starting points today.
+                DealVault is the clearest first path when record proof, payout visibility, and milestones matter.
               </CardDescription>
             </CardHeader>
           </Card>
           <Card className="premium-card">
             <CardHeader>
-              <CardTitle className="text-lg">For lenders and buyers</CardTitle>
+              <CardTitle className="text-lg">For funding prep</CardTitle>
               <CardDescription>
-                Funding and real-estate services stay visible here so capital partners and buyers still feel expected.
+                Start with the free funding check, then move into paid prep or credit support only when the business needs cleanup or sequencing help.
               </CardDescription>
             </CardHeader>
           </Card>
           <Card className="premium-card">
             <CardHeader>
-              <CardTitle className="text-lg">For sellers</CardTitle>
+              <CardTitle className="text-lg">For added support</CardTitle>
               <CardDescription>
-                Seller submissions still matter, but they no longer define the whole brand.
+                Intake assets, partner materials, and funding prep can be added when a qualified member needs more support.
               </CardDescription>
             </CardHeader>
           </Card>

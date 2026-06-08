@@ -20,7 +20,7 @@ export type GrowthServiceRequestWorkflowInput = {
   packageKey: ServicePackageKey;
   leadName: string;
   leadEmail: string;
-  phone: string;
+  phone?: string | null;
   businessName?: string | null;
   primaryGoal?: string | null;
   monthlyRevenueRange?: string | null;

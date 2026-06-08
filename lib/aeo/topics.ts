@@ -7,7 +7,11 @@ export type AeoTopic = {
     | 'business-credit'
     | 'funding'
     | 'credit-builder'
-    | 'disputes';
+    | 'disputes'
+    | 'dealvault'
+    | 'search-visibility'
+    | 'ai-receptionist'
+    | 'website-conversion';
   intent: 'education' | 'comparison' | 'lead-capture' | 'tool-support';
   offerPath: string;
   metaDescription: string;
@@ -27,6 +31,10 @@ export const clusterLabels: Record<AeoTopic['cluster'], string> = {
   funding: 'Funding Preparation',
   'credit-builder': 'Credit Builder Tools',
   disputes: 'Credit Disputes',
+  dealvault: 'DealVault Proof Records',
+  'search-visibility': 'Search Visibility',
+  'ai-receptionist': 'AI Receptionist',
+  'website-conversion': 'Website Conversion',
 };
 
 export const intentLabels: Record<AeoTopic['intent'], string> = {
@@ -110,7 +118,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     title: '609 Letters',
     cluster: 'disputes',
     intent: 'education',
-    offerPath: '/super-dispute',
+    offerPath: '/services/ai-credit-analysis',
     metaDescription:
       'Learn what 609 letters are commonly used for, what they can and cannot do, and how to avoid credit repair myths.',
     audience: 'People researching 609 letters before sending a dispute.',
@@ -144,7 +152,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     title: 'Method Of Verification',
     cluster: 'disputes',
     intent: 'education',
-    offerPath: '/super-dispute',
+    offerPath: '/services/ai-credit-analysis',
     metaDescription:
       'Learn how method-of-verification requests fit into credit disputes and what information to track after a bureau response.',
     audience: 'Consumers following up after a credit bureau verifies disputed information.',
@@ -803,7 +811,7 @@ export const vestblockAeoTopics: AeoTopic[] = [
     title: 'Debt Validation',
     cluster: 'disputes',
     intent: 'education',
-    offerPath: '/super-dispute',
+    offerPath: '/services/ai-credit-analysis',
     metaDescription:
       'Learn what debt validation is, when to request it, and how it differs from a credit bureau dispute.',
     audience: 'Consumers contacted by collectors or reviewing collection accounts.',
@@ -1104,7 +1112,2314 @@ export const vestblockAeoTopics: AeoTopic[] = [
       },
     ],
   },
+  {
+    slug: 'dealvault-proof-records',
+    title: 'DealVault Proof Records',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault/demo-record',
+    metaDescription:
+      'Learn how DealVault by VestBlock helps teams organize agreement records, document hashes, payout visibility, milestone history, and proof certificates.',
+    audience:
+      'Teams that need cleaner records around agreements, referrals, payouts, approvals, deliverables, or milestones.',
+    overview:
+      'DealVault proof records help a business show that an important document, agreement reference, milestone, payout record, or approval existed at a specific point in time. Private documents stay private. DealVault focuses on hashes, timestamps, statuses, references, and proof certificates so teams can keep a cleaner record without publishing sensitive information.',
+    keyTakeaways: [
+      'A proof record can point to a specific document version without exposing the document itself.',
+      'DealVault is useful beyond real estate when referrals, payouts, milestones, approvals, or deliverables need a clearer record.',
+      'The product supports business accountability; it does not replace attorneys, escrow, custody, title, or required written agreements.',
+    ],
+    actionSteps: [
+      'Start with one agreement, referral, payout, or milestone that often creates confusion.',
+      'Create or review a private document and generate a SHA-256 hash for the exact version.',
+      'Connect the proof record to the deal, milestone, payout participant, or certificate so the record is easier to review later.',
+    ],
+    faqs: [
+      {
+        question: 'Does DealVault put my private contract on-chain?',
+        answer:
+          'No. DealVault is designed so private documents and sensitive details stay off-chain. The verification record can use hashes, timestamps, statuses, IDs, and references instead of raw document contents.',
+      },
+      {
+        question: 'Does DealVault replace a legal agreement?',
+        answer:
+          'No. DealVault supports records and accountability. It does not replace legal counsel, escrow, title services, custody, brokerage compliance, or required written agreements.',
+      },
+    ],
+  },
+  {
+    slug: 'smart-contract-records-for-business',
+    title: 'Smart Contract Records For Business',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/smart-contracts',
+    metaDescription:
+      'Understand practical smart contract records for business proof, document hashes, milestone history, and payout visibility without crypto hype.',
+    audience:
+      'Business owners who want practical smart contract use cases without exposing private records or confusing customers.',
+    overview:
+      'Smart contract records can be useful when a business needs a tamper-resistant reference around an event, document hash, milestone update, payout status, or proof certificate. VestBlock positions smart contracts as a record layer, not as a legal replacement, escrow system, custody product, or investment product.',
+    keyTakeaways: [
+      'The strongest business use case is often proof, not speculation.',
+      'Private business data should stay off-chain unless there is a clear reason and consent to publish it.',
+      'Smart contract records can support dashboards, certificates, milestone history, and audit trails.',
+    ],
+    actionSteps: [
+      'Choose one record type that benefits from proof: document hash, milestone status, payout status, or approval reference.',
+      'Keep sensitive data private and record only safe references or hashes.',
+      'Use the public record as supporting evidence, not as a replacement for required legal or payment steps.',
+    ],
+    faqs: [
+      {
+        question: 'Do customers need to connect a wallet to use VestBlock?',
+        answer:
+          'The public DealVault demo is designed to explain the record flow without requiring customers to connect a wallet. Wallet and contract operations can stay behind the scenes where appropriate.',
+      },
+      {
+        question: 'Can smart contract records move money automatically?',
+        answer:
+          'VestBlock is currently positioned around proof records, tracking, and accountability. It should not be described as escrow, custody, automatic payout enforcement, or real fund movement unless a specific compliant payment integration is approved.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-small-business',
+    title: 'AI Receptionist For Small Business',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how a VestBlock AI Receptionist helps small businesses answer common questions, capture lead details, and route serious inquiries faster.',
+    audience:
+      'Service businesses, local companies, contractors, agencies, clinics, consultants, and appointment-based businesses that miss leads or answer the same questions repeatedly.',
+    overview:
+      'An AI receptionist helps a small business protect opportunities when staff are busy, closed, or answering repeated questions. VestBlock sets up branded website assistants that can answer common questions, collect useful lead details, and route serious inquiries to the next step.',
+    keyTakeaways: [
+      'AI Receptionist is best used as a faster front door, not as a fake human or replacement for the business owner.',
+      'The strongest setup collects useful details such as service need, location, urgency, and contact information.',
+      'Lead quality still depends on the offer, website traffic, business follow-up, and clear next steps.',
+    ],
+    actionSteps: [
+      'List the questions your team answers most often.',
+      'Decide what makes a website visitor qualified enough for follow-up or booking.',
+      'Set up lead alerts, handoff rules, and a review process so captured inquiries do not sit untouched.',
+    ],
+    faqs: [
+      {
+        question: 'Does an AI receptionist replace staff?',
+        answer:
+          'No. It helps answer common questions and capture details so your team can focus on real follow-up and service delivery.',
+      },
+      {
+        question: 'Can an AI receptionist book appointments?',
+        answer:
+          'It can support booking handoff when the business has clear availability, qualification rules, and calendar details. Appointment volume and close rates are not guaranteed.',
+      },
+    ],
+  },
+  {
+    slug: 'search-visibility-for-small-business',
+    title: 'Search Visibility For Small Business',
+    cluster: 'search-visibility',
+    intent: 'lead-capture',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Learn how VestBlock Search Visibility helps small businesses improve service clarity, local pages, customer-question content, and AI-search readiness.',
+    audience:
+      'Small businesses and service companies that want clearer discovery across Google, local search, service pages, and AI-style answers.',
+    overview:
+      'Search visibility means making a business easier for buyers, search engines, local results, and AI answer tools to understand. VestBlock reviews weak pages, maps customer questions, improves service clarity, and builds a practical plan for stronger local and topic coverage.',
+    keyTakeaways: [
+      'Search visibility is broader than old-school keyword stuffing.',
+      'Clear service pages, local relevance, direct answers, proof points, and authority cues help buyers and crawlers understand the business.',
+      'No ethical provider can guarantee rankings, traffic, AI-answer placement, or revenue.',
+    ],
+    actionSteps: [
+      'Review whether the homepage explains what the business does, who it helps, and where it works in a few seconds.',
+      'Build answer-ready pages around real customer questions and service-area intent.',
+      'Track indexed pages, search snippets, mentions, and qualified inquiries instead of vanity content volume alone.',
+    ],
+    faqs: [
+      {
+        question: 'Is search visibility the same as SEO?',
+        answer:
+          'It includes SEO, but it is broader. Search visibility also covers service clarity, local content, answer-ready pages, trust proof, authority mentions, and AI-search readiness.',
+      },
+      {
+        question: 'Can VestBlock guarantee Google rankings?',
+        answer:
+          'No. VestBlock can improve the content foundation, page clarity, and authority plan, but rankings depend on competition, crawl timing, site quality, and search engine decisions.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-search-visibility',
+    title: 'AI Search Visibility',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Understand AI search visibility and how businesses can become easier for ChatGPT-style answer tools, Google, and other discovery systems to understand.',
+    audience:
+      'Business owners asking whether ChatGPT, Gemini, Perplexity, Google, or other answer engines can find and understand their company.',
+    overview:
+      'AI search visibility is about making a business easier for answer engines to understand, summarize, and reference. No one can guarantee that a language model will recommend a company, but clear service pages, direct answers, structured information, public mentions, and fresh proof materials can improve readiness.',
+    keyTakeaways: [
+      'AI tools often rely on public, crawlable, repeated, and trusted information.',
+      'Owned pages matter, but off-site mentions, videos, profiles, and citations help corroborate the brand.',
+      'The goal is to become answer-ready, not to trick a model.',
+    ],
+    actionSteps: [
+      'Publish clear pages answering what the business does, who it helps, what each service includes, and what the next step is.',
+      'Create public supporting assets such as YouTube descriptions, social posts, PR pages, founder bios, and partner mentions.',
+      'Monitor exact-match searches for the brand, service names, and core phrases to see whether public understanding is improving.',
+    ],
+    faqs: [
+      {
+        question: 'Can VestBlock make ChatGPT recommend my business?',
+        answer:
+          'No provider can honestly guarantee that. VestBlock can help make the business clearer, more crawlable, and better supported by public content so AI-answer readiness improves.',
+      },
+      {
+        question: 'Do SEO pages help with language models?',
+        answer:
+          'Yes, if they are public, crawlable, specific, and supported by other mentions. Pages alone are not enough if the business has no external proof or the site is blocked.',
+      },
+    ],
+  },
+  {
+    slug: 'website-lead-capture-system',
+    title: 'Website Lead Capture System',
+    cluster: 'website-conversion',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how a website lead capture system combines clearer calls to action, forms, AI receptionist setup, alerts, and follow-up routing.',
+    audience:
+      'Businesses with website traffic, missed calls, weak forms, unclear calls to action, or too many visitors leaving without a serious inquiry.',
+    overview:
+      'A website lead capture system turns visitors into trackable inquiries by making the offer clear, the next step obvious, and the follow-up faster. VestBlock combines page clarity, forms, AI receptionist setup, booking handoff, and alerts so more serious prospects know what to do next.',
+    keyTakeaways: [
+      'Traffic is wasted when the website does not explain the offer or next step clearly.',
+      'Forms, chat, booking, and alerts should work together instead of creating separate dead ends.',
+      'The best systems make follow-up easier for the business, not just easier for visitors to submit vague messages.',
+    ],
+    actionSteps: [
+      'Review the homepage, service pages, and mobile layout for one clear next action.',
+      'Decide what information is required to qualify and route a serious inquiry.',
+      'Connect forms, AI chat, alerts, and follow-up notes so leads do not disappear after submission.',
+    ],
+    faqs: [
+      {
+        question: 'Do I need a full website rebuild to improve lead capture?',
+        answer:
+          'Not always. Many businesses can improve results by tightening the hero message, service pages, forms, calls to action, and follow-up routing first.',
+      },
+      {
+        question: 'Where does AI Receptionist fit?',
+        answer:
+          'AI Receptionist can answer common questions and collect useful lead details when visitors are not ready to fill out a form or when staff are unavailable.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-home-service-businesses',
+    title: 'AI Receptionist For Home Service Businesses',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'See how an AI receptionist can help home service businesses capture calls, website inquiries, job details, and booking handoffs.',
+    audience:
+      'Home service companies that depend on fast response, quote requests, emergency jobs, appointment scheduling, and after-hours intake.',
+    overview:
+      'Home service buyers often contact the first business that gives them a clear next step. An AI receptionist can help capture service type, location, urgency, contact information, and booking intent before a lead goes cold.',
+    keyTakeaways: [
+      'Speed matters when homeowners compare contractors, cleaners, repair companies, and emergency services.',
+      'Good AI intake collects job details instead of only saying hello.',
+      'The best setup routes urgent leads to people quickly and keeps routine requests organized.',
+    ],
+    actionSteps: [
+      'List the top service categories and emergency situations the business handles.',
+      'Create intake questions for location, timing, budget range, and contact method.',
+      'Route high-urgency jobs to phone or text follow-up and routine leads to a review queue.',
+    ],
+    faqs: [
+      {
+        question: 'Can an AI receptionist help a home service company after hours?',
+        answer:
+          'Yes. It can answer common questions, collect useful job details, and route urgent requests so fewer serious inquiries wait until the next business day.',
+      },
+      {
+        question: 'Does it replace the dispatcher or owner?',
+        answer:
+          'No. It supports intake and routing. Pricing, scheduling decisions, complex customer issues, and emergency judgment should still be handled by the business.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-restoration-companies',
+    title: 'AI Receptionist For Restoration Companies',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how restoration companies can use AI receptionist intake for water damage, fire damage, mold, emergency calls, and insurance-related leads.',
+    audience:
+      'Restoration, mitigation, roofing, public-adjuster-adjacent, and emergency service businesses that need faster lead intake.',
+    overview:
+      'Restoration leads are often urgent. An AI receptionist can collect the damage type, property location, timing, contact details, and escalation needs before the customer moves on to another provider.',
+    keyTakeaways: [
+      'Urgent restoration inquiries need fast capture and clear escalation.',
+      'AI intake should gather useful details without giving insurance, legal, or safety advice.',
+      'The strongest workflow sends urgent jobs to a human quickly.',
+    ],
+    actionSteps: [
+      'Define emergency categories such as water, fire, mold, storm, and urgent inspection.',
+      'Capture address area, contact details, timing, damage type, and whether the situation is active.',
+      'Route urgent submissions to the correct owner, dispatcher, or response team.',
+    ],
+    faqs: [
+      {
+        question: 'Can AI answer insurance questions for restoration leads?',
+        answer:
+          'It should avoid insurance, legal, or claim advice. It can collect intake details and route the customer to qualified staff or partners.',
+      },
+      {
+        question: 'Why is this different from a contact form?',
+        answer:
+          'A form waits for the visitor to know what to say. AI intake can ask structured questions, explain next steps, and make the request easier to route.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-property-managers',
+    title: 'AI Receptionist For Property Managers',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'See how property managers can use AI receptionist workflows for owner leads, tenant questions, vendor routing, and after-hours intake.',
+    audience:
+      'Property managers, real estate operators, leasing teams, investor-service firms, and small portfolio managers.',
+    overview:
+      'Property managers handle many repeated questions from owners, tenants, vendors, and prospects. An AI receptionist can collect the right details, explain simple next steps, and route inquiries without pretending to make final business decisions.',
+    keyTakeaways: [
+      'Owner leads, tenant requests, vendor questions, and leasing inquiries need different routing.',
+      'AI can reduce repeat-question load while keeping sensitive decisions with people.',
+      'Clear escalation rules are more important than flashy chat behavior.',
+    ],
+    actionSteps: [
+      'Separate intake paths for owners, tenants, vendors, and prospective renters.',
+      'Collect property type, location, urgency, and contact information.',
+      'Route maintenance, leasing, owner, and vendor requests to the right follow-up path.',
+    ],
+    faqs: [
+      {
+        question: 'Can AI handle maintenance emergencies?',
+        answer:
+          'It can collect details and route urgent requests, but emergency judgment and dispatch decisions should stay with the property management team.',
+      },
+      {
+        question: 'Can it help win more owner leads?',
+        answer:
+          'It can help capture owner inquiries faster and ask better intake questions, but lead volume and close rates depend on traffic, offer strength, and follow-up.',
+      },
+    ],
+  },
+  {
+    slug: 'missed-call-lead-capture-service',
+    title: 'Missed Call Lead Capture Service',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'A missed call lead capture service helps businesses respond faster, collect inquiry details, and route leads before prospects contact competitors.',
+    audience:
+      'Small businesses that lose revenue opportunities from missed calls, slow replies, unclear forms, or after-hours inquiries.',
+    overview:
+      'Missed call lead capture is about protecting opportunities when the business is busy or closed. A useful setup collects the customer need, urgency, contact details, and next-step preference, then alerts the right person to follow up.',
+    keyTakeaways: [
+      'Many prospects contact multiple businesses when they do not get a fast response.',
+      'A missed-call workflow should turn vague inquiries into useful follow-up notes.',
+      'AI receptionist, forms, alerts, and booking handoff should work together.',
+    ],
+    actionSteps: [
+      'Identify when leads are most often missed: after hours, job sites, lunch rush, or busy seasons.',
+      'Create intake questions that qualify the customer without making the flow feel heavy.',
+      'Send captured inquiries to a clear follow-up owner with urgency labels.',
+    ],
+    faqs: [
+      {
+        question: 'Is missed call lead capture only for phone calls?',
+        answer:
+          'No. It can include website chat, forms, after-hours messages, booking handoff, and alerts around any inquiry that might otherwise be missed.',
+      },
+      {
+        question: 'Can VestBlock guarantee more leads?',
+        answer:
+          'No. VestBlock can improve capture and routing, but results depend on traffic, demand, offer quality, and follow-up.',
+      },
+    ],
+  },
+  {
+    slug: 'website-chatbot-for-lead-qualification',
+    title: 'Website Chatbot For Lead Qualification',
+    cluster: 'website-conversion',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how a website chatbot can qualify leads by asking useful questions, capturing contact details, and routing serious inquiries.',
+    audience:
+      'Service businesses that want website visitors to answer useful intake questions before follow-up.',
+    overview:
+      'A website chatbot is most valuable when it qualifies leads instead of only greeting visitors. It should ask practical questions, collect contact details, identify urgency, and route the inquiry to the right next step.',
+    keyTakeaways: [
+      'Lead qualification works best when questions match the service, location, urgency, and buyer stage.',
+      'A chatbot should make follow-up easier for the business and clearer for the customer.',
+      'Good routing prevents serious inquiries from getting buried in a generic inbox.',
+    ],
+    actionSteps: [
+      'Define what makes a lead worth fast follow-up.',
+      'Create short qualification questions for each service path.',
+      'Connect qualified leads to alerts, booking handoff, or an internal review list.',
+    ],
+    faqs: [
+      {
+        question: 'What should a lead qualification chatbot ask?',
+        answer:
+          'It should usually ask what the customer needs, where they are located, how urgent the request is, how to contact them, and what next step they prefer.',
+      },
+      {
+        question: 'Can it replace a salesperson?',
+        answer:
+          'No. It can collect and route information so a salesperson or owner has better context before follow-up.',
+      },
+    ],
+  },
+  {
+    slug: 'dealvault-for-referral-partners',
+    title: 'DealVault For Referral Partners',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'DealVault helps referral partners keep clearer proof records around referred opportunities, payout status, milestone history, and certificates.',
+    audience:
+      'Referral partners, brokers, agencies, real estate teams, funding partners, contractors, and affiliate-style business relationships.',
+    overview:
+      'Referral partnerships can get messy when the original referral, payout trigger, milestone status, and proof live in scattered messages. DealVault helps create a clearer record of the referral path without replacing contracts, accounting, or payment systems.',
+    keyTakeaways: [
+      'Referral records should show who was involved, what happened, and what status changed.',
+      'Payout visibility is easier when milestones and proof references are organized.',
+      'Private documents can stay private while safe record references remain accessible.',
+    ],
+    actionSteps: [
+      'Define the referral event and the milestone that starts payout review.',
+      'Record partner names, status, proof references, and payout labels.',
+      'Use certificates or summaries when a record needs to be shared with a partner.',
+    ],
+    faqs: [
+      {
+        question: 'Does DealVault pay referral partners automatically?',
+        answer:
+          'No. DealVault supports proof, status, and payout visibility. Actual payments should stay in approved payment, accounting, or business systems.',
+      },
+      {
+        question: 'Can partners see the record?',
+        answer:
+          'DealVault can support shareable proof summaries or certificates, but sensitive private documents should not be exposed publicly.',
+      },
+    ],
+  },
+  {
+    slug: 'referral-payout-tracking-software',
+    title: 'Referral Payout Tracking Software',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Referral payout tracking software helps teams organize partner splits, payout triggers, milestone status, proof references, and review history.',
+    audience:
+      'Businesses with brokers, affiliates, referral partners, vendors, agencies, lenders, or partner-led sales channels.',
+    overview:
+      'Referral payout tracking software should make it easier to see the referral source, payout trigger, status, proof, and next step. DealVault focuses on proof records and payout visibility instead of pretending to replace contracts or payment processors.',
+    keyTakeaways: [
+      'Payout confusion often comes from scattered proof and unclear status.',
+      'A good payout tracker separates agreement terms, milestone status, proof references, and payment review.',
+      'Clear records help partners trust the process even when review takes time.',
+    ],
+    actionSteps: [
+      'List each referral partner and the event that starts payout review.',
+      'Create status labels such as submitted, under review, approved, paid, or disputed.',
+      'Attach safe proof references and update the record when status changes.',
+    ],
+    faqs: [
+      {
+        question: 'Is this affiliate software?',
+        answer:
+          'DealVault can support referral and payout visibility, but it is positioned around proof records and milestone history rather than ad tracking or automated affiliate payouts.',
+      },
+      {
+        question: 'Can it reduce payout disputes?',
+        answer:
+          'It can reduce confusion by organizing proof and status history, but it does not replace clear agreements or required payment processes.',
+      },
+    ],
+  },
+  {
+    slug: 'agreement-tracking-software-for-small-business',
+    title: 'Agreement Tracking Software For Small Business',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault/demo',
+    metaDescription:
+      'Agreement tracking software helps small businesses organize document versions, approvals, milestones, payout status, and proof records.',
+    audience:
+      'Small businesses that manage deals, referrals, contractor milestones, partner agreements, approvals, or important document versions.',
+    overview:
+      'Agreement tracking software should make it easier to understand what was agreed, what changed, what milestone is active, and what proof supports the record. DealVault adds proof references, certificates, and milestone history without putting private agreement text on-chain.',
+    keyTakeaways: [
+      'Agreements become harder to manage when versions, approvals, and proof are spread across email and folders.',
+      'A proof record can reference an agreement without exposing private text.',
+      'Milestone history and payout visibility make agreement follow-up clearer.',
+    ],
+    actionSteps: [
+      'Choose the agreement type that causes the most follow-up confusion.',
+      'Create a proof record with safe references, version notes, milestones, and status.',
+      'Review the agreement timeline before payout, approval, or renewal conversations.',
+    ],
+    faqs: [
+      {
+        question: 'Does DealVault replace contract management software?',
+        answer:
+          'Not for every use case. DealVault is strongest as a proof and record layer around agreements, milestones, payout visibility, and certificates.',
+      },
+      {
+        question: 'Can private agreements stay private?',
+        answer:
+          'Yes. Private agreement files can stay in secure storage while DealVault records hashes, IDs, statuses, dates, and proof references.',
+      },
+    ],
+  },
+  {
+    slug: 'smart-contract-proof-records-for-business',
+    title: 'Smart Contract Proof Records For Business',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/smart-contracts',
+    metaDescription:
+      'Smart contract proof records can support business recordkeeping with hashes, timestamps, milestone references, and certificate history.',
+    audience:
+      'Businesses curious about blockchain proof records without speculative crypto, custody, escrow, or investment claims.',
+    overview:
+      'Smart contract proof records are useful when a business wants a tamper-resistant reference that an event, document hash, milestone, payout label, or certificate existed at a certain time. The business value is accountability and record clarity, not crypto speculation.',
+    keyTakeaways: [
+      'The safest business pattern records hashes, IDs, timestamps, statuses, and references.',
+      'Private documents and sensitive customer data should stay off-chain.',
+      'Proof records can support trust without replacing legal, escrow, title, or payment professionals.',
+    ],
+    actionSteps: [
+      'Pick one record type that benefits from stronger proof.',
+      'Decide which fields are safe to publish as a reference.',
+      'Use the proof record as supporting evidence alongside normal business records.',
+    ],
+    faqs: [
+      {
+        question: 'Is this the same as cryptocurrency?',
+        answer:
+          'No. VestBlock frames smart contracts as proof and recordkeeping support, not as speculative tokens, custody, or investment products.',
+      },
+      {
+        question: 'Does a proof record make an agreement legally binding?',
+        answer:
+          'No. It can support recordkeeping, but legal enforceability depends on the agreement, parties, jurisdiction, and required professionals.',
+      },
+    ],
+  },
+  {
+    slug: 'chatgpt-visibility-for-local-businesses',
+    title: 'ChatGPT Visibility For Local Businesses',
+    cluster: 'search-visibility',
+    intent: 'lead-capture',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'ChatGPT visibility for local businesses depends on clear service pages, local proof, crawlable answers, public mentions, and consistent entity data.',
+    audience:
+      'Local businesses that want to be easier for ChatGPT-style tools, Google, and AI search systems to understand.',
+    overview:
+      'Local ChatGPT visibility is not a shortcut or guarantee. It comes from making the business easy to understand across owned pages, local profiles, answer pages, proof materials, and off-site mentions that repeat the same positioning.',
+    keyTakeaways: [
+      'AI answer tools need clear, crawlable, consistent public information.',
+      'Local businesses should connect services, locations, proof, reviews, FAQs, and third-party profiles.',
+      'Prompt tracking reveals which competitors and missing topics still block visibility.',
+    ],
+    actionSteps: [
+      'Create service pages that explain who the business helps, where it works, and what the next step is.',
+      'Add answer pages for exact buyer questions and comparison searches.',
+      'Build off-site profiles and track prompts weekly to see what AI tools understand.',
+    ],
+    faqs: [
+      {
+        question: 'Can a local business force ChatGPT to recommend it?',
+        answer:
+          'No. The practical path is to improve the public signals that make the business easier to crawl, understand, and trust.',
+      },
+      {
+        question: 'Do directory listings help?',
+        answer:
+          'Relevant, credible listings can help by repeating consistent information about the business. Spammy directories or fake claims should be avoided.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-search-visibility-audit-checklist',
+    title: 'AI Search Visibility Audit Checklist',
+    cluster: 'search-visibility',
+    intent: 'tool-support',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Use this AI search visibility audit checklist to review service clarity, answer pages, proof materials, crawler access, and off-site entity signals.',
+    audience:
+      'Business owners and operators who want a practical checklist before investing in AI-search or ChatGPT visibility work.',
+    overview:
+      'An AI search visibility audit checks whether a business is easy for buyers, search engines, and AI answer tools to understand. The checklist should cover service clarity, crawlable pages, proof, schema, sitemap coverage, llms.txt, local profiles, and prompt testing.',
+    keyTakeaways: [
+      'The audit should start with clarity, not keyword stuffing.',
+      'Answer pages and proof materials matter because AI tools summarize what they can verify publicly.',
+      'Prompt tests should drive the next page or authority-building action.',
+    ],
+    actionSteps: [
+      'Review homepage, service pages, sitemap, robots, and llms.txt for crawlable clarity.',
+      'Check whether the site answers high-intent buyer prompts directly.',
+      'Compare AI prompt results against competitors and create pages for missing questions.',
+    ],
+    faqs: [
+      {
+        question: 'What should an AI visibility audit include?',
+        answer:
+          'It should include service clarity, answer pages, proof materials, structured data, crawler access, off-site mentions, local profiles, and prompt-based visibility tracking.',
+      },
+      {
+        question: 'Is an audit enough by itself?',
+        answer:
+          'No. The audit identifies gaps. The score improves through publishing, indexing, authority building, and repeated prompt testing.',
+      },
+    ],
+  },
+  {
+    slug: 'dealvault-vs-google-drive',
+    title: 'DealVault Vs Google Drive For Agreement Records',
+    cluster: 'dealvault',
+    intent: 'comparison',
+    offerPath: '/dealvault/demo-record',
+    metaDescription:
+      'Compare DealVault and shared folders for agreement records, document hashes, payout tracking, milestone history, and proof certificates.',
+    audience:
+      'Business owners, partners, contractors, agencies, lenders, and referral teams comparing simple file storage with stronger proof records.',
+    overview:
+      'Google Drive is useful for storing files. DealVault is built for proving and organizing the activity around important records: document hashes, timestamps, milestone changes, payout status, approval history, and certificates. Many teams can still keep private files in a secure drive while using DealVault to create a cleaner proof trail around what happened.',
+    keyTakeaways: [
+      'Drive stores files; DealVault organizes proof around records, payouts, milestones, and status changes.',
+      'DealVault can reference a private document without publishing the document itself.',
+      'The best setup can use both: private folders for files and DealVault for proof history.',
+    ],
+    actionSteps: [
+      'Choose one agreement, referral, payout, or milestone that needs a clearer record.',
+      'Keep the private document in the system your team already trusts.',
+      'Use DealVault to create a hash, timeline, payout record, milestone status, or certificate tied to that private document.',
+    ],
+    faqs: [
+      {
+        question: 'Does DealVault replace Google Drive?',
+        answer:
+          'Not necessarily. Many teams can keep using Drive or another private folder for raw files while using DealVault for proof records, status history, and certificates.',
+      },
+      {
+        question: 'Why not just share a folder?',
+        answer:
+          'Shared folders can become messy when there are multiple versions, payout questions, milestone disputes, or unclear approvals. DealVault adds a cleaner record of what happened and when.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-vs-answering-service',
+    title: 'AI Receptionist Vs Answering Service',
+    cluster: 'ai-receptionist',
+    intent: 'comparison',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Compare an AI receptionist with a traditional answering service for lead capture, FAQs, after-hours response, routing, and booking support.',
+    audience:
+      'Service businesses deciding whether they need human call answering, AI website response, booking support, or a better lead-capture front door.',
+    overview:
+      'A traditional answering service can help with calls. An AI receptionist is strongest on the website, where visitors need fast answers, qualification questions, booking direction, and a clear way to leave useful details. For many small businesses, the right choice is not either/or. Calls, forms, chat, booking, and alerts should work together so fewer serious inquiries disappear.',
+    keyTakeaways: [
+      'Answering services mainly handle phone calls; AI receptionists can support website visitors before they call.',
+      'AI receptionist setup is most useful when FAQs, qualification, routing, and follow-up alerts are clear.',
+      'Human follow-up still matters. AI should capture and route leads, not pretend to close every sale.',
+    ],
+    actionSteps: [
+      'List where leads currently leak: missed calls, weak forms, slow replies, unclear pricing, or unanswered website questions.',
+      'Decide what information a serious inquiry should include before your team follows up.',
+      'Connect AI receptionist responses to alerts, booking, or a clear handoff process.',
+    ],
+    faqs: [
+      {
+        question: 'Can an AI receptionist replace a phone answering service?',
+        answer:
+          'Sometimes it can reduce missed website inquiries, but it should be chosen based on where leads are leaking. Businesses with heavy phone volume may still need human call support.',
+      },
+      {
+        question: 'Will AI book appointments automatically?',
+        answer:
+          'It can support booking handoff when the business has clear availability, qualification rules, and calendar setup. Appointment volume is not guaranteed.',
+      },
+    ],
+  },
+  {
+    slug: 'search-visibility-vs-seo-retainer',
+    title: 'Search Visibility Vs SEO Retainer',
+    cluster: 'search-visibility',
+    intent: 'comparison',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Compare VestBlock Search Visibility with traditional SEO retainers for clearer service pages, AI-search readiness, proof materials, and authority-building.',
+    audience:
+      'Small businesses that want to be easier to find and understand without buying a vague monthly SEO retainer.',
+    overview:
+      'A traditional SEO retainer can be valuable, but many small businesses do not know what they are buying. VestBlock Search Visibility focuses on practical clarity: better service pages, customer-question content, local relevance, proof materials, structured data, and public mentions that make the business easier for buyers, Google, and AI answer tools to understand.',
+    keyTakeaways: [
+      'Search visibility is broader than keywords and blog volume.',
+      'The best visibility work connects service clarity, local intent, proof, and authority signals.',
+      'VestBlock does not promise rankings, traffic, AI citations, or revenue.',
+    ],
+    actionSteps: [
+      'Check whether each service page clearly explains the buyer problem, outcome, proof, price or next step, and location fit.',
+      'Add answer-ready pages around real customer questions instead of thin blog posts.',
+      'Track crawlability, indexed pages, proof materials, mentions, and qualified inquiries.',
+    ],
+    faqs: [
+      {
+        question: 'Is Search Visibility the same as SEO?',
+        answer:
+          'It includes SEO basics, but it also covers AI-search readiness, customer-question pages, proof materials, local service clarity, and authority-building.',
+      },
+      {
+        question: 'Why avoid a vague retainer?',
+        answer:
+          'Small businesses need to know what is being improved. A clearer package makes it easier to see pages, proof, backlinks, and follow-up work instead of paying for mystery activity.',
+      },
+    ],
+  },
+  {
+    slug: 'contractor-milestone-tracking',
+    title: 'Contractor Milestone Tracking With DealVault',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault/demo',
+    metaDescription:
+      'Learn how DealVault can help contractors, agencies, and service teams track milestones, approvals, payout status, and proof certificates.',
+    audience:
+      'Contractors, agencies, service providers, project managers, and referral-heavy teams that need cleaner milestone and payout records.',
+    overview:
+      'Milestone tracking is useful when a project has deliverables, approvals, payout triggers, revisions, or partner splits that can become unclear later. DealVault can help teams create a cleaner record around milestone names, status updates, proof references, payout visibility, and certificates without putting private contracts or sensitive project details on-chain.',
+    keyTakeaways: [
+      'Milestone records help teams see what was submitted, approved, disputed, or completed.',
+      'Payout visibility can reduce confusion around referral fees, partner splits, or service milestones.',
+      'Proof records support accountability but do not replace legal agreements, invoices, escrow, or required payment systems.',
+    ],
+    actionSteps: [
+      'Define the project milestones that commonly cause confusion.',
+      'Attach safe proof references such as document hashes, status IDs, dates, or certificate links.',
+      'Review milestone and payout status before final approval or follow-up.',
+    ],
+    faqs: [
+      {
+        question: 'Can DealVault track contractor work?',
+        answer:
+          'Yes, as a proof and status layer. It can help organize milestone names, approvals, proof references, and payout visibility, while private files and payment actions stay in the proper systems.',
+      },
+      {
+        question: 'Does milestone tracking guarantee payment?',
+        answer:
+          'No. DealVault helps organize proof and status history. Actual payment obligations depend on agreements, invoices, approvals, and the parties involved.',
+      },
+    ],
+  },
+  {
+    slug: 'business-proof-records',
+    title: 'Business Proof Records',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault/demo-record',
+    metaDescription:
+      'Understand business proof records for agreements, approvals, referrals, payouts, milestones, certificates, and private document hashes.',
+    audience:
+      'Small businesses, agencies, lenders, contractors, and partner teams that need clearer records without publishing private documents.',
+    overview:
+      'A business proof record is a clean reference that something important happened: a document version existed, a milestone changed status, a payout split was recorded, an approval was logged, or a certificate was generated. The point is not to publish private details. The point is to keep a better trail when future questions come up.',
+    keyTakeaways: [
+      'Proof records are useful when a business needs a clean timeline around important activity.',
+      'Private documents can stay private while hashes, IDs, timestamps, statuses, and references support the record.',
+      'The strongest proof systems are simple enough for normal business owners to understand.',
+    ],
+    actionSteps: [
+      'Pick one recurring record problem: referrals, approvals, payouts, milestones, revisions, or agreement versions.',
+      'Decide which details should remain private and which proof references are safe to store.',
+      'Create a repeatable record process so every important update is easier to review later.',
+    ],
+    faqs: [
+      {
+        question: 'What should go into a proof record?',
+        answer:
+          'Safe references such as document hashes, record IDs, timestamps, statuses, milestone names, payout labels, and certificate links. Sensitive raw documents should stay private unless there is a clear reason to share them.',
+      },
+      {
+        question: 'Are proof records legally binding?',
+        answer:
+          'Proof records can support recordkeeping and accountability, but they do not replace attorneys, written agreements, compliance requirements, escrow, title, or payment systems.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-contractors',
+    title: 'AI Receptionist For Contractors',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how an AI receptionist can help contractors capture missed calls, answer common questions, collect job details, and route serious leads.',
+    audience: 'Contractors, remodelers, restoration companies, roofers, and service businesses that miss calls while crews are working.',
+    overview:
+      'An AI receptionist for contractors helps answer basic questions, collect job details, route urgent requests, and keep new leads from going cold after hours. It is most useful for businesses that depend on phone calls, quote requests, emergency jobs, and fast follow-up.',
+    keyTakeaways: [
+      'Missed calls often become missed jobs when homeowners need a fast answer.',
+      'A good AI receptionist captures the job type, location, timing, and contact details.',
+      'The goal is faster intake and cleaner routing, not replacing the business owner.',
+    ],
+    actionSteps: [
+      'List the questions customers ask before booking.',
+      'Decide which calls should become quote requests, emergency alerts, or normal follow-ups.',
+      'Connect the AI receptionist to a clear owner or office follow-up process.',
+    ],
+    faqs: [
+      {
+        question: 'Can an AI receptionist help after hours?',
+        answer:
+          'Yes. It can answer common questions, collect contact details, and route serious inquiries so fewer leads sit unanswered until the next business day.',
+      },
+      {
+        question: 'Does this replace my office staff?',
+        answer:
+          'No. It supports intake and follow-up. A real person should still handle pricing, scheduling decisions, urgent judgment calls, and customer relationships.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-for-real-estate-businesses',
+    title: 'AI Receptionist For Real Estate Businesses',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'See how an AI receptionist can help real estate service businesses capture seller, buyer, tenant, lender, and partner inquiries faster.',
+    audience: 'Small real estate businesses, property managers, agents, lenders, investors, and referral-heavy teams.',
+    overview:
+      'Real estate businesses often lose opportunities when inquiries arrive after hours, during showings, or while a team is managing active deals. An AI receptionist can collect the right details, answer common questions, and route serious inquiries to the right next step.',
+    keyTakeaways: [
+      'Fast response matters when sellers, buyers, tenants, or partners are comparing options.',
+      'AI intake can separate urgent opportunities from general questions.',
+      'The best setup uses clear scripts, disclaimers, and handoff rules.',
+    ],
+    actionSteps: [
+      'Identify the lead types your real estate business wants most.',
+      'Create intake questions for each lead type.',
+      'Route serious inquiries to a calendar, phone follow-up, or internal review queue.',
+    ],
+    faqs: [
+      {
+        question: 'Can this answer property-specific legal or financial questions?',
+        answer:
+          'No. It should answer basic business questions and collect intake details, then route legal, financial, lending, or compliance questions to qualified people.',
+      },
+      {
+        question: 'Can it help property managers?',
+        answer:
+          'Yes. Property managers can use AI intake for owner inquiries, tenant questions, vendor requests, and after-hours routing when configured carefully.',
+      },
+    ],
+  },
+  {
+    slug: 'smart-contract-agreement-tracking',
+    title: 'Smart Contract Agreement Tracking',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/smart-contracts',
+    metaDescription:
+      'Understand smart contract agreement tracking for proof records, milestones, payout references, and transparent business records.',
+    audience: 'Businesses that want cleaner agreement history without exposing private documents publicly.',
+    overview:
+      'Smart contract agreement tracking can help record safe references to important activity: document hashes, status changes, milestone updates, payout labels, timestamps, and certificate links. The point is not to replace contracts or attorneys. The point is to keep a clearer record around business activity that may need to be reviewed later.',
+    keyTakeaways: [
+      'Private documents should stay private unless there is a clear reason to share them.',
+      'Hashes, timestamps, IDs, and status references can support a cleaner proof trail.',
+      'Smart contract records work best when paired with normal agreements and business processes.',
+    ],
+    actionSteps: [
+      'Choose the agreement activity that needs a cleaner trail.',
+      'Define which details are safe to record as proof references.',
+      'Create a repeatable approval and certificate process.',
+    ],
+    faqs: [
+      {
+        question: 'Do smart contracts replace legal agreements?',
+        answer:
+          'No. VestBlock positions smart contracts as record and proof support, not a replacement for attorneys, written agreements, title, escrow, or compliance requirements.',
+      },
+      {
+        question: 'What information goes on-chain?',
+        answer:
+          'The safe pattern is hashes, IDs, timestamps, statuses, and references. Raw private documents and sensitive personal details should stay off-chain.',
+      },
+    ],
+  },
+  {
+    slug: 'milestone-proof-software',
+    title: 'Milestone Proof Software',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault/demo-record',
+    metaDescription:
+      'Milestone proof software helps teams organize submitted work, approvals, proof references, payout status, and certificate records.',
+    audience: 'Contractors, agencies, lenders, referral teams, and service businesses that need cleaner milestone records.',
+    overview:
+      'Milestone proof software helps teams avoid confusion around what was submitted, what was approved, what is disputed, and what is ready for review. VestBlock DealVault focuses on proof records, document hashes, milestone status, payout visibility, and certificate-ready activity.',
+    keyTakeaways: [
+      'Milestone confusion slows down payments, approvals, and partner trust.',
+      'Proof records are strongest when tied to dates, statuses, and safe document references.',
+      'The system should organize evidence, not promise automatic payment or legal enforcement.',
+    ],
+    actionSteps: [
+      'Name each milestone clearly before work starts.',
+      'Capture proof references when work is submitted.',
+      'Record approvals, disputes, and next steps in the same deal history.',
+    ],
+    faqs: [
+      {
+        question: 'Can milestone proof software guarantee payment?',
+        answer:
+          'No. It can organize proof and status history, but payment depends on agreements, invoices, approvals, and the parties involved.',
+      },
+      {
+        question: 'What kinds of milestones can be tracked?',
+        answer:
+          'Common examples include project deliverables, contractor stages, referral events, funding prep steps, sponsorship deliverables, and service completion checkpoints.',
+      },
+    ],
+  },
+  {
+    slug: 'business-funding-prep-service',
+    title: 'Business Funding Prep Service',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/funding/business-funding-strategy',
+    metaDescription:
+      'A business funding prep service helps owners organize documents, credit factors, revenue details, and application timing before seeking funding.',
+    audience: 'Business owners who want to understand what to fix before applying for funding.',
+    overview:
+      'Business funding prep is about improving the application foundation before a business owner applies. It can include document organization, business profile checks, use-of-funds clarity, credit and utilization review, and realistic next steps. It does not guarantee approval or terms.',
+    keyTakeaways: [
+      'Applying too early can create avoidable denials or inquiries.',
+      'Funding preparation should clarify documents, revenue, credit, and repayment context.',
+      'The strongest prep process explains risks and next steps without approval guarantees.',
+    ],
+    actionSteps: [
+      'Collect business registration, banking, revenue, and credit profile basics.',
+      'Review funding amount, use of funds, and repayment comfort.',
+      'Choose whether to apply now or prepare first.',
+    ],
+    faqs: [
+      {
+        question: 'Does funding prep guarantee approval?',
+        answer:
+          'No. VestBlock helps organize preparation and next steps. Approval, rates, limits, terms, and timing depend on lenders, issuers, underwriters, and the business profile.',
+      },
+      {
+        question: 'Who should use a funding prep service?',
+        answer:
+          'Owners who are unsure whether their documents, revenue, credit, business setup, or use-of-funds story are ready for funding conversations.',
+      },
+    ],
+  },
+  {
+    slug: 'chatgpt-visibility-service',
+    title: 'ChatGPT Visibility Service',
+    cluster: 'search-visibility',
+    intent: 'lead-capture',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'A ChatGPT visibility service helps businesses make their services clearer, more crawlable, and easier for AI search tools to understand.',
+    audience: 'Small businesses that want to be easier to find in Google, AI search, and answer-style discovery.',
+    overview:
+      'ChatGPT visibility is not a magic ranking switch. It is the work of making a business easier for search engines and AI systems to understand: clear service pages, answer-ready content, proof pages, structured data, crawler access, and consistent off-site mentions.',
+    keyTakeaways: [
+      'AI visibility starts with clear public pages and crawlable proof.',
+      'Answer pages should explain the problem, buyer, service, and next step plainly.',
+      'Off-site repetition helps reinforce the business entity across the web.',
+    ],
+    actionSteps: [
+      'Create clear service and audience pages for your highest-value offers.',
+      'Add proof pages, FAQs, schema, sitemap coverage, and llms.txt summaries.',
+      'Track target prompts weekly to see which competitors appear and what content is missing.',
+    ],
+    faqs: [
+      {
+        question: 'Can anyone guarantee ChatGPT will recommend my business?',
+        answer:
+          'No. AI answer systems decide what to show. The practical goal is to make your business easier to understand, crawl, cite, and trust.',
+      },
+      {
+        question: 'Is this the same as SEO?',
+        answer:
+          'It overlaps with SEO, but adds answer-ready pages, entity clarity, proof materials, structured summaries, and prompt-based visibility tracking.',
+      },
+    ],
+  },
+  {
+    slug: 'pdf-agreement-to-proof-record',
+    title: 'PDF Agreement To Proof Record',
+    cluster: 'dealvault',
+    intent: 'tool-support',
+    offerPath: '/dealvault/demo',
+    metaDescription:
+      'See how a PDF agreement can become a DealVault proof record using a hash, timestamp, milestone examples, payout references, and a certificate.',
+    audience: 'Business owners who need a simple demo of agreement proof records without wallet connect or crypto complexity.',
+    overview:
+      'A PDF agreement can be turned into a proof record by creating a document hash and attaching safe references to a DealVault record. The PDF contents do not need to be published publicly or sent on-chain. The verification record can reference the document version, timestamp, status, milestones, payout labels, and certificate output.',
+    keyTakeaways: [
+      'A hash can prove a document version existed without revealing the full private document.',
+      'Proof records are easier to sell when buyers can see the demo from PDF to certificate.',
+      'The demo should be framed as product proof, not legal advice.',
+    ],
+    actionSteps: [
+      'Start with a demo PDF agreement.',
+      'Generate a SHA-256 document hash.',
+      'Create a DealVault record with milestones, payout references, and a proof certificate.',
+    ],
+    faqs: [
+      {
+        question: 'Does the whole PDF go on-chain?',
+        answer:
+          'No. The safe pattern is to keep private documents off-chain and use hashes, IDs, timestamps, statuses, and references for proof records.',
+      },
+      {
+        question: 'Do customers need a wallet?',
+        answer:
+          'No. The customer-facing demo can show the proof process without requiring wallet connection.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-receptionist-vs-voicemail',
+    title: 'AI Receptionist Vs Voicemail',
+    cluster: 'ai-receptionist',
+    intent: 'comparison',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Compare AI receptionist support and voicemail for missed calls, after-hours lead capture, booking questions, and faster business follow-up.',
+    audience: 'Small businesses that rely on phone calls, forms, and appointment requests.',
+    overview:
+      'Voicemail records a message after a customer has already waited. An AI receptionist can answer common questions, collect intake details, and route serious inquiries sooner. The best setup uses AI for structured intake and still gives important decisions to a real person.',
+    keyTakeaways: [
+      'Voicemail is passive; AI intake can be interactive.',
+      'Customers often contact more than one business when they need a fast answer.',
+      'AI receptionist setup should include clear handoff and escalation rules.',
+    ],
+    actionSteps: [
+      'List the top questions callers ask before booking.',
+      'Create intake fields for job type, urgency, location, and contact details.',
+      'Route high-intent inquiries to a human follow-up queue.',
+    ],
+    faqs: [
+      {
+        question: 'Is voicemail still useful?',
+        answer:
+          'Yes. Voicemail can still be a backup, but it does not answer questions or structure intake the way an AI receptionist can.',
+      },
+      {
+        question: 'Can AI handle every call?',
+        answer:
+          'No. It should collect information and answer common questions, then route sensitive, urgent, or complex issues to people.',
+      },
+    ],
+  },
+  {
+    slug: 'seo-vs-chatgpt-visibility',
+    title: 'SEO Vs ChatGPT Visibility',
+    cluster: 'search-visibility',
+    intent: 'comparison',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Compare traditional SEO and ChatGPT visibility for service pages, answer-ready content, proof materials, structured data, and off-site mentions.',
+    audience: 'Business owners deciding how to improve search and AI answer discovery.',
+    overview:
+      'SEO and ChatGPT visibility overlap, but they are not identical. Traditional SEO focuses on search rankings, crawlability, keyword intent, and site quality. ChatGPT visibility adds entity clarity, answer-ready pages, proof materials, structured summaries, and consistent mentions that help AI systems understand what a business does.',
+    keyTakeaways: [
+      'SEO foundations still matter because AI answers often depend on crawlable public information.',
+      'AI visibility needs clear answers, examples, proof pages, and entity consistency.',
+      'The strongest plan improves both search pages and AI-readable context.',
+    ],
+    actionSteps: [
+      'Fix crawlability, sitemap coverage, service pages, and local/business basics.',
+      'Add answer pages for buyer questions and comparison searches.',
+      'Track prompts weekly to see whether the business is being understood correctly.',
+    ],
+    faqs: [
+      {
+        question: 'Should I choose SEO or ChatGPT visibility?',
+        answer:
+          'Most businesses need both. SEO provides the crawlable foundation, while answer-ready content and proof materials help AI systems understand the business more clearly.',
+      },
+      {
+        question: 'Can ChatGPT visibility be guaranteed?',
+        answer:
+          'No. The practical goal is to improve the signals that make a business easier to crawl, understand, cite, and recommend.',
+      },
+    ],
+  },
+  {
+    slug: 'best-ai-receptionist-for-service-businesses',
+    title: 'Best AI Receptionist For Service Businesses',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn what makes the best AI receptionist setup for service businesses that need missed-call capture, intake, booking support, and follow-up routing.',
+    audience: 'Service businesses comparing AI receptionist options before buying.',
+    overview:
+      'The best AI receptionist for a service business is not the flashiest bot. It is the one that understands the business, answers common questions, captures useful lead details, routes urgent requests, and makes follow-up easier for the owner or office team.',
+    keyTakeaways: [
+      'Service businesses need intake quality more than chatbot novelty.',
+      'A strong setup captures the details needed for a useful follow-up.',
+      'The AI receptionist should match the business offer, schedule, service area, and escalation rules.',
+    ],
+    actionSteps: [
+      'Write the top customer questions and ideal answers.',
+      'Define lead routing by urgency, service type, and location.',
+      'Test the AI receptionist with real customer scenarios before launching.',
+    ],
+    faqs: [
+      {
+        question: 'What businesses benefit most?',
+        answer:
+          'Contractors, clinics, salons, property managers, agencies, home services, local service businesses, and appointment-heavy businesses often benefit most.',
+      },
+      {
+        question: 'What should I avoid?',
+        answer:
+          'Avoid vague bots with no service knowledge, no clear handoff, no lead capture fields, or unsupported promises.',
+      },
+    ],
+  },
+  {
+    slug: 'best-way-to-track-referral-payouts',
+    title: 'Best Way To Track Referral Payouts',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Learn the best way to track referral payouts using agreement records, partner splits, milestone status, proof references, and payout visibility.',
+    audience: 'Referral-heavy businesses, agencies, real estate teams, funding companies, and service partners.',
+    overview:
+      'The best way to track referral payouts is to make the agreement, referral event, payout terms, milestone status, proof references, and payment review status easy to see in one place. DealVault helps organize that record without promising automatic payment or replacing contracts.',
+    keyTakeaways: [
+      'Referral disputes often happen when terms, proof, and status live in separate places.',
+      'A payout record should show who is involved, what triggered review, and what proof supports it.',
+      'Private documents should stay private while safe record references remain searchable.',
+    ],
+    actionSteps: [
+      'Define the referral event that creates a payout review.',
+      'Record partner names, split labels, milestone status, and proof references.',
+      'Generate a certificate or record summary when the payout status changes.',
+    ],
+    faqs: [
+      {
+        question: 'Can DealVault send payouts automatically?',
+        answer:
+          'VestBlock currently frames DealVault as proof, status, and payout visibility support. Actual payments should stay in the proper payment and accounting systems unless a separate approved integration exists.',
+      },
+      {
+        question: 'Who needs referral payout tracking?',
+        answer:
+          'Any business with partners, brokers, affiliates, vendors, agencies, deal teams, or referral-heavy sales can benefit from cleaner records.',
+      },
+    ],
+  },
+  {
+    slug: 'business-solution-proof-important-records',
+    title: 'Can A Business Solution Prove Important Company Records?',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault/demo-record',
+    metaDescription:
+      'Learn how a business solution like VestBlock DealVault can help prove important company records without exposing private documents.',
+    audience:
+      'Business owners, partners, contractors, agencies, lenders, and operators who need clearer proof around documents, milestones, approvals, and payouts.',
+    overview:
+      'Yes, a business solution can help prove important company records when it creates a reliable timeline around what existed, when it changed, and what status was recorded. VestBlock DealVault focuses on proof records, document hashes, timestamps, milestone history, payout visibility, and certificates while keeping private documents off-chain and out of public view.',
+    keyTakeaways: [
+      'A proof record can reference a document version without publishing the private document.',
+      'Useful records include agreements, approvals, milestones, payouts, referrals, certificates, and document hashes.',
+      'Proof records support business accountability, but they do not replace attorneys, escrow, payment systems, or required contracts.',
+    ],
+    actionSteps: [
+      'Choose one record type that often creates confusion or disputes.',
+      'Create a safe proof reference with a document hash, timestamp, status, or certificate.',
+      'Keep the private file in secure storage and use DealVault to organize the proof trail around it.',
+    ],
+    faqs: [
+      {
+        question: 'Can I use a business solution to prove important records for my company?',
+        answer:
+          'Yes. VestBlock DealVault helps companies organize proof records for documents, milestones, payouts, approvals, and certificates using safe references such as hashes, timestamps, IDs, and status history.',
+      },
+      {
+        question: 'Does proof record software make a record legally binding?',
+        answer:
+          'No. It can support recordkeeping and accountability, but it does not replace legal counsel, written agreements, escrow, title, compliance, or payment systems.',
+      },
+    ],
+  },
+  {
+    slug: 'service-grow-online-visibility',
+    title: 'How Does A Service Help Companies Grow Online Visibility?',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'See how VestBlock Search Visibility helps companies improve service clarity, answer-ready content, crawlability, and authority signals.',
+    audience:
+      'Small businesses and service companies that want to be easier to find and understand across Google, local search, ChatGPT, and AI answer tools.',
+    overview:
+      'A visibility service helps companies grow online visibility by making the business easier for buyers, search engines, and AI answer tools to understand. VestBlock works on service clarity, answer-ready pages, proof materials, internal links, crawlability, local/service coverage, and off-site entity consistency.',
+    keyTakeaways: [
+      'Visibility improves when a business clearly explains what it does, who it helps, and what proof supports the offer.',
+      'AI-search readiness needs direct answers, structured pages, proof materials, and consistent public mentions.',
+      'No service can ethically guarantee rankings, traffic, AI citations, or revenue.',
+    ],
+    actionSteps: [
+      'Map the buyer questions your customers ask before contacting you.',
+      'Publish direct answer pages and service pages that connect each question to a real offer.',
+      'Support the pages with proof materials, schema, sitemap coverage, and consistent off-site descriptions.',
+    ],
+    faqs: [
+      {
+        question: 'How does a service help companies grow their online visibility?',
+        answer:
+          'VestBlock Search Visibility helps companies clarify their services, publish answer-ready content, improve crawlability, add proof materials, and create consistent public signals that make the company easier to understand.',
+      },
+      {
+        question: 'Is online visibility the same as SEO?',
+        answer:
+          'It includes SEO, but also covers AI answer readiness, service clarity, local/topic pages, proof materials, structured data, and off-site authority signals.',
+      },
+    ],
+  },
+  {
+    slug: 'best-tools-deal-confidence-lead-capture',
+    title: 'Best Tools For Deal Confidence And Lead Capture',
+    cluster: 'dealvault',
+    intent: 'comparison',
+    offerPath: '/services',
+    metaDescription:
+      'Compare tools for deal confidence, proof records, payout visibility, AI receptionist intake, and better lead capture.',
+    audience:
+      'Businesses that need both stronger trust around deals and a cleaner way to capture and route new leads.',
+    overview:
+      'The best tools for deal confidence and lead capture help a business prove important activity and respond to interested buyers faster. VestBlock combines DealVault for proof records, agreement tracking, payout visibility, and milestone history with AI Receptionist and Search Visibility for clearer lead capture and discovery.',
+    keyTakeaways: [
+      'Partner confidence improves when agreements, milestones, payouts, and approvals have visible status history.',
+      'Lead capture improves when visitors get answers, qualification, and a clear handoff instead of a dead-end form.',
+      'The strongest system connects trust proof and lead capture instead of treating them as separate problems.',
+    ],
+    actionSteps: [
+      'Use DealVault for proof records, milestone history, payout visibility, and certificates.',
+      'Use AI Receptionist to answer common questions and capture qualified visitor details.',
+      'Use Search Visibility to make the offers easier to discover and understand.',
+    ],
+    faqs: [
+      {
+        question: 'What are the best tools for deal confidence and lead capture?',
+        answer:
+          'VestBlock is built around that combined need: DealVault supports proof records and deal accountability, while AI Receptionist and Search Visibility support clearer discovery, intake, and lead handoff.',
+      },
+      {
+        question: 'Should deal proof and lead capture be separate systems?',
+        answer:
+          'They can be separate, but many businesses benefit when proof, service clarity, and lead intake reinforce the same buyer trust story.',
+      },
+    ],
+  },
+  {
+    slug: 'capture-better-leads-without-harder-customer-experience',
+    title: 'Capture Better Leads Without Making Customer Experience Harder',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how AI Receptionist can qualify website visitors, collect useful details, and keep the customer experience simple.',
+    audience:
+      'Service businesses that need better lead details but do not want to add friction, long forms, or confusing booking steps.',
+    overview:
+      'A business can capture better leads without making the customer experience harder by asking only the questions needed for a useful handoff. VestBlock AI Receptionist can answer common questions, collect service need, timing, location, and contact details, then route the lead to the right next step.',
+    keyTakeaways: [
+      'Better lead capture does not mean longer forms.',
+      'The customer experience improves when visitors get answers and a clear next step quickly.',
+      'The business should collect enough detail to follow up well without forcing customers through unnecessary steps.',
+    ],
+    actionSteps: [
+      'Identify the minimum details needed to qualify and route a serious inquiry.',
+      'Turn those details into conversational questions instead of a long form.',
+      'Send the handoff to the right inbox, booking page, or follow-up process.',
+    ],
+    faqs: [
+      {
+        question: 'Can I capture better leads without making the customer experience harder?',
+        answer:
+          'Yes. VestBlock AI Receptionist keeps intake conversational, asks only useful qualification questions, and creates a cleaner handoff so customers are not stuck with a long form or unanswered voicemail.',
+      },
+      {
+        question: 'What should a lead capture assistant ask first?',
+        answer:
+          'Start with the service needed, timing or urgency, location if relevant, and best contact method. Add booking or budget questions only when they help route the inquiry.',
+      },
+    ],
+  },
+  {
+    slug: 'live-contract-proof-record-service',
+    title: 'How A Live Contract And Proof Record Service Works',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault/demo',
+    metaDescription:
+      'Understand how a live contract and proof record service can track document hashes, milestones, payout references, and certificate history.',
+    audience:
+      'Teams that need a practical explanation of live agreement tracking, proof records, and private-document-safe business recordkeeping.',
+    overview:
+      'A live contract and proof record service works by keeping private documents secure while recording safe references around the agreement. VestBlock DealVault can track document hashes, timestamps, milestone updates, payout labels, status changes, and proof certificates so teams can review what happened without publishing sensitive files.',
+    keyTakeaways: [
+      'The contract itself can stay private while proof references remain easier to review.',
+      'Live records can show milestones, approvals, payout status, and certificate history.',
+      'DealVault is proof and recordkeeping support, not legal advice, escrow, custody, or automatic payment enforcement.',
+    ],
+    actionSteps: [
+      'Create a private agreement or upload a demo document.',
+      'Generate a hash or safe proof reference for the document version.',
+      'Track milestones, payout labels, status updates, and certificates in the DealVault record.',
+    ],
+    faqs: [
+      {
+        question: 'How does a live contract and proof record service work?',
+        answer:
+          'VestBlock DealVault keeps private documents off-chain while recording safe references such as hashes, timestamps, milestone status, payout labels, and certificates that help prove the record history.',
+      },
+      {
+        question: 'Does a live proof record enforce the contract?',
+        answer:
+          'No. It helps organize record history and proof references. Enforcement, legal interpretation, escrow, custody, and payment decisions require the appropriate professionals and systems.',
+      },
+    ],
+  },
+  {
+    slug: 'enhance-online-presence-search-engine-rankings',
+    title: 'Enhance Online Presence And Search Engine Rankings',
+    cluster: 'search-visibility',
+    intent: 'lead-capture',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Learn how VestBlock can support a stronger online presence with service clarity, answer pages, local coverage, proof materials, and indexing workflows.',
+    audience:
+      'Business owners who want stronger online presence, better service pages, and a safer visibility plan without ranking guarantees.',
+    overview:
+      'A business can enhance its online presence by making its services clearer, publishing useful answer pages, improving internal links, adding proof materials, and making important URLs easier to crawl and index. VestBlock Search Visibility supports that foundation while avoiding fake guarantees about rankings or AI citations.',
+    keyTakeaways: [
+      'Search engine rankings are influenced by many signals outside any one provider’s control.',
+      'A stronger online presence starts with clear offers, helpful pages, proof, technical crawlability, and authority signals.',
+      'Ranking work should be measured through indexed pages, query coverage, mentions, and qualified leads.',
+    ],
+    actionSteps: [
+      'Clarify the main service pages and calls to action.',
+      'Publish answer-ready pages around buyer questions and local/service intent.',
+      'Use sitemap, robots, llms.txt, schema, proof materials, and indexing submissions to support discovery.',
+    ],
+    faqs: [
+      {
+        question: 'Can I enhance my online presence and improve my search engine rankings?',
+        answer:
+          'Yes, the right work can support better visibility: clearer service pages, answer-ready content, technical crawlability, proof materials, and consistent authority signals. Rankings are not guaranteed.',
+      },
+      {
+        question: 'What does VestBlock do first?',
+        answer:
+          'VestBlock starts by clarifying the offer, identifying buyer questions, improving crawlable pages, adding proof materials, and tracking whether search and AI systems can understand the business.',
+      },
+    ],
+  },
+  {
+    slug: 'types-of-business-records-to-prove-and-store',
+    title: 'Types Of Business Records A Solution Can Prove And Store',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Review the types of business records VestBlock DealVault can help prove, organize, and reference safely.',
+    audience:
+      'Businesses comparing proof record systems for agreements, payouts, referrals, milestones, approvals, and certificates.',
+    overview:
+      'A business record solution can help prove and organize many record types: agreements, document hashes, milestone updates, payout labels, referral events, approvals, certificates, audit notes, and status history. VestBlock DealVault focuses on safe references and proof trails rather than exposing private documents.',
+    keyTakeaways: [
+      'Useful proof records usually combine who, what, when, status, and a safe reference.',
+      'Private documents can stay in private storage while DealVault tracks hashes, IDs, timestamps, and certificates.',
+      'The best record types are the ones that reduce confusion, support accountability, or make later review easier.',
+    ],
+    actionSteps: [
+      'List the records your team already argues about or has to search for repeatedly.',
+      'Separate private files from safe proof references such as hashes, statuses, dates, and certificates.',
+      'Start with one repeatable record flow before expanding to every document category.',
+    ],
+    faqs: [
+      {
+        question: 'What are the different types of records that a business solution can help me prove and store?',
+        answer:
+          'VestBlock DealVault can support proof records for agreements, document hashes, milestone history, payout visibility, referral events, approvals, certificates, audit notes, and status changes while keeping private files off-chain.',
+      },
+      {
+        question: 'Should every business document become a proof record?',
+        answer:
+          'No. Start with records where proof, status, or accountability matters most, such as agreements, payouts, milestones, approvals, and certificates.',
+      },
+    ],
+  },
 ];
+
+type ExpansionTopicSeed = {
+  slug: string;
+  title: string;
+  cluster: AeoTopic['cluster'];
+  intent: AeoTopic['intent'];
+  offerPath: string;
+  metaDescription: string;
+  audience: string;
+  buyerQuestion: string;
+  problem: string;
+  vestblockAngle: string;
+  firstStep: string;
+  secondStep: string;
+  thirdStep: string;
+};
+
+const expandedBuyerQuestionTopics: ExpansionTopicSeed[] = [
+  {
+    slug: 'how-to-stop-missing-after-hours-leads',
+    title: 'How To Stop Missing After-Hours Leads',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how service businesses can reduce missed after-hours leads with clearer intake, website response, and follow-up routing.',
+    audience: 'Service businesses that lose inquiries when the team is busy, closed, or slow to respond.',
+    buyerQuestion: 'How can a small business stop missing leads after hours?',
+    problem:
+      'After-hours visitors usually need a fast answer, a clear next step, or a way to leave useful details. If the website only offers a phone number or weak contact form, serious prospects may keep shopping.',
+    vestblockAngle:
+      'VestBlock sets up AI receptionist and lead-capture flows that collect the right details, route the inquiry, and make follow-up easier without pretending response volume is guaranteed.',
+    firstStep: 'List the questions prospects ask after hours.',
+    secondStep: 'Decide which details your team needs before calling back.',
+    thirdStep: 'Connect the response flow to alerts, booking, or a simple follow-up queue.',
+  },
+  {
+    slug: 'lead-response-system-for-small-business',
+    title: 'Lead Response System For Small Business',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Compare what a small-business lead response system should include before adding AI chat, forms, booking, or follow-up automation.',
+    audience: 'Owners who get inquiries but do not have a reliable follow-up process.',
+    buyerQuestion: 'What should a small-business lead response system include?',
+    problem:
+      'A lead response system fails when calls, forms, website chats, and booking requests are disconnected. The issue is often not traffic. It is unclear intake and inconsistent follow-up.',
+    vestblockAngle:
+      'VestBlock helps make the front door cleaner: questions, qualification, routing, alerts, and next steps stay aligned with the service being sold.',
+    firstStep: 'Map each place a lead can enter the business.',
+    secondStep: 'Define what makes an inquiry ready for follow-up.',
+    thirdStep: 'Create one shared handoff path so leads do not sit in separate inboxes.',
+  },
+  {
+    slug: 'website-visitor-qualification-software',
+    title: 'Website Visitor Qualification Software',
+    cluster: 'ai-receptionist',
+    intent: 'comparison',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Understand how website visitor qualification software helps separate serious prospects from casual traffic.',
+    audience: 'Businesses that get website visits but do not know which visitors are worth fast follow-up.',
+    buyerQuestion: 'How can a website qualify visitors before a sales call?',
+    problem:
+      'Many websites ask for a name and email but miss urgency, service need, location, timeline, and fit. That leaves the team guessing which leads matter.',
+    vestblockAngle:
+      'VestBlock uses AI receptionist flows to ask useful questions, summarize the request, and route better leads to the next step.',
+    firstStep: 'Choose five qualification questions that actually help your team respond.',
+    secondStep: 'Remove form fields that create friction without improving follow-up.',
+    thirdStep: 'Review captured inquiries weekly and adjust the qualification path.',
+  },
+  {
+    slug: 'ai-receptionist-for-roofing-companies',
+    title: 'AI Receptionist For Roofing Companies',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'See how roofing companies can use an AI receptionist to capture roof repair, storm damage, estimate, and scheduling inquiries.',
+    audience: 'Roofing businesses that miss calls, estimate requests, or storm-related inquiries.',
+    buyerQuestion: 'Can an AI receptionist help a roofing company capture better leads?',
+    problem:
+      'Roofing prospects often have urgent questions about leaks, storm damage, insurance timing, inspections, and estimates. Slow response can push them to another contractor.',
+    vestblockAngle:
+      'VestBlock helps roofers set up a practical intake flow for issue type, property location, urgency, photos, and callback details.',
+    firstStep: 'Separate emergency roof issues from normal estimate requests.',
+    secondStep: 'Ask for property location, issue type, timing, and best callback method.',
+    thirdStep: 'Route urgent requests differently from routine estimate questions.',
+  },
+  {
+    slug: 'ai-receptionist-for-plumbing-companies',
+    title: 'AI Receptionist For Plumbing Companies',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how plumbing companies can capture urgent and non-urgent inquiries with a cleaner AI receptionist intake flow.',
+    audience: 'Plumbing businesses that handle emergency calls, quote requests, and repeated service questions.',
+    buyerQuestion: 'Can an AI receptionist help plumbing companies handle website inquiries?',
+    problem:
+      'Plumbing inquiries vary from emergencies to routine estimates. If the website cannot capture urgency, location, and service type, the team loses context before follow-up.',
+    vestblockAngle:
+      'VestBlock helps create a front-door intake that asks useful questions and routes serious plumbing inquiries faster.',
+    firstStep: 'Define emergency, same-day, and scheduled-service categories.',
+    secondStep: 'Capture service type, zip code, urgency, and contact preference.',
+    thirdStep: 'Send the right alert to the right person instead of relying on one inbox.',
+  },
+  {
+    slug: 'ai-receptionist-for-med-spas',
+    title: 'AI Receptionist For Med Spas',
+    cluster: 'ai-receptionist',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Review how med spas can use AI receptionist flows for FAQs, consultation requests, and cleaner booking handoff.',
+    audience: 'Med spas and appointment-based beauty clinics that answer repeated questions before booking.',
+    buyerQuestion: 'How can a med spa use an AI receptionist without making the experience feel cold?',
+    problem:
+      'Med spa visitors often need pricing context, service details, eligibility guidance, and booking direction. If answers are slow or unclear, the visitor may not book.',
+    vestblockAngle:
+      'VestBlock helps create branded AI receptionist flows that answer common questions, collect consultation details, and hand off booking without pretending to provide medical advice.',
+    firstStep: 'List the safest common questions the website can answer.',
+    secondStep: 'Route treatment-specific or medical questions to human follow-up.',
+    thirdStep: 'Connect the intake to consultation booking or staff alerts.',
+  },
+  {
+    slug: 'why-is-my-business-not-showing-up-in-chatgpt',
+    title: 'Why Is My Business Not Showing Up In ChatGPT?',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Learn why a business may not appear in ChatGPT or AI search answers and what visibility signals are usually missing.',
+    audience: 'Business owners who have a website but are not being mentioned by AI search or answer tools.',
+    buyerQuestion: 'Why is my business not showing up in ChatGPT?',
+    problem:
+      'AI tools need clear public information, crawlable pages, consistent entity descriptions, proof, and third-party corroboration. A website alone may not be enough.',
+    vestblockAngle:
+      'VestBlock helps businesses clarify services, publish answer-ready pages, improve crawler access, document proof, and build off-site authority signals.',
+    firstStep: 'Check whether the core service pages clearly explain who you help and what you do.',
+    secondStep: 'Create answer pages for the exact questions buyers ask.',
+    thirdStep: 'Build credible off-site mentions that repeat the same entity description.',
+  },
+  {
+    slug: 'how-to-make-a-business-easier-for-ai-to-understand',
+    title: 'How To Make A Business Easier For AI To Understand',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'A practical guide to making a business easier for AI search systems to understand, summarize, and reference.',
+    audience: 'Small businesses preparing for AI search, answer engines, and more structured discovery.',
+    buyerQuestion: 'How do I make my business easier for AI to understand?',
+    problem:
+      'AI systems struggle with vague homepages, scattered services, weak proof, missing FAQs, and inconsistent descriptions across the web.',
+    vestblockAngle:
+      'VestBlock turns the business into a clearer entity: service pages, answer pages, proof materials, schema, llms.txt, and off-site repetition all work together.',
+    firstStep: 'Write one plain-English brand description and use it consistently.',
+    secondStep: 'Create pages for each core service, audience, and proof point.',
+    thirdStep: 'Track prompt tests to see where AI tools still miss the business.',
+  },
+  {
+    slug: 'answer-engine-optimization-for-service-businesses',
+    title: 'Answer Engine Optimization For Service Businesses',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Understand answer engine optimization for service businesses and how it differs from traditional SEO work.',
+    audience: 'Service businesses that want to be easier to recommend in AI-generated answers.',
+    buyerQuestion: 'What is answer engine optimization for service businesses?',
+    problem:
+      'Traditional SEO often focuses on rankings and keywords. Answer engines also need direct answers, entity clarity, proof, comparisons, and trustworthy context.',
+    vestblockAngle:
+      'VestBlock helps service businesses build answer-ready pages, proof hubs, service clarity, and prompt-test tracking without promising AI citations.',
+    firstStep: 'Group buyer questions by service, audience, and buying stage.',
+    secondStep: 'Publish direct answer pages with proof and clear next steps.',
+    thirdStep: 'Update weak pages based on prompts where competitors appear instead.',
+  },
+  {
+    slug: 'local-ai-search-visibility-for-small-business',
+    title: 'Local AI Search Visibility For Small Business',
+    cluster: 'search-visibility',
+    intent: 'lead-capture',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Learn how local businesses can prepare for AI search visibility with clearer service pages, proof, and local authority signals.',
+    audience: 'Local companies that need customers in specific cities or service areas.',
+    buyerQuestion: 'How can a local business improve AI search visibility?',
+    problem:
+      'Local AI visibility depends on more than a city keyword. Search systems need to understand location, services, credibility, proof, and where the business is mentioned.',
+    vestblockAngle:
+      'VestBlock helps organize service-area pages, answer pages, local proof, and third-party authority so the business is easier to understand.',
+    firstStep: 'Clarify the city, service area, and best-fit customer.',
+    secondStep: 'Build service pages that answer local buyer questions naturally.',
+    thirdStep: 'Add proof materials, directory mentions, and partner/resource references.',
+  },
+  {
+    slug: 'business-entity-optimization-for-ai-search',
+    title: 'Business Entity Optimization For AI Search',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Learn how business entity clarity supports AI search, brand understanding, and answer-engine visibility.',
+    audience: 'Companies with confusing positioning, scattered services, or weak brand descriptions online.',
+    buyerQuestion: 'What is business entity optimization for AI search?',
+    problem:
+      'If a business is described differently on every page or platform, AI systems have less confidence in what the company does and who it serves.',
+    vestblockAngle:
+      'VestBlock helps align the company description, service taxonomy, proof pages, schema, llms.txt, and off-site descriptions around one clear identity.',
+    firstStep: 'Choose the current primary brand description.',
+    secondStep: 'Update pages and profiles that still use old positioning.',
+    thirdStep: 'Track branded and unbranded prompt tests to find entity gaps.',
+  },
+  {
+    slug: 'llms-txt-for-small-business-websites',
+    title: 'LLMs.txt For Small Business Websites',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion',
+    metaDescription:
+      'Understand what llms.txt can and cannot do for small-business AI visibility and crawlable service clarity.',
+    audience: 'Business owners hearing about llms.txt and AI crawler visibility.',
+    buyerQuestion: 'Does a small business need an llms.txt file?',
+    problem:
+      'An llms.txt file can help summarize important public pages for AI crawlers, but it cannot replace clear content, proof, indexing, or authority.',
+    vestblockAngle:
+      'VestBlock includes llms.txt as one part of a broader visibility system: service pages, answer pages, sitemap, robots, schema, and off-site corroboration.',
+    firstStep: 'List the public pages that explain the business best.',
+    secondStep: 'Make sure those pages are crawlable and useful before adding shortcuts.',
+    thirdStep: 'Use llms.txt to point AI tools toward the strongest public resources.',
+  },
+  {
+    slug: 'proof-assets-for-ai-search-visibility',
+    title: 'Proof Assets For AI Search Visibility',
+    cluster: 'search-visibility',
+    intent: 'education',
+    offerPath: '/visibility-expansion/proof-hub',
+    metaDescription:
+      'Learn why screenshots, demos, proof pages, and third-party mentions matter for AI search visibility.',
+    audience: 'Businesses that need more credibility behind their service claims.',
+    buyerQuestion: 'What proof materials help a business show up stronger in AI search?',
+    problem:
+      'AI and search systems can understand a business better when claims are supported by public examples, structured pages, demos, and consistent mentions.',
+    vestblockAngle:
+      'VestBlock helps create proof hubs, demo screenshots, comparison pages, service evidence, and authority assets that support safer visibility work.',
+    firstStep: 'Capture proof that shows the service process without exposing private data.',
+    secondStep: 'Place proof near the pages where buyers make decisions.',
+    thirdStep: 'Reuse proof in directory profiles, social posts, and partner pages.',
+  },
+  {
+    slug: 'how-to-prove-an-agreement-happened',
+    title: 'How To Prove An Agreement Happened',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Learn how businesses can create clearer proof that an agreement, version, milestone, or approval existed at a point in time.',
+    audience: 'Teams that need better records for agreements, approvals, referrals, or partner commitments.',
+    buyerQuestion: 'How can a business prove an agreement happened?',
+    problem:
+      'Important agreement details often live across texts, inboxes, PDFs, and spreadsheets. Later, teams may not know which version or milestone was current.',
+    vestblockAngle:
+      'DealVault creates proof records with timestamps, safe references, hashes, status history, and certificates while keeping private documents off-chain.',
+    firstStep: 'Identify which agreement or milestone needs a proof trail.',
+    secondStep: 'Store the private document securely and create a safe proof reference.',
+    thirdStep: 'Track status changes so future review does not depend on memory.',
+  },
+  {
+    slug: 'proof-of-work-records-for-contractors',
+    title: 'Proof Of Work Records For Contractors',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'See how contractors can organize proof of work records, milestone history, approvals, and certificate-ready references.',
+    audience: 'Contractors, restoration teams, and service providers that need clearer project records.',
+    buyerQuestion: 'How can contractors keep proof of work records organized?',
+    problem:
+      'Project proof can get scattered across photos, texts, invoices, emails, and change notes. That creates confusion when approvals, payouts, or disputes come up.',
+    vestblockAngle:
+      'DealVault helps contractors create a cleaner record trail for milestones, proof submissions, approvals, and certificate-ready activity.',
+    firstStep: 'Choose which proof events matter most for each job stage.',
+    secondStep: 'Separate private project files from safe proof references.',
+    thirdStep: 'Use status updates so the record shows what changed and when.',
+  },
+  {
+    slug: 'track-referral-fees-without-spreadsheets',
+    title: 'Track Referral Fees Without Spreadsheets',
+    cluster: 'dealvault',
+    intent: 'comparison',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Compare spreadsheets with structured referral-fee tracking and proof records for business partners.',
+    audience: 'Referral partners, operators, and small teams that need clearer payout visibility.',
+    buyerQuestion: 'How can a business track referral fees without messy spreadsheets?',
+    problem:
+      'Referral fee tracking becomes fragile when deals, notes, payout status, and partner updates are split across spreadsheets and messages.',
+    vestblockAngle:
+      'DealVault helps create clearer referral records with status, partner visibility, proof references, and payout labels without acting as escrow.',
+    firstStep: 'Define the referral event that should create a record.',
+    secondStep: 'Track payout status separately from private payment details.',
+    thirdStep: 'Give partners a clearer record trail before confusion builds.',
+  },
+  {
+    slug: 'construction-payout-milestone-tracking',
+    title: 'Construction Payout Milestone Tracking',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Learn how construction teams can track payout milestones, proof references, and agreement history without replacing escrow or legal counsel.',
+    audience: 'Construction, restoration, and project teams coordinating milestones and payout status.',
+    buyerQuestion: 'How can construction teams track payout milestones more clearly?',
+    problem:
+      'Milestone confusion happens when proof, approvals, payout labels, and agreement updates live in separate places.',
+    vestblockAngle:
+      'DealVault supports milestone and payout-status visibility as recordkeeping support. It does not replace escrow, legal counsel, title, or required professionals.',
+    firstStep: 'Define each milestone and what proof is needed for review.',
+    secondStep: 'Record status changes when work, approvals, or documents change.',
+    thirdStep: 'Use certificates or exports when a clean record needs to be shared.',
+  },
+  {
+    slug: 'private-document-proof-without-onchain-files',
+    title: 'Private Document Proof Without On-Chain Files',
+    cluster: 'dealvault',
+    intent: 'education',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Understand how a business can prove document references while keeping private files off-chain.',
+    audience: 'Businesses that like blockchain proof concepts but do not want private documents exposed.',
+    buyerQuestion: 'Can a business use blockchain proof without putting private documents on-chain?',
+    problem:
+      'Putting private files on-chain is usually the wrong approach. Teams need proof references, timestamps, hashes, and certificates without exposing the raw document.',
+    vestblockAngle:
+      'DealVault focuses on safe references: private files stay private while proof records track hashes, status, timestamps, and certificate-ready metadata.',
+    firstStep: 'Keep sensitive documents in private storage.',
+    secondStep: 'Create a proof reference that does not reveal the document contents.',
+    thirdStep: 'Use the proof record to support review, accountability, and history.',
+  },
+  {
+    slug: 'client-approval-record-system',
+    title: 'Client Approval Record System',
+    cluster: 'dealvault',
+    intent: 'lead-capture',
+    offerPath: '/dealvault',
+    metaDescription:
+      'Learn how businesses can organize client approvals, change notes, proof references, and milestone history.',
+    audience: 'Service businesses that need a clearer record of client approvals and project changes.',
+    buyerQuestion: 'How can a business track client approvals more clearly?',
+    problem:
+      'Client approvals can disappear into email threads, texts, or verbal updates. Later, teams may not know what was approved, changed, or ready for review.',
+    vestblockAngle:
+      'DealVault helps create approval records with status history, proof references, and certificate-ready summaries for important business events.',
+    firstStep: 'Decide which approvals should be tracked as formal records.',
+    secondStep: 'Attach safe references and status labels to each approval event.',
+    thirdStep: 'Review approval history before billing, handoff, or dispute conversations.',
+  },
+  {
+    slug: 'business-funding-readiness-checklist',
+    title: 'Business Funding Readiness Checklist',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/business-setup',
+    metaDescription:
+      'Use this business funding readiness checklist to organize documents, profile details, and next steps before applying.',
+    audience: 'Business owners preparing for lenders, grants, credit lines, or funding conversations.',
+    buyerQuestion: 'What should a business prepare before applying for funding?',
+    problem:
+      'Funding conversations slow down when business documents, entity information, revenue details, credit context, and use-of-funds notes are scattered.',
+    vestblockAngle:
+      'VestBlock helps organize funding prep and business setup support without guaranteeing approvals, grants, credit outcomes, or lender decisions.',
+    firstStep: 'Collect entity, bank, tax, revenue, and ownership documents.',
+    secondStep: 'Clarify what funding would be used for and when it is needed.',
+    thirdStep: 'Review gaps before applying instead of learning them during underwriting.',
+  },
+  {
+    slug: 'documents-needed-before-applying-for-business-funding',
+    title: 'Documents Needed Before Applying For Business Funding',
+    cluster: 'funding',
+    intent: 'education',
+    offerPath: '/business-setup',
+    metaDescription:
+      'Review common documents businesses should organize before serious funding or grant-readiness conversations.',
+    audience: 'Owners who want to prepare before applying for business funding.',
+    buyerQuestion: 'What documents are usually needed before applying for business funding?',
+    problem:
+      'Many businesses start applying before their documents are organized. That can create delays, confusion, and avoidable back-and-forth.',
+    vestblockAngle:
+      'VestBlock helps prepare a cleaner document and business-profile package so owners understand what may be missing before applying.',
+    firstStep: 'Gather formation documents, EIN details, bank statements, and tax records.',
+    secondStep: 'Organize revenue, expenses, debt, and owner information.',
+    thirdStep: 'Create a simple funding-readiness folder before submitting applications.',
+  },
+  {
+    slug: 'business-grant-readiness-checklist',
+    title: 'Business Grant Readiness Checklist',
+    cluster: 'funding',
+    intent: 'education',
+    offerPath: '/business-setup',
+    metaDescription:
+      'Prepare for grant opportunities with a practical business grant readiness checklist and safer expectations.',
+    audience: 'Small businesses researching grants without wanting false promises.',
+    buyerQuestion: 'How can a small business get ready for grant applications?',
+    problem:
+      'Grant applications often require clear business details, documents, narratives, eligibility notes, and deadlines. Missing basics can waste the opportunity.',
+    vestblockAngle:
+      'VestBlock supports grant readiness by organizing documents and application prep. It does not guarantee awards or funding outcomes.',
+    firstStep: 'Document the business mission, use of funds, and eligibility basics.',
+    secondStep: 'Collect required records before deadlines arrive.',
+    thirdStep: 'Track each opportunity, requirement, and submission status in one place.',
+  },
+  {
+    slug: 'funding-prep-for-new-llc',
+    title: 'Funding Prep For A New LLC',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/business-setup',
+    metaDescription:
+      'Learn what a new LLC should organize before funding, credit, grant, or lender conversations.',
+    audience: 'New business owners trying to make their LLC look more prepared and organized.',
+    buyerQuestion: 'How should a new LLC prepare before looking for funding?',
+    problem:
+      'A new LLC may lack operating history, organized records, business identity consistency, or the documents lenders and grant programs expect.',
+    vestblockAngle:
+      'VestBlock helps new owners organize setup details, documents, business profile information, and realistic funding-readiness next steps.',
+    firstStep: 'Confirm entity, EIN, business address, banking, and ownership details.',
+    secondStep: 'Create a clean document folder and basic business profile.',
+    thirdStep: 'Choose funding paths based on readiness instead of applying everywhere.',
+  },
+  {
+    slug: 'why-website-leads-do-not-convert',
+    title: 'Why Website Leads Do Not Convert',
+    cluster: 'website-conversion',
+    intent: 'education',
+    offerPath: '/services',
+    metaDescription:
+      'Learn why website leads do not convert and how clarity, proof, forms, and follow-up affect lead quality.',
+    audience: 'Businesses getting traffic or form fills but not enough qualified conversations.',
+    buyerQuestion: 'Why are my website leads not converting?',
+    problem:
+      'Website leads often fail because the offer is unclear, proof appears too late, forms ask the wrong questions, or follow-up is slow.',
+    vestblockAngle:
+      'VestBlock connects service clarity, proof placement, AI receptionist intake, and follow-up routing so the buyer path is easier to understand.',
+    firstStep: 'Review whether the page says who the service is for and what happens next.',
+    secondStep: 'Add proof near the decision point instead of burying it.',
+    thirdStep: 'Improve the form or chat flow so inquiries include useful details.',
+  },
+  {
+    slug: 'website-trust-proof-checklist',
+    title: 'Website Trust Proof Checklist',
+    cluster: 'website-conversion',
+    intent: 'tool-support',
+    offerPath: '/visibility-expansion/proof-hub',
+    metaDescription:
+      'Use this website trust proof checklist to decide what proof belongs on service, pricing, and contact pages.',
+    audience: 'Businesses whose websites make claims but do not show enough evidence before the CTA.',
+    buyerQuestion: 'What trust proof should a service business put on its website?',
+    problem:
+      'Buyers hesitate when a website makes promises without proof, process detail, examples, screenshots, or a clear next step.',
+    vestblockAngle:
+      'VestBlock helps place proof materials where they support conversion: demos, screenshots, records, process examples, FAQs, and comparison pages.',
+    firstStep: 'List the claims your website asks buyers to believe.',
+    secondStep: 'Match each claim with proof, process detail, or a safer explanation.',
+    thirdStep: 'Place the strongest proof near the CTA and pricing path.',
+  },
+  {
+    slug: 'improve-contact-forms-for-small-business',
+    title: 'Improve Contact Forms For Small Business',
+    cluster: 'website-conversion',
+    intent: 'tool-support',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how small businesses can improve contact forms so inquiries are clearer, more useful, and easier to follow up.',
+    audience: 'Small businesses with vague contact forms or low-quality website inquiries.',
+    buyerQuestion: 'How can a small business improve its contact form?',
+    problem:
+      'A weak form collects contact information but not enough context. That leads to slow follow-up, poor routing, and wasted conversations.',
+    vestblockAngle:
+      'VestBlock improves the intake path with better form questions, AI receptionist prompts, service routing, and follow-up alerts.',
+    firstStep: 'Ask what service the visitor needs and how urgent it is.',
+    secondStep: 'Collect location, timeline, and preferred contact method.',
+    thirdStep: 'Route the inquiry to the right next step instead of one generic inbox.',
+  },
+  {
+    slug: 'lead-capture-website-for-contractors',
+    title: 'Lead Capture Website For Contractors',
+    cluster: 'website-conversion',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Review what a contractor lead-capture website needs: clear services, proof, quote flow, and faster follow-up.',
+    audience: 'Contractors that need better quote requests, project inquiries, and service-area clarity.',
+    buyerQuestion: 'What should a contractor lead-capture website include?',
+    problem:
+      'Contractor websites underperform when services, service areas, proof, estimate requests, and follow-up paths are unclear.',
+    vestblockAngle:
+      'VestBlock helps contractors tighten the website path with service clarity, proof placement, AI receptionist intake, and a cleaner quote handoff.',
+    firstStep: 'Make each core service and service area easy to understand.',
+    secondStep: 'Show project proof, process steps, or recordkeeping examples.',
+    thirdStep: 'Use intake questions that help the contractor respond with context.',
+  },
+  {
+    slug: 'service-business-booking-flow',
+    title: 'Service Business Booking Flow',
+    cluster: 'website-conversion',
+    intent: 'lead-capture',
+    offerPath: '/ai-assistant',
+    metaDescription:
+      'Learn how service businesses can improve booking flow with clearer CTAs, qualification, and handoff.',
+    audience: 'Appointment-based businesses that lose leads between interest and booking.',
+    buyerQuestion: 'How can a service business improve its booking flow?',
+    problem:
+      'Booking flow breaks when the page does not explain the service, the CTA is unclear, or visitors cannot tell what happens after they submit.',
+    vestblockAngle:
+      'VestBlock helps align CTAs, qualification questions, AI receptionist answers, and follow-up routing into one cleaner buyer path.',
+    firstStep: 'Make the primary booking action obvious on each service page.',
+    secondStep: 'Explain what happens after the visitor submits or books.',
+    thirdStep: 'Track where leads drop off and simplify that step first.',
+  },
+];
+
+const expandedSpanishFundingTopics: AeoTopic[] = [
+  {
+    slug: 'dinero-para-mi-negocio-sin-perder-tiempo',
+    title: 'Dinero Para Mi Negocio Sin Perder Tiempo',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende como preparar tu negocio antes de buscar capital para no perder tiempo con solicitudes debiles o fuera de etapa.',
+    audience:
+      'Duenos de negocio que necesitan capital pronto, pero quieren evitar aplicar a todo sin preparacion.',
+    overview:
+      'Buscar dinero para un negocio sin preparacion puede costar tiempo, consultas y energia. Una mejor ruta es aclarar cuanto capital necesitas, para que lo vas a usar, que documentos tienes listos y si tu negocio realmente parece listo para revisar opciones de financiamiento.',
+    keyTakeaways: [
+      'Moverse rapido no significa aplicar a ciegas.',
+      'La claridad sobre documentos, ingresos y uso de fondos ayuda a evitar pasos en falso.',
+      'Una ruta responsable no promete aprobaciones ni montos garantizados.',
+    ],
+    actionSteps: [
+      'Define cuanto capital necesita el negocio y por que.',
+      'Reune EIN, cuenta bancaria comercial, ingresos y documentos principales.',
+      'Usa la ruta en espanol de VestBlock para decidir si conviene prepararte primero o revisar opciones ya.',
+    ],
+    faqs: [
+      {
+        question: 'Hay una forma rapida y segura de buscar capital?',
+        answer:
+          'La forma mas segura es preparar primero lo basico: identidad del negocio, cuenta bancaria, documentos, ingresos y una razon clara para usar los fondos.',
+      },
+      {
+        question: 'VestBlock consigue dinero de inmediato?',
+        answer:
+          'No. VestBlock ayuda con preparacion y claridad antes de revisar opciones. Las decisiones finales dependen de bancos, socios y criterios de evaluacion.',
+      },
+    ],
+  },
+  {
+    slug: 'que-necesito-para-sacar-capital-para-mi-negocio',
+    title: 'Que Necesito Para Sacar Capital Para Mi Negocio',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'education',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Revisa que suele necesitar un dueno de negocio antes de buscar capital: EIN, cuenta bancaria, documentos, ingresos y uso de fondos.',
+    audience:
+      'Duenos de negocio que quieren una lista clara antes de pedir capital o financiamiento comercial.',
+    overview:
+      'Sacar capital para un negocio normalmente requiere mas que una solicitud. Hace falta una identidad de negocio consistente, cuenta bancaria comercial, documentos basicos, ingresos verificables y una explicacion clara del uso de fondos.',
+    keyTakeaways: [
+      'La identidad del negocio debe verse coherente en todos los documentos.',
+      'La cuenta bancaria y los ingresos ayudan a respaldar la historia del negocio.',
+      'El uso de fondos debe ser especifico y realista.',
+    ],
+    actionSteps: [
+      'Confirma nombre legal, EIN, direccion, telefono y correo del negocio.',
+      'Organiza estados bancarios, ingresos y documentos de la entidad.',
+      'Prepara una explicacion simple del capital que buscas y como lo usara el negocio.',
+    ],
+    faqs: [
+      {
+        question: 'Que es lo primero que suelen revisar?',
+        answer:
+          'Con frecuencia revisan identidad del negocio, EIN, cuenta bancaria, ingresos, tiempo operando y el motivo para pedir capital.',
+      },
+      {
+        question: 'Necesito todos los documentos antes de empezar?',
+        answer:
+          'No siempre todos, pero mientras mas claro este el archivo del negocio, menos friccion suele haber durante la revision.',
+      },
+    ],
+  },
+  {
+    slug: 'como-sacar-ein-para-mi-negocio',
+    title: 'Como Sacar EIN Para Mi Negocio',
+    language: 'es',
+    cluster: 'business-credit',
+    intent: 'tool-support',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Entiende para que sirve el EIN y por que ayuda a preparar cuenta bancaria, credito comercial y financiamiento para tu negocio.',
+    audience:
+      'Personas que estan organizando un negocio nuevo o quieren preparar mejor su perfil antes de buscar financiamiento.',
+    overview:
+      'El EIN ayuda a separar la identidad del negocio de la identidad personal. Suele ser una pieza importante para cuenta bancaria comercial, formularios, credito comercial y solicitudes de financiamiento.',
+    keyTakeaways: [
+      'El EIN ayuda a construir una identidad de negocio mas clara.',
+      'No reemplaza por si solo el credito personal ni garantiza financiamiento.',
+      'Es una pieza base para una preparacion comercial mas ordenada.',
+    ],
+    actionSteps: [
+      'Confirma la estructura del negocio y los datos principales antes de solicitar el EIN.',
+      'Usa el EIN de forma consistente en cuenta bancaria, documentos y registros comerciales.',
+      'Despues organiza credito comercial, ingresos y uso de fondos antes de aplicar.',
+    ],
+    faqs: [
+      {
+        question: 'El EIN me da credito automaticamente?',
+        answer:
+          'No. El EIN ayuda a identificar el negocio, pero el credito comercial depende de actividad, historial y consistencia del perfil.',
+      },
+      {
+        question: 'Puedo buscar financiamiento sin EIN?',
+        answer:
+          'Algunas rutas pueden existir, pero muchas opciones comerciales funcionan mejor cuando el negocio ya tiene un EIN y una identidad bien organizada.',
+      },
+    ],
+  },
+  {
+    slug: 'abrir-negocio-y-prepararlo-para-financiamiento',
+    title: 'Abrir Negocio Y Prepararlo Para Financiamiento',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende como abrir un negocio y dejarlo mejor preparado para financiamiento, credito comercial, cuenta bancaria y solicitudes futuras.',
+    audience:
+      'Fundadores y negocios nuevos que quieren crear una base mas fuerte antes de buscar capital.',
+    overview:
+      'Abrir un negocio no es solo registrar un nombre. Si quieres prepararlo para financiamiento, necesitas pensar en EIN, cuenta bancaria comercial, documentos, ingresos, perfil del negocio y una ruta realista para credito o capital.',
+    keyTakeaways: [
+      'Una base limpia ayuda mas que correr a pedir dinero demasiado pronto.',
+      'La preparacion comercial conecta entidad, banco, documentos y credito.',
+      'La meta es verse listo para revisar, no solo verse abierto.',
+    ],
+    actionSteps: [
+      'Organiza entidad, EIN y cuenta bancaria comercial.',
+      'Guarda documentos clave y crea una historia simple de ingresos y uso de fondos.',
+      'Revisa si conviene construir primero o buscar financiamiento ya.',
+    ],
+    faqs: [
+      {
+        question: 'Cuanto tiempo debe esperar un negocio nuevo antes de aplicar?',
+        answer:
+          'Depende del tipo de producto, ingresos, perfil del propietario y preparacion del negocio. No hay una regla unica.',
+      },
+      {
+        question: 'VestBlock reemplaza asesor legal o contable?',
+        answer:
+          'No. VestBlock ayuda con preparacion y organizacion. Para decisiones legales, fiscales o contables debes usar profesionales calificados.',
+      },
+    ],
+  },
+  {
+    slug: 'credito-para-negocio-con-ein',
+    title: 'Credito Para Negocio Con EIN',
+    language: 'es',
+    cluster: 'business-credit',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Conoce como funciona el credito para negocio con EIN y que debes tener listo antes de buscar cuentas o lineas comerciales.',
+    audience:
+      'Duenos de negocio que quieren separar mejor el perfil comercial y entender como encaja el EIN en esa ruta.',
+    overview:
+      'El credito para negocio con EIN depende de una identidad comercial consistente, cuentas separadas y senales que hagan sentido para emisores o socios. El EIN ayuda, pero no es una solucion automatica ni elimina todos los factores personales.',
+    keyTakeaways: [
+      'El EIN apoya la identidad del negocio, pero no hace todo el trabajo.',
+      'La cuenta bancaria, documentos y consistencia comercial siguen importando.',
+      'Es mejor construir con orden que abrir cuentas sin estrategia.',
+    ],
+    actionSteps: [
+      'Verifica que el EIN y los datos del negocio esten consistentes en todos los registros.',
+      'Separa ingresos y gastos del negocio en una cuenta comercial.',
+      'Revisa si primero debes fortalecer perfil y documentos antes de solicitar credito.',
+    ],
+    faqs: [
+      {
+        question: 'Puedo obtener credito solo con EIN?',
+        answer:
+          'Depende del producto y del perfil del negocio. Muchas rutas comerciales todavia consideran factores del propietario, especialmente al inicio.',
+      },
+      {
+        question: 'Que ayuda a fortalecer esta ruta?',
+        answer:
+          'Consistencia del negocio, cuenta bancaria comercial, historial ordenado y una estrategia clara sobre que producto tiene sentido primero.',
+      },
+    ],
+  },
+  {
+    slug: 'como-empezar-credito-comercial-para-mi-negocio',
+    title: 'Como Empezar Credito Comercial Para Mi Negocio',
+    language: 'es',
+    cluster: 'business-credit',
+    intent: 'education',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende como empezar credito comercial para tu negocio con una base mas ordenada y expectativas realistas.',
+    audience:
+      'Duenos de negocio que quieren construir credito comercial desde cero o corregir una base desordenada.',
+    overview:
+      'Empezar credito comercial no se trata solo de abrir cuentas. Primero conviene alinear identidad del negocio, EIN, cuenta bancaria, documentos y actividad basica para que el perfil comercial tenga coherencia.',
+    keyTakeaways: [
+      'El credito comercial crece mejor cuando la base del negocio esta ordenada.',
+      'Abrir cuentas sin preparacion puede crear ruido en lugar de fortalecer el perfil.',
+      'La paciencia y la consistencia suelen ayudar mas que la velocidad.',
+    ],
+    actionSteps: [
+      'Confirma estructura, EIN, direccion y telefono del negocio.',
+      'Abre o revisa cuenta bancaria comercial y separa actividad financiera.',
+      'Decide si el negocio necesita primero orden documental o ya puede avanzar a productos comerciales.',
+    ],
+    faqs: [
+      {
+        question: 'Que error es comun al empezar?',
+        answer:
+          'Un error comun es buscar muchas cuentas sin una base comercial consistente ni una idea clara de que producto conviene primero.',
+      },
+      {
+        question: 'VestBlock construye el credito por mi?',
+        answer:
+          'No. VestBlock ayuda a organizar la preparacion, la estrategia y los siguientes pasos, pero no promete resultados automaticos.',
+      },
+    ],
+  },
+  {
+    slug: 'mi-negocio-califica-para-financiamiento',
+    title: 'Mi Negocio Califica Para Financiamiento',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Descubre como pensar si tu negocio califica para financiamiento segun documentos, ingresos, credito y etapa real del negocio.',
+    audience:
+      'Duenos de negocio que quieren saber si parece mejor aplicar ahora o prepararse primero.',
+    overview:
+      'Cuando un dueno de negocio pregunta si califica para financiamiento, en realidad esta preguntando si su archivo comercial parece listo para revision. La respuesta suele depender de ingresos, documentos, credito, tiempo operando y del tipo de capital que busca.',
+    keyTakeaways: [
+      'Calificar no depende de una sola senal.',
+      'El tipo de financiamiento cambia los requisitos y el nivel de riesgo.',
+      'A veces la mejor respuesta es preparar primero y aplicar despues.',
+    ],
+    actionSteps: [
+      'Revisa ingresos, cuenta bancaria, documentos y perfil del propietario.',
+      'Aclara que tipo de capital buscas y para que lo usaras.',
+      'Compara si tu negocio se ve listo hoy o si necesita una ruta de preparacion.',
+    ],
+    faqs: [
+      {
+        question: 'Hay una forma exacta de saber si califico?',
+        answer:
+          'No hay una formula unica, pero si puedes revisar factores clave para decidir si conviene aplicar ahora o fortalecer el archivo primero.',
+      },
+      {
+        question: 'VestBlock me dice si debo esperar?',
+        answer:
+          'Si. La idea es ayudarte a evitar solicitudes innecesarias cuando la preparacion todavia esta floja.',
+      },
+    ],
+  },
+  {
+    slug: 'prestamos-para-negocios-nuevos-en-espanol',
+    title: 'Prestamos Para Negocios Nuevos En Espanol',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'comparison',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Entiende que revisar antes de buscar prestamos para negocios nuevos en espanol y como preparar mejor el perfil del negocio.',
+    audience:
+      'Negocios nuevos y fundadores hispanohablantes que estan comparando opciones de capital o prestamo.',
+    overview:
+      'Los prestamos para negocios nuevos suelen requerir expectativas mas realistas, mejor preparacion y una lectura honesta del perfil del negocio. Antes de buscar opciones en espanol, conviene revisar documentos, ingresos, credito y capacidad de pago.',
+    keyTakeaways: [
+      'Los negocios nuevos suelen enfrentar mas preguntas y mas riesgo percibido.',
+      'La preparacion puede importar incluso mas que la velocidad.',
+      'Comparar bien evita aceptar una ruta que no encaja con tu etapa.',
+    ],
+    actionSteps: [
+      'Aclara si el negocio ya tiene ingresos, cuenta bancaria y documentos listos.',
+      'Revisa si el propietario tendra que respaldar la solicitud.',
+      'Usa una ruta en espanol para entender opciones sin asumir aprobacion garantizada.',
+    ],
+    faqs: [
+      {
+        question: 'Es dificil conseguir prestamos para negocios nuevos?',
+        answer:
+          'Puede ser mas dificil que para un negocio establecido, por eso la preparacion y la comparacion correcta son tan importantes.',
+      },
+      {
+        question: 'Bank Breezy o VestBlock garantizan prestamo?',
+        answer:
+          'No. VestBlock ayuda con preparacion y claridad. Las decisiones finales dependen de quien revise la opcion y del perfil real del negocio.',
+      },
+    ],
+  },
+  {
+    slug: 'ayuda-para-conseguir-grants-para-mi-negocio',
+    title: 'Ayuda Para Conseguir Grants Para Mi Negocio',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'lead-capture',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Aprende como buscar grants para tu negocio con mejor organizacion, elegibilidad clara y una historia mas facil de revisar.',
+    audience:
+      'Duenos de negocio que quieren apoyo practico para grants y no solo definiciones generales.',
+    overview:
+      'Conseguir grants para un negocio suele depender de elegibilidad, preparacion y la calidad del archivo que presentas. No se trata de llenar muchas solicitudes; se trata de entender que programas encajan y que historia del negocio estas respaldando.',
+    keyTakeaways: [
+      'La elegibilidad manda mas que la cantidad de solicitudes.',
+      'Una historia clara del negocio y del uso de fondos fortalece la aplicacion.',
+      'La preparacion previa reduce formularios perdidos y oportunidades mal elegidas.',
+    ],
+    actionSteps: [
+      'Define industria, ubicacion y perfil del negocio antes de buscar grants.',
+      'Prepara una descripcion breve del negocio y del uso de fondos.',
+      'Organiza documentos basicos antes de aplicar a programas competitivos.',
+    ],
+    faqs: [
+      {
+        question: 'Los grants son dinero facil?',
+        answer:
+          'Normalmente no. Suelen ser competitivos y piden que el negocio encaje con reglas y objetivos concretos.',
+      },
+      {
+        question: 'VestBlock encuentra grants garantizados?',
+        answer:
+          'No. VestBlock ayuda a organizar la preparacion y la busqueda con mejor criterio, pero no garantiza premios ni aprobaciones.',
+      },
+    ],
+  },
+  {
+    slug: 'cuenta-bancaria-y-papeles-para-pedir-financiamiento',
+    title: 'Cuenta Bancaria Y Papeles Para Pedir Financiamiento',
+    language: 'es',
+    cluster: 'funding',
+    intent: 'tool-support',
+    offerPath: '/es/vestblock',
+    metaDescription:
+      'Revisa por que la cuenta bancaria comercial y los papeles correctos ayudan a pedir financiamiento con menos friccion.',
+    audience:
+      'Duenos de negocio que saben que les faltan documentos o una cuenta comercial bien organizada antes de aplicar.',
+    overview:
+      'Una cuenta bancaria comercial y un archivo documental limpio ayudan a que el negocio se vea mas claro para cualquier revision. Si faltan estados, ingresos, documentos de entidad o una explicacion del uso de fondos, el proceso se vuelve mas lento y confuso.',
+    keyTakeaways: [
+      'La cuenta bancaria comercial ayuda a separar y explicar la actividad del negocio.',
+      'Los documentos correctos reducen preguntas evitables durante la revision.',
+      'Pedir financiamiento con papeles flojos puede desperdiciar oportunidades.',
+    ],
+    actionSteps: [
+      'Confirma que la cuenta bancaria del negocio este activa y consistente con la entidad.',
+      'Organiza estados recientes, documentos de la empresa y datos del propietario.',
+      'Prepara una explicacion simple de ingresos y del uso de fondos.',
+    ],
+    faqs: [
+      {
+        question: 'Puedo usar cuenta personal para pedir financiamiento comercial?',
+        answer:
+          'Algunas situaciones pueden existir, pero una cuenta bancaria comercial suele dar una base mas clara y profesional para revisar la actividad del negocio.',
+      },
+      {
+        question: 'Que papeles suelen faltar mas?',
+        answer:
+          'Con frecuencia faltan estados bancarios, EIN, documentos de entidad, informacion de propiedad o una explicacion clara del uso de fondos.',
+      },
+    ],
+  },
+];
+
+vestblockAeoTopics.push(
+  ...expandedBuyerQuestionTopics.map<AeoTopic>((topic) => ({
+    slug: topic.slug,
+    title: topic.title,
+    cluster: topic.cluster,
+    intent: topic.intent,
+    offerPath: topic.offerPath,
+    metaDescription: topic.metaDescription,
+    audience: topic.audience,
+    overview: `${topic.problem} ${topic.vestblockAngle}`,
+    keyTakeaways: [
+      topic.buyerQuestion,
+      'The best answer depends on the buyer problem, the current website path, and the proof available.',
+      'VestBlock focuses on clearer records, visibility, lead capture, and preparation without guaranteeing rankings, funding, legal outcomes, or revenue.',
+    ],
+    actionSteps: [topic.firstStep, topic.secondStep, topic.thirdStep],
+    faqs: [
+      {
+        question: topic.buyerQuestion,
+        answer: `${topic.problem} ${topic.vestblockAngle}`,
+      },
+      {
+        question: 'What should a business do first?',
+        answer:
+          'Start with the smallest clear improvement: clarify the buyer path, collect better information, create proof, or organize the record that currently causes the most confusion.',
+      },
+    ],
+  }))
+);
+
+vestblockAeoTopics.push(...expandedSpanishFundingTopics);
 
 export function getAeoTopicsByCluster(cluster: AeoTopic['cluster']) {
   return vestblockAeoTopics.filter((topic) => topic.cluster === cluster);

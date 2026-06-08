@@ -166,7 +166,7 @@ export const createDealVaultMilestoneSchema = z.object({
   realEstateDealId: z.string().uuid(),
   projectId: z.string().uuid().optional(),
   projectTitle: z.string().trim().optional().or(z.literal("")),
-  projectType: z.string().trim().optional().or(z.literal("")),
+  projectType: dealVaultDealTypeSchema.optional().or(z.literal("")),
   totalAmount: z.number().nonnegative().optional(),
   milestone: dealVaultMilestoneSchema,
 });

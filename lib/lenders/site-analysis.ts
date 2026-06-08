@@ -48,7 +48,6 @@ const CATEGORY_KEYWORDS: Array<{ category: LenderCategory; patterns: RegExp[] }>
   { category: 'invoice_factoring', patterns: [/factoring/i, /accounts receivable/i, /invoice financing/i] },
   { category: 'equipment_finance', patterns: [/equipment financing/i, /equipment loan/i] },
   { category: 'franchise_finance', patterns: [/franchise financing/i] },
-  { category: 'trucking_finance', patterns: [/truck financing/i, /trucking/i, /fleet/i] },
   { category: 'restaurant_finance', patterns: [/restaurant/i, /hospitality/i] },
   { category: 'contractor_finance', patterns: [/contractor/i, /home service/i, /construction business/i] },
   { category: 'cdfi', patterns: [/community development financial institution/i, /\bcdfi\b/i] },
@@ -70,7 +69,6 @@ const CATEGORY_KEYWORDS: Array<{ category: LenderCategory; patterns: RegExp[] }>
   { category: 'nonprofit_microloan', patterns: [/nonprofit/i, /community program/i] },
   { category: 'medical_practice_finance', patterns: [/medical practice/i, /dental practice/i] },
   { category: 'auto_repair_finance', patterns: [/auto repair/i, /automotive/i] },
-  { category: 'logistics_finance', patterns: [/logistics/i, /transportation/i, /freight/i] },
 ]
 
 function normalizeAmount(match: RegExpMatchArray | null) {

@@ -50,6 +50,21 @@ export async function generateMetadata({
       title: page.seoTitle,
       description: page.metaDescription,
       url: absoluteUrl(`/services/${page.slug}`),
+      type: 'article',
+      images: [
+        {
+          url: absoluteUrl('/opengraph-image'),
+          width: 1200,
+          height: 630,
+          alt: 'VestBlock service guide preview',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: page.seoTitle,
+      description: page.metaDescription,
+      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }

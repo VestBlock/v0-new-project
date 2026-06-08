@@ -2,6 +2,7 @@ import type React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
 import { PosthogProvider } from '@/components/providers/posthog-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -20,7 +21,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
+    default: `${vestBlockSiteName} - Real Estate Partner Network`,
     template: `%s | ${vestBlockSiteName}`,
   },
   description: vestBlockDefaultDescription,
@@ -30,33 +31,33 @@ export const metadata: Metadata = {
   applicationName: vestBlockSiteName,
   authors: [{ name: vestBlockSiteName, url: absoluteUrl('/') }],
   keywords: [
-    'AI receptionist',
-    'local visibility growth',
-    'small business growth services',
-    'business funding',
-    'buyer and lender deal flow',
-    'home seller submissions',
-    'business setup',
+    'real estate partner network',
+    'seller property review',
+    'buyer buy box network',
+    'private lender network',
+    'DealVault records',
+    'AI SEO AEO real estate',
     'real estate funding',
+    'developer contractor partner network',
   ],
   openGraph: {
     type: 'website',
     siteName: vestBlockSiteName,
     url: absoluteUrl('/'),
-    title: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
+    title: `${vestBlockSiteName} - Real Estate Partner Network`,
     description: vestBlockDefaultDescription,
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock website preview',
+        alt: 'VestBlock real estate partner network preview',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${vestBlockSiteName} - Deal confidence, stronger visibility, and better lead capture`,
+    title: `${vestBlockSiteName} - Real Estate Partner Network`,
     description: vestBlockDefaultDescription,
     images: [absoluteUrl('/opengraph-image')],
   },
@@ -87,6 +88,7 @@ export default function RootLayout({
             __html: JSON.stringify([organizationJsonLd(), websiteJsonLd()]),
           }}
         />
+        <GoogleAdsProvider />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PosthogProvider>
             <AuthProvider>

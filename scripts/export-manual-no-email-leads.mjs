@@ -8,6 +8,9 @@ const BLOCKED_SUBSTRINGS = [
   '@2x.',
   '@1x.',
   'user@domain.',
+  'your@email.com',
+  'youremail@',
+  'your.name@',
   'john@email.com',
   'example.com',
   'sentry',
@@ -26,6 +29,34 @@ const BLOCKED_LOCAL_PARTS = new Set([
   'do-not-reply',
   'mailer-daemon',
   'postmaster',
+  'info',
+  'hello',
+  'contact',
+  'support',
+  'admin',
+  'office',
+  'sales',
+  'team',
+  'leasing',
+  'tenant',
+  'offers',
+  'main',
+])
+const BLOCKED_DOMAINS = new Set([
+  'domain.com',
+  'email.com',
+  'example.com',
+  'example.org',
+  'example.net',
+  'facebook.com',
+  'fb.com',
+  'instagram.com',
+  'linkedin.com',
+  'messenger.com',
+  'tiktok.com',
+  'twitter.com',
+  'x.com',
+  'webador.com',
 ])
 const SUSPICIOUS_APPENDED_TLD_RE = /\.(com|net|org|co|io|biz|info|us)(office|branch|location|team|corp|group)$/i
 const SOURCE_FAMILY_SEPARATOR = '__'
@@ -43,16 +74,57 @@ const REVENUE_CAMPAIGNS = [
       'blockchain',
       'agreement tracking',
       'proof record',
+      'approval history',
       'referral payout',
+      'referral partner',
+      'referral chain',
       'partner split',
+      'referral split',
+      'commission split',
+      'placement split',
       'milestone',
+      'completion certificate',
       'draw approval',
+      'draw schedule',
+      'staged draw',
+      'draw package',
+      'progress billing',
+      'subcontractor',
+      'rehab contractor',
+      'remodel contractor',
+      'restoration',
+      'mitigation',
       'private lending',
       'hard money',
+      'borrower draw',
+      'loan packaging',
+      'funding referral',
+      'referral desk',
       'joint venture',
       'creative finance',
       'vendor deliverable',
+      'vendor proof',
+      'vendor completion',
+      'work order approval',
+      'maintenance vendor',
+      'property management',
+      'unit turn',
+      'turn make ready',
+      'turnover',
+      'retainer deliverable',
+      'monthly retainer',
+      'statement of work',
+      'sponsorship deliverable',
+      'sponsor fulfillment',
       'placement fee',
+      'contingent search',
+      'staffing guarantee',
+      'recruiter split',
+      'guarantee period',
+      'permit expeditor',
+      'owner rep',
+      'owner approval',
+      'field completion proof',
     ],
   },
   {
@@ -147,6 +219,10 @@ function getEmailQualityIssue(value) {
   const [localPart, domain] = email.split('@')
   if (!localPart || !domain) return 'invalid_format'
   if (BLOCKED_LOCAL_PARTS.has(localPart)) return 'blocked_local_part'
+  if (localPart === 'example' || localPart === 'sample' || localPart.startsWith('test+')) {
+    return 'blocked_local_part'
+  }
+  if (BLOCKED_DOMAINS.has(domain)) return 'blocked_domain'
   if (domain.endsWith('.local')) return 'local_domain'
   if (SUSPICIOUS_APPENDED_TLD_RE.test(domain)) return 'suspicious_domain_suffix'
 
@@ -164,6 +240,10 @@ function getEmailQualityIssue(value) {
 
 function isUsableContactEmail(value) {
   return getEmailQualityIssue(value) === null
+}
+
+function isLeadEmailReady(lead) {
+  return Boolean(lead && lead.email_valid !== false && isUsableContactEmail(lead.email))
 }
 
 function getSourceFamily(sourceKey) {
@@ -218,18 +298,6 @@ function normalizePhone(value) {
   const digits = String(value || '').replace(/\D+/g, '')
   if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1)
   return digits
-}
-
-function normalizeUrl(value) {
-  const raw = String(value || '').trim()
-  if (!raw) return ''
-  try {
-    const url = new URL(raw.startsWith('http') ? raw : `https://${raw}`)
-    const pathname = url.pathname.replace(/\/+$/, '') || '/'
-    return `${url.hostname.replace(/^www\./i, '').toLowerCase()}${pathname === '/' ? '' : pathname}`
-  } catch {
-    return raw.toLowerCase()
-  }
 }
 
 function getHostname(value) {
@@ -345,7 +413,7 @@ async function main() {
   const { data, error } = await admin
     .from('leads')
     .select(
-      'id,created_at,updated_at,status,source,source_url,category,lead_type,name,business_name,phone,email,website,city,state,zip,best_offer,lead_score,urgency_level,contactability_level,pain_signal,outreach_angle,market_segment,niche,delivery_status,suppression_reason,contact_info,form_data,metadata_json,website_audit_json'
+      'id,created_at,updated_at,status,source,source_url,category,lead_type,name,business_name,phone,email,email_valid,website,city,state,zip,best_offer,lead_score,urgency_level,contactability_level,pain_signal,outreach_angle,market_segment,niche,delivery_status,suppression_reason,contact_info,form_data,metadata_json,website_audit_json'
     )
     .gte('created_at', startedAt)
     .order('lead_score', { ascending: false, nullsFirst: false })
@@ -359,7 +427,7 @@ async function main() {
     if (EXCLUDED_STATUSES.has(String(lead.status || '').toLowerCase())) return false
     if (EXCLUDED_DELIVERY_STATUSES.has(String(lead.delivery_status || '').toLowerCase())) return false
     if (hasSuppressionReason(lead)) return false
-    if (isUsableContactEmail(lead.email)) return false
+    if (isLeadEmailReady(lead)) return false
     if (!hasManualPath(lead)) return false
     return true
   })

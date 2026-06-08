@@ -31,6 +31,27 @@ type OpportunityCandidate = {
   safeAutoPublish: boolean
 }
 
+type EntitySeoExpansionOptions = {
+  dryRun?: boolean
+  proactiveCityEnabled?: boolean
+  proactiveCityLimit?: number
+}
+
+type ProactiveCityMarket = {
+  city: string
+  state: string
+  tier: number
+}
+
+type ProactiveCityServiceTemplate = {
+  serviceFocus: string
+  focusTerm: string
+  titlePrefix: string
+  slugPrefix: string
+  clusterType: string
+  keywords: string[]
+}
+
 const serviceRouteMap: Record<string, string> = {
   dealvault: '/dealvault',
   business_funding: '/funding',
@@ -40,6 +61,7 @@ const serviceRouteMap: Record<string, string> = {
   real_estate_funding: '/real-estate-funding',
   sell_property: '/sell',
   grants: '/tools/grants',
+  credit_analysis: '/credit-upload',
   credit_dispute_letters: '/tools/my-dispute-letters',
   financial_growth_services: '/services/financial-growth',
   visibility_expansion: '/visibility-expansion',
@@ -56,12 +78,146 @@ const serviceLabelMap: Record<string, string> = {
   real_estate_funding: 'Real Estate Funding',
   sell_property: 'Sell Property',
   grants: 'Grants',
+  credit_analysis: 'Credit Review Tools',
   credit_dispute_letters: 'Credit Dispute Letters',
-  financial_growth_services: 'Financial Growth Services',
-  visibility_expansion: 'Visibility Expansion SaaS',
+  financial_growth_services: 'Funding & Business Credit Prep Reviews',
+  visibility_expansion: 'Search Visibility',
   business_setup: 'Business Setup',
-  ai_credit_analysis: 'AI Credit Analysis',
+  ai_credit_analysis: 'Credit Review Tools',
 }
+
+const proactiveCityMarkets: ProactiveCityMarket[] = [
+  { city: 'Milwaukee', state: 'WI', tier: 1 },
+  { city: 'Brookfield', state: 'WI', tier: 1 },
+  { city: 'Waukesha', state: 'WI', tier: 1 },
+  { city: 'Madison', state: 'WI', tier: 1 },
+  { city: 'Chicago', state: 'IL', tier: 1 },
+  { city: 'Naperville', state: 'IL', tier: 2 },
+  { city: 'Minneapolis', state: 'MN', tier: 2 },
+  { city: 'Indianapolis', state: 'IN', tier: 2 },
+  { city: 'Detroit', state: 'MI', tier: 2 },
+  { city: 'Grand Rapids', state: 'MI', tier: 2 },
+  { city: 'Columbus', state: 'OH', tier: 2 },
+  { city: 'Cincinnati', state: 'OH', tier: 2 },
+  { city: 'St. Louis', state: 'MO', tier: 2 },
+  { city: 'Kansas City', state: 'MO', tier: 2 },
+  { city: 'Nashville', state: 'TN', tier: 3 },
+  { city: 'Atlanta', state: 'GA', tier: 3 },
+  { city: 'Charlotte', state: 'NC', tier: 3 },
+  { city: 'Tampa', state: 'FL', tier: 3 },
+  { city: 'Orlando', state: 'FL', tier: 3 },
+  { city: 'Dallas', state: 'TX', tier: 3 },
+  { city: 'Houston', state: 'TX', tier: 3 },
+  { city: 'Phoenix', state: 'AZ', tier: 3 },
+  { city: 'Denver', state: 'CO', tier: 3 },
+]
+
+const proactiveCityServiceTemplates: ProactiveCityServiceTemplate[] = [
+  {
+    serviceFocus: 'ai_assistant',
+    focusTerm: 'ai receptionist for home service businesses',
+    titlePrefix: 'AI Receptionist for Home Service Businesses',
+    slugPrefix: 'ai-receptionist-home-service-businesses',
+    clusterType: 'proactive_city_ai_receptionist',
+    keywords: ['AI receptionist', 'missed call lead capture', 'website lead capture'],
+  },
+  {
+    serviceFocus: 'ai_assistant',
+    focusTerm: 'missed call lead capture service',
+    titlePrefix: 'Missed Call Lead Capture Service',
+    slugPrefix: 'missed-call-lead-capture-service',
+    clusterType: 'proactive_city_ai_receptionist',
+    keywords: ['missed call lead capture', 'AI lead capture', 'booking handoff'],
+  },
+  {
+    serviceFocus: 'visibility_expansion',
+    focusTerm: 'search visibility for local businesses',
+    titlePrefix: 'Search Visibility for Local Businesses',
+    slugPrefix: 'search-visibility-local-businesses',
+    clusterType: 'proactive_city_visibility',
+    keywords: ['search visibility', 'ChatGPT visibility', 'answer engine optimization'],
+  },
+  {
+    serviceFocus: 'visibility_expansion',
+    focusTerm: 'chatgpt visibility service for small business',
+    titlePrefix: 'ChatGPT Visibility Service for Small Business',
+    slugPrefix: 'chatgpt-visibility-service-small-business',
+    clusterType: 'proactive_city_visibility',
+    keywords: ['ChatGPT visibility service', 'AI search visibility', 'answer-ready service pages'],
+  },
+  {
+    serviceFocus: 'dealvault',
+    focusTerm: 'referral payout tracking software',
+    titlePrefix: 'Referral Payout Tracking Software',
+    slugPrefix: 'referral-payout-tracking-software',
+    clusterType: 'proactive_city_dealvault',
+    keywords: ['referral payout tracking', 'payout visibility', 'proof records'],
+  },
+  {
+    serviceFocus: 'dealvault',
+    focusTerm: 'agreement tracking software for small business',
+    titlePrefix: 'Agreement Tracking Software for Small Business',
+    slugPrefix: 'agreement-tracking-software-small-business',
+    clusterType: 'proactive_city_dealvault',
+    keywords: ['agreement tracking software', 'milestone tracking', 'business recordkeeping'],
+  },
+  {
+    serviceFocus: 'financial_growth_services',
+    focusTerm: 'business funding prep review',
+    titlePrefix: 'Business Funding Prep Review',
+    slugPrefix: 'business-funding-prep-review',
+    clusterType: 'proactive_city_financial_growth',
+    keywords: ['funding prep review', 'funding readiness', 'document checklist'],
+  },
+  {
+    serviceFocus: 'financial_growth_services',
+    focusTerm: 'business credit builder sprint',
+    titlePrefix: 'Business Credit Builder Sprint',
+    slugPrefix: 'business-credit-builder-sprint',
+    clusterType: 'proactive_city_financial_growth',
+    keywords: ['business credit builder', 'business credit prep', 'EIN setup for credit'],
+  },
+  {
+    serviceFocus: 'grants',
+    focusTerm: 'small business grants checklist',
+    titlePrefix: 'Small Business Grants Checklist',
+    slugPrefix: 'small-business-grants-checklist',
+    clusterType: 'proactive_city_grants',
+    keywords: ['small business grants', 'grant checklist', 'grant application prep'],
+  },
+  {
+    serviceFocus: 'real_estate_funding',
+    focusTerm: 'dscr loan funding prep',
+    titlePrefix: 'DSCR Loan Funding Prep',
+    slugPrefix: 'dscr-loan-funding-prep',
+    clusterType: 'proactive_city_real_estate_funding',
+    keywords: ['DSCR loan', 'rental loan', 'real estate funding'],
+  },
+  {
+    serviceFocus: 'sell_property',
+    focusTerm: 'sell a house fast consultation',
+    titlePrefix: 'Sell A House Fast Consultation',
+    slugPrefix: 'sell-house-fast-consultation',
+    clusterType: 'proactive_city_sell_property',
+    keywords: ['sell a house fast', 'property review', 'cash buyer conversation'],
+  },
+  {
+    serviceFocus: 'credit_analysis',
+    focusTerm: 'credit report analysis tool',
+    titlePrefix: 'Credit Report Analysis Tool',
+    slugPrefix: 'credit-report-analysis-tool',
+    clusterType: 'proactive_city_credit_analysis',
+    keywords: ['credit report analysis', 'credit report review', 'dispute prep'],
+  },
+  {
+    serviceFocus: 'business_setup',
+    focusTerm: 'business funding prep service',
+    titlePrefix: 'Business Funding Prep Service',
+    slugPrefix: 'business-funding-prep-service',
+    clusterType: 'proactive_city_funding_prep',
+    keywords: ['business funding prep', 'funding readiness', 'business setup for funding'],
+  },
+]
 
 function slugify(value: string) {
   return value
@@ -91,6 +247,13 @@ function parseBoolEnv(name: string, fallback: boolean) {
   return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
 }
 
+function rotateForToday<T>(items: T[], salt = 0) {
+  if (!items.length) return []
+  const dayIndex = Math.floor(Date.now() / 86_400_000)
+  const offset = (dayIndex + salt) % items.length
+  return [...items.slice(offset), ...items.slice(0, offset)]
+}
+
 function compact<T>(values: Array<T | null | undefined | false>) {
   return values.filter(Boolean) as T[]
 }
@@ -116,7 +279,7 @@ function deriveLeadServiceFocus(lead: any) {
   if (category === 'seller_lead' || category === 'code_violation') return 'sell_property'
   if (
     offer.includes('dealvault') ||
-    offer.includes('operator accountability') ||
+    offer.includes('accountability') ||
     ((category === 'real_estate' || String(lead.lead_type || '').toLowerCase() === 'real_estate') &&
       /contractor|rehab|property management|investor|landlord|referral|partner|jv|joint venture|seller finance|lease option|subject-to|creative finance|rental/.test(
         typeText
@@ -160,20 +323,66 @@ function buildKeywords(input: { city?: string | null; state?: string | null; foc
   ])
 }
 
+function isProactiveCityOpportunity(opportunity: OpportunityCandidate) {
+  return Boolean((opportunity.sourceSignals as { proactiveCitySeed?: unknown } | undefined)?.proactiveCitySeed)
+}
+
+function buildProactiveBodyMarkdown(opportunity: OpportunityCandidate) {
+  const serviceLabel = serviceLabelMap[opportunity.suggestedServiceFocus] || titleCase(opportunity.suggestedServiceFocus)
+  const route = serviceRouteMap[opportunity.suggestedServiceFocus] || '/services'
+  const location = cityLabel(opportunity.city, opportunity.state) || 'this market'
+  const keywords = opportunity.suggestedKeywords.slice(0, 5)
+
+  return `# ${opportunity.suggestedTitle}
+
+VestBlock created this page to explain how ${serviceLabel.toLowerCase()} can help businesses in ${location} strengthen trust, visibility, and lead capture without making inflated claims.
+
+## Why this matters in ${location}
+
+- Local businesses need clearer service pages that answer buyer questions directly
+- Missed calls, unclear proof records, and weak search visibility can cost real opportunities
+- Buyers and partners move faster when the next step is obvious
+- Search engines and answer engines need specific, crawlable explanations instead of vague service copy
+
+## How VestBlock can help
+
+- Clarify the business offer and route interested visitors to the right next step
+- Organize proof records, milestones, payouts, or intake details when they matter
+- Improve answer-ready service language for people researching this topic
+- Create a more practical handoff from research to ${route}
+
+## Safe expectations
+
+VestBlock can support stronger readiness, clearer records, better lead capture, and improved crawlability. We do not guarantee rankings, AI citations, funding approvals, legal outcomes, payouts, or customer results.
+
+## Keywords this page supports
+
+- ${keywords.join('\n- ')}
+
+## Next step
+
+Open the VestBlock ${serviceLabel.toLowerCase()} page and use it as the practical starting point for ${location}.
+`
+}
+
 function buildBodyMarkdown(opportunity: OpportunityCandidate) {
   const serviceLabel = serviceLabelMap[opportunity.suggestedServiceFocus] || titleCase(opportunity.suggestedServiceFocus)
   const route = serviceRouteMap[opportunity.suggestedServiceFocus] || '/services'
   const location = cityLabel(opportunity.city, opportunity.state) || titleCase(opportunity.entityName)
   const keywords = opportunity.suggestedKeywords.slice(0, 4).join(', ')
 
+  if (isProactiveCityOpportunity(opportunity)) {
+    return buildProactiveBodyMarkdown(opportunity)
+  }
+
   return `# ${opportunity.suggestedTitle}
 
-VestBlock tracks real demand signals around ${location} so we can build more useful pages around funding, automation, real-estate help, and partner coverage. This page is part of that live market expansion workflow.
+VestBlock reviews real customer interest around ${location} so we can publish more useful pages about funding, lead capture, real-estate help, and partner coverage.
 
 ## Why this topic matters in ${location}
 
-- Recent activity in VestBlock showed meaningful demand around this segment
-- The signal was strong enough to prioritize a city, niche, or service page
+- Recent activity showed meaningful interest around this topic
+- The topic was strong enough to prioritize a city, niche, or service page
 - The goal is to connect research with a practical next step instead of publishing generic filler
 - The closest service path for this topic currently routes through ${route}
 
@@ -181,11 +390,11 @@ VestBlock tracks real demand signals around ${location} so we can build more use
 
 - Clarify the local intent behind this topic
 - Connect the topic to a real VestBlock service path
-- Give business owners, sellers, or operators a cleaner starting point
+- Give business owners, sellers, or partners a cleaner starting point
 
 ## How VestBlock fits
 
-VestBlock helps organize the next step with workflows around ${serviceLabel.toLowerCase()}, documentation, lead routing, and operator follow-up. We use real market signals so the page library stays closer to live demand.
+VestBlock helps organize the next step for ${serviceLabel.toLowerCase()}, documentation, lead routing, and follow-up. We use real customer interest so the page library stays closer to what people actually need.
 
 ## Keywords we are targeting
 
@@ -193,7 +402,7 @@ VestBlock helps organize the next step with workflows around ${serviceLabel.toLo
 
 ## Next step
 
-Open the VestBlock workflow for ${serviceLabel.toLowerCase()} and move from research into a more practical plan.
+Open the VestBlock page for ${serviceLabel.toLowerCase()} and move from research into a more practical plan.
 `
 }
 
@@ -532,6 +741,60 @@ function buildBuyerOpportunitiesFromRecord(buyer: {
   return opportunities
 }
 
+function buildProactiveCityOpportunities(existingSlugs: Set<string>, limit: number) {
+  const opportunities: OpportunityCandidate[] = []
+  const markets = rotateForToday(proactiveCityMarkets)
+  const templates = rotateForToday(proactiveCityServiceTemplates, 3)
+  const usedSlugs = new Set(existingSlugs)
+
+  for (const market of markets) {
+    for (const template of templates) {
+      if (opportunities.length >= limit) return opportunities
+
+      const slug = `${template.slugPrefix}-${slugify(market.city)}-${slugify(market.state)}`
+      if (usedSlugs.has(slug)) continue
+
+      const serviceLabel = serviceLabelMap[template.serviceFocus] || titleCase(template.serviceFocus)
+      usedSlugs.add(slug)
+      opportunities.push({
+        entityType: 'city',
+        entityName: template.focusTerm,
+        city: market.city,
+        state: market.state,
+        clusterType: template.clusterType,
+        opportunityScore: 52 + Math.max(0, 4 - market.tier) * 2,
+        suggestedTitle: `${template.titlePrefix} in ${market.city}, ${market.state}`,
+        suggestedSlug: slug,
+        suggestedKeywords: Array.from(
+          new Set([
+            ...buildKeywords({
+              city: market.city,
+              state: market.state,
+              focusTerm: template.focusTerm,
+              serviceLabel,
+            }),
+            ...template.keywords,
+          ])
+        ),
+        suggestedServiceFocus: template.serviceFocus,
+        sourceReason: `Proactive city expansion for ${template.focusTerm} in ${cityLabel(market.city, market.state)} so VestBlock builds local coverage before waiting on lead volume.`,
+        approvalStatus: 'ready',
+        publishStatus: 'queued',
+        sourceSignals: {
+          proactiveCitySeed: true,
+          marketTier: market.tier,
+          focusTerm: template.focusTerm,
+          keywordCluster: template.keywords,
+          language: 'en',
+        },
+        safeAutoPublish: true,
+      })
+    }
+  }
+
+  return opportunities
+}
+
 async function saveImmediateSeoOpportunities(
   candidates: OpportunityCandidate[],
   metadata: { entityType: string; entityId: string; trigger: string }
@@ -608,11 +871,21 @@ export async function queueSeoForBuyerRecord(buyer: {
   )
 }
 
-export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) {
+export async function runEntitySeoExpansion(options: EntitySeoExpansionOptions = {}) {
   const admin = createAdminClient()
+  const proactiveCityEnabled =
+    options.proactiveCityEnabled ?? parseBoolEnv('ENTITY_SEO_PROACTIVE_CITY_ENABLED', true)
+  const proactiveCityLimit = Math.min(
+    12,
+    Math.max(0, options.proactiveCityLimit ?? parseIntEnv('ENTITY_SEO_PROACTIVE_CITY_LIMIT', 6))
+  )
   const run = await createEntitySeoRun({
     runType: options.dryRun ? 'manual_refresh' : 'daily_scan',
-    requestParams: { dryRun: options.dryRun || false },
+    requestParams: {
+      dryRun: options.dryRun || false,
+      proactiveCityEnabled,
+      proactiveCityLimit,
+    },
   })
 
   try {
@@ -646,6 +919,10 @@ export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) 
     ])
 
     const candidates: OpportunityCandidate[] = []
+    const proactiveCityCandidates =
+      proactiveCityEnabled && proactiveCityLimit > 0
+        ? buildProactiveCityOpportunities(existingSlugs, proactiveCityLimit)
+        : []
 
     const leadGroups = new Map<string, { city: string; state: string; sample: any; count: number }>()
     for (const lead of leadsResult.data || []) {
@@ -775,6 +1052,8 @@ export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) 
       })
     }
 
+    candidates.push(...proactiveCityCandidates)
+
     const deduped = new Map<string, OpportunityCandidate>()
     for (const candidate of candidates.sort((a, b) => b.opportunityScore - a.opportunityScore)) {
       if (!deduped.has(candidate.suggestedSlug)) deduped.set(candidate.suggestedSlug, candidate)
@@ -791,6 +1070,7 @@ export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) 
         ok: true,
         count: finalCandidates.length,
         autoPublishedCount: 0,
+        proactiveCityCandidatesCount: proactiveCityCandidates.length,
         opportunities: finalCandidates,
       }
     }
@@ -870,6 +1150,7 @@ export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) 
         opportunityCount: saved.length,
         autoPublishedCount,
         snapshotCount: snapshots.length,
+        proactiveCityCandidatesCount: proactiveCityCandidates.length,
       },
     })
 
@@ -892,6 +1173,7 @@ export async function runEntitySeoExpansion(options: { dryRun?: boolean } = {}) 
       ok: true,
       count: saved.length,
       autoPublishedCount,
+      proactiveCityCandidatesCount: proactiveCityCandidates.length,
       opportunities: saved,
     }
   } catch (error) {

@@ -1,4 +1,5 @@
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
+import { getOutreachV2FitIssue, isOutreachV2Enabled, validateOutreachV2Copy } from '@/lib/leads/outreachV2'
 
 export type RevenueCampaignKey =
   | 'dealvault_smart_contracts'
@@ -33,19 +34,88 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
       'proof record',
       'proof records',
       'document proof',
+      'approval history',
+      'agreement tracker',
       'referral payout',
+      'referral partner',
+      'referral chain',
       'partner split',
+      'commission split',
+      'recruiter split',
+      'co-broker split',
       'payout split',
       'milestone',
+      'milestone tracking',
       'contractor milestone',
       'draw approval',
+      'draw schedule',
+      'progress billing',
+      'subcontractor',
+      'restoration',
+      'mitigation',
       'private lending',
       'hard money',
+      'loan packaging',
+      'funding referral',
       'joint venture',
       'jv',
       'creative finance',
       'vendor deliverable',
+      'work order approval',
+      'maintenance vendor',
+      'property management',
+      'turnover',
+      'home watch',
+      'property watch',
+      'reserve study',
+      'reserve specialist',
+      'retainer deliverable',
+      'lead generation agency',
+      'appointment setting agency',
+      'outsourced sdr',
+      'white label lead generation',
+      'statement of work',
+      'sponsorship deliverable',
+      'influencer marketing agency',
+      'creator campaign',
+      'proof of post',
       'placement fee',
+      'guarantee period',
+      'permit expeditor',
+      'owner rep',
+      'manufacturer rep',
+      'manufacturers representative',
+      'independent sales rep',
+      'draw administration',
+      'private lender servicing',
+    ],
+  },
+  {
+    key: 'funding_prep',
+    label: 'Business Funding Prep',
+    primary: true,
+    sendWeight: 30,
+    minAutoScore: 70,
+    priority: 420,
+    terms: [
+      'business funding',
+      'funding readiness',
+      'funding prep',
+      'capital',
+      'business credit',
+      'credit builder',
+      'credit repair',
+      'grant',
+      'grant/funding roadmap',
+      'funding roadmap',
+      'financing',
+      'trade line',
+      'tradeline',
+      'new business formation',
+      'business setup',
+      'spanish funding',
+      'contract readiness',
+      'gov contract',
     ],
   },
   {
@@ -54,7 +124,7 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
     primary: true,
     sendWeight: 30,
     minAutoScore: 70,
-    priority: 420,
+    priority: 400,
     terms: [
       'ai receptionist',
       'ai appointment',
@@ -71,29 +141,6 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
       'search visibility',
       'answer engine',
       'website weakness',
-    ],
-  },
-  {
-    key: 'funding_prep',
-    label: 'Business Funding Prep',
-    primary: true,
-    sendWeight: 30,
-    minAutoScore: 70,
-    priority: 400,
-    terms: [
-      'business funding',
-      'funding readiness',
-      'funding prep',
-      'capital',
-      'business credit',
-      'credit builder',
-      'grant',
-      'financing',
-      'new business formation',
-      'business setup',
-      'spanish funding',
-      'contract readiness',
-      'gov contract',
     ],
   },
   {
@@ -221,6 +268,11 @@ export function getLeadRevenueFitIssue(
 ) {
   if (!lead) return 'missing_lead'
 
+  if (isOutreachV2Enabled()) {
+    const v2Issue = getOutreachV2FitIssue(lead)
+    if (v2Issue) return v2Issue
+  }
+
   const campaign = classifyLeadRevenueCampaign(lead)
   if (campaign.key === 'other') return 'non_primary_campaign'
   if (!campaign.primary && !options.allowSecondaryCampaigns) {
@@ -248,6 +300,10 @@ export function validateOutreachMessageQuality(input: {
   lead: LeadRecord
   message: Pick<OutreachMessageRecord, 'subject' | 'body' | 'compliance_note'>
 }) {
+  if (isOutreachV2Enabled()) {
+    return validateOutreachV2Copy(input)
+  }
+
   const subject = String(input.message.subject || '').trim()
   const body = String(input.message.body || '').trim()
   const combined = `${subject}\n${body}`

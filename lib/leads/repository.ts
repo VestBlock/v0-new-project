@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
 import { getLeadRevenueFitIssue, getRevenueCampaignPriority } from '@/lib/leads/revenueCampaigns'
+import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
 import type {
   LeadSuppressionRecord,
@@ -13,7 +14,7 @@ import type {
   ScrapeRunRecord,
   TargetMarketRecord,
 } from '@/lib/leads/types'
-import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 
 type ScrapeRunCreate = {
   sourceKey: string
@@ -76,10 +77,59 @@ function shouldIncludeInRevenueOutreach(lead: LeadRecord | null | undefined, all
   return !getLeadRevenueFitIssue(lead, { allowSecondaryCampaigns })
 }
 
+function isLeadEmailReady(lead: LeadRecord | null | undefined) {
+  return Boolean(lead && lead.email_valid !== false && isUsableContactEmail(lead.email))
+}
+
+const WEBMAIL_EMAIL_DOMAINS = new Set(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'aol.com'])
+
+function shouldVerifyExistingLeadEmail(lead: LeadRecord) {
+  if (!lead.website || !isUsableContactEmail(lead.email) || lead.email_valid === false) return false
+
+  const emailDomain = extractEmailDomain(lead.email)
+  const websiteHost = extractWebsiteHost(lead.website)
+  if (!emailDomain || !websiteHost) return false
+
+  return WEBMAIL_EMAIL_DOMAINS.has(emailDomain) || !domainsLookAligned(emailDomain, websiteHost)
+}
+
+function normalizeIncomingWebsite(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`)
+    return `${url.protocol}//${url.host.replace(/^www\./i, '').toLowerCase()}${url.pathname === '/' ? '' : url.pathname}`
+  } catch {
+    return trimmed
+  }
+}
+
+function normalizePhoneDigits(value: string | null | undefined) {
+  return value?.replace(/\D/g, '') || ''
+}
+
+function normalizeBusinessIdentity(value: string | null | undefined) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(inc|llc|ltd|co|company|corp|corporation|the)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasSentOutreachState(lead: LeadRecord | null | undefined) {
+  return Boolean(
+    lead &&
+      (lead.status === 'contacted' || lead.delivery_status === 'sent' || lead.outreach_status === 'sent')
+  )
+}
+
 function leadOutreachPriorityScore(lead: LeadRecord) {
   const createdAtMs = leadCreatedAtMs(lead)
   const ageMs = createdAtMs ? Date.now() - createdAtMs : Number.POSITIVE_INFINITY
-  const hasFreshEmail = isUsableContactEmail(lead.email)
+  const hasFreshEmail = isLeadEmailReady(lead)
   const contactFormCount = getLeadContactFormCount(lead)
   const isFresh = ageMs <= 3 * 24 * 60 * 60 * 1000
   const isPriorityDirectorySource =
@@ -120,7 +170,8 @@ function extractEmailDomain(email: string | null | undefined) {
 function extractWebsiteHost(website: string | null | undefined) {
   if (!website) return null
   try {
-    return new URL(website).host.replace(/^www\./i, '').toLowerCase()
+    const normalized = /^https?:\/\//i.test(website) ? website : `https://${website}`
+    return new URL(normalized).host.replace(/^www\./i, '').toLowerCase()
   } catch {
     return null
   }
@@ -135,9 +186,10 @@ function domainsLookAligned(emailDomain: string, websiteHost: string) {
 }
 
 function hasDirectBusinessEmail(lead: LeadRecord | null | undefined) {
-  if (!lead || !isUsableContactEmail(lead.email)) return false
-  const emailDomain = extractEmailDomain(lead.email)
-  const websiteHost = extractWebsiteHost(lead.website)
+  if (!isLeadEmailReady(lead)) return false
+  const currentLead = lead as LeadRecord
+  const emailDomain = extractEmailDomain(currentLead.email)
+  const websiteHost = extractWebsiteHost(currentLead.website)
   if (!emailDomain || !websiteHost) return false
   return domainsLookAligned(emailDomain, websiteHost)
 }
@@ -150,7 +202,7 @@ function messageSendPriorityScore(message: OutreachMessageRecord & { leads: Lead
     (lead ? leadOutreachPriorityScore(lead) : 0) +
     (message.status === 'approved' ? 500 : 0) +
     (hasDirectBusinessEmail(lead) ? 240 : 0) +
-    (isUsableContactEmail(lead?.email) ? 160 : 0) +
+    (isLeadEmailReady(lead) ? 160 : 0) +
     Math.min(approvedAgeHours, 96)
   )
 }
@@ -163,8 +215,8 @@ function sortMessagesForSendQueue(rows: Array<OutreachMessageRecord & { leads: L
     const rightApproved = right.status === 'approved'
     if (leftApproved !== rightApproved) return leftApproved ? -1 : 1
 
-    const leftUsableEmail = leftLead ? isUsableContactEmail(leftLead.email) : false
-    const rightUsableEmail = rightLead ? isUsableContactEmail(rightLead.email) : false
+    const leftUsableEmail = isLeadEmailReady(leftLead)
+    const rightUsableEmail = isLeadEmailReady(rightLead)
     if (leftUsableEmail !== rightUsableEmail) return leftUsableEmail ? -1 : 1
 
     const leftDirectBusinessEmail = hasDirectBusinessEmail(leftLead)
@@ -176,6 +228,93 @@ function sortMessagesForSendQueue(rows: Array<OutreachMessageRecord & { leads: L
 
     return messageQueuedAtMs(left) - messageQueuedAtMs(right)
   })
+}
+
+async function findExistingLeadByExternalId(
+  admin: ReturnType<typeof createAdminClient>,
+  input: NormalizedLeadInput
+) {
+  if (!input.externalId) return null
+
+  const { data, error } = await admin
+    .from('leads')
+    .select('*')
+    .eq('source', input.source)
+    .eq('external_id', input.externalId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data ? { lead: data as LeadRecord, matchedBy: 'external_id' as const } : null
+}
+
+async function findDuplicateLead(
+  admin: ReturnType<typeof createAdminClient>,
+  input: NormalizedLeadInput
+) {
+  const email = normalizeEmailAddress(input.email)
+  if (isUsableContactEmail(email)) {
+    const { data, error } = await admin
+      .from('leads')
+      .select('*')
+      .ilike('email', email)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+
+    if (error) throw error
+    const match = (data || [])[0]
+    if (match) return { lead: match as LeadRecord, matchedBy: 'email' as const }
+  }
+
+  const incomingHost = extractWebsiteHost(input.website)
+  if (incomingHost) {
+    const { data, error } = await admin
+      .from('leads')
+      .select('*')
+      .not('website', 'is', null)
+      .ilike('website', `%${incomingHost}%`)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(10)
+
+    if (error) throw error
+    const match = ((data || []) as LeadRecord[]).find(
+      (lead) => extractWebsiteHost(lead.website) === incomingHost
+    )
+    if (match) return { lead: match, matchedBy: 'website_host' as const }
+  }
+
+  const incomingPhoneDigits = normalizePhoneDigits(input.phone)
+  if (input.phone && incomingPhoneDigits.length >= 10) {
+    const { data, error } = await admin
+      .from('leads')
+      .select('*')
+      .eq('phone', input.phone)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+
+    if (error) throw error
+    const match = (data || [])[0]
+    if (match) return { lead: match as LeadRecord, matchedBy: 'phone' as const }
+  }
+
+  const incomingBusinessName = normalizeBusinessIdentity(input.businessName || input.name)
+  if (incomingBusinessName && input.city && input.state) {
+    const { data, error } = await admin
+      .from('leads')
+      .select('*')
+      .ilike('city', input.city)
+      .ilike('state', input.state)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(25)
+
+    if (error) throw error
+    const match = ((data || []) as LeadRecord[]).find((lead) => {
+      const existingName = normalizeBusinessIdentity(lead.business_name || lead.name)
+      return existingName && existingName === incomingBusinessName
+    })
+    if (match) return { lead: match, matchedBy: 'business_city_state' as const }
+  }
+
+  return null
 }
 
 export async function startScrapeRun(input: ScrapeRunCreate) {
@@ -258,34 +397,41 @@ export async function finishScrapeRun(
 
 export async function upsertLead(input: NormalizedLeadInput) {
   const admin = createAdminClient()
-  const existingLead =
-    input.externalId
-      ? await admin
-          .from('leads')
-          .select('*')
-          .eq('source', input.source)
-          .eq('external_id', input.externalId)
-          .maybeSingle()
-          .then(({ data, error }) => {
-            if (error) throw error
-            return (data || null) as LeadRecord | null
-          })
-      : null
+  const existingMatch =
+    (await findExistingLeadByExternalId(admin, input)) || (await findDuplicateLead(admin, input))
+  const existingLead = existingMatch?.lead || null
+  const normalizedEmail = isUsableContactEmail(input.email)
+    ? normalizeEmailAddress(input.email)
+    : input.email?.trim() || null
+  const normalizedWebsite = normalizeIncomingWebsite(input.website)
+  const preserveSentState = hasSentOutreachState(existingLead)
+  const duplicateMetadata =
+    existingLead && existingMatch?.matchedBy !== 'external_id'
+      ? {
+          dedupe: {
+            matchedAt: new Date().toISOString(),
+            matchedBy: existingMatch?.matchedBy || 'unknown',
+            matchedLeadId: existingLead.id,
+            incomingSource: input.source,
+            incomingExternalId: input.externalId || null,
+          },
+        }
+      : {}
 
   const payload = {
     lead_type: input.leadType,
-    owner_user_id: input.ownerUserId || null,
-    source: input.source,
-    source_url: input.sourceUrl || null,
-    category: input.category || null,
-    external_id: input.externalId || null,
+    owner_user_id: input.ownerUserId || existingLead?.owner_user_id || null,
+    source: existingLead && existingMatch?.matchedBy !== 'external_id' ? existingLead.source || input.source : input.source,
+    source_url: pickIncomingString(input.sourceUrl, existingLead?.source_url),
+    category: input.category || existingLead?.category || null,
+    external_id: existingLead && existingMatch?.matchedBy !== 'external_id' ? existingLead.external_id || null : input.externalId || null,
     name: pickIncomingString(input.name, existingLead?.name),
     business_name: pickIncomingString(input.businessName, existingLead?.business_name),
     property_address: pickIncomingString(input.propertyAddress, existingLead?.property_address),
     mailing_address: pickIncomingString(input.mailingAddress, existingLead?.mailing_address),
     phone: pickIncomingString(input.phone, existingLead?.phone),
-    email: pickIncomingString(input.email, existingLead?.email),
-    website: pickIncomingString(input.website, existingLead?.website),
+    email: pickIncomingString(normalizedEmail, existingLead?.email),
+    website: pickIncomingString(normalizedWebsite, existingLead?.website),
     city: pickIncomingString(input.city, existingLead?.city),
     state: pickIncomingString(input.state, existingLead?.state),
     zip: pickIncomingString(input.zip, existingLead?.zip),
@@ -293,14 +439,14 @@ export async function upsertLead(input: NormalizedLeadInput) {
     pain_signal: pickIncomingString(input.painSignal, existingLead?.pain_signal),
     best_offer: input.bestOffer || existingLead?.best_offer || null,
     niche: pickIncomingString(input.niche, existingLead?.niche),
-    target_market_id: input.targetMarketId || null,
-    expansion_batch_id: input.expansionBatchId || null,
+    target_market_id: input.targetMarketId || existingLead?.target_market_id || null,
+    expansion_batch_id: input.expansionBatchId || existingLead?.expansion_batch_id || null,
     campaign_name: input.campaignName || existingLead?.campaign_name || null,
     email_valid: pickIncomingBoolean(input.emailValid, existingLead?.email_valid),
     bounce_risk_score: pickIncomingNumber(input.bounceRiskScore, existingLead?.bounce_risk_score) ?? 0,
-    delivery_status: input.deliveryStatus || existingLead?.delivery_status || 'not_sent',
-    suppression_reason: input.suppressionReason || null,
-    imported_at: input.importedAt || null,
+    delivery_status: preserveSentState ? existingLead?.delivery_status || 'sent' : input.deliveryStatus || existingLead?.delivery_status || 'not_sent',
+    suppression_reason: input.suppressionReason || existingLead?.suppression_reason || null,
+    imported_at: input.importedAt || existingLead?.imported_at || null,
     outreach_angle: input.outreachAngle || existingLead?.outreach_angle || null,
     market_segment: input.marketSegment || existingLead?.market_segment || null,
     next_follow_up_at: input.nextFollowUpAt || existingLead?.next_follow_up_at || null,
@@ -308,8 +454,8 @@ export async function upsertLead(input: NormalizedLeadInput) {
       ...(existingLead?.website_audit_json || {}),
       ...(input.websiteAudit || {}),
     },
-    mailing_matches_property: input.mailingMatchesProperty ?? null,
-    status: input.status || existingLead?.status || 'new',
+    mailing_matches_property: input.mailingMatchesProperty ?? existingLead?.mailing_matches_property ?? null,
+    status: preserveSentState ? existingLead?.status || 'contacted' : input.status || existingLead?.status || 'new',
     notes: input.notes || existingLead?.notes || null,
     contact_info: {
       ...(existingLead?.contact_info || {}),
@@ -322,14 +468,18 @@ export async function upsertLead(input: NormalizedLeadInput) {
     metadata_json: {
       ...(existingLead?.metadata_json || {}),
       ...(input.metadata || {}),
+      ...duplicateMetadata,
     },
   }
 
-  let query = admin.from('leads').upsert(payload, {
-    onConflict: input.externalId ? 'source,external_id' : undefined,
-  })
-
-  if (!input.externalId) {
+  let query
+  if (existingLead?.id && existingMatch?.matchedBy !== 'external_id') {
+    query = admin.from('leads').update(payload).eq('id', existingLead.id)
+  } else if (input.externalId) {
+    query = admin.from('leads').upsert(payload, {
+      onConflict: 'source,external_id',
+    })
+  } else {
     query = admin.from('leads').insert(payload)
   }
 
@@ -405,7 +555,19 @@ export async function saveOutreachMessages(
   }>
 ) {
   const admin = createAdminClient()
-  const payload = rows.map((row) => ({
+  const channels = Array.from(new Set(rows.map((row) => row.channel).filter(Boolean)))
+  const { data: existingMessages, error: existingError } = channels.length
+    ? await admin.from('outreach_messages').select('*').eq('lead_id', leadId).in('channel', channels)
+    : { data: [], error: null }
+
+  if (existingError) throw existingError
+
+  const preservedMessages = ((existingMessages || []) as OutreachMessageRecord[]).filter(
+    (row) => row.status === 'sent' || Boolean(row.sent_at)
+  )
+  const preservedChannels = new Set<string>(preservedMessages.map((row) => row.channel))
+  const writableRows = rows.filter((row) => !preservedChannels.has(row.channel))
+  const payload = writableRows.map((row) => ({
     lead_id: leadId,
       channel: row.channel,
       subject: row.subject || null,
@@ -418,24 +580,28 @@ export async function saveOutreachMessages(
       last_generated_at: new Date().toISOString(),
     }))
 
+  if (!payload.length) return preservedMessages
+
   const [{ data, error }, { error: leadError }] = await Promise.all([
     admin
       .from('outreach_messages')
       .upsert(payload, { onConflict: 'lead_id,channel' })
       .select('*'),
-    admin
-      .from('leads')
-      .update({
-        status: 'outreach_ready',
-        outreach_status: 'needs_review',
-        last_outreach_generated_at: new Date().toISOString(),
-      })
-      .eq('id', leadId),
+    preservedMessages.some((row) => row.channel === 'email')
+      ? Promise.resolve({ error: null })
+      : admin
+          .from('leads')
+          .update({
+            status: 'outreach_ready',
+            outreach_status: 'needs_review',
+            last_outreach_generated_at: new Date().toISOString(),
+          })
+          .eq('id', leadId),
   ])
 
   if (error) throw error
   if (leadError) throw leadError
-  return (data || []) as OutreachMessageRecord[]
+  return [...preservedMessages, ...((data || []) as OutreachMessageRecord[])]
 }
 
 export async function updateLeadRecord(
@@ -534,7 +700,6 @@ export async function listLeadsForEmailEnrichment(limit = 60) {
   const { data, error } = await admin
     .from('leads')
     .select('*')
-    .is('email', null)
     .not('website', 'is', null)
     .not('status', 'in', '(closed,closed_won,closed_lost,disqualified,do_not_contact)')
     .order('lead_score', { ascending: false, nullsFirst: false })
@@ -544,6 +709,10 @@ export async function listLeadsForEmailEnrichment(limit = 60) {
   if (error) throw error
 
   const filtered = ((data || []) as LeadRecord[]).filter((lead) => {
+    const needsEmail = !isUsableContactEmail(lead.email) || lead.email_valid === false
+    const needsVerification = shouldVerifyExistingLeadEmail(lead)
+    if (!needsEmail && !needsVerification) return false
+
     const enrichment =
       typeof lead.automation_flags_json?.emailEnrichment === 'object' && lead.automation_flags_json.emailEnrichment
         ? (lead.automation_flags_json.emailEnrichment as Record<string, unknown>)
@@ -566,6 +735,7 @@ export async function listLeadsForEmailEnrichment(limit = 60) {
 export async function listLeadsNeedingOutreach(limit = 100) {
   const admin = createAdminClient()
   const allowSecondaryCampaigns = allowSecondaryRevenueOutreach()
+  const fetchLimit = Math.min(Math.max(limit * 12, 500), 2500)
   const { data, error } = await admin
     .from('leads')
     .select('*')
@@ -573,12 +743,13 @@ export async function listLeadsNeedingOutreach(limit = 100) {
     .in('outreach_status', ['not_started', 'failed'])
     .order('lead_score', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(limit * 4)
+    .limit(fetchLimit)
 
   if (error) throw error
   const filtered = ((data || []) as LeadRecord[]).filter(
     (lead) =>
-      !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(lead.source, 'google_places_businesses')) &&
+      (isOutreachV2Enabled() ||
+        !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(lead.source, 'google_places_businesses'))) &&
       shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
   )
   return sortLeadsForOutreach(filtered).slice(0, limit)
@@ -591,29 +762,37 @@ export async function listApprovedEmailOutreach(limit = 50) {
     .select('*, leads(*)')
     .eq('channel', 'email')
     .eq('status', 'approved')
+    .is('sent_at', null)
     .order('approved_at', { ascending: true, nullsFirst: false })
     .limit(limit)
 
   if (error) throw error
-  return (data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>
+  return ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter(
+    (row) => row.leads?.delivery_status !== 'sent' && row.leads?.outreach_status !== 'sent'
+  )
 }
 
 export async function listEmailOutreachForSendQueue(limit = 75) {
   const admin = createAdminClient()
   const allowSecondaryCampaigns = allowSecondaryRevenueSendQueue()
+  const fetchLimit = Math.min(Math.max(limit * 50, 250), 2000)
   const { data, error } = await admin
     .from('outreach_messages')
     .select('*, leads(*)')
     .eq('channel', 'email')
-    .in('status', ['approved', 'needs_review'])
+    .in('status', ['approved', 'queued', 'needs_review'])
+    .is('sent_at', null)
     .order('approved_at', { ascending: true, nullsFirst: false })
     .order('last_generated_at', { ascending: true, nullsFirst: false })
-    .limit(limit * 4)
+    .limit(fetchLimit)
 
   if (error) throw error
   const filtered = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter(
-    (row) =>
-      !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(row.leads?.source, 'google_places_businesses')) &&
+      (row) =>
+      row.leads?.delivery_status !== 'sent' &&
+      row.leads?.outreach_status !== 'sent' &&
+      (isOutreachV2Enabled() ||
+        !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(row.leads?.source, 'google_places_businesses'))) &&
       shouldIncludeInRevenueOutreach(row.leads, allowSecondaryCampaigns)
   )
   return sortMessagesForSendQueue(filtered).slice(0, limit)

@@ -14,7 +14,15 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
     const dryRun = ['1', 'true', 'yes'].includes(url.searchParams.get('dryRun')?.toLowerCase() || '')
-    const result = await runEntitySeoExpansion({ dryRun })
+    const proactiveCityEnabledParam = url.searchParams.get('proactiveCityEnabled')
+    const proactiveCityLimitParam = Number.parseInt(url.searchParams.get('proactiveCityLimit') || '', 10)
+    const result = await runEntitySeoExpansion({
+      dryRun,
+      proactiveCityEnabled: proactiveCityEnabledParam
+        ? ['1', 'true', 'yes'].includes(proactiveCityEnabledParam.toLowerCase())
+        : undefined,
+      proactiveCityLimit: Number.isFinite(proactiveCityLimitParam) ? proactiveCityLimitParam : undefined,
+    })
     return NextResponse.json({ success: true, dryRun, ...result })
   } catch (error) {
     return NextResponse.json(

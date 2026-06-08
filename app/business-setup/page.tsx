@@ -48,7 +48,7 @@ const nextSteps = [
     description:
       'Review funding options based on credit, revenue, documents, and business stage.',
     href: '/funding',
-    cta: 'View funding options',
+    cta: 'Run free funding check',
   },
   {
     title: 'Spanish funding support',
@@ -79,12 +79,12 @@ export default function BusinessSetupPage() {
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Button asChild>
-                <Link href="/tools/business-credit">
-                  Build funding roadmap <ArrowRight className="ml-2 h-4 w-4" />
+                <Link href="/funding">
+                  Check funding readiness <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/tools/grants">Find grant matches</Link>
+                <Link href="/pricing#funding-assistant-plans">See paid prep options</Link>
               </Button>
             </div>
           </div>

@@ -29,7 +29,6 @@ export const DEFAULT_LENDER_DISCOVERY_NICHES = [
   'equipment financing service',
   'small business lender',
   'SBA lender',
-  'truck financing',
   'restaurant financing',
   'contractor financing',
   'community development financial institution',

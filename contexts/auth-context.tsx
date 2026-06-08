@@ -338,19 +338,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!authData.user)
         throw new Error('Sign up succeeded but no user was returned.');
 
-      void fetch('/api/auth/post-signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          fullName,
-          userId: authData.user.id,
-        }),
-      }).catch((emailError) => {
-        console.warn('Post-signup email request failed:', emailError);
-      });
+      try {
+        const postSignupResponse = await fetch('/api/auth/post-signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            fullName,
+            userId: authData.user.id,
+          }),
+        });
+
+        if (!postSignupResponse.ok) {
+          console.warn(
+            'Post-signup growth system provisioning failed:',
+            await postSignupResponse.text()
+          );
+        }
+      } catch (postSignupError) {
+        console.warn('Post-signup growth system request failed:', postSignupError);
+      }
 
       captureClientEvent(analyticsEvents.authSignUpCompleted, {
         email_domain: email.split('@')[1] || 'unknown',
@@ -359,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       toast({
         title: 'Success',
-        description: 'Account created. Please check your email to verify.',
+        description: 'Account created. Your Growth System is being prepared now.',
       });
       router.push(redirectTo || '/login');
     } catch (error: any) {

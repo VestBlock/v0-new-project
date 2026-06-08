@@ -378,7 +378,7 @@ function CreditUploadContent() {
             <AlertTitle>Unlock Your Full Potential!</AlertTitle>
             <AlertDescription>
               Upgrade to Pro to access our full suite of AI-powered tools,
-              including the Super Dispute Letter generator and personalized
+              including the advanced dispute draft builder and personalized
               financial roadmaps.
             </AlertDescription>
             <div className="mt-4">
@@ -413,7 +413,7 @@ function CreditUploadContent() {
               Credit Report Upload
             </h1>
             <p className="text-xl text-foreground mb-6">
-              Securely upload your credit report to our encrypted storage system
+              Securely upload your credit report to encrypted storage
             </p>
 
             <div className="grid md:grid-cols-3 gap-6 mb-8">

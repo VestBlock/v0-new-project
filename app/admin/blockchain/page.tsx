@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { checkAdminAccess } from "@/lib/auth/admin";
+import { getDealVaultContractAddresses } from "@/lib/blockchain/chains";
 import { getDealVaultAdmin } from "@/lib/dealvault/server";
 import {
   getDealVaultDeploymentArtifacts,
@@ -46,6 +47,7 @@ export default async function AdminBlockchainPage() {
   const admin = getDealVaultAdmin();
   const network = process.env.NEXT_PUBLIC_BLOCKCHAIN_NETWORK || null;
   const chainId = process.env.NEXT_PUBLIC_CHAIN_ID || null;
+  const contractAddresses = getDealVaultContractAddresses();
   const { deploymentPath, smokePath, deployment, smoke } = await getDealVaultDeploymentArtifacts(network);
   const explorerBaseUrl = getDealVaultExplorerBaseUrl(network);
   const opsSnapshot = await getDealVaultOperationalSnapshot(admin).catch(() => null);
@@ -54,12 +56,15 @@ export default async function AdminBlockchainPage() {
     ["Feature flag", process.env.NEXT_PUBLIC_ENABLE_DEALVAULT === "true" ? "Enabled" : "Disabled"],
     ["Chain ID", chainId || "Not configured"],
     ["Network", network || "Not configured"],
-    ["RPC configured", process.env.DEALVAULT_BLOCKCHAIN_RPC_URL ? "Yes" : "No"],
-    ["Admin key configured", process.env.DEALVAULT_BLOCKCHAIN_ADMIN_PRIVATE_KEY ? "Yes" : "No"],
-    ["DealVaultRealEstate", process.env.NEXT_PUBLIC_DEALVAULT_REAL_ESTATE_ADDRESS || "Not configured"],
-    ["ProofVault", process.env.NEXT_PUBLIC_PROOF_VAULT_ADDRESS || "Not configured"],
-    ["PartnerPay", process.env.NEXT_PUBLIC_PARTNER_PAY_ADDRESS || "Not configured"],
-    ["MilestoneVault", process.env.NEXT_PUBLIC_MILESTONE_VAULT_ADDRESS || "Not configured"],
+    ["RPC configured", process.env.DEALVAULT_BLOCKCHAIN_RPC_URL || process.env.BLOCKCHAIN_RPC_URL ? "Yes" : "No"],
+    [
+      "Admin key configured",
+      process.env.DEALVAULT_BLOCKCHAIN_ADMIN_PRIVATE_KEY || process.env.BLOCKCHAIN_ADMIN_PRIVATE_KEY ? "Yes" : "No",
+    ],
+    ["DealVaultRealEstate", contractAddresses.dealVaultRealEstate || "Not configured"],
+    ["ProofVault", contractAddresses.proofVault || "Not configured"],
+    ["PartnerPay", contractAddresses.partnerPay || "Not configured"],
+    ["MilestoneVault", contractAddresses.milestoneVault || "Not configured"],
   ] as const;
 
   const contracts = deployment

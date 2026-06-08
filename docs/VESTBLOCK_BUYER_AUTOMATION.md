@@ -19,9 +19,14 @@ Scheduled in `vercel.json`:
 
 - `/api/cron/buyers-discover`
 - `/api/cron/buyers-score`
-- `/api/cron/buyers-outreach`
 - `/api/cron/buyers-followup`
 - `/api/cron/buyers-performance`
+
+Retired and not scheduled:
+
+- `/api/cron/buyers-outreach`
+
+Buyer criteria outreach now runs through offline artifacts and guarded sender scripts, not a website cron route.
 
 Recommended flow:
 
@@ -88,7 +93,7 @@ The first discovery pass uses public market searches and investor websites. It i
 
 ## Next practical expansion
 
-- Add curated CSV import for buyer lists and hedge-fund coverage.
+- Keep curated CSV import as optional augmentation only; daily buyer discovery should come from `buyer-leads` artifacts and real-source scouting.
 - Add code-violation lead auto-matching during lead enrichment.
 - Add reply logging and acquisition-team owner assignment.
 - Add buyer routing cards directly inside the real-estate lead detail experience.

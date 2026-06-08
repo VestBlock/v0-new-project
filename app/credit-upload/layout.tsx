@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
-  title: 'AI Credit Report Analysis And Dispute Letter Workflow',
+  title: 'AI Credit Report Analysis And Dispute Letter Prep',
   description:
     'Upload a credit report to VestBlock, organize negative items, review AI-powered credit analysis, and prepare dispute-letter drafts for user review.',
   alternates: {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'VestBlock AI Credit Report Analysis',
     description:
-      'AI credit report upload, analysis, dispute-letter support, workflow alerts, and admin review for credit repair operations.',
+      'AI credit report upload, analysis, dispute-letter support, progress alerts, and review support for credit repair preparation.',
     url: absoluteUrl('/credit-upload'),
   },
 };
@@ -20,4 +20,3 @@ export const metadata: Metadata = {
 export default function CreditUploadLayout({ children }: { children: ReactNode }) {
   return children;
 }
-

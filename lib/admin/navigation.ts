@@ -19,6 +19,18 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'command',
   },
   {
+    title: 'Revenue Command',
+    description: 'Revenue, pipeline, outreach, visibility, and fastest-cash priorities.',
+    href: '/admin/revenue-command',
+    group: 'command',
+  },
+  {
+    title: 'DealFlow Command',
+    description: 'Trust passports, verified criteria, routing, DealVault recommendations, and revenue targets.',
+    href: '/admin/dealflow',
+    group: 'command',
+  },
+  {
     title: 'Funding Pipeline',
     description: 'Funding requests, paid strategy reviews, and approvals.',
     href: '/admin/funding',

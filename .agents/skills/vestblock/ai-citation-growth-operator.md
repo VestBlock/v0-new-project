@@ -42,6 +42,21 @@ Increase the likelihood that VestBlock and partner entities appear in AI answers
 - page / schema recommendations
 - recheck plan with before/after prompts
 
+## Authority Map
+
+Track authority as a map, not a single score:
+
+- Entity: VestBlock, DealVault, AI Receptionist, Search Visibility, Funding Prep.
+- Offer: the buyer problem, outcome, page URL, and CTA.
+- Proof: screenshot, demo record, PDF, certificate, case-study style asset, or public submission proof.
+- Prompt: the question a buyer would ask ChatGPT, Claude, Gemini, Perplexity, or Google.
+- Page: the best page that should answer that prompt.
+- Off-site mention: directory, social profile, partner page, article, or verified listing.
+- Schema: organization, service, FAQ, article, breadcrumb, and sameAs signals.
+- Recheck cadence: rerun scorecards after publishing, indexing, or off-site submissions.
+
+Do not claim a visibility score improved unless the scorecard, prompt test, indexing state, or external proof changed.
+
 ## Guardrails
 
 - never guarantee citation outcomes

@@ -66,6 +66,31 @@ const NETWORK_FILE_MAP: Record<string, string> = {
   "polygon-amoy": "amoy",
 };
 
+type DealVaultDeploymentRecordLike =
+  | DealVaultDeploymentRecord
+  | {
+      network?: string;
+      chainId?: number;
+      deployer?: string;
+      adminAddress?: string;
+      deployedAt?: string;
+      contracts?: Partial<DealVaultDeploymentRecord["contracts"]>;
+      dealVaultRealEstate?: string;
+      proofVault?: string;
+      partnerPay?: string;
+      milestoneVault?: string;
+    };
+
+type DealVaultFlatDeploymentRecord = Extract<
+  DealVaultDeploymentRecordLike,
+  {
+    dealVaultRealEstate?: string;
+    proofVault?: string;
+    partnerPay?: string;
+    milestoneVault?: string;
+  }
+>;
+
 async function readJsonFile<T>(filePath: string) {
   try {
     const file = await readFile(filePath, "utf8");
@@ -73,6 +98,36 @@ async function readJsonFile<T>(filePath: string) {
   } catch {
     return null;
   }
+}
+
+function normalizeDeploymentRecord(
+  deployment: DealVaultDeploymentRecordLike | null
+): DealVaultDeploymentRecord | null {
+  if (!deployment || typeof deployment !== "object") {
+    return null;
+  }
+
+  const flatDeployment = deployment as DealVaultFlatDeploymentRecord;
+  const nestedContracts = deployment.contracts || {};
+  const dealVaultRealEstate =
+    nestedContracts.dealVaultRealEstate || flatDeployment.dealVaultRealEstate || "";
+  const proofVault = nestedContracts.proofVault || flatDeployment.proofVault || "";
+  const partnerPay = nestedContracts.partnerPay || flatDeployment.partnerPay || "";
+  const milestoneVault = nestedContracts.milestoneVault || flatDeployment.milestoneVault || "";
+
+  return {
+    network: deployment.network || "unknown",
+    chainId: Number(deployment.chainId || 0),
+    deployer: deployment.deployer || "",
+    adminAddress: deployment.adminAddress || deployment.deployer || "",
+    deployedAt: deployment.deployedAt || "",
+    contracts: {
+      dealVaultRealEstate,
+      proofVault,
+      partnerPay,
+      milestoneVault,
+    },
+  };
 }
 
 export function getDealVaultExplorerBaseUrl(network: string | null) {
@@ -95,10 +150,11 @@ export async function getDealVaultDeploymentArtifacts(network: string | null) {
   const deploymentPath = networkFile ? path.join(process.cwd(), "deployments", `${networkFile}.json`) : null;
   const smokePath = networkFile ? path.join(process.cwd(), "deployments", `${networkFile}.smoke.json`) : null;
 
-  const [deployment, smoke] = await Promise.all([
-    deploymentPath ? readJsonFile<DealVaultDeploymentRecord>(deploymentPath) : Promise.resolve(null),
+  const [deploymentRaw, smoke] = await Promise.all([
+    deploymentPath ? readJsonFile<DealVaultDeploymentRecordLike>(deploymentPath) : Promise.resolve(null),
     smokePath ? readJsonFile<DealVaultSmokeRecord>(smokePath) : Promise.resolve(null),
   ]);
+  const deployment = normalizeDeploymentRecord(deploymentRaw);
 
   return {
     deploymentPath,

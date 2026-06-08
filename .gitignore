@@ -13,8 +13,45 @@
 # generated local output
 /artifacts/
 /cache/
+/tmp/
+/test-results/
+/.playwright-cli/
 automation-run-results.json
 /vendor/
+
+# local OS/editor noise
+.DS_Store
+**/.DS_Store
+
+# local strategy/backtest output not used by VestBlock app runtime
+/data/spy_*
+spy_daily_signal.pine
+spy_swing_conservative_strategy.pine
+spy_swing_strategy.pine
+
+# local revenue/outreach operating data; keep scripts and docs tracked, not raw exports
+/data/distress-leads/
+/data/distress-sources/
+/data/buffer/*results-*.json
+/data/buffer/vestblock-facebook-90-day-calendar.*
+/data/partnership-targets*.csv
+/data/relationship-campaigns/*state*.json
+/data/relationship-campaigns/*targets*.csv
+/docs/codex-fast-index.json
+/docs/pitch/*.pptx
+/docs/pitch/*manifest.json
+
+# local proof/research scratch folders; keep runtime assets under /public
+/authority/
+/proof/
+/deliverables/
+/grant-assets/
+/grant-tracker/
+/marketing/
+/surplus_sources/
+ohio_foreclosure_excess_funds_starter.csv
+vestblock_bank_partnership_outreach_draft_*.md
+vestblock_special_assets_contacts_enriched_*.csv
 
 # debug
 npm-debug.log*

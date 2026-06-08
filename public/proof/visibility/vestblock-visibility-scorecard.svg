@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+  <title id="title">VestBlock Visibility Proof Scorecard</title>
+  <desc id="desc">A proof scorecard showing VestBlock visibility progress from blocked to proof layer live.</desc>
+  <defs>
+    <radialGradient id="orb" cx="20%" cy="15%" r="85%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.42"/>
+      <stop offset="45%" stop-color="#0f172a" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <linearGradient id="line" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1400" height="900" fill="url(#orb)"/>
+  <g opacity="0.18">
+    <line x1="0" x2="0" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="44" x2="44" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="88" x2="88" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="132" x2="132" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="176" x2="176" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="220" x2="220" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="264" x2="264" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="308" x2="308" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="352" x2="352" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="396" x2="396" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="440" x2="440" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="484" x2="484" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="528" x2="528" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="572" x2="572" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="616" x2="616" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="660" x2="660" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="704" x2="704" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="748" x2="748" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="792" x2="792" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="836" x2="836" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="880" x2="880" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="924" x2="924" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="968" x2="968" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1012" x2="1012" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1056" x2="1056" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1100" x2="1100" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1144" x2="1144" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1188" x2="1188" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1232" x2="1232" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1276" x2="1276" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1320" x2="1320" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1364" x2="1364" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1408" x2="1408" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/><line x1="1452" x2="1452" y1="0" y2="900" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="0" x2="1400" y1="0" y2="0" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="44" y2="44" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="88" y2="88" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="132" y2="132" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="176" y2="176" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="220" y2="220" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="264" y2="264" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="308" y2="308" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="352" y2="352" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="396" y2="396" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="440" y2="440" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="484" y2="484" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="528" y2="528" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="572" y2="572" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="616" y2="616" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="660" y2="660" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="704" y2="704" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="748" y2="748" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="792" y2="792" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="836" y2="836" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="880" y2="880" stroke="#e2e8f0" stroke-width="1"/><line x1="0" x2="1400" y1="924" y2="924" stroke="#e2e8f0" stroke-width="1"/>
+  </g>
+  <text x="86" y="92" fill="#67e8f9" font-size="24" font-family="Inter, Arial, sans-serif" font-weight="700" letter-spacing="0.08em">VESTBLOCK PROOF LOG</text>
+  <text x="86" y="150" fill="#ffffff" font-size="54" font-family="Inter, Arial, sans-serif" font-weight="800">Visibility score climbed from 22 to 63</text>
+  <text x="88" y="196" fill="#cbd5e1" font-size="24" font-family="Inter, Arial, sans-serif">Live site, sitemap, llms.txt, AI-search pages, and proof case study are now crawlable.</text>
+  <line x1="130" y1="580" x2="1190" y2="580" stroke="#64748b" stroke-width="2"/>
+  <line x1="130" y1="220" x2="130" y2="580" stroke="#64748b" stroke-width="2"/>
+  <polyline points="130,500.8 483.3333333333333,385.6 836.6666666666666,364 1190,353.2" fill="none" stroke="url(#line)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  
+    <g>
+      <circle cx="130" cy="500.8" r="18" fill="#020617" stroke="#67e8f9" stroke-width="6"/>
+      <text x="104" y="466.8" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">22/100</text>
+      <rect x="22" y="614" width="216" height="132" rx="22" fill="#0f172a" stroke="#334155"/>
+      <text x="42" y="652" fill="#f8fafc" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="800">Blocked</text>
+      <text x="42" y="684" fill="#67e8f9" font-size="17" font-family="Inter, Arial, sans-serif">May 12, 2026</text>
+      <foreignObject x="42" y="698" width="176" height="58">
+        <p xmlns="http://www.w3.org/1999/xhtml" style="margin:0;color:#cbd5e1;font:14px Arial;line-height:1.25">Production site was not reliably crawlable.</p>
+      </foreignObject>
+    </g>
+  
+    <g>
+      <circle cx="483.3333333333333" cy="385.6" r="18" fill="#020617" stroke="#67e8f9" stroke-width="6"/>
+      <text x="457.3333333333333" y="351.6" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">54/100</text>
+      <rect x="375.3333333333333" y="614" width="216" height="132" rx="22" fill="#0f172a" stroke="#334155"/>
+      <text x="395.3333333333333" y="652" fill="#f8fafc" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="800">Restored</text>
+      <text x="395.3333333333333" y="684" fill="#67e8f9" font-size="17" font-family="Inter, Arial, sans-serif">May 12, 2026</text>
+      <foreignObject x="395.3333333333333" y="698" width="176" height="58">
+        <p xmlns="http://www.w3.org/1999/xhtml" style="margin:0;color:#cbd5e1;font:14px Arial;line-height:1.25">Production routes, sitemap, robots.txt, and llms.txt returned 200.</p>
+      </foreignObject>
+    </g>
+  
+    <g>
+      <circle cx="836.6666666666666" cy="364" r="18" fill="#020617" stroke="#67e8f9" stroke-width="6"/>
+      <text x="810.6666666666666" y="330" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">60/100</text>
+      <rect x="728.6666666666666" y="614" width="216" height="132" rx="22" fill="#0f172a" stroke="#334155"/>
+      <text x="748.6666666666666" y="652" fill="#f8fafc" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="800">AI-search foundation</text>
+      <text x="748.6666666666666" y="684" fill="#67e8f9" font-size="17" font-family="Inter, Arial, sans-serif">May 13, 2026</text>
+      <foreignObject x="748.6666666666666" y="698" width="176" height="58">
+        <p xmlns="http://www.w3.org/1999/xhtml" style="margin:0;color:#cbd5e1;font:14px Arial;line-height:1.25">Exact-match learn pages went live for VestBlock services.</p>
+      </foreignObject>
+    </g>
+  
+    <g>
+      <circle cx="1190" cy="353.2" r="18" fill="#020617" stroke="#67e8f9" stroke-width="6"/>
+      <text x="1164" y="319.2" fill="#ffffff" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="800">63/100</text>
+      <rect x="1082" y="614" width="216" height="132" rx="22" fill="#0f172a" stroke="#334155"/>
+      <text x="1102" y="652" fill="#f8fafc" font-size="22" font-family="Inter, Arial, sans-serif" font-weight="800">Proof layer live</text>
+      <text x="1102" y="684" fill="#67e8f9" font-size="17" font-family="Inter, Arial, sans-serif">May 13, 2026</text>
+      <foreignObject x="1102" y="698" width="176" height="58">
+        <p xmlns="http://www.w3.org/1999/xhtml" style="margin:0;color:#cbd5e1;font:14px Arial;line-height:1.25">Case study, proof screenshots, and structured proof language added.</p>
+      </foreignObject>
+    </g>
+  
+  <rect x="86" y="760" width="1228" height="76" rx="26" fill="#082f49" stroke="#155e75"/>
+  <text x="124" y="808" fill="#e0f2fe" font-size="24" font-family="Inter, Arial, sans-serif" font-weight="700">Next proof target: videos, off-site mentions, directory listings, partner links, and weekly screenshots.</text>
+</svg>

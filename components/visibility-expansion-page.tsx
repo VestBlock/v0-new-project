@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   CheckCircle2,
+  FileText,
   Globe2,
   Loader2,
   MapPinned,
@@ -106,7 +107,9 @@ export function VisibilityExpansionPage() {
   const previewMarket = formData.cityFocus || 'your core market';
   const deliverableStatusLabel =
     submissionState?.deliverableStatus === 'sent_to_client'
-      ? 'Ready in your account'
+      ? isAuthenticated
+        ? 'Ready in your account'
+        : 'Ready after account setup'
       : submissionState?.deliverableStatus === 'ready_for_review'
         ? 'Being reviewed'
         : submissionState?.deliverableStatus === 'queued'
@@ -287,6 +290,34 @@ export function VisibilityExpansionPage() {
                 <Link href="/pricing">Compare Pricing</Link>
               </Button>
             </div>
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <Link
+                href="/services/visibility-expansion-saas"
+                className="underline-offset-4 hover:underline"
+              >
+                Read the Search Visibility service guide
+              </Link>
+              {visibilityExpansionPackages.map((pkg) => (
+                <Link
+                  key={pkg.key}
+                  href={`/services/${pkg.slug}`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  {pkg.title} guide
+                </Link>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <Link href="/visibility-expansion/proof-hub" className="underline-offset-4 hover:underline">
+                Proof Hub
+              </Link>
+              <Link href="/visibility-expansion/case-study" className="underline-offset-4 hover:underline">
+                Case Study
+              </Link>
+              <Link href="/learn/search-visibility-for-small-business" className="underline-offset-4 hover:underline">
+                Learn how it works
+              </Link>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
                 <CardContent className="p-4">
@@ -403,6 +434,45 @@ export function VisibilityExpansionPage() {
               );
             })}
           </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-12">
+        <div className="container mx-auto max-w-7xl">
+          <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+            <CardHeader>
+              <Badge variant="outline" className="w-fit border-cyan-500/30 text-cyan-200">
+                Buyer guide
+              </Badge>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <FileText className="h-5 w-5 text-cyan-500" />
+                See what the first visibility sprint looks like
+              </CardTitle>
+              <CardDescription>
+                Download the short one-pager and 7-day launch plan before you request a review.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-search-visibility-one-pager.pdf" target="_blank" rel="noreferrer">
+                  Search Visibility One-Pager
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-before-after-growth-example.pdf" target="_blank" rel="noreferrer">
+                  Before and After Example
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-7-day-growth-launch-plan.pdf" target="_blank" rel="noreferrer">
+                  7-Day Launch Plan
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -559,12 +629,12 @@ export function VisibilityExpansionPage() {
                       {submissionState.packageTitle} request saved for {submissionState.businessName}
                     </p>
                     <p className="mt-1">
-                      Status: {deliverableStatusLabel}. We will review your site and prepare the next recommendations.
+                      Status: {deliverableStatusLabel}. VestBlock will review the visibility gaps, confirm the best-fit package, and send the next recommendations before any monthly work starts.
                     </p>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                       <Button asChild size="sm">
                         <Link href={isAuthenticated ? '/dashboard/services' : '/register?redirect=/dashboard/services'}>
-                          {isAuthenticated ? 'View My Account' : 'Create Account to Save'}
+                          {isAuthenticated ? 'View My Account' : 'Create Account for Dashboard Access'}
                         </Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
@@ -573,6 +643,9 @@ export function VisibilityExpansionPage() {
                     </div>
                   </div>
                 ) : null}
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">
+                  Takes about 2 minutes. VestBlock uses this to build a first-pass plan and confirm the best-fit package before any ongoing work is discussed.
+                </div>
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="packageKey">Package</Label>
@@ -627,15 +700,17 @@ export function VisibilityExpansionPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
+                    <Label htmlFor="phone">Phone (optional)</Label>
                     <Input
                       id="phone"
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
                       placeholder="(555) 555-5555"
-                      required
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Used only if we need to confirm details about the business or service area.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="websiteUrl">Website</Label>
@@ -731,6 +806,10 @@ export function VisibilityExpansionPage() {
                 <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
                   {selectedPackage.complianceNote}
                 </div>
+
+                <p className="text-center text-xs text-muted-foreground">
+                  We will email the plan and next steps to the address above. No guarantees, no spam.
+                </p>
 
                 <Button
                   type="submit"

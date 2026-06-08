@@ -1,0 +1,90 @@
+{
+  "lastUpdated": "2026-05-14",
+  "boardName": "VestBlock Agent Board",
+  "primeDirective": "Make VestBlock easier to trust, buy from, follow up with, discover, and operate.",
+  "readFirst": [
+    "docs/CODEX_FAST_CONTEXT.md",
+    "docs/CODEX_TASK_PLAYBOOK.md",
+    "docs/VESTBLOCK_AGENT_BOARD.md",
+    "docs/codex-fast-index.json"
+  ],
+  "directors": [
+    {
+      "seat": "Chair",
+      "skill": ".agents/skills/vestblock/nexus-sprint-orchestrator.md",
+      "owns": ["focus", "scope", "verification", "next bottleneck"]
+    },
+    {
+      "seat": "Revenue Director",
+      "skill": ".agents/skills/vestblock/revenue-operations-operator.md",
+      "owns": ["offers", "pricing", "payment readiness", "admin follow-up"]
+    },
+    {
+      "seat": "Conversion Director",
+      "skill": ".agents/skills/vestblock/agentic-conversion-operator.md",
+      "owns": ["landing flow", "forms", "thank-you pages", "buyer clarity"]
+    },
+    {
+      "seat": "Design Director",
+      "skill": ".agents/skills/vestblock/website-weakness-audit.md",
+      "supports": ["conversion-rate-auditor", "information-architecture-editor", "mobile-polish-auditor", "premium-motion-director", "trust-proof-placement"],
+      "owns": ["visual hierarchy", "clickability", "mobile polish", "trust placement"]
+    },
+    {
+      "seat": "Visibility Director",
+      "skill": ".agents/skills/vestblock/ai-citation-growth-operator.md",
+      "supports": [".agents/skills/vestblock/aeo-content-automation.md", ".agents/skills/vestblock/seo-aeo-learning-loop.md"],
+      "owns": ["SEO", "AEO", "GEO", "sitemap", "llms.txt", "indexing"]
+    },
+    {
+      "seat": "Outreach Director",
+      "skill": ".agents/skills/vestblock/signal-based-outbound-operator.md",
+      "supports": [".agents/skills/vestblock/compliant-outreach-operations.md", ".agents/skills/vestblock/outreach-optimization.md", ".agents/skills/vestblock/lead-intelligence-operator.md"],
+      "owns": ["lead quality", "outreach copy", "approval queue", "follow-up", "100/day readiness"]
+    },
+    {
+      "seat": "DealVault Director",
+      "skill": ".agents/skills/vestblock/dealvault-revenue-operator.md",
+      "owns": ["demo proof", "milestone clarity", "payout records", "smart contract proof safety"]
+    },
+    {
+      "seat": "Funding Director",
+      "skill": ".agents/skills/vestblock/funding-lead-automation.md",
+      "supports": [".agents/skills/vestblock/funding-strategy-improvement.md", ".agents/skills/vestblock/compliance-safe-credit-content.md"],
+      "owns": ["funding prep", "intake quality", "compliance-safe language", "dashboard continuity"]
+    },
+    {
+      "seat": "Performance Director",
+      "skill": ".agents/skills/vestblock/production-launch-verification.md",
+      "supports": ["vercel:nextjs", "vercel:deployments-cicd", "vercel:observability", "vercel:agent-browser-verify"],
+      "owns": ["build health", "route health", "bundle weight", "cron load", "Vercel deploy safety"]
+    },
+    {
+      "seat": "Security Director",
+      "skill": ".agents/skills/vestblock/security-privacy-audit.md",
+      "supports": ["security-best-practices", "security-threat-model", "supabase", "vercel:env-vars"],
+      "owns": ["auth boundaries", "secrets", "admin routes", "private data", "payment and chain safety"]
+    },
+    {
+      "seat": "Content Asset Director",
+      "skills": ["presentations:Presentations", "documents:documents", "pdf", "imagegen", "trust-proof-placement"],
+      "owns": ["pitch decks", "PDFs", "screenshots", "graphics", "proof packets", "social drafts"]
+    }
+  ],
+  "delegationRules": [
+    "Use explorer agents for independent read-only investigations.",
+    "Use worker agents only when file ownership is clear and disjoint.",
+    "Do not delegate live sends, payments, chain transactions, or secret handling.",
+    "The main Codex session owns integration, tests, deployment, and final truth."
+  ],
+  "safeVerificationCommands": [
+    "npx eslint <changed-files>",
+    "npm run typecheck",
+    "npm run build",
+    "npm run outreach:scorecard",
+    "npm run outreach:preflight",
+    "npm run visibility:aeo-scorecard",
+    "npm run demo:dealvault",
+    "npm run check:contracts"
+  ]
+}

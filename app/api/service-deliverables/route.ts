@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/admin';
+import { ensureSignupGrowthSystem } from '@/lib/auth/signup-growth-system';
 import { getServiceDeliverableForLead } from '@/lib/services/aiServiceDeliverables';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -17,6 +18,15 @@ export async function GET(request: Request) {
   }
 
   const admin = createAdminClient();
+  await ensureSignupGrowthSystem({
+    email: user.email,
+    userId: user.id,
+    fullName:
+      typeof user.user_metadata?.full_name === 'string'
+        ? user.user_metadata.full_name
+        : null,
+  });
+
   const supportedLeadTypes = ['business_funding', 'ai_assistant', 'website_upgrade', 'visibility_expansion'];
   const { data: leads, error } = await admin
     .from('leads')

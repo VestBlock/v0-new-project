@@ -212,7 +212,7 @@ export function FundingAssistantDashboard() {
 
       toast({
         title: 'Funding strategy generated',
-        description: 'Your readiness score, path, and sequence are ready.',
+        description: 'Your funding path and sequence are ready.',
       });
     } catch (error) {
       toast({
@@ -257,7 +257,7 @@ export function FundingAssistantDashboard() {
       toast({
         title: 'No external application link',
         description:
-          'This step is an internal readiness or strategy step. There is no direct issuer link for it yet.',
+          'This step is a readiness or strategy step. There is no direct issuer link for it yet.',
       });
       return;
     }
@@ -339,7 +339,7 @@ export function FundingAssistantDashboard() {
         toast({
           title: 'Assisted review requested',
           description:
-            'VestBlock saved your plan preference so admin follow-up can start from the right lane.',
+            'VestBlock saved your plan preference so assisted follow-up can start from the right lane.',
         });
       }
     } catch (error) {
@@ -383,7 +383,7 @@ export function FundingAssistantDashboard() {
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300 md:text-base">
                 Build your readiness profile, generate a deterministic funding strategy, track every application step,
-                and keep admin follow-up organized in one place.
+                and keep assisted follow-up organized in one place.
               </p>
             </div>
           </div>
@@ -420,7 +420,7 @@ export function FundingAssistantDashboard() {
           <CardHeader>
             <CardTitle>Funding profile</CardTitle>
             <CardDescription>
-              This profile drives readiness scoring, strategy selection, timing, and admin follow-up.
+              This profile drives readiness scoring, strategy selection, timing, and assisted follow-up.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -787,7 +787,7 @@ export function FundingAssistantDashboard() {
             <CardHeader>
               <CardTitle>Results</CardTitle>
               <CardDescription>
-                VestBlock uses deterministic readiness rules first, then organizes the path and sequence around that score.
+                VestBlock uses readiness rules first, then organizes the path and sequence around your profile.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -796,7 +796,7 @@ export function FundingAssistantDashboard() {
                   <Target className="h-4 w-4" />
                   <AlertTitle>No strategy yet</AlertTitle>
                   <AlertDescription>
-                    Fill out your profile and generate the strategy to unlock the readiness score, estimated range, and application tracker.
+                    Fill out your profile and generate the strategy to unlock your estimated range, next steps, and application tracker.
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -1156,7 +1156,7 @@ export function FundingAssistantDashboard() {
                 Best use case
               </div>
               <p className="mt-2">
-                Use this workflow to decide whether to apply now, build first, or repair first, then track each move
+                Use this plan to decide whether to apply now, build first, or repair first, then track each move
                 with less noise and less guessing.
               </p>
             </div>
@@ -1166,7 +1166,7 @@ export function FundingAssistantDashboard() {
                 Human support lane
               </div>
               <p className="mt-2">
-                Once you choose an assisted plan, admin follow-up can review the sequence, highlight blockers, and keep
+                Once you choose an assisted plan, VestBlock follow-up can review the sequence, highlight blockers, and keep
                 your process organized without promising approvals.
               </p>
             </div>

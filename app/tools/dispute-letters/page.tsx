@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -69,31 +69,19 @@ function DisputeLettersToolPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [isClientReady, setIsClientReady] = useState(false);
+  const defaultLetter = (() => {
+    const typeFromUrl = searchParams.get('type');
+    const foundType = typeFromUrl
+      ? letterTypes.find((lt) => lt.key === typeFromUrl)
+      : null;
+    return foundType ? { key: foundType.key, title: foundType.title } : null;
+  })();
   const [selectedLetter, setSelectedLetter] = useState<{
     key: string;
     title: string;
-  } | null>(null);
+  } | null>(() => defaultLetter);
 
-  // Handle pre-selection from URL params
-  useEffect(() => {
-    const typeFromUrl = searchParams.get('type');
-    if (typeFromUrl) {
-      const foundType = letterTypes.find((lt) => lt.key === typeFromUrl);
-      if (foundType) {
-        setSelectedLetter({ key: foundType.key, title: foundType.title });
-      }
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    setIsClientReady(true);
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login?redirect=/tools/dispute-letters');
-    }
-  }, [authLoading, isAuthenticated, router]);
-
-  if (!isClientReady || authLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <main className="flex-grow flex items-center justify-center">
@@ -103,7 +91,7 @@ function DisputeLettersToolPageContent() {
     );
   }
 
-  if (!isAuthenticated && isClientReady) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background">
         <main className="pt-32 px-4 text-center">
@@ -152,31 +140,31 @@ function DisputeLettersToolPageContent() {
               </h1>
               <p className="text-muted-foreground text-center mb-8 max-w-2xl mx-auto">
                 Choose a tool to get started. Generate standard letters or use
-                our advanced AI-powered Super Dispute system.
+                the advanced dispute draft builder for more guided support.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Super Dispute Card */}
+                {/* Advanced dispute builder card */}
                 <Link href="/super-dispute" className="block">
                   <Card className="h-full hover:border-cyan-500 transition-colors duration-300 flex flex-col">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-3">
                         <ShieldZap className="h-8 w-8 text-cyan-500" />
                         <div>
-                          Super Dispute System
+                          Advanced Dispute Draft Builder
                           <span className="ml-2 inline-block text-xs font-semibold text-cyan-500 bg-cyan-500/10 px-2 py-1 rounded-full">
                             AI-Powered
                           </span>
                         </div>
                       </CardTitle>
                       <CardDescription>
-                        Our most advanced tool. AI analyzes your report and
-                        helps generate more tailored dispute-letter drafts and
-                        follow-up structure than generic templates.
+                        AI reviews your report details and helps create more
+                        tailored dispute-letter drafts and follow-up steps than
+                        generic templates.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="mt-auto">
                       <Button className="w-full bg-cyan-500 hover:bg-cyan-600">
-                        Launch Super Dispute
+                        Launch Draft Builder
                       </Button>
                     </CardContent>
                   </Card>

@@ -15,13 +15,18 @@ It currently supports:
 
 ## Daily automation
 
-Scheduled in `vercel.json`:
+Routes exist for local/operator use but are not currently scheduled in `vercel.json`:
 
 - `/api/cron/lenders-discover`
 - `/api/cron/lenders-score`
-- `/api/cron/lenders-outreach`
 - `/api/cron/lenders-followup`
 - `/api/cron/lenders-performance`
+
+Retired and not scheduled:
+
+- `/api/cron/lenders-outreach`
+
+Lender outreach should stay approval-gated through offline drafts until a guarded daily lender sender is rebuilt.
 
 Recommended flow:
 

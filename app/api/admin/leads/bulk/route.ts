@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
             .select('*')
             .eq('lead_id', lead.id)
             .eq('channel', 'email')
+            .in('status', ['needs_review', 'queued'])
 
           if (messagesError) throw messagesError
 

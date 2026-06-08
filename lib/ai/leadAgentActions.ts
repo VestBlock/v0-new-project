@@ -57,10 +57,19 @@ export function chooseLeadPartnerRouting(input: {
   ])
 
   const commercialLike = includesAny(combined, [/commercial/, /mixed use/, /broker/, /complex/])
+  const nlcLike = includesAny(combined, [
+    /fix.*flip/,
+    /hard money/,
+    /bridge/,
+    /ground.?up/,
+    /new construction/,
+    /rehab/,
+    /investor capital/,
+  ])
   const businessFundingLike = includesAny(combined, [/business funding/, /grant/, /sba/, /capital/, /credit builder/])
 
   if (realEstateLike) {
-    const partnerKey: PartnerReferralKey = commercialLike ? 'rcn' : 'kiavi'
+    const partnerKey: PartnerReferralKey = nlcLike ? 'nlc' : commercialLike ? 'rcn' : 'kiavi'
     const partner = getPartnerReferralDefinition(partnerKey)
     if (!partner) return null
 
@@ -72,7 +81,7 @@ export function chooseLeadPartnerRouting(input: {
         partnerKey,
         source: 'lead_agent',
         leadId: lead.id,
-        loanType: commercialLike ? 'bridge' : 'dscr',
+        loanType: nlcLike ? 'investor-capital' : commercialLike ? 'bridge' : 'dscr',
         service: 'real_estate_funding',
       }),
       fitSummary: partner.fitSummary,

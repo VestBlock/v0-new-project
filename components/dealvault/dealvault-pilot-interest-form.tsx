@@ -35,6 +35,10 @@ function getCurrentSourcePath() {
 export function DealVaultPilotInterestForm() {
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionState, setSubmissionState] = useState<{
+    companyName: string;
+    useCase: string;
+  } | null>(null);
   const { toast } = useToast();
 
   const updateField = (name: keyof typeof initialForm, value: string) => {
@@ -61,6 +65,10 @@ export function DealVaultPilotInterestForm() {
         title: 'Demo request received',
         description: 'VestBlock will review the DealVault request and follow up with the next step.',
       });
+      setSubmissionState({
+        companyName: form.companyName || form.name,
+        useCase: form.useCase || 'private demo',
+      });
       setForm(initialForm);
     } catch (error) {
       toast({
@@ -85,6 +93,16 @@ export function DealVaultPilotInterestForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={submitInterest} className="space-y-5">
+          {submissionState ? (
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">
+                Demo request saved for {submissionState.companyName}
+              </p>
+              <p className="mt-1">
+                Next step: VestBlock reviews the {submissionState.useCase.replaceAll('_', ' ')} request and follows up with the right demo path or rollout conversation.
+              </p>
+            </div>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="dealvault-name">Name</Label>

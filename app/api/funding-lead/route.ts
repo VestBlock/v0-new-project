@@ -14,7 +14,7 @@ import { analyticsEvents } from '@/lib/analytics/events';
 const fundingLeadSchema = z.object({
   name: z.string().trim().min(2).max(140),
   email: z.string().trim().email(),
-  phone: z.string().trim().min(7).max(40),
+  phone: z.string().trim().min(7).max(40).optional().or(z.literal('')),
   business_type: z.string().trim().min(2).max(140),
   funding_amount: z.string().trim().min(1).max(80),
   credit_score: z.string().trim().min(2).max(20),
@@ -47,6 +47,8 @@ export async function POST(req: Request) {
   }
 
   const data = parsed.data;
+  const trimmedPhone = String(data.phone || '').trim();
+  const leadPhone = trimmedPhone ? trimmedPhone : null;
   const supabase = createAdminClient();
   const summary = `Business funding lead for ${data.business_type}; requested ${data.funding_amount}; credit score ${data.credit_score}.`;
   const products = await getFundingProducts(supabase);
@@ -71,13 +73,13 @@ export async function POST(req: Request) {
       category: 'business_funding',
       name: data.name,
       email: data.email,
-      phone: data.phone,
+      phone: leadPhone,
       best_offer: 'Business Funding',
       pain_signal: `Funding request ${data.funding_amount}; credit ${data.credit_score}; business type ${data.business_type}.`,
       contact_info: {
         name: data.name,
         email: data.email,
-        phone: data.phone,
+        phone: leadPhone,
       },
       form_data: {
         ...data,
@@ -113,7 +115,7 @@ export async function POST(req: Request) {
     leadType: 'business_funding',
     name: data.name,
     email: data.email,
-    phone: data.phone,
+    phone: leadPhone,
     sourcePath: '/funding',
     summary,
     metadata: {

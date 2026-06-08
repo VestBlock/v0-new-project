@@ -10,10 +10,13 @@ VestBlock now has a daily continuous-improvement sequence that runs after the mo
 
 - `/api/cron/improvement-review`
 - `/api/cron/research-digest`
-- `/api/cron/optimize-outreach`
 - `/api/cron/optimize-markets`
 - `/api/cron/optimize-content`
 - `/api/cron/optimize-credit-funding`
+
+Retired and not scheduled:
+
+- `/api/cron/optimize-outreach`
 
 ## What each job does
 

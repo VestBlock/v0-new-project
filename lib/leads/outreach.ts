@@ -1,6 +1,8 @@
 import { createChatCompletion } from '@/lib/openai-service'
 import { OUTREACH_UNSUBSCRIBE_NOTES } from '@/lib/leads/constants'
 import { listActiveOutreachVariants } from '@/lib/improvement/repository'
+import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
+import { buildOutreachV2EmailDraft, evaluateOutreachV2Lead, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import type {
   GeneratedOutreachBundle,
   LeadRecord,
@@ -22,6 +24,8 @@ function leadLanguage(lead: LeadRecord): 'en' | 'es' {
 function isSellerAcquisitionLead(lead: LeadRecord) {
   const offer = String(lead.best_offer || '').toLowerCase()
   const realEstateStrategy = String(lead.metadata_json?.realEstateStrategy || lead.form_data?.realEstateStrategy || '').toLowerCase()
+  const preferredSalePath = String(lead.metadata_json?.preferredSalePath || lead.form_data?.preferredSalePath || '').toLowerCase()
+  const sellerExitStrategy = realEstateStrategy || preferredSalePath
   const painText = `${lead.pain_signal || ''} ${lead.notes || ''} ${lead.status_detail || ''}`.toLowerCase()
 
   if (offer.includes('dealvault') || offer.includes('operator accountability')) {
@@ -32,7 +36,7 @@ function isSellerAcquisitionLead(lead: LeadRecord) {
     lead.category === 'seller_lead' ||
     lead.category === 'code_violation' ||
     lead.lead_type === 'sell_house' ||
-    realEstateStrategy.length > 0 ||
+    sellerExitStrategy.length > 0 ||
     ((lead.category === 'real_estate' || lead.lead_type === 'real_estate') &&
       /distress|vacant|violation|preforeclosure|probate|tax delinquent|seller|listing/.test(painText))
   )
@@ -146,7 +150,7 @@ function publicOfferLabel(lead: LeadRecord, fallbackOffer?: string | null) {
   if (offer.includes('AI Appointment Booking')) return 'appointment-booking automation'
   if (offer.includes('AI Receptionist')) return 'AI receptionist setup'
   if (offer.includes('Website')) return 'visibility expansion support'
-  if (offer.includes('DealVault') || offer.includes('Operator Accountability')) {
+  if (offer.includes('DealVault') || offer.includes('Agreement & Milestone Records')) {
     return 'DealVault records for agreements, payouts, and milestones'
   }
   if (offer.includes('Business Funding')) return 'funding prep support'
@@ -209,59 +213,65 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
     variantPhone?.cta ||
     leadCta(lead)
   const realEstateStrategy = String(lead.metadata_json?.realEstateStrategy || lead.form_data?.realEstateStrategy || '').toLowerCase()
+  const preferredSalePath = String(lead.metadata_json?.preferredSalePath || lead.form_data?.preferredSalePath || '').toLowerCase()
+  const sellerExitStrategy = realEstateStrategy || preferredSalePath
   const reason =
     lead.pain_signal ||
     (lead.category === 'code_violation'
       ? 'public property-compliance activity that may point to seller motivation'
       : lead.category === 'seller_lead' || lead.category === 'real_estate' || lead.lead_type === 'sell_house' || lead.lead_type === 'real_estate'
-        ? 'property ownership details that suggest a possible sale or investor conversation'
+        ? 'property ownership details that may fit fast cash, creative, novation, or partner-fit review'
         : lead.category === 'new_business_formation'
           ? 'a newly formed business profile'
           : 'growth and funding prep signals')
   const realEstateOfferText =
     language === 'es'
-      ? 'conversaciones de venta directa, revision de inversionista y opciones practicas para vender la propiedad'
-      : 'direct-sale conversations, investor review, and practical seller options'
+      ? 'revision de venta rapida, estructura creativa, novacion y opciones practicas para vender la propiedad'
+      : 'fast cash review, creative structure review, novation review, and practical seller options'
   const realEstateSupportText =
     language === 'es'
-      ? 'VestBlock puede ayudar a evaluar una venta directa, una conversacion con inversionista o el mejor siguiente paso si quieres salir de la propiedad.'
-      : 'VestBlock can help evaluate a direct sale, an investor conversation, or the strongest next step if you want to move the property.'
+      ? 'VestBlock puede ayudar a evaluar venta rapida, estructura creativa, novacion o el mejor siguiente paso si quieres vender la propiedad.'
+      : 'VestBlock can help evaluate fast cash, creative structure, novation, or the strongest next step if you want to move the property.'
   const strategySpecificOfferText =
-    realEstateStrategy === 'fast_cash'
+    sellerExitStrategy === 'fast_cash'
       ? language === 'es'
         ? 'una conversacion simple de venta rapida y as-is'
         : 'a simple fast-cash, as-is sale conversation'
-      : realEstateStrategy === 'failed_listing'
+      : sellerExitStrategy === 'failed_listing'
         ? language === 'es'
           ? 'una comparacion de nuevas opciones despues de una venta fallida'
           : 'a new-options comparison after a failed listing'
-      : realEstateStrategy === 'novation'
+      : sellerExitStrategy === 'novation'
         ? language === 'es'
           ? 'una comparacion entre novacion y venta directa'
           : 'a novation-versus-direct-sale comparison'
-        : realEstateStrategy === 'creative_finance'
+        : sellerExitStrategy === 'creative_finance' || sellerExitStrategy === 'creative_structure'
           ? language === 'es'
             ? 'una conversacion sobre terminos flexibles y salida creativa'
             : 'a flexible-terms and creative-exit conversation'
           : realEstateOfferText
   const strategySpecificSupportText =
-    realEstateStrategy === 'fast_cash'
+    sellerExitStrategy === 'fast_cash'
       ? language === 'es'
         ? 'Si la prioridad es velocidad, condicion as-is, o menos friccion, VestBlock puede ayudarte a revisar una salida rapida y una conversacion realista con comprador.'
         : 'If the priority is speed, as-is condition, or less friction, VestBlock can help review a fast-exit path and a realistic buyer conversation.'
-      : realEstateStrategy === 'failed_listing'
+      : sellerExitStrategy === 'failed_listing'
         ? language === 'es'
           ? 'Si la propiedad ya paso por el mercado sin venderse, VestBlock puede ayudarte a comparar una ruta diferente en vez de seguir haciendo lo mismo.'
           : 'If the property already went through the market without selling, VestBlock can help compare a different path instead of repeating the same approach.'
-      : realEstateStrategy === 'novation'
+      : sellerExitStrategy === 'novation'
         ? language === 'es'
           ? 'Si la propiedad parece mas limpia que una venta cash tipica, VestBlock puede ayudarte a comparar una ruta tipo novacion con una venta directa mas sencilla.'
           : 'If the property looks cleaner than a typical cash-offer deal, VestBlock can help compare a novation-style path with a simpler direct sale.'
-        : realEstateStrategy === 'creative_finance'
+        : sellerExitStrategy === 'creative_finance' || sellerExitStrategy === 'creative_structure'
           ? language === 'es'
             ? 'Si hay apertura a terminos, tiempo, o flexibilidad, VestBlock puede ayudarte a revisar una conversacion de seller finance, subject-to, u otras opciones creativas.'
             : 'If there is openness to terms, timing, or flexibility, VestBlock can help review a seller-finance, subject-to, or other creative-exit conversation.'
           : realEstateSupportText
+
+  const v2EmailDraft = isOutreachV2Enabled() && !isSellerAcquisitionLead(lead)
+    ? buildOutreachV2EmailDraft(lead)
+    : null
 
   if (language === 'es') {
     return {
@@ -323,7 +333,7 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
       language,
     },
     email: {
-      subject: isSellerAcquisitionLead(lead)
+      subject: v2EmailDraft?.subject || (isSellerAcquisitionLead(lead)
         ? realEstateStrategy === 'fast_cash'
           ? `${business}: a simple as-is cash path for this property`
           : realEstateStrategy === 'failed_listing'
@@ -333,17 +343,19 @@ async function templateOutreach(lead: LeadRecord, score?: LeadScoreRecord | null
             : realEstateStrategy === 'creative_finance'
               ? `${business}: flexible options for this property`
               : `${business}: practical options for this property`
-        : `${business}: a practical next step for ${publicOffer}`,
-      body: `Hi ${business},\n\n${variantEmail?.opener || `I came across ${reason}${city ? ` in ${city}` : ''} and thought VestBlock might be useful.`} ${
-        variantEmail?.body_guidance ||
-        (isSellerAcquisitionLead(lead)
-          ? strategySpecificSupportText
-          : 'We help businesses track agreements, capture more leads, and choose cleaner next steps without overpromising.')
-      } ${fundingBridgeLine(lead, language)}\n\nBased on what we found, the best next conversation looks like: ${
-        isSellerAcquisitionLead(lead) ? strategySpecificOfferText : publicOffer
-      }.\n\n${cta}\n\nBest,\n${OUTREACH_SIGNATURE}`,
-      complianceNote: OUTREACH_UNSUBSCRIBE_NOTES.email,
-      cta,
+        : `${business}: a practical next step for ${publicOffer}`),
+      body:
+        v2EmailDraft?.body ||
+        `Hi ${business},\n\n${variantEmail?.opener || `I came across ${reason}${city ? ` in ${city}` : ''} and thought VestBlock might be useful.`} ${
+          variantEmail?.body_guidance ||
+          (isSellerAcquisitionLead(lead)
+            ? strategySpecificSupportText
+            : 'We help businesses track agreements, capture more leads, and choose cleaner next steps without overpromising.')
+        } ${fundingBridgeLine(lead, language)}\n\nBased on what we found, the best next conversation looks like: ${
+          isSellerAcquisitionLead(lead) ? strategySpecificOfferText : publicOffer
+        }.\n\n${cta}\n\nBest,\n${OUTREACH_SIGNATURE}`,
+      complianceNote: v2EmailDraft?.complianceNote || OUTREACH_UNSUBSCRIBE_NOTES.email,
+      cta: v2EmailDraft?.cta || cta,
       language,
     },
     facebook_dm: {
@@ -390,12 +402,17 @@ export async function generateLeadOutreach(
 
   const emailVariant = await pickVariantGuidance(lead, 'email', leadLanguage(lead))
   const baseTemplate = await templateOutreach(lead, score)
+  const v2Evaluation = evaluateOutreachV2Lead(lead)
+
+  if (isOutreachV2Enabled() && !v2Evaluation.eligible) {
+    return baseTemplate
+  }
 
   const messages = [
     {
       role: 'system' as const,
       content:
-        'You create concise compliant outreach for B2B lead generation. Never promise approvals, outcomes, or guaranteed savings. Return JSON with keys sms,email,facebook_dm,instagram_dm,phone_script. Each key must contain body, cta, language, complianceNote. Email must also contain subject.',
+        'You create short, human, compliant outreach for B2B lead generation. Write like a useful business owner, not a marketing automation tool. Avoid internal language such as workflow infrastructure, operator, AEO, MVP, pilot, rails, or support layer. Never promise approvals, outcomes, guaranteed savings, funding, or legal enforceability. Never use placeholders like [Your Name], [Your Company], [Tu Nombre], [Tu Empresa], TODO, or template brackets. Always name VestBlock and the lead business naturally in the email. Return JSON with keys sms,email,facebook_dm,instagram_dm,phone_script. Each key must contain body, cta, language, complianceNote. Email must also contain subject.',
     },
     {
       role: 'user' as const,
@@ -421,6 +438,11 @@ export async function generateLeadOutreach(
           includeUnsubscribe: true,
           language: leadLanguage(lead),
           mentionFundingReadinessWhenHelpful: shouldMentionFundingBridge(lead),
+          outreachV2: {
+            segment: v2Evaluation.segmentLabel,
+            strengths: v2Evaluation.strengths,
+            rule: 'Keep the email under 170 words. Use one specific reason, one service, and one soft reply CTA.',
+          },
           activeVariantGuidance: emailVariant
             ? {
                 segmentType: emailVariant.segment_type,
@@ -514,6 +536,18 @@ export async function generateLeadOutreach(
     }
 
     bundle.email.body = ensureFundingBridgeInEmailBody(bundle.email.body, lead, leadLanguage(lead))
+
+    const qualityIssue = validateOutreachMessageQuality({
+      lead,
+      message: {
+        subject: bundle.email.subject,
+        body: bundle.email.body,
+        compliance_note: bundle.email.complianceNote,
+      },
+    })
+    if (qualityIssue) {
+      return baseTemplate
+    }
 
     return bundle
   } catch {

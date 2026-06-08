@@ -21,48 +21,8 @@
       "schedule": "50 17 * * *"
     },
     {
-      "path": "/api/cron/partners-send-autopilot",
-      "schedule": "10 18 * * *"
-    },
-    {
-      "path": "/api/cron/leads-score",
-      "schedule": "20 12 * * *"
-    },
-    {
-      "path": "/api/cron/leads-outreach",
-      "schedule": "40 12 * * *"
-    },
-    {
-      "path": "/api/cron/leads-followup",
-      "schedule": "0 13 * * *"
-    },
-    {
       "path": "/api/cron/discover-markets",
       "schedule": "15 11 * * *"
-    },
-    {
-      "path": "/api/cron/daily-lead-run",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/leads-enrich-email",
-      "schedule": "10 12 * * *"
-    },
-    {
-      "path": "/api/cron/send-outreach",
-      "schedule": "20 13 * * *"
-    },
-    {
-      "path": "/api/cron/leads-throughput",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/leads-throughput",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/cron/leads-throughput",
-      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/cron/update-market-performance",
@@ -77,10 +37,6 @@
       "schedule": "20 14 * * *"
     },
     {
-      "path": "/api/cron/optimize-outreach",
-      "schedule": "35 14 * * *"
-    },
-    {
       "path": "/api/cron/optimize-markets",
       "schedule": "45 14 * * *"
     },
@@ -93,36 +49,12 @@
       "schedule": "5 15 * * *"
     },
     {
-      "path": "/api/cron/lenders-discover",
-      "schedule": "30 15 * * *"
-    },
-    {
-      "path": "/api/cron/lenders-score",
-      "schedule": "40 15 * * *"
-    },
-    {
-      "path": "/api/cron/lenders-outreach",
-      "schedule": "50 15 * * *"
-    },
-    {
-      "path": "/api/cron/lenders-followup",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/cron/lenders-performance",
-      "schedule": "15 16 * * *"
-    },
-    {
       "path": "/api/cron/buyers-discover",
       "schedule": "30 16 * * *"
     },
     {
       "path": "/api/cron/buyers-score",
       "schedule": "40 16 * * *"
-    },
-    {
-      "path": "/api/cron/buyers-outreach",
-      "schedule": "50 16 * * *"
     },
     {
       "path": "/api/cron/buyers-followup",
@@ -135,6 +67,14 @@
     {
       "path": "/api/cron/entity-seo-expansion",
       "schedule": "25 17 * * *"
+    },
+    {
+      "path": "/api/cron/visibility-aeo-publisher",
+      "schedule": "28 17 * * *"
+    },
+    {
+      "path": "/api/cron/visibility-indexing-push",
+      "schedule": "35 17 * * *"
     },
     {
       "path": "/api/cron/daily-ops-report",
@@ -157,12 +97,12 @@
       "schedule": "45 18 * * *"
     },
     {
-      "path": "/api/cron/pr-engine-outreach-queue",
-      "schedule": "52 18 * * *"
-    },
-    {
       "path": "/api/cron/pr-engine-weekly-learning",
       "schedule": "0 19 * * 0"
+    },
+    {
+      "path": "/api/cron/aeo-site-audit",
+      "schedule": "0 9 * * *"
     }
   ]
 }

@@ -418,7 +418,7 @@ export function LenderPartnerPortal({ token }: { token: string }) {
                   </div>
                   <div className="space-y-2">
                     <Label>Partner process owner</Label>
-                    <Textarea value={form.partnerProcessOwner} onChange={(event) => setForm((current) => ({ ...current, partnerProcessOwner: event.target.value }))} placeholder="Who handles partner referrals, intake, or relationship ops?" />
+                    <Textarea value={form.partnerProcessOwner} onChange={(event) => setForm((current) => ({ ...current, partnerProcessOwner: event.target.value }))} placeholder="Who handles partner referrals, intake, or relationship management?" />
                   </div>
                 </div>
 

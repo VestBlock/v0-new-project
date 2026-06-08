@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-label="VestBlock Search Visibility and AI Receptionist flowchart">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#05070b"/>
+      <stop offset="52%" stop-color="#07131d"/>
+      <stop offset="100%" stop-color="#02050a"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>
+      .title{font:700 54px Arial,Helvetica,sans-serif;fill:#f8fdff}
+      .sub{font:400 24px Arial,Helvetica,sans-serif;fill:#b7c7d4}
+      .label{font:700 25px Arial,Helvetica,sans-serif;fill:#f8fdff}
+      .body{font:400 20px Arial,Helvetica,sans-serif;fill:#b7c7d4}
+      .small{font:700 18px Arial,Helvetica,sans-serif;fill:#22d3ee;letter-spacing:2px}
+    </style>
+  </defs>
+  <rect width="1400" height="900" fill="url(#bg)"/>
+  <circle cx="1220" cy="120" r="210" fill="#0ea5e9" opacity=".12"/>
+  <circle cx="140" cy="780" r="260" fill="#2563eb" opacity=".12"/>
+  <text x="80" y="95" class="small">VESTBLOCK GROWTH SYSTEM</text>
+  <text x="80" y="165" class="title">From being found to being booked</text>
+  <text x="82" y="210" class="sub">Search Visibility brings better visitors in. AI Receptionist helps turn them into cleaner conversations.</text>
+
+  <g>
+    <rect x="80" y="320" width="265" height="180" rx="28" fill="#0b1320" stroke="#1f4353"/>
+    <circle cx="122" cy="364" r="22" fill="url(#cyan)" filter="url(#glow)"/>
+    <text x="115" y="372" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#041016">1</text>
+    <text x="156" y="370" class="label">Customer Searches</text>
+    <text x="112" y="414" class="body">They look for a service, city,</text><text x="112" y="442" class="body">question, or problem your business</text><text x="112" y="470" class="body">can solve.</text>
+  </g>
+  <g>
+    <rect x="405" y="320" width="265" height="180" rx="28" fill="#0b1320" stroke="#1f4353"/>
+    <circle cx="447" cy="364" r="22" fill="url(#cyan)" filter="url(#glow)"/>
+    <text x="440" y="372" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#041016">2</text>
+    <text x="481" y="370" class="label">Search Visibility</text>
+    <text x="437" y="414" class="body">VestBlock improves pages, answers,</text><text x="437" y="442" class="body">city coverage, and trust proof so</text><text x="437" y="470" class="body">the business is easier to find.</text>
+  </g>
+  <g>
+    <rect x="730" y="320" width="265" height="180" rx="28" fill="#0b1320" stroke="#1f4353"/>
+    <circle cx="772" cy="364" r="22" fill="url(#cyan)" filter="url(#glow)"/>
+    <text x="765" y="372" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#041016">3</text>
+    <text x="806" y="370" class="label">Website Converts</text>
+    <text x="762" y="414" class="body">The visitor sees a clear offer,</text><text x="762" y="442" class="body">stronger proof, and a next step</text><text x="762" y="470" class="body">that does not feel confusing.</text>
+  </g>
+  <g>
+    <rect x="1055" y="320" width="265" height="180" rx="28" fill="#0b1320" stroke="#1f4353"/>
+    <circle cx="1097" cy="364" r="22" fill="url(#cyan)" filter="url(#glow)"/>
+    <text x="1090" y="372" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#041016">4</text>
+    <text x="1131" y="370" class="label">AI Receptionist</text>
+    <text x="1087" y="414" class="body">The assistant answers common</text><text x="1087" y="442" class="body">questions, captures details,</text><text x="1087" y="470" class="body">qualifies the lead, and routes</text><text x="1087" y="498" class="body">booking or follow-up.</text>
+  </g>
+
+  <path d="M345 410 C375 410, 375 410, 405 410" stroke="url(#cyan)" stroke-width="5" fill="none" filter="url(#glow)"/>
+  <path d="M670 410 C700 410, 700 410, 730 410" stroke="url(#cyan)" stroke-width="5" fill="none" filter="url(#glow)"/>
+  <path d="M995 410 C1025 410, 1025 410, 1055 410" stroke="url(#cyan)" stroke-width="5" fill="none" filter="url(#glow)"/>
+
+  <rect x="180" y="640" width="1040" height="140" rx="32" fill="#0b1320" stroke="#1f4353"/>
+  <text x="230" y="700" class="label">Result: better demand capture</text>
+  <text x="230" y="742" class="body">More people can understand the business, ask the right questions, leave useful information, and move toward a real sales conversation.</text>
+  <text x="230" y="818" class="body" fill="#7f92a3">No rankings, lead volume, bookings, or revenue are guaranteed. VestBlock improves the path and the follow-up system.</text>
+</svg>

@@ -23,6 +23,28 @@ function monthsInBusiness(startDate?: string | null) {
   return Math.max(0, Math.round((Date.now() - parsed) / (30 * 24 * 60 * 60 * 1000)));
 }
 
+function shouldPersistLenderMatches() {
+  return ['1', 'true', 'yes'].includes(
+    String(process.env.ENABLE_LENDER_MATCH_PERSISTENCE || '').toLowerCase()
+  );
+}
+
+async function maybePersistBorrowerLenderMatches(
+  input: Parameters<typeof persistBorrowerLenderMatches>[0]
+) {
+  if (!shouldPersistLenderMatches()) return [];
+
+  try {
+    return await persistBorrowerLenderMatches(input);
+  } catch (error) {
+    console.warn(
+      '[funding-recommendation] lender match persistence skipped:',
+      error instanceof Error ? error.message : error
+    );
+    return [];
+  }
+}
+
 export async function GET() {
   const { user, response } = await requireFundingUser();
   if (response || !user) return response;
@@ -46,7 +68,7 @@ export async function GET() {
     recommendation.id
   );
 
-  const lenderMatches = await persistBorrowerLenderMatches({
+  const lenderMatches = await maybePersistBorrowerLenderMatches({
     userId: user.id,
     fundingProfileId: profile?.id,
     fundingRecommendationId: recommendation.id,
@@ -168,7 +190,7 @@ export async function POST(req: Request) {
     recommendation.id
   );
 
-  const lenderMatches = await persistBorrowerLenderMatches({
+  const lenderMatches = await maybePersistBorrowerLenderMatches({
     userId: user.id,
     fundingProfileId: profile.id,
     fundingRecommendationId: recommendation.id,

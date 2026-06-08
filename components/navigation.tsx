@@ -34,8 +34,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isClientAdmin } from '@/lib/auth/client-admin';
-import Image from 'next/image';
 import React from 'react';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
@@ -52,21 +52,27 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
+    { href: '/sell', label: 'Sellers' },
+    { href: '/buyers', label: 'Buyers' },
+    { href: '/lenders', label: 'Lenders' },
     { href: '/dealvault', label: 'DealVault' },
-    { href: '/smart-contracts', label: 'Smart Contracts' },
-    { href: '/visibility-expansion', label: 'Visibility' },
-    { href: '/ai-assistant', label: 'AI Receptionist' },
-    { href: '/funding', label: 'Funding' },
+    { href: '/real-estate-funding', label: 'Capital' },
     { href: '/pricing', label: 'Pricing' },
-    { href: '/learn', label: 'Learn' },
   ];
+
+  const isActiveLink = (href: string) => {
+    const baseHref = href.split('#')[0];
+    if (baseHref === '/') return pathname === '/';
+    return pathname === baseHref || pathname.startsWith(`${baseHref}/`);
+  };
 
   // User menu links (when logged in)
   const userMenuLinks = [
-    { href: '/get-started', label: 'Workspace', icon: LayoutDashboard },
+    { href: '/dashboard/services', label: 'Growth System', icon: Sparkles },
+    { href: '/get-started', label: 'Network Hub', icon: LayoutDashboard },
     { href: '/profile', label: 'Profile', icon: User },
     { href: '/dashboard/funding', label: 'Funding Assistant', icon: Sparkles },
-    { href: '/dashboard/services', label: 'My Services', icon: FileText },
+    { href: '/dashboard', label: 'Dashboard', icon: FileText },
     { href: '/credit-upload', label: 'Credit Upload', icon: CreditCard },
     { href: '/tools/my-dispute-letters', label: 'Dispute Letters', icon: FileText },
     { href: '/tools/business-credit', label: 'Business Credit', icon: Briefcase },
@@ -88,14 +94,8 @@ export function Navigation() {
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#050913]/85 shadow-[0_10px_40px_rgba(2,6,23,0.22)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#050913]/70">
       <div className="container flex h-14 items-center">
         <div className="mr-4 flex items-center">
-          <Link href="/" className="group mr-6 flex items-center space-x-2 rounded-full outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-            <Image
-              src="/4D3E27E0-6C7A-4B5B-92D5-CF92182A4C7A.png"
-              alt="VestBlock Logo"
-              width={28}
-              height={28}
-            />
-            <span className="font-bold transition-colors group-hover:text-cyan-100">VestBlock</span>
+          <Link href="/" className="group mr-6 flex items-center rounded-full outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
           <nav className="hidden items-center space-x-6 text-sm font-medium lg:flex">
@@ -105,7 +105,7 @@ export function Navigation() {
                 href={link.href}
                 className={cn(
                   'rounded-full px-3 py-2 transition-[color,background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-foreground hover:shadow-[0_0_24px_rgba(34,211,238,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  pathname === link.href
+                  isActiveLink(link.href)
                     ? 'bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgba(34,211,238,0.18)]'
                     : 'text-foreground/60'
                 )}
@@ -126,29 +126,23 @@ export function Navigation() {
                   <span className="sr-only">Toggle Menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left">
+              <SheetContent side="left" className="overflow-y-auto">
                 <SheetHeader className="sr-only">
                   <SheetTitle>Site navigation</SheetTitle>
                   <SheetDescription>
-                    Browse VestBlock services, pricing, learning resources, and account links.
+                    Browse VestBlock seller, buyer, lender, funding, and DealVault paths.
                   </SheetDescription>
                 </SheetHeader>
-                <Link href="/" className="mb-6 flex items-center space-x-2">
-                  <Image
-                    src="/4D3E27E0-6C7A-4B5B-92D5-CF92182A4C7A.png"
-                    alt="VestBlock Logo"
-                    width={28}
-                    height={28}
-                  />
-                  <span className="font-bold">VestBlock</span>
+                <Link href="/" className="group mb-6 flex items-center">
+                  <BrandLogo showTagline />
                 </Link>
-                <div className="flex flex-col space-y-3">
+                <div className="flex flex-col space-y-2">
                   {mainNavLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                    className="rounded-xl px-3 py-3 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -156,15 +150,15 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/get-started" onClick={() => setIsMobileMenuOpen(false)} className="text-foreground">
+                      <Link href="/login?redirect=/dashboard/services" onClick={() => setIsMobileMenuOpen(false)} className="text-foreground">
                         Sign In
                       </Link>
                       <Link
-                        href="/dealvault/demo"
+                        href="/get-started"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Request Demo
+                        Join Network
                       </Link>
                     </>
                   ) : (
@@ -258,10 +252,10 @@ export function Navigation() {
           ) : (
             <nav className="hidden items-center space-x-2 md:flex">
               <Button variant="ghost" asChild>
-                <Link href="/login?redirect=/get-started">Sign In</Link>
+                <Link href="/login?redirect=/dashboard/services">Sign In</Link>
               </Button>
-              <Button asChild className="bg-cyan-500 hover:bg-cyan-600">
-                <Link href="/dealvault/demo">Request Demo</Link>
+              <Button asChild className="bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.25)] transition-all duration-200">
+                <Link href="/get-started">Join Network</Link>
               </Button>
             </nav>
           )}

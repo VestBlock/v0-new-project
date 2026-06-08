@@ -5,6 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { persistPropertyBuyerMatches } from '@/lib/buyers/service';
+import { buildRoughPropertyEstimate, parseCurrencyAmount } from '@/lib/property/roughEstimate';
 
 // Twilio SMS function
 async function sendSMS(to: string, message: string): Promise<boolean> {
@@ -66,9 +67,17 @@ interface LeadFormData {
   liensOrTaxes?: string;
   occupancyStatus?: string;
   bestTimeToCall?: string;
+  preferredSalePath?: string;
   notes?: string;
   reasonForSelling?: string;
 }
+
+const sellerSalePathLabels: Record<string, string> = {
+  fast_cash: 'Fast cash buyer review',
+  creative_structure: 'Creative structure review',
+  novation: 'Novation / market-assisted sale review',
+  not_sure: 'Needs best-path review',
+};
 
 function buildPropertyAddress(address?: string | null, city?: string | null, state?: string | null) {
   const parts = [address, city, state]
@@ -97,6 +106,31 @@ export async function POST(request: NextRequest) {
       data.city,
       data.state
     );
+    const preferredSalePathKey =
+      typeof data.preferredSalePath === 'string' && data.preferredSalePath.trim()
+        ? data.preferredSalePath.trim()
+        : 'not_sure';
+    const preferredSalePathLabel =
+      sellerSalePathLabels[preferredSalePathKey] || sellerSalePathLabels.not_sure;
+    const sellerContext = [data.reasonForSelling, preferredSalePathLabel, data.notes]
+      .filter(Boolean)
+      .join('; ');
+    const roughEstimate = await buildRoughPropertyEstimate({
+      address: normalizedPropertyAddress,
+      city: data.city,
+      state: data.state,
+      propertyType: data.propertyType,
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+      sellerEstimatedValue: data.estimatedValue,
+      askingPrice: data.askingPrice,
+      mortgageBalance: data.mortgageBalance,
+      liensOrTaxes: data.liensOrTaxes,
+      propertyCondition: data.propertyCondition,
+      timelineToSell: data.timelineToSell,
+      occupancyStatus: data.occupancyStatus,
+      preferredSalePath: preferredSalePathKey,
+    });
 
     // Keep the older seller table best-effort only so the main workflow
     // does not fail when the legacy table is absent in a newer environment.
@@ -141,7 +175,7 @@ export async function POST(request: NextRequest) {
         best_offer: 'Real Estate Seller Lead',
         pain_signal:
           data.reasonForSelling ||
-          `Property condition ${data.propertyCondition || 'unknown'}; timeline ${data.timelineToSell || 'unknown'}.`,
+          `Preferred path ${preferredSalePathLabel}; property condition ${data.propertyCondition || 'unknown'}; timeline ${data.timelineToSell || 'unknown'}.`,
         contact_info: {
           name: data.name,
           email: data.email,
@@ -164,16 +198,20 @@ export async function POST(request: NextRequest) {
           liensOrTaxes: data.liensOrTaxes,
           occupancyStatus: data.occupancyStatus,
           bestTimeToCall: data.bestTimeToCall,
+          preferredSalePath: preferredSalePathKey,
+          preferredSalePathLabel,
           notes: data.notes,
           reasonForSelling: data.reasonForSelling,
+          roughEstimate,
           legacyId: legacyLeadId
         },
         market_segment: 'seller_lead',
-        outreach_angle: 'Seller exit help and distressed-property options',
+        outreach_angle: `Seller exit review: ${preferredSalePathLabel}`,
         email: data.email || null,
         notes:
-          data.notes ||
-          `${normalizedPropertyAddress || 'Unknown property'}; timeline ${data.timelineToSell || 'not specified'}.`,
+          data.notes
+            ? `${data.notes} Preferred sale path: ${preferredSalePathLabel}.`
+            : `${normalizedPropertyAddress || 'Unknown property'}; timeline ${data.timelineToSell || 'not specified'}; preferred sale path ${preferredSalePathLabel}.`,
       })
       .select('id')
       .single();
@@ -185,13 +223,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-
-    const estimateNumber = (value?: string | null) => {
-      if (!value) return null;
-      const cleaned = String(value).replace(/[^0-9.]/g, '');
-      const parsed = Number.parseFloat(cleaned);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
 
     const timelineMap: Record<string, number> = {
       asap: 7,
@@ -211,11 +242,12 @@ export async function POST(request: NextRequest) {
           ? 6
           : 4;
 
-    const summary = `${normalizedPropertyAddress || 'Unknown property'}; timeline ${data.timelineToSell || 'not specified'}; value ${data.estimatedValue || 'unknown'}; mortgage ${data.mortgageBalance || 'unknown'}.`;
+    const summary = `${normalizedPropertyAddress || 'Unknown property'}; path ${preferredSalePathLabel}; timeline ${data.timelineToSell || 'not specified'}; rough value ${roughEstimate.estimateValue ? `$${roughEstimate.estimateValue.toLocaleString()}` : data.estimatedValue || 'unknown'} (${roughEstimate.confidenceLabel}); mortgage ${data.mortgageBalance || 'unknown'}. ${roughEstimate.buyerPacketSummary}`;
 
-    const smsMessage = `New seller lead: ${data.name} - ${normalizedPropertyAddress || 'Unknown property'} - ${data.timelineToSell || 'Timeline not specified'} - Value: ${data.estimatedValue || 'unknown'}`;
+    const smsMessage = `New seller lead: ${data.name} - ${preferredSalePathLabel} - ${normalizedPropertyAddress || 'Unknown property'} - ${data.timelineToSell || 'Timeline not specified'} - Rough value: ${roughEstimate.estimateValue ? `$${roughEstimate.estimateValue.toLocaleString()}` : data.estimatedValue || 'unknown'}`;
 
-    void Promise.allSettled([
+    const alertPhone = process.env.SELLER_LEAD_ALERT_PHONE || process.env.ADMIN_ALERT_PHONE || null;
+    const followUpTasks: Array<Promise<unknown>> = [
       runNewLeadAutomation({
         leadId: unifiedLead.id,
         leadType: 'sell_house',
@@ -234,9 +266,12 @@ export async function POST(request: NextRequest) {
           propertyType: data.propertyType,
           propertyCondition: data.propertyCondition,
           timelineToSell: data.timelineToSell,
+          preferredSalePath: preferredSalePathKey,
+          preferredSalePathLabel,
           occupancyStatus: data.occupancyStatus,
           estimatedValue: data.estimatedValue,
           mortgageBalance: data.mortgageBalance,
+          roughEstimate,
         },
         }),
       persistPropertyBuyerMatches({
@@ -249,15 +284,16 @@ export async function POST(request: NextRequest) {
         occupancy: data.occupancyStatus || null,
         distressLevel,
         rehabLevel: distressLevel,
-        askingPrice: estimateNumber(data.askingPrice),
-        estimatedValue: estimateNumber(data.estimatedValue),
+        askingPrice: parseCurrencyAmount(data.askingPrice),
+        estimatedValue: roughEstimate.estimateValue || parseCurrencyAmount(data.estimatedValue),
         landlordSignal:
           data.occupancyStatus?.toLowerCase().includes('tenant') ||
           data.occupancyStatus?.toLowerCase().includes('rental') ||
           false,
-        sellerMotivation: data.reasonForSelling || data.notes || null,
+        sellerMotivation: sellerContext || null,
         timelineDays: timelineMap[normalizedTimeline] ?? null,
         creativeFinanceOpen:
+          preferredSalePathKey === 'creative_structure' ||
           /subject to|seller finance|creative/i.test(data.reasonForSelling || '') ||
           /subject to|seller finance|creative/i.test(data.notes || ''),
         languagePreference:
@@ -266,8 +302,13 @@ export async function POST(request: NextRequest) {
             : 'en',
         marketTag: `${data.city}, ${data.state}`,
       }),
-      sendSMS('+14146876923', smsMessage),
-    ]).then((results) => {
+    ];
+
+    if (alertPhone) {
+      followUpTasks.push(sendSMS(alertPhone, smsMessage));
+    }
+
+    void Promise.allSettled(followUpTasks).then((results) => {
       const rejected = results.filter((result) => result.status === 'rejected');
       if (rejected.length > 0) {
         console.error('Seller lead follow-up tasks failed:', rejected);
@@ -278,6 +319,7 @@ export async function POST(request: NextRequest) {
       success: true,
       leadId: unifiedLead.id,
       message: 'Lead submitted successfully',
+      roughEstimate,
     });
   } catch (error) {
     console.error('API error:', error);

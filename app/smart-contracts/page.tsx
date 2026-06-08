@@ -92,7 +92,7 @@ export default function SmartContractsPage() {
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
               <Badge className="bg-cyan-600 text-white">Live on Polygon</Badge>
-              <Badge variant="outline">DealVault proof layer</Badge>
+              <Badge variant="outline">DealVault verification records</Badge>
               <Badge variant="outline">No raw documents on-chain</Badge>
             </div>
 
@@ -101,7 +101,7 @@ export default function SmartContractsPage() {
                 Smart contract records for real business agreements.
               </h1>
               <p className="max-w-3xl text-lg text-muted-foreground">
-                VestBlock uses live smart contracts as a proof layer for DealVault. Teams can
+                VestBlock uses live smart contracts as a verification record for DealVault. Teams can
                 track proof records, payout status, and milestone history while keeping private
                 files, contracts, and sensitive deal details off-chain.
               </p>

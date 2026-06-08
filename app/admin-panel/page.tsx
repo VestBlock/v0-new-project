@@ -178,6 +178,7 @@ type AdminDashboard = {
       resendConfigured: boolean;
       adminAlertEmailConfigured: boolean;
       fromEmailConfigured: boolean;
+      outreachMailingAddressConfigured: boolean;
       siteUrlConfigured: boolean;
     };
     payments: {
@@ -469,6 +470,7 @@ const envLabels: Record<keyof AdminDashboard['automation']['env'], string> = {
   resendConfigured: 'RESEND_API_KEY',
   adminAlertEmailConfigured: 'ADMIN_ALERT_EMAIL',
   fromEmailConfigured: 'FROM_EMAIL',
+  outreachMailingAddressConfigured: 'OUTREACH_MAILING_ADDRESS',
   siteUrlConfigured: 'NEXT_PUBLIC_SITE_URL',
 };
 
@@ -482,6 +484,31 @@ const paymentEnvLabels: Array<
   ['paypalSecretConfigured', 'PAYPAL_CLIENT_SECRET'],
   ['paypalWebhookConfigured', 'PAYPAL_WEBHOOK_ID'],
 ];
+
+function getAutomationBlockingIssues(dashboard: AdminDashboard) {
+  const issues: Array<{ title: string; description: string; action: string }> = [];
+  const env = dashboard.automation.env;
+
+  if (!env.outreachMailingAddressConfigured) {
+    issues.push({
+      title: 'Outbound lead email is blocked',
+      description:
+        'AUTO_SEND can be enabled, but prospect email should not run until a compliant business mailing address is configured.',
+      action: 'Add OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS in the deployment environment.',
+    });
+  }
+
+  if (!env.fromEmailConfigured || !env.resendConfigured) {
+    issues.push({
+      title: 'Resend fallback is incomplete',
+      description:
+        'If Gmail fails, the app needs a verified fallback sender before lead outreach can continue safely.',
+      action: 'Confirm FROM_EMAIL and RESEND_API_KEY are configured and verified.',
+    });
+  }
+
+  return issues;
+}
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown';
@@ -2911,6 +2938,24 @@ function AdminPanelPageContent() {
           <TabsContent value="automation">
             <div className="space-y-4">
               <MarketCommandCard />
+
+              {getAutomationBlockingIssues(dashboard).length > 0 && (
+                <Alert variant="destructive">
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertTitle>Outreach is not ready to send</AlertTitle>
+                  <AlertDescription>
+                    <div className="mt-2 space-y-2">
+                      {getAutomationBlockingIssues(dashboard).map((issue) => (
+                        <div key={issue.title}>
+                          <p className="font-medium text-foreground">{issue.title}</p>
+                          <p>{issue.description}</p>
+                          <p className="font-medium">{issue.action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="grid gap-4 lg:grid-cols-4">
                 <Card>

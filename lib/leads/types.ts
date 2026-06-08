@@ -4,6 +4,7 @@ export type LeadSourceKey =
   | 'milwaukee_accela_enforcement'
   | 'google_places_businesses'
   | 'outscraper_google_maps_businesses'
+  | 'weak_web_presence_businesses'
   | 'apify_yelp_businesses'
   | 'sam_contract_opportunities'
   | 'zillow_stale_listing_import'
@@ -33,6 +34,7 @@ export type LeadCategory =
   | 'seller_lead'
 
 export type LeadOffer =
+  | 'DealVault Agreement & Milestone Records'
   | 'DealVault / Operator Accountability'
   | 'Business Funding'
   | 'Business Credit Builder'

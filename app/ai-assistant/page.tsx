@@ -8,6 +8,7 @@ import {
   Bot,
   CalendarClock,
   CheckCircle2,
+  FileText,
   Globe,
   Loader2,
   Rocket,
@@ -37,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { WebsitePreviewShowcase } from "@/components/site-preview-showcase";
+import { AiReceptionistProofChat } from "@/components/ai-receptionist-proof-chat";
 import type { SitePreviewResult } from "@/lib/services/sitePreview";
 import {
   automationPackageKeys,
@@ -132,7 +134,9 @@ function AIAssistantContent() {
   }, [previewBusinessName, previewIndustry, previewSystem, selectedPackage.key, selectedTemplate]);
   const deliverableStatusLabel =
     submissionState?.deliverableStatus === "sent_to_client"
-      ? "Ready in your account"
+      ? isAuthenticated
+        ? "Ready in your account"
+        : "Ready after account setup"
       : submissionState?.deliverableStatus === "ready_for_review"
         ? "Being reviewed"
         : submissionState?.deliverableStatus === "queued"
@@ -281,8 +285,25 @@ function AIAssistantContent() {
                 </a>
               </Button>
               <Button asChild size="lg" variant="outline">
+                <a href="#ai-receptionist-demo">Try Demo</a>
+              </Button>
+              <Button asChild size="lg" variant="ghost">
                 <Link href="/pricing">Compare Pricing</Link>
               </Button>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <Link href="/services/vestblock-ai-assistant" className="underline-offset-4 hover:underline">
+                Read the AI Receptionist service guide
+              </Link>
+              {automationPackages.map((pkg) => (
+                <Link
+                  key={pkg.key}
+                  href={`/services/${pkg.slug}`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  {pkg.title} guide
+                </Link>
+              ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
@@ -339,6 +360,27 @@ function AIAssistantContent() {
               </p>
             </CardContent>
           </Card>
+        </div>
+      </section>
+
+      <section id="ai-receptionist-demo" className="px-4 py-16">
+        <div className="container mx-auto max-w-7xl space-y-6">
+          <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+            <div className="space-y-3">
+              <Badge className="w-fit bg-cyan-600 text-white">
+                Live proof example
+              </Badge>
+              <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+                Test the receptionist flow before requesting setup.
+              </h2>
+            </div>
+            <p className="text-muted-foreground">
+              This demo is intentionally simple and public: it shows the core job buyers care about,
+              answering questions, qualifying intent, and creating a handoff the business can act on.
+              A client install connects the flow to their real booking, inbox, or lead pipeline.
+            </p>
+          </div>
+          <AiReceptionistProofChat />
         </div>
       </section>
 
@@ -454,6 +496,45 @@ function AIAssistantContent() {
         </div>
       </section>
 
+      <section className="px-4 py-12">
+        <div className="container mx-auto max-w-7xl">
+          <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+            <CardHeader>
+              <Badge variant="outline" className="w-fit border-cyan-500/30 text-cyan-200">
+                Buyer guide
+              </Badge>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <FileText className="h-5 w-5 text-cyan-500" />
+                See how the receptionist setup works
+              </CardTitle>
+              <CardDescription>
+                Use these short assets to compare the setup, launch path, and growth flow before you request help.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-ai-receptionist-one-pager.pdf" target="_blank" rel="noreferrer">
+                  AI Receptionist One-Pager
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-growth-flowchart.svg" target="_blank" rel="noreferrer">
+                  Growth Flowchart
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild variant="outline" className="justify-between">
+                <a href="/sales/vestblock-7-day-growth-launch-plan.pdf" target="_blank" rel="noreferrer">
+                  7-Day Launch Plan
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
       <section id="request-setup" className="px-4 py-16">
         <div className="container mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_360px] lg:items-start">
           <Card className="premium-card border-cyan-500/20">
@@ -508,12 +589,12 @@ function AIAssistantContent() {
                       {submissionState.packageTitle} request saved for {submissionState.businessName}
                     </p>
                     <p className="mt-1">
-                      Status: {deliverableStatusLabel}. We will review your site and prepare the next recommendations.
+                      Status: {deliverableStatusLabel}. VestBlock will review your site, confirm the best-fit scope, and send the next recommendations before any build work starts.
                     </p>
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                       <Button asChild size="sm">
                         <Link href={isAuthenticated ? "/dashboard/services" : "/register?redirect=/dashboard/services"}>
-                          {isAuthenticated ? "View My Account" : "Create Account to Save"}
+                          {isAuthenticated ? "View My Account" : "Create Account for Dashboard Access"}
                         </Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
@@ -578,10 +659,13 @@ function AIAssistantContent() {
                     <Input
                       id="phone"
                       name="phone"
+                      type="tel"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      required
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Add a phone number only if you want a call-back for setup questions.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="websiteUrl">Website URL</Label>
@@ -774,9 +858,81 @@ function AIAssistantContent() {
   );
 }
 
+function AIAssistantStaticFallback() {
+  return (
+    <main className="premium-page">
+      <section className="px-4 pb-16 pt-24">
+        <div className="container mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
+          <div className="space-y-5">
+            <Badge className="w-fit bg-cyan-600 text-white">
+              Lead capture and booking systems
+            </Badge>
+            <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+              AI receptionist, booking, and website improvements for service businesses.
+            </h1>
+            <p className="max-w-3xl text-lg text-muted-foreground">
+              VestBlock helps businesses capture more of the demand they already have with
+              clearer intake, booking handoff, and website lead-flow improvements.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
+                <a href="#request-setup">
+                  Request Setup
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/pricing">Compare Pricing</Link>
+              </Button>
+            </div>
+          </div>
+
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle>What this fixes</CardTitle>
+              <CardDescription>
+                For teams losing inquiries to missed calls, weak forms, slow replies, or unclear booking steps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>AI receptionist setup for common questions, lead capture, and handoff.</p>
+              <p>Appointment booking logic when visitors are ready for a real conversation.</p>
+              <p>Website upgrade direction around mobile clarity, CTAs, and form flow.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section id="request-setup" className="px-4 py-16">
+        <div className="container mx-auto max-w-4xl">
+          <Card className="premium-card border-cyan-500/20">
+            <CardHeader>
+              <CardTitle>Request your setup</CardTitle>
+              <CardDescription>
+                Tell VestBlock what is breaking in the current lead flow and we will review the best-fit next step.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-3">
+              <Button asChild>
+                <Link href="/pricing">View Packages</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/services/vestblock-ai-assistant">Read Service Guide</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/get-started">Choose My Path</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function AIAssistantPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+    <Suspense fallback={<AIAssistantStaticFallback />}>
       <AIAssistantContent />
     </Suspense>
   );

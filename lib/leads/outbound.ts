@@ -17,7 +17,7 @@ type SendLeadEmailResult = {
 
 function buildEmailBodyWithComplianceNote(message: OutreachMessageRecord) {
   const body = String(message.body || '').trim()
-  const complianceNote = String(message.compliance_note || '').trim()
+  const complianceNote = buildLeadOutreachComplianceBlock(message)
   if (!complianceNote) return body
 
   const normalizedBody = body.toLowerCase()
@@ -25,6 +25,25 @@ function buildEmailBodyWithComplianceNote(message: OutreachMessageRecord) {
   if (normalizedBody.includes(normalizedNote)) return body
 
   return body ? `${body}\n\n${complianceNote}` : complianceNote
+}
+
+function getOutreachMailingAddress() {
+  return (
+    process.env.OUTREACH_MAILING_ADDRESS ||
+    process.env.BUSINESS_MAILING_ADDRESS ||
+    process.env.COMPANY_MAILING_ADDRESS ||
+    process.env.PUBLIC_BUSINESS_ADDRESS ||
+    ''
+  ).trim()
+}
+
+function buildLeadOutreachComplianceBlock(message: OutreachMessageRecord) {
+  const note = String(message.compliance_note || '').trim()
+  const mailingAddress = getOutreachMailingAddress()
+  const parts = [note || 'If this is not relevant, reply and we will not contact you again.']
+  if (mailingAddress) parts.push(`VestBlock mailing address: ${mailingAddress}`)
+
+  return parts.filter(Boolean).join('\n')
 }
 
 function getWorkspaceSender() {
@@ -58,6 +77,7 @@ export function getOutboundProviderReadiness() {
     resend: hasResendConfig(),
     defaultProvider: hasGmailConfig() ? 'gmail' : hasResendConfig() ? 'resend' : 'none',
     sender: getWorkspaceSender(),
+    mailingAddressConfigured: Boolean(getOutreachMailingAddress()),
   }
 }
 
@@ -164,6 +184,15 @@ async function sendWithResend(input: SendLeadEmailInput): Promise<SendLeadEmailR
 export async function sendLeadOutreachEmail(
   input: SendLeadEmailInput
 ): Promise<SendLeadEmailResult> {
+  if (!getOutreachMailingAddress()) {
+    return {
+      ok: false,
+      provider: 'none',
+      error:
+        'Lead outreach is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
+    }
+  }
+
   if (!isUsableContactEmail(input.lead.email)) {
     return { ok: false, provider: 'none', error: 'Lead does not have a usable email address.' }
   }

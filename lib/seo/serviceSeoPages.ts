@@ -31,12 +31,69 @@ export type ServiceSeoPage = {
 
 const baseServiceSeoPages: ServiceSeoPage[] = [
   {
+    serviceKey: 'dealvault',
+    slug: 'dealvault',
+    title: 'DealVault Proof Records, Milestones, And Payout Tracking',
+    seoTitle: 'DealVault Proof Records, Payout Tracking, And Milestone Accountability',
+    metaDescription:
+      'Use DealVault to organize agreements, milestones, payouts, and proof certificates so teams can reduce follow-up confusion without replacing legal or escrow workflows.',
+    excerpt:
+      'DealVault is a premium record product for teams that need cleaner agreement history, milestone tracking, and payout accountability.',
+    audience:
+      'Real estate teams, private lenders, contractors, agencies, and businesses that need clearer agreement records, payouts, and partner accountability.',
+    primaryRoute: '/dealvault/demo',
+    primaryCta: 'Request DealVault Demo',
+    secondaryRoute: '/dealvault',
+    secondaryCta: 'View DealVault Overview',
+    sections: [
+      {
+        heading: 'What DealVault is',
+        body:
+          'DealVault is a record and accountability product. It helps teams capture agreement context, milestones, payouts, and supporting documents so follow-up stays clear when multiple parties are involved.',
+        bullets: [
+          'Agreement timeline and milestone history',
+          'Payout tracking and accountability notes',
+          'Proof certificates and supporting documents',
+          'Status updates your team can review',
+        ],
+      },
+      {
+        heading: 'When DealVault is the right fit',
+        body:
+          'DealVault is useful when partners need clarity around what was agreed to, what was delivered, what was paid, and what evidence exists for each step — especially when teams grow or responsibilities change.',
+      },
+      {
+        heading: 'How VestBlock keeps it safe and compliant',
+        body:
+          'DealVault is not a replacement for legal counsel, escrow, title, brokerage compliance, or custody. It focuses on record organization and accountability so the right professionals can still operate the transaction.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'Is DealVault an escrow or payment processor?',
+        answer:
+          'No. DealVault is a record product. It organizes records and milestones, but it does not hold funds, move money, or replace escrow and settlement workflows.',
+      },
+      {
+        question: 'Does DealVault replace legal agreements or compliance requirements?',
+        answer:
+          'No. DealVault helps track what happened and store supporting records. Teams still use the proper legal and compliance processes for contracts and transactions.',
+      },
+      {
+        question: 'What is the safest first step?',
+        answer:
+          'Start with the DealVault demo and walkthrough request. VestBlock can then confirm fit, scope, and next steps for your team.',
+      },
+    ],
+    relatedSlugs: ['real-estate-funding', 'vestblock-ai-assistant', 'visibility-expansion-saas'],
+  },
+  {
     serviceKey: 'credit_analysis',
     slug: 'ai-credit-analysis',
-    title: 'AI Credit Analysis For Credit Repair Planning',
-    seoTitle: 'AI Credit Analysis For Credit Repair And Dispute Planning',
+    title: 'Credit Review Tools For Credit Repair Planning',
+    seoTitle: 'Credit Review Tools For Credit Repair And Dispute Planning',
     metaDescription:
-      'Use VestBlock AI credit analysis to organize credit report issues, understand dispute opportunities, and prepare next steps without score guarantees.',
+      'Use VestBlock credit review tools to organize credit report issues, understand dispute opportunities, and prepare next steps without score guarantees.',
     excerpt:
       'VestBlock helps users turn a confusing credit report into organized findings, next steps, and dispute-letter support they can review.',
     audience:
@@ -49,11 +106,11 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What this service does',
         body:
-          'AI Credit Analysis reviews uploaded credit report text and organizes the information into practical credit repair categories. The goal is clarity: which items may need documentation, which accounts may require dispute review, and which next steps make sense before letters are generated.',
+          'VestBlock credit review tools organize uploaded credit report text into practical credit repair categories. The goal is clarity: which items may need documentation, which accounts may require dispute review, and which next steps make sense before letters are generated.',
         bullets: [
           'Organizes negative items and account details',
           'Helps identify dispute-letter starting points',
-          'Connects report status to admin review and email alerts',
+          'Connects report status to review notes and email alerts',
           'Keeps the user in control of what they review and send',
         ],
       },
@@ -70,7 +127,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     ],
     faqs: [
       {
-        question: 'Does AI credit analysis repair my credit automatically?',
+        question: 'Do these credit review tools repair my credit automatically?',
         answer:
           'No. It organizes report information and helps prepare next steps. Users still review the findings, decide what to dispute, and control any letters or follow-up actions.',
       },
@@ -95,13 +152,13 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     metaDescription:
       'Check business funding eligibility for free, then use VestBlock prep services if documents, revenue, credit, or business structure need work first.',
     excerpt:
-      'VestBlock helps business owners understand whether they should apply now, prepare first, or review a more structured funding strategy.',
+      'VestBlock helps business owners understand whether they should apply now, prepare first, or move into a clearer funding prep plan.',
     audience:
       'Business owners comparing funding options, document gaps, credit profile, and use-of-funds requirements.',
     primaryRoute: '/funding#free-eligibility-check',
     primaryCta: 'Check Funding Eligibility Free',
     secondaryRoute: '/funding/business-funding-strategy',
-    secondaryCta: 'Review Funding Strategy',
+    secondaryCta: 'Review Funding Prep Plan',
     sections: [
       {
         heading: 'Start with a free funding check',
@@ -147,8 +204,8 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'credit_card_stacking',
     slug: 'business-funding-strategy',
-    title: 'Business Funding Strategy Review',
-    seoTitle: 'Business Funding Strategy And Credit Line Prep',
+    title: 'Business Funding Prep Plan',
+    seoTitle: 'Business Funding Prep Plan And Credit Line Readiness',
     metaDescription:
       'Prepare for business credit funding with VestBlock document checks, inquiry-risk consent, utilization guidance, and follow-up.',
     excerpt:
@@ -156,14 +213,14 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     audience:
       'Business owners considering business credit lines or business credit line working-capital options.',
     primaryRoute: '/funding/business-funding-strategy',
-    primaryCta: 'Start The Funding Strategy Review',
+    primaryCta: 'Start The Funding Prep Plan',
     secondaryRoute: '/funding#free-eligibility-check',
     secondaryCta: 'Check Eligibility First',
     sections: [
       {
-        heading: 'What business funding strategy preparation means',
+        heading: 'What this funding prep plan covers',
         body:
-          'A business credit line funding strategy usually means reviewing multiple business credit options in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as preparation and consent, not an instant approval promise.',
+          'A business credit line prep plan reviews multiple funding options in a planned sequence. Because that can involve hard inquiries, utilization risk, fees, and repayment pressure, VestBlock treats it as preparation and consent, not an instant approval promise.',
         bullets: [
           'Review business and personal credit factors',
           'Check business documents and banking basics',
@@ -174,7 +231,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'How the VestBlock offer is priced',
         body:
-          'The current strategy uses a $300 funding plan plus a 10% success fee only after accepted business credit funding is available. This keeps the paid setup separate from any final lender or issuer decision.',
+          'The current offer uses a $300 funding prep plan plus a 10% success fee only after accepted business credit funding is available. This keeps the paid setup separate from any final lender or issuer decision.',
       },
       {
         heading: 'What owners should know before applying',
@@ -184,14 +241,14 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     ],
     faqs: [
       {
-        question: 'Does this strategy guarantee business funding?',
+        question: 'Does this prep plan guarantee business funding?',
         answer:
           'No. Card approvals, limits, terms, and fees depend on issuers, underwriting, credit profile, income, business details, and user decisions.',
       },
       {
         question: 'Why charge a funding plan fee?',
         answer:
-          'The plan fee covers review, organization, risk checks, and preparation before a strategy is pursued. It is not a guarantee of approval.',
+          'The plan fee covers review, organization, risk checks, and preparation before applications are pursued. It is not a guarantee of approval.',
       },
       {
         question: 'When does the success fee apply?',
@@ -204,8 +261,8 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'business_setup',
     slug: 'business-setup-funding-grants',
-    title: 'Business Setup For Funding And Grants',
-    seoTitle: 'Business Setup For Funding, Grants, And Business Credit',
+    title: 'Business Setup for Funding and Grants',
+    seoTitle: 'Business Setup for Funding, Grants, and Business Credit',
     metaDescription:
       'Prepare business records, EIN, business banking, documents, business credit basics, and use-of-funds details before funding or grant applications.',
     excerpt:
@@ -261,23 +318,23 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'financial_growth_services',
     slug: 'financial-growth-services',
-    title: 'Financial Growth Services For Credit, Funding, Grants, And Deals',
-    seoTitle: 'Financial Growth Services For Funding Prep And Credit Planning',
+    title: 'Funding And Business Credit Prep Reviews',
+    seoTitle: 'Funding And Business Credit Prep Reviews',
     metaDescription:
-      'Review VestBlock paid financial prep packages for funding, business credit, grants, utilization, cash-flow documents, and real estate funding.',
+      'Request VestBlock prep reviews for funding readiness, business credit, grants, utilization, cash-flow documents, and real estate funding.',
     excerpt:
-      'VestBlock offers paid preparation packages for clients who need more than a free checker before they apply, dispute, or submit a deal.',
+      'VestBlock offers focused prep reviews for owners who need a clearer plan before they apply, submit documents, or talk to lenders.',
     audience:
-      'Clients who need a practical paid review before funding, grants, credit repair, business credit, or real estate funding steps.',
+      'Business owners who need a practical review before funding, grants, business credit, or real estate funding steps.',
     primaryRoute: '/services/financial-growth',
-    primaryCta: 'View Financial Packages',
+    primaryCta: 'Request Prep Review',
     secondaryRoute: '/services/financial-growth#request-service',
-    secondaryCta: 'Request A Service',
+    secondaryCta: 'Compare Prep Reviews',
     sections: [
       {
-        heading: 'What these packages are for',
+        heading: 'What these reviews are for',
         body:
-          'Financial Growth Services turn broad goals into clear, paid preparation work. Each package has a defined scope, price, and follow-up so clients know what they are buying before deeper funding or credit work begins.',
+          'Funding and business credit prep reviews turn broad goals into clear preparation work. Each review has a defined scope, price range, and follow-up so customers know what happens before deeper funding or credit work begins.',
         bullets: [
           'Funding Prep Snapshot',
           'Business Credit Builder Sprint',
@@ -290,7 +347,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'How this helps customers move forward',
         body:
-          'Each request includes the selected package, price, business details, goal, and follow-up context. That helps the customer understand what happens next and helps VestBlock follow through clearly.',
+          'Each request includes the selected review, business details, goal, and follow-up context. That helps the customer understand what happens next and helps VestBlock follow through clearly.',
       },
       {
         heading: 'What is not included',
@@ -300,7 +357,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     ],
     faqs: [
       {
-        question: 'Which financial growth package should I choose?',
+        question: 'Which prep review should I choose?',
         answer:
           'Start with the package closest to the immediate goal: funding prep, business credit, grants, debt utilization, cash-flow documents, or real estate deal review.',
       },
@@ -491,14 +548,14 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'sell_property',
     slug: 'sell-property',
-    title: 'Sell Property Lead Review',
-    seoTitle: 'Sell Property Lead Review For Owners Considering Investor Offers',
+    title: 'Seller Property Review For Fast Cash, Creative, Or Novation Paths',
+    seoTitle: 'Seller Property Review For Fast Cash, Creative Finance, And Novation Paths',
     metaDescription:
-      'Use VestBlock to submit property details for seller follow-up, investor review, or a fast-sale conversation without a promised offer.',
+      'Use VestBlock to submit property details for fast cash buyer, creative structure, novation, or partner-fit seller review without a promised offer.',
     excerpt:
-      'VestBlock helps property owners submit the details needed for a clearer investor or buyer follow-up conversation.',
+      'VestBlock helps property owners submit the details needed to compare fast cash, creative, novation, and partner-fit sale conversations.',
     audience:
-      'Property owners who want an investor conversation, cash-offer review, or faster sale conversation.',
+      'Property owners who want a fast cash buyer review, creative structure review, novation review, or another better-fit sale conversation.',
     primaryRoute: '/sell',
     primaryCta: 'Request Property Review',
     secondaryRoute: '/real-estate-funding',
@@ -507,30 +564,36 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What sellers can submit',
         body:
-          'The sell-property flow collects property address, property type, condition, occupancy, estimated value, desired price, liens or taxes, timeline, and contact preferences. That gives the follow-up team a better starting point.',
+          'The sell-property flow collects property address, property type, condition, occupancy, estimated value, desired price, payoff, liens or taxes, timeline, preferred sale path, and contact preferences. That gives the follow-up team a better starting point.',
         bullets: [
           'Property and occupancy details',
           'Condition and repair context',
           'Estimated value and desired sale price',
+          'Fast cash, creative structure, or novation preference',
           'Best time and method for follow-up',
         ],
       },
       {
         heading: 'When this option makes sense',
         body:
-          'This option is useful when an owner wants a fast conversation, has an as-is property, is comparing investor interest, or wants to understand whether a sale makes sense.',
+          'This option is useful when an owner wants a fast cash conversation, has an as-is property, is open to creative structure, wants to review a novation path, or needs to understand which sale path is most realistic.',
       },
       {
         heading: 'Keeping expectations clear',
         body:
-          'VestBlock does not promise a specific offer before review. Any offer, timeline, closing, or buyer conversation depends on the property, market, title, condition, and buyer interest.',
+          'VestBlock does not promise a specific offer before review. Any fast cash offer, creative structure, novation path, timeline, closing, or buyer conversation depends on the property, market, title, condition, payoff, and buyer interest.',
       },
     ],
     faqs: [
       {
         question: 'Will I get a guaranteed cash offer?',
         answer:
-          'No. Submitting the form starts a review and follow-up process. Any offer depends on the property and buyer review.',
+          'No. Submitting the form starts a review and follow-up process. Any cash offer, creative structure, or novation path depends on the property, title, payoff, market, and buyer review.',
+      },
+      {
+        question: 'Can VestBlock review creative finance or novation options?',
+        answer:
+          'Yes. Sellers can request review for fast cash, creative structure, or novation paths. VestBlock still reviews the property details first because not every property or payoff situation fits every route.',
       },
       {
         question: 'Can I submit an as-is property?',
@@ -548,8 +611,8 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'ai_assistant',
     slug: 'vestblock-ai-assistant',
-    title: 'AI Receptionist, Appointment Booking, And Website Upgrades',
-    seoTitle: 'AI Receptionist And Appointment Booking Service | VestBlock',
+    title: 'AI Receptionist, Booking, and Website Upgrades',
+    seoTitle: 'AI Receptionist, Booking, and Website Upgrades | VestBlock',
     metaDescription:
       'Compare VestBlock AI receptionist, appointment-booking, and website-upgrade offers for service businesses that need stronger lead capture and conversion.',
     excerpt:
@@ -557,7 +620,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
     audience:
       'Owners who want more leads, better appointment flow, and a clearer move from website traffic to booked conversations.',
     primaryRoute: '/ai-assistant',
-    primaryCta: 'Compare Automation Offers',
+    primaryCta: 'Compare AI Receptionist Packages',
     secondaryRoute: '/pricing',
     secondaryCta: 'Compare Pricing',
     sections: [
@@ -569,7 +632,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
           'AI receptionist setup for website lead capture',
           'Appointment-booking flow for service businesses',
           'Website upgrades for weak lead capture',
-          'Admin follow-up and routed service requests',
+          'Follow-up notes and routed service requests',
         ],
       },
       {
@@ -605,8 +668,8 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'visibility_expansion',
     slug: 'visibility-expansion-saas',
-    title: 'Search Visibility Service For SEO, AI Answers, And PR Growth',
-    seoTitle: 'Search Visibility Service For SEO, AI Answers, And PR | VestBlock',
+    title: 'Search Visibility for SEO, AI Answers, and PR Growth',
+    seoTitle: 'Search Visibility for SEO, AI Answers, and PR | VestBlock',
     metaDescription:
       'Use VestBlock visibility packages to improve search presence, AI-answer coverage, city pages, and authority-building without vague retainers.',
     excerpt:
@@ -623,7 +686,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
         body:
           'This visibility service is built for businesses that want more than isolated blog posts or generic SEO retainers. The goal is simple: clearer search presence, stronger AI-answer coverage, smarter city pages, and authority work that helps buyers find and trust the company.',
         bullets: [
-          'Search and schema priorities',
+          'Search structure and page priorities',
           'AI-answer question and topic coverage',
           'City and service page planning',
           'PR and authority-building support',
@@ -661,7 +724,9 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   },
 ];
 
-const pricedOfferSeoPages: ServiceSeoPage[] = pricedVestBlockOffers.map((offer) => ({
+const publicPricedOfferSeoPages = pricedVestBlockOffers;
+
+const pricedOfferSeoPages: ServiceSeoPage[] = publicPricedOfferSeoPages.map((offer) => ({
   serviceKey: offer.serviceKey,
   slug: offer.slug,
   title: offer.title,

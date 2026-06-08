@@ -40,13 +40,7 @@ function parseBoolean(value: string | undefined, fallback: boolean) {
 
 function parseClusters(value: string | undefined): AeoTopic['cluster'][] | undefined {
   if (!value) return undefined
-  const allowed = new Set<AeoTopic['cluster']>([
-    'credit-repair',
-    'business-credit',
-    'funding',
-    'credit-builder',
-    'disputes',
-  ])
+  const allowed = new Set<AeoTopic['cluster']>(vestblockAeoTopics.map((topic) => topic.cluster))
   const clusters = value
     .split(',')
     .map((item) => item.trim())

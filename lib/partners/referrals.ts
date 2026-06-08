@@ -1,4 +1,4 @@
-export type PartnerReferralKey = 'kiavi' | 'rcn';
+export type PartnerReferralKey = 'kiavi' | 'rcn' | 'nlc';
 
 type PartnerReferralDefinition = {
   key: PartnerReferralKey;
@@ -43,6 +43,19 @@ export const partnerReferralDefinitions: Record<
       'External broker-portal intake. The current destination is brokerage-wide and may require partner login, so this path is best used after VestBlock review.',
     ctaLabel: 'Open Broker Portal Intake',
   },
+  nlc: {
+    key: 'nlc',
+    displayName: 'No Limit Capital',
+    slug: 'no-limit-capital',
+    destinationUrl: 'https://app.nlcfund.com',
+    utmCampaign: 'no-limit-capital',
+    trackingMode: 'utm',
+    fitSummary:
+      'Best for investor buyers who need fix-and-flip, bridge, DSCR, or ground-up construction capital reviewed with a capital partner.',
+    disclosure:
+      'External No Limit Capital partner path. Final terms, approvals, pricing, leverage, appraisal requirements, and eligibility are determined by No Limit Capital.',
+    ctaLabel: 'Open No Limit Capital Path',
+  },
 };
 
 type BuildPartnerReferralPathInput = {
@@ -57,8 +70,8 @@ type BuildPartnerReferralPathInput = {
 export function getPartnerReferralDefinition(
   partnerKey: string
 ): PartnerReferralDefinition | null {
-  if (partnerKey === 'kiavi' || partnerKey === 'rcn') {
-    return partnerReferralDefinitions[partnerKey];
+  if (Object.prototype.hasOwnProperty.call(partnerReferralDefinitions, partnerKey)) {
+    return partnerReferralDefinitions[partnerKey as PartnerReferralKey];
   }
 
   return null;

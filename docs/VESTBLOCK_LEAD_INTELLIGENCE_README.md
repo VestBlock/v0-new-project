@@ -16,14 +16,14 @@ This release adds a lead-generation and lead-ops system directly inside VestBloc
   - `/admin/leads/[id]`
   - `/admin/lead-sources`
   - `/admin/scrape-runs`
-- Lead scraping routes:
+- Retired legacy lead scraping routes:
   - `/api/leads/scrape/new-businesses`
   - `/api/leads/scrape/code-violations`
   - `/api/leads/scrape/google-places`
   - `/api/leads/scrape/sam`
 - Lead scoring route:
   - `/api/leads/score`
-- Outreach route:
+- Retired outreach route:
   - `/api/leads/generate-outreach`
 - CSV export:
   - `/api/leads/export`
@@ -163,22 +163,22 @@ Behavior:
 
 ## Daily Automation
 
-The growth engine now supports daily cron routes:
+The old app-route daily automation was retired. Keep daily outreach on the offline/V4 workflow instead of recreating these removed routes:
 
 - `/api/cron/leads-scrape`
 - `/api/cron/leads-score`
 - `/api/cron/leads-outreach`
 - `/api/cron/leads-followup`
 
-These can:
+Current operator path:
 
-- scrape public lead sources
-- rescore leads
-- generate outreach drafts
-- queue follow-up work
-- optionally send approved outbound email when enabled
+- `npm run outreach:v4-workflow`
+- `npm run outreach:v4-scorecard`
+- `npm run buyers:kimi-outreach`
+- `npm run buyers:kimi-send-preview`
+- `npm run buyers:kimi-send-approved` only after draft review
 
-Important env controls:
+Historical env controls from the retired routes should not be used for new daily work:
 
 - `LEADS_AUTO_SEND_APPROVED`
 - `LEADS_DAILY_SCRAPE_LIMIT_PER_SOURCE`
@@ -198,15 +198,11 @@ The send path is intentionally approval-aware and keeps a separate `outreach_sen
 ## Suggested First Runs
 
 1. Run the migration.
-2. Load small-business leads:
-   - `POST /api/leads/scrape/google-places`
-3. Load Wisconsin business filings:
-   - `POST /api/leads/scrape/new-businesses`
-4. Load code-violation leads:
-   - `POST /api/leads/scrape/code-violations`
-5. Match SAM opportunities after business leads exist:
-   - `POST /api/leads/scrape/sam`
-6. Review and regenerate outreach from `/admin/leads`
+2. Run `npm run outreach:v4-workflow` for the general offline outreach queue.
+3. Run `npm run buyers:kimi-outreach` when buyer CSVs are refreshed.
+4. Review generated drafts under `artifacts/offline-automation/outreach-drafts/<date>/buyers`.
+5. Preview sends with `npm run buyers:kimi-send-preview`.
+6. Send only reviewed/approved drafts with `npm run buyers:kimi-send-approved`.
 
 ## Example Request Bodies
 

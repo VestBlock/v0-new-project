@@ -1,6 +1,8 @@
+import "server-only";
+
 export async function generatePDF(html: string, fileName: string): Promise<string> {
   try {
-    const apiKey = process.env.VITE_PDFCO_API_KEY
+    const apiKey = process.env.PDFCO_API_KEY
 
     if (!apiKey) {
       throw new Error("PDF.co API key is not configured")

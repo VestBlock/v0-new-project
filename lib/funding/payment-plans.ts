@@ -14,9 +14,9 @@ function basePlans(): FundingPaymentPlan[] {
   return [
     {
       id: 'software_access',
-      name: 'Software Access',
+      name: 'Funding Assistant Tool Access',
       description:
-        'A lighter-touch option for users who want the dashboard, reminders, and strategy tracking without white-glove support.',
+        'A lighter-touch option for users who only need dashboard access, reminders, and organization without guided review.',
       price: 49,
       discountedPrice: 39,
       features: [
@@ -25,15 +25,15 @@ function basePlans(): FundingPaymentPlan[] {
         'Saved funding-prep profile',
         'Estimated sequence organization',
       ],
-      ctaLabel: 'Choose Software Access',
+      ctaLabel: 'Start With Free Funding Check',
       requiresAdminReview: false,
       stripeCheckoutReady: false,
     },
     {
       id: 'strategy_report',
-      name: 'Funding Strategy Report',
+      name: 'Funding Prep Report',
       description:
-        'A one-time roadmap option for users who want a clearer plan before they decide on higher-touch support.',
+        'A one-time report option for users who want a clearer plan before they decide on higher-touch support.',
       price: 149,
       discountedPrice: 99,
       features: [
@@ -42,13 +42,13 @@ function basePlans(): FundingPaymentPlan[] {
         'Warnings and timing notes',
         'Follow-up checklist',
       ],
-      ctaLabel: 'View Strategy Report Plan',
+      ctaLabel: 'Request Funding Prep Review',
       requiresAdminReview: false,
       stripeCheckoutReady: false,
     },
     {
       id: 'assisted_funding_package',
-      name: 'Assisted Funding Package',
+      name: 'Business Funding Prep Plan',
       description:
         'Higher-touch support for users who want VestBlock follow-up on eligibility, sequencing, and guided review.',
       price: 300,
@@ -59,7 +59,7 @@ function basePlans(): FundingPaymentPlan[] {
         'Sequence support',
         'Follow-up task handling',
       ],
-      ctaLabel: 'Request Assisted Review',
+      ctaLabel: 'Start Funding Prep Plan',
       requiresAdminReview: true,
       stripeCheckoutReady: false,
     },
@@ -94,14 +94,14 @@ export function getFundingPaymentPlans(
   const mode = context.profile?.mode;
   const readiness = context.recommendation?.readiness_score ?? 0;
 
-  let recommendedPlanId: FundingPaymentPlanId = 'strategy_report';
+  let recommendedPlanId: FundingPaymentPlanId = 'assisted_funding_package';
 
   if (path === 'repair_first' || path === 'build_first') {
     recommendedPlanId = 'assisted_funding_package';
   } else if (mode === 'hybrid') {
     recommendedPlanId = 'custom_plan';
   } else if (readiness >= 78) {
-    recommendedPlanId = 'software_access';
+    recommendedPlanId = 'assisted_funding_package';
   }
 
   return {

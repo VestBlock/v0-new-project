@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,8 +16,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { financialSkillsetPackages } from '@/lib/services/financialSkillsets';
+import {
+  financialSkillsetPackages,
+  getFinancialSkillsetPackage,
+} from '@/lib/services/financialSkillsets';
 
 const initialForm = {
   packageKey: 'funding_readiness_snapshot',
@@ -31,21 +36,41 @@ const initialForm = {
   notes: '',
 };
 
+function getValidPackageKey(value: string | null) {
+  if (!value) return initialForm.packageKey;
+
+  const packageExists = financialSkillsetPackages.some((item) => item.key === value);
+  return packageExists ? value : initialForm.packageKey;
+}
+
+function createInitialForm(packageKey = initialForm.packageKey) {
+  return { ...initialForm, packageKey };
+}
+
 export function FinancialServiceInterestForm() {
   const searchParams = useSearchParams();
-  const [form, setForm] = useState(initialForm);
+  const defaultPackageKey = getValidPackageKey(searchParams.get('package'));
+  const [form, setForm] = useState(() => createInitialForm(defaultPackageKey));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionState, setSubmissionState] = useState<{
+    businessName: string;
+    packageTitle: string;
+    deliverableStatus: string;
+  } | null>(null);
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
-
-  useEffect(() => {
-    const packageKey = searchParams.get('package');
-    if (!packageKey) return;
-
-    const packageExists = financialSkillsetPackages.some((item) => item.key === packageKey);
-    if (!packageExists) return;
-
-    setForm((current) => ({ ...current, packageKey }));
-  }, [searchParams]);
+  const deliverableStatusLabel =
+    submissionState?.deliverableStatus === 'sent_to_client'
+      ? isAuthenticated
+        ? 'Ready in your account'
+        : 'Ready after account setup'
+      : submissionState?.deliverableStatus === 'ready_for_review'
+        ? 'Being reviewed'
+        : submissionState?.deliverableStatus === 'queued'
+          ? 'Queued for follow-up'
+          : submissionState?.deliverableStatus === 'generating'
+            ? 'In progress'
+            : 'Saved';
 
   const updateField = (name: string, value: string) => {
     setForm((current) => ({ ...current, [name]: value }));
@@ -68,10 +93,16 @@ export function FinancialServiceInterestForm() {
       }
 
       toast({
-        title: 'Service request received',
-        description: 'VestBlock will review the request and follow up with the next step.',
+        title: 'Prep review request received',
+        description: 'VestBlock will confirm the right scope and next step before any payment is collected.',
       });
-      setForm(initialForm);
+      const selectedPackage = getFinancialSkillsetPackage(form.packageKey);
+      setSubmissionState({
+        businessName: form.businessName || form.name,
+        packageTitle: selectedPackage?.title || 'Prep review',
+        deliverableStatus: data.deliverableStatus || 'requested',
+      });
+      setForm(createInitialForm(defaultPackageKey));
     } catch (error) {
       toast({
         title: 'Request not sent',
@@ -89,14 +120,34 @@ export function FinancialServiceInterestForm() {
   return (
     <Card id="request-service" className="border-cyan-500/20">
       <CardHeader>
-        <CardTitle>Request A Financial Service</CardTitle>
+        <CardTitle>Request A Prep Review</CardTitle>
         <CardDescription>
-          Tell us which package fits your goal. VestBlock will review the request
-          and follow up with the next step.
+          Tell us which review fits your goal. VestBlock will confirm the right
+          scope and next step before any payment is collected.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submitInterest} className="space-y-5">
+          {submissionState ? (
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">
+                {submissionState.packageTitle} request saved for {submissionState.businessName}
+              </p>
+              <p className="mt-1">
+                Status: {deliverableStatusLabel}. VestBlock will confirm scope, next step, and any payment only after review.
+              </p>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button asChild size="sm">
+                  <Link href={isAuthenticated ? '/dashboard/services' : '/register?redirect=/dashboard/services'}>
+                    {isAuthenticated ? 'View My Account' : 'Create Account for Dashboard Access'}
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/services">Compare Other Services</Link>
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label>Package</Label>
             <Select
@@ -217,7 +268,7 @@ export function FinancialServiceInterestForm() {
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Submit Service Request
+            Submit Prep Review Request
           </Button>
         </form>
       </CardContent>

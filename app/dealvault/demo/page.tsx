@@ -31,6 +31,11 @@ import {
   shortenHex,
 } from '@/lib/dealvault/contractMetadata';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  breadcrumbJsonLd,
+  dealVaultFaqJsonLd,
+  dealVaultServiceJsonLd,
+} from '@/lib/seo/structuredData';
 import demoPackage from '@/deployments/dealvault-demo-package.json';
 
 export const metadata: Metadata = {
@@ -117,8 +122,20 @@ const demoAgreementStats = [
 ];
 
 export default function DealVaultDemoPage() {
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'DealVault', path: '/dealvault' },
+    { name: 'DealVault Demo', path: '/dealvault/demo' },
+  ]);
+
   return (
     <main className="premium-page px-4 py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([breadcrumbs, dealVaultServiceJsonLd(), dealVaultFaqJsonLd()]),
+        }}
+      />
       <div className="container mx-auto max-w-7xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-6">
@@ -327,7 +344,7 @@ export default function DealVaultDemoPage() {
             <CardHeader>
               <CardTitle>Certificate-ready proof output</CardTitle>
               <CardDescription>
-                The demo gives prospects a concrete artifact they can understand before they book.
+                The demo gives prospects a concrete record they can understand before they book.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -357,13 +374,13 @@ export default function DealVaultDemoPage() {
         <section className="space-y-5">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
             <div>
-              <Badge variant="outline">Public contract layer</Badge>
+              <Badge variant="outline">Public verification records</Badge>
               <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
                 Live contracts behind the demo
               </h2>
               <p className="mt-2 max-w-2xl text-muted-foreground">
                 The demo points back to real contract addresses so serious buyers can review the
-                proof layer without needing to connect a wallet.
+                verification trail without needing to connect a wallet.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -397,7 +414,10 @@ export default function DealVaultDemoPage() {
           </div>
         </section>
 
-        <section className="grid gap-8 lg:grid-cols-[.92fr_1.08fr] lg:items-start">
+        <section
+          id="dealvault-demo"
+          className="grid gap-8 lg:grid-cols-[.92fr_1.08fr] lg:items-start"
+        >
           <Card className="premium-card border-cyan-500/20">
             <CardHeader>
               <CardTitle>Best-fit demo prospects</CardTitle>

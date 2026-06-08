@@ -4,7 +4,6 @@ import { logEvent } from '@/lib/system/logEvent';
 
 type EmailEventType =
   | 'admin_credit_report_uploaded'
-  | 'user_signup_credit_report_start'
   | 'user_credit_report_received'
   | 'user_analysis_completed'
   | 'admin_analysis_completed'
@@ -22,6 +21,7 @@ type EmailEventType =
   | 'admin_lead_outreach_daily_report'
   | 'admin_lead_send_daily_report'
   | 'user_service_deliverable_ready'
+  | 'user_signup_growth_system_ready'
   | 'user_dispute_letters_ready'
   | 'user_dispute_letter_mail_reminder'
   | 'user_dispute_secondary_bureau_reminder'
@@ -71,7 +71,7 @@ function shell(title: string, body: string) {
         <p style="margin:0 0 18px;color:#67e8f9;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">VestBlock</p>
         <h1 style="margin:0 0 18px;font-size:24px;line-height:1.2;color:#ffffff;">${escapeHtml(title)}</h1>
         <div style="font-size:15px;line-height:1.6;color:#d7e6ea;">${body}</div>
-        <p style="margin-top:28px;color:#8aa4ad;font-size:12px;line-height:1.5;">VestBlock provides education, workflow tools, and document support. We do not guarantee credit outcomes.</p>
+        <p style="margin-top:28px;color:#8aa4ad;font-size:12px;line-height:1.5;">VestBlock provides education, workflow tools, partner-intake support, DealVault records, and visibility planning. We do not guarantee funding, approvals, rankings, citations, deal volume, or closed transactions.</p>
       </div>
     </div>
   `;
@@ -602,33 +602,31 @@ export async function sendUserUploadReminderEmail(details: {
   });
 }
 
-export async function sendUserSignupCreditReportStartEmail(details: {
+export async function sendUserSignupGrowthSystemReadyEmail(details: {
   userEmail?: string | null;
   userId?: string | null;
   fullName?: string | null;
 }) {
-  const reportUrl = 'https://www.annualcreditreport.com/';
-  const uploadUrl = `${getSiteUrl()}/credit-upload`;
+  const servicesUrl = `${getSiteUrl()}/dashboard/services`;
+  const getStartedUrl = `${getSiteUrl()}/get-started`;
   const greeting = details.fullName
     ? `Hi ${escapeHtml(details.fullName)},`
     : 'Hi,';
 
   return sendEmail({
     to: details.userEmail,
-    subject: 'Start here: download your free credit report',
-    eventType: 'user_signup_credit_report_start',
+    subject: 'Your VestBlock Growth System is ready',
+    eventType: 'user_signup_growth_system_ready',
     userId: details.userId,
     userEmail: details.userEmail,
     html: shell(
-      'Start your VestBlock credit workflow',
+      'Your VestBlock Growth System is ready',
       `
       <p>${greeting}</p>
-      <p>Your VestBlock account is ready. The fastest next step is downloading your free official credit report and then uploading it to VestBlock for analysis.</p>
-      <p><strong>Official source:</strong> <a href="${reportUrl}" style="color:#67e8f9;">AnnualCreditReport.com</a></p>
-      <p>This is the federally authorized site for free credit reports from Equifax, Experian, and TransUnion.</p>
-      <p>After you download your report, come back here:</p>
-      <p><a href="${uploadUrl}" style="color:#67e8f9;">Upload your credit report to VestBlock</a></p>
-      <p>Once uploaded, VestBlock can help organize dispute methods, boost-pack steps, card ideas, and side-hustle recommendations based on your actual profile.</p>
+      <p>Your VestBlock starter workspace is ready. Use it to choose the right seller, buyer, lender, developer, contractor, operator, or capital-partner path.</p>
+      <p>From there, VestBlock can support partnership review, DealVault records, and AI-powered SEO/AEO visibility planning when the profile is clear enough to build around.</p>
+      <p><a href="${servicesUrl}" style="color:#67e8f9;">Open your Growth System dashboard</a></p>
+      <p><a href="${getStartedUrl}" style="color:#67e8f9;">Choose your VestBlock path</a></p>
     `
     ),
   });

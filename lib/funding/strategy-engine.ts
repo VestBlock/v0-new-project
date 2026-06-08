@@ -358,11 +358,11 @@ function buildStrategySummary(
   const businessReady = Boolean(profile.has_llc && profile.ein_available);
 
   if (path === 'repair_first') {
-    return `Your readiness score is ${readinessScore}, which points to a repair-first funding strategy. Lowering utilization, cooling inquiry pressure, and tightening your documentation should come before a larger application sequence.`;
+    return 'Your profile points to a repair-first funding strategy. Lowering utilization, cooling inquiry pressure, and tightening your documentation should come before a larger application sequence.';
   }
 
   if (path === 'build_first') {
-    return `Your readiness score is ${readinessScore}, which supports a build-first path. The next move is to improve profile stability and sequence timing before you pursue a broader funding lane.`;
+    return 'Your profile supports a build-first path. The next move is to improve profile stability and sequence timing before you pursue a broader funding lane.';
   }
 
   if (path === 'business_first') {
@@ -374,10 +374,10 @@ function buildStrategySummary(
   }
 
   if (profile.mode === 'personal') {
-    return `Your readiness score is ${readinessScore} with ${riskLevel} risk, so VestBlock recommends a personal funding strategy focused on cleaner timing, lower utilization, and careful application spacing.`;
+    return `Your profile shows ${riskLevel} risk, so VestBlock recommends a personal funding strategy focused on cleaner timing, lower utilization, and careful application spacing.`;
   }
 
-  return `Your readiness score is ${readinessScore} with ${riskLevel} risk, which supports an apply-now strategy if you stay disciplined on sequence order, truthful data, and issuer-specific terms.`;
+  return `Your profile shows ${riskLevel} risk, which supports an apply-now strategy if you stay disciplined on sequence order, truthful data, and issuer-specific terms.`;
 }
 
 export function generateFundingStrategy(

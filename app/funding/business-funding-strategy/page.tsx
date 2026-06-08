@@ -210,7 +210,7 @@ export default function CreditCardStrategyPage() {
         toast({
           title: 'Sign in to save the paid plan request',
           description:
-            'Your funding strategy draft is saved. Sign in and we will bring you back here.',
+            'Your funding prep draft is saved. Sign in and we will bring you back here.',
         });
         router.push('/login?redirect=/funding/business-funding-strategy');
         return;
@@ -231,7 +231,7 @@ export default function CreditCardStrategyPage() {
         description:
           data.readiness?.tier === 'needs_prep'
             ? 'You can now join the $300 funding prep plan to work on eligibility.'
-            : 'You can now purchase the funding strategy plan.',
+            : 'You can now purchase the funding prep plan.',
       });
     } catch (error) {
       toast({
@@ -303,7 +303,7 @@ export default function CreditCardStrategyPage() {
       <div className="container mx-auto max-w-6xl space-y-8">
         <section className="grid gap-8 lg:grid-cols-[1.1fr_.9fr] lg:items-start">
           <div className="space-y-5">
-            <Badge className="w-fit">Business funding strategy</Badge>
+            <Badge className="w-fit">Business funding prep</Badge>
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
               Business funding prep plan
             </h1>
@@ -319,11 +319,12 @@ export default function CreditCardStrategyPage() {
                 <p className="text-2xl font-bold">$300</p>
               </div>
               <div className="rounded-md border p-4">
-                <p className="text-sm text-muted-foreground">Success fee</p>
-                <p className="text-2xl font-bold">10%</p>
+                <p className="text-sm text-muted-foreground">Success fee trigger</p>
+                <p className="text-lg font-bold">After accepted funding</p>
+                <p className="mt-1 text-xs text-muted-foreground">10% only after approved business credit funding is accepted and available.</p>
               </div>
               <div className="rounded-md border p-4">
-                <p className="text-sm text-muted-foreground">Admin review</p>
+                <p className="text-sm text-muted-foreground">Team review</p>
                 <p className="text-2xl font-bold">Queued</p>
               </div>
             </div>
@@ -333,7 +334,7 @@ export default function CreditCardStrategyPage() {
             <ShieldCheck className="h-4 w-4" />
             <AlertTitle>Compliance-first funding support</AlertTitle>
             <AlertDescription>
-              This service organizes strategy and funding preparation. It does not
+              This service organizes funding preparation and follow-up. It does not
               guarantee approvals, credit limits, rates, or funding. No
               application should be submitted until you review the lender terms,
               fees, inquiries, and repayment obligations. The $300 funding prep plan
@@ -598,7 +599,7 @@ export default function CreditCardStrategyPage() {
                   ) : (
                     <CreditCard className="mr-2 h-4 w-4" />
                   )}
-                  Generate Funding Prep Review
+                  Save Funding Prep Review
                 </Button>
               </form>
             </CardContent>
@@ -626,7 +627,7 @@ export default function CreditCardStrategyPage() {
                         <ShieldCheck className="h-4 w-4" />
                         <AlertTitle>Draft saved</AlertTitle>
                         <AlertDescription>
-                          Sign in to continue this funding strategy request without
+                          Sign in to continue this funding prep request without
                           re-entering the form.
                         </AlertDescription>
                       </Alert>
@@ -688,7 +689,7 @@ export default function CreditCardStrategyPage() {
                       ) : (
                         <CreditCard className="mr-2 h-4 w-4" />
                       )}
-                      Pay $300 For Funding Prep Plan
+                      Continue To $300 Funding Prep Checkout
                     </Button>
                   </>
                 )}

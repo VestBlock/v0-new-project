@@ -1,7 +1,7 @@
 export const vestBlockSiteName = 'VestBlock';
 
 export const vestBlockDefaultDescription =
-  'VestBlock helps businesses strengthen records, grow visibility, and capture better leads with DealVault, Visibility Expansion, and AI Receptionist.';
+  'VestBlock connects sellers, buyers, lenders, developers, contractors, operators, and capital partners around real estate opportunities, DealVault records, and AI-powered visibility.';
 
 export function getSiteUrl() {
   const configured = (

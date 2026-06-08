@@ -1,0 +1,33 @@
+.DS_Store
+
+# Local environment and platform state
+.env*
+.vercel/
+.next/
+node_modules/
+tsconfig.tsbuildinfo
+
+# Local QA, generated artifacts, and temporary outputs
+/artifacts/
+/cache/
+/tmp/
+/test-results/
+/.playwright-cli/
+
+# Internal planning/docs that are not needed by the web runtime
+/deliverables/
+/grant-assets/
+/grant-tracker/
+/surplus_sources/
+/deployments/*
+!/deployments/dealvault-demo-package.json
+
+# Lead lists, exports, trackers, and local data files
+*.csv
+*.xlsx
+*.xls
+*.tsv
+*.zip
+
+# Trading/backtest local outputs
+spy_*.pine

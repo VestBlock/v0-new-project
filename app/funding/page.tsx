@@ -119,8 +119,8 @@ export default function FundingPage() {
       }
 
       toast({
-        title: "Application Submitted!",
-        description: "We'll review your information and get back to you within 24 hours.",
+        title: "Funding review request received",
+        description: "We'll review your details and follow up with the clearest next step.",
         variant: "default",
       })
 
@@ -149,7 +149,7 @@ export default function FundingPage() {
         description:
           error instanceof Error
             ? error.message
-            : "There was an error submitting your application. Please try again.",
+            : "There was an error submitting your funding review request. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -161,7 +161,7 @@ export default function FundingPage() {
       
       <section className="pt-24 pb-16 px-4">
         <div className="container mx-auto text-center">
-          <h1 className="text-4xl md:text-6xl font-bold gradient-text mb-6">Check Business Funding Eligibility Free</h1>
+          <h1 className="text-4xl md:text-6xl font-bold gradient-text mb-6">Check Business Funding Eligibility for Free</h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
             Check whether your business looks ready for funding before you pay for anything. If you need help getting prepared, VestBlock can help with credit, business setup, and documentation through the $300 plan.
           </p>
@@ -169,15 +169,23 @@ export default function FundingPage() {
             <Button size="lg" className="bg-cyan-500 hover:bg-cyan-600 text-white" asChild>
               <a href="#free-eligibility-check">
                 <DollarSign className="mr-2 h-5 w-5" />
-                Check Eligibility Free
+                Check Eligibility for Free
               </a>
             </Button>
             <Button size="lg" variant="outline" asChild>
               <Link href="/funding/business-funding-strategy">
                 <Phone className="mr-2 h-5 w-5" />
-                Join $300 Funding Prep Plan
+                Review $300 Funding Prep Plan
               </Link>
             </Button>
+          </div>
+          <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+            <Link href="/services/business-funding-eligibility" className="underline-offset-4 hover:underline">
+              Read the funding eligibility guide
+            </Link>
+            <Link href="/services/business-funding-strategy" className="underline-offset-4 hover:underline">
+              Read the funding prep plan guide
+            </Link>
           </div>
         </div>
       </section>
@@ -408,8 +416,8 @@ export default function FundingPage() {
               <Badge className="w-fit bg-emerald-600 text-white">VestBlock paid plan</Badge>
               <CardTitle className="text-2xl">Business Funding Prep Plan</CardTitle>
               <CardDescription className="text-base">
-                A $300 plan for business owners who need help getting ready before they pursue funding, plus a
-                10% success fee only after approved funding is accepted and available. VestBlock helps organize credit,
+                A $300 plan for business owners who need help getting ready before they pursue funding. A
+                10% success fee applies only after approved business credit funding is accepted and available. VestBlock helps organize credit,
                 business setup, documentation, use of funds, and application sequencing.
               </CardDescription>
             </CardHeader>
@@ -417,7 +425,7 @@ export default function FundingPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div className="rounded-lg border p-4">
                   <div className="font-medium">Guided review</div>
-                  <div className="text-muted-foreground">Creates a funding score and clear follow-up.</div>
+                  <div className="text-muted-foreground">Creates a funding review and clear follow-up.</div>
                 </div>
                 <div className="rounded-lg border p-4">
                   <div className="font-medium">Compliance-Safe</div>
@@ -430,7 +438,7 @@ export default function FundingPage() {
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" asChild>
                 <Link href="/funding/business-funding-strategy">
-                  Join Business Funding Prep Plan
+                  Review Business Funding Prep Plan
                   <CreditCard className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -587,7 +595,7 @@ export default function FundingPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="phone" className="block text-sm font-medium mb-2">
-                        Phone Number *
+                        Phone Number (optional)
                       </label>
                       <Input
                         id="phone"
@@ -595,9 +603,11 @@ export default function FundingPage() {
                         type="tel"
                         value={formData.phone}
                         onChange={handleInputChange}
-                        required
                         placeholder="(555) 123-4567"
                       />
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Optional. Email is enough to send the next-step snapshot.
+                      </p>
                     </div>
                     <div>
                       <label htmlFor="business_type" className="block text-sm font-medium mb-2">
@@ -662,7 +672,7 @@ export default function FundingPage() {
                     className="w-full bg-cyan-500 hover:bg-cyan-600 text-white"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Submitting..." : "Submit Application"}
+                    {isSubmitting ? "Sending..." : "Request Funding Review"}
                   </Button>
                 </form>
               </CardContent>

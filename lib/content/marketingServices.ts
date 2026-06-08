@@ -31,7 +31,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     offerPath: '/dealvault',
     audience: 'small real estate businesses, investor teams, partner groups, and contractor-led projects that need cleaner records and accountability',
     valuePromise:
-      'Track agreements, payout terms, proof records, and project milestones with a premium record system and a live audit trail behind it.',
+      'Track agreements, payout terms, proof records, and project milestones with a premium record product and a live audit trail behind it.',
     proofPoints: [
       'Live on-chain proof and payout records',
       'Proof certificate generation',
@@ -46,7 +46,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'ai_credit_analysis',
-    label: 'AI Credit Analysis',
+    label: 'Credit Review Tools',
     offerPath: '/credit-upload',
     audience: 'people who want to understand what is hurting their credit report',
     valuePromise:
@@ -54,7 +54,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     proofPoints: [
       'Report upload and analysis flow',
       'Credit repair progress statuses',
-      'Admin alerts for uploaded, completed, and failed analyses',
+      'Status alerts for uploaded, completed, and failed analyses',
     ],
     complianceNotes: [
       'Do not promise score increases.',
@@ -125,8 +125,8 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
       'Review funding options based on credit, revenue, business stage, documents, and use of funds.',
     proofPoints: [
       'Funding page',
-      'Lead intake and admin follow-up',
-      'Payment and lead automation dashboard',
+      'Lead intake and follow-up notes',
+      'Payment and lead tracking view',
     ],
     complianceNotes: [
       'Do not guarantee approvals or terms.',
@@ -145,7 +145,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
       '$300 funding preparation plan',
       'Funding strategy request path',
       'Success-fee consent tracking',
-      'Admin review dashboard',
+      'Review dashboard',
     ],
     complianceNotes: [
       'Do not guarantee card approvals or limits.',
@@ -155,15 +155,15 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'financial_growth_services',
-    label: 'Financial Growth Services',
+    label: 'Funding & Business Credit Prep Reviews',
     offerPath: '/services/financial-growth',
     audience: 'clients who need paid preparation before applying for funding, grants, credit, or real estate financing',
     valuePromise:
-      'Offer one-time financial prep packages for funding reviews, business credit setup, grants, debt utilization, cash-flow documents, and real estate deal funding review.',
+      'Offer focused prep reviews for funding readiness, business credit setup, grants, debt utilization, cash-flow documents, and real estate deal funding review.',
     proofPoints: [
-      'Financial service request form',
-      'Business funding lead automation',
-      'Admin package visibility',
+      'Prep review request form',
+      'Business funding intake support',
+      'Package status visibility',
       'Service package catalog',
     ],
     complianceNotes: [
@@ -215,7 +215,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
     audience: 'investors and property owners looking for real estate funding conversations',
     valuePromise:
       'Capture deal details and route high-intent real estate funding leads for follow-up.',
-    proofPoints: ['Real estate lead form', 'Admin lead manager', 'Lead follow-up tasks'],
+    proofPoints: ['Real estate lead form', 'Lead review view', 'Follow-up task tracking'],
     complianceNotes: [
       'Do not promise financing.',
       'Make lead source and follow-up expectations clear.',
@@ -224,12 +224,12 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'sell_property',
-    label: 'Sell Property Lead Flow',
+    label: 'Seller Property Review',
     offerPath: '/sell',
-    audience: 'property owners who want a cash-offer or investor conversation',
+    audience: 'property owners who want fast cash, creative structure, novation, or partner-fit sale review',
     valuePromise:
-      'Collect property details and contact information so the team can review and follow up.',
-    proofPoints: ['Sell property form', 'Lead tracking', 'Admin follow-up path'],
+      'Collect property details, payoff context, preferred sale path, and contact information so the team can review the right route.',
+    proofPoints: ['Sell property form', 'Preferred sale path capture', 'Lead tracking', 'Follow-up path'],
     complianceNotes: [
       'Do not promise a specific offer.',
       'Do not imply instant approval.',
@@ -238,16 +238,16 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'ai_assistant',
-    label: 'AI Receptionist And Website Systems',
+    label: 'AI Receptionist & Booking',
     offerPath: '/ai-assistant',
-    audience: 'service businesses that need stronger lead capture, booking automation, or a better converting website',
+    audience: 'service businesses that need stronger lead capture, booking support, or a better converting website',
     valuePromise:
-      'Install AI receptionist, appointment-booking, and conversion-focused website systems that help visitors turn into leads and appointments.',
+      'Install AI receptionist, appointment-booking, and conversion-focused website support that helps visitors turn into leads and appointments.',
     proofPoints: [
       'AI receptionist intake route',
       'Appointment booking offer path',
       'Website upgrade sprint packaging',
-      'Lead automation and admin follow-up',
+      'Lead capture and follow-up support',
     ],
     complianceNotes: [
       'Do not guarantee booked revenue or sales results.',
@@ -257,7 +257,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'visibility_expansion',
-    label: 'Visibility Expansion SaaS',
+    label: 'Search Visibility',
     offerPath: '/visibility-expansion',
     audience: 'service businesses that want more search visibility, answer-engine coverage, and authority without a vague marketing retainer',
     valuePromise:
@@ -266,7 +266,7 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
       'Search visibility package page',
       'City and authority package offer paths',
       'AI-assisted first-pass visibility review',
-      'Lead automation and admin follow-up',
+      'Lead capture and follow-up support',
     ],
     complianceNotes: [
       'Do not guarantee rankings, traffic, citations, media pickups, or revenue.',

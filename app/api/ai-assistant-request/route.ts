@@ -21,7 +21,7 @@ const aiAssistantRequestSchema = z.object({
   businessName: z.string().trim().min(2).max(160),
   contactName: z.string().trim().min(2).max(140),
   email: z.string().trim().email(),
-  phone: z.string().trim().min(7).max(40),
+  phone: z.string().trim().min(7).max(40).optional().or(z.literal('')),
   websiteUrl: z.string().trim().max(240).optional().or(z.literal('')),
   industry: z.string().trim().min(2).max(120),
   currentSystem: z.string().trim().max(240).optional().or(z.literal('')),
@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
     }
 
     const summary = `${servicePackage.title} request for ${data.businessName}; industry: ${data.industry}; website: ${data.websiteUrl || 'not provided'}.`;
+    const trimmedPhone = String(data.phone || '').trim();
+    const leadPhone = trimmedPhone ? trimmedPhone : null;
 
     const supabaseAdmin = createAdminClient();
     const { data: lead, error: leadsError } = await supabaseAdmin
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
         name: data.contactName,
         business_name: data.businessName,
         email: data.email,
-        phone: data.phone,
+        phone: leadPhone,
         website: data.websiteUrl || null,
         best_offer: servicePackage.bestOffer,
         pain_signal:
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
         contact_info: {
           name: data.contactName,
           email: data.email,
-          phone: data.phone,
+          phone: leadPhone,
           businessName: data.businessName,
         },
         form_data: {
@@ -118,7 +120,7 @@ export async function POST(req: NextRequest) {
       packageKey: data.packageKey,
       leadName: data.contactName,
       leadEmail: data.email,
-      phone: data.phone,
+      phone: leadPhone,
       businessName: data.businessName,
       primaryGoal:
         data.notes ||

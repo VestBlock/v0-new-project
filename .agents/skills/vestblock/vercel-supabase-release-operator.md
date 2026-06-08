@@ -36,6 +36,17 @@ Use this skill when changing VestBlock production env vars, Supabase project con
 5. Smoke test public pages and protected APIs.
 6. Verify custom domain assignment.
 
+## Monitoring Loop
+
+Use this loop when Rob asks if production is healthy:
+
+1. Check latest deployment status and production URL.
+2. Review recent function errors, especially cron routes, lead routes, payment routes, and admin APIs.
+3. Verify cron health for outreach, visibility indexing, daily reports, and content publishing.
+4. Check env drift between local `.env.local` expectations and Vercel env presence without printing secrets.
+5. Verify domain status for `vestblock.io` and `www.vestblock.io`.
+6. Escalate only real blockers: failed deploys, missing env vars, repeated function errors, broken domains, or auth leaks.
+
 ## Domain Move Rules
 
 - Move `vestblock.io` and `www.vestblock.io` from `vest-block-pro` to `v0-vest-block-rebuild`.

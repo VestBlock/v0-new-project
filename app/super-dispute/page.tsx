@@ -5,8 +5,12 @@ import { Badge } from "@/components/ui/badge"
 import { Shield, Zap, FileText, CheckCircle } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Super Dispute - VestBlock",
-  description: "Advanced credit dispute workflow for organizing report issues, letter drafts, and follow-up steps.",
+  title: "Advanced Dispute Draft Builder - VestBlock",
+  description: "Advanced credit dispute preparation for organizing report issues, letter drafts, and follow-up steps.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function SuperDisputePage() {
@@ -16,10 +20,10 @@ export default function SuperDisputePage() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-4">
           <Shield className="h-8 w-8 text-cyan-500" />
-          <h1 className="text-4xl font-bold gradient-text">Super Dispute System</h1>
+          <h1 className="text-4xl font-bold gradient-text">Advanced Dispute Draft Builder</h1>
         </div>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Our most advanced dispute workflow for analyzing your credit report, organizing possible reporting problems,
+          Our most advanced dispute preparation process for analyzing your credit report, organizing possible reporting problems,
           and generating draft letters you can review before sending.
         </p>
         <Badge variant="secondary" className="mt-4">
@@ -69,7 +73,7 @@ export default function SuperDisputePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              The goal is a cleaner workflow: clearer reasons, better document tracking, and more disciplined
+              The goal is a cleaner process: clearer reasons, better document tracking, and more disciplined
               follow-up than generic one-size-fits-all templates.
             </p>
           </CardContent>
@@ -82,7 +86,7 @@ export default function SuperDisputePage() {
       {/* How It Works Section */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle>How Super Dispute Works</CardTitle>
+          <CardTitle>How The Draft Builder Works</CardTitle>
           <CardDescription>Our advanced 4-step process for clearer dispute preparation</CardDescription>
         </CardHeader>
         <CardContent>
@@ -103,7 +107,7 @@ export default function SuperDisputePage() {
               </div>
               <h3 className="font-semibold mb-2">AI Analysis</h3>
               <p className="text-sm text-muted-foreground">
-                The workflow identifies possible reporting issues, mixed data, duplicate items, and follow-up needs
+                The review identifies possible reporting issues, mixed data, duplicate items, and follow-up needs
               </p>
             </div>
 
@@ -155,7 +159,7 @@ export default function SuperDisputePage() {
           </div>
           <p className="mt-6 text-sm text-muted-foreground">
             VestBlock does not promise deletion of accurate negative information, guaranteed score increases,
-            or legal outcomes. The workflow is built around documentation, user review, and practical follow-up.
+            or legal outcomes. The process is built around documentation, user review, and practical follow-up.
           </p>
         </CardContent>
       </Card>

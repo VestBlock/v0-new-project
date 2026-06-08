@@ -21,6 +21,19 @@ Use this skill when checking whether VestBlock is ready to go live after deploys
 - `/setup-database` redirects anonymous users to login.
 - Upload page renders and asks unauthenticated users to sign in or upgrade as intended.
 
+## Browser QA Ladder
+
+Use browser QA when public pages, admin pages, forms, navigation, or dashboard flows changed.
+
+1. Local route smoke: open the changed routes and confirm they render.
+2. Console check: look for hydration errors, failed chunks, or client exceptions.
+3. Mobile pass: check narrow viewport for cramped cards, hidden CTAs, or horizontal overflow.
+4. Form dry-run: submit only safe test data to non-payment/non-live-send forms.
+5. Screenshot proof: capture important UI changes when Rob needs visual confirmation.
+6. Production spot check: after deploy, verify key public routes and protected admin/API behavior.
+
+Do not use browser QA to run live payments, live email sends, or blockchain transactions without explicit approval.
+
 ## Domain Rules
 
 - Upgraded project: `v0-vest-block-rebuild`.

@@ -34,16 +34,16 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     category: 'core_product',
     serviceKey: 'credit_analysis',
     slug: 'vestblock-pro-credit-tools',
-    title: 'VestBlock Pro Credit Tools Access',
+    title: 'Credit Review Tools Access',
     priceLabel: '$75',
     amount: 75,
     summary:
-      'Get paid access to credit-report analysis, organized findings, and dispute-letter tools inside VestBlock.',
+      'Optional access to credit-report analysis, organized findings, and dispute-letter tools inside VestBlock.',
     bestFor:
-      'Users who are ready to upload a report and want guided credit-analysis tools unlocked.',
+      'Customers who specifically need credit-report tools after deciding credit support is the right fit.',
     deliverables: [
       'Credit report upload access',
-      'AI credit-analysis tools',
+      'Credit review and organization tools',
       'Dispute-letter generation tools',
       'Dashboard tracking for report progress',
     ],
@@ -52,9 +52,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/credit-upload',
     primaryCta: 'Open Credit Tools',
     secondaryRoute: '/services/ai-credit-analysis',
-    secondaryCta: 'Read The Credit Analysis Guide',
+    secondaryCta: 'Read The Credit Review Guide',
     parentServiceRoute: '/services/ai-credit-analysis',
-    parentServiceLabel: 'AI Credit Analysis',
+    parentServiceLabel: 'Credit Tools',
   },
   {
     key: 'funding_strategy_review',
@@ -88,11 +88,11 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     category: 'funding_assistant',
     serviceKey: 'business_funding',
     slug: 'funding-assistant-software-access',
-    title: 'Funding Assistant Software Access',
+    title: 'Funding Assistant Tool Access',
     priceLabel: '$39',
     amount: 39,
     summary:
-      'Use the Funding Assistant dashboard for progress tracking, reminders, and application organization without guided review.',
+      'Use the Funding Assistant dashboard for progress tracking, reminders, and organization without guided review.',
     bestFor:
       'Users who want lighter funding tools they can manage themselves.',
     deliverables: [
@@ -115,7 +115,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     category: 'funding_assistant',
     serviceKey: 'business_funding',
     slug: 'funding-strategy-report',
-    title: 'Funding Strategy Report',
+    title: 'Funding Prep Report',
     priceLabel: '$99',
     amount: 99,
     summary:
@@ -142,7 +142,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     category: 'funding_assistant',
     serviceKey: 'credit_card_stacking',
     slug: 'assisted-funding-package',
-    title: 'Assisted Funding Package',
+    title: 'Guided Funding Prep Review',
     priceLabel: '$300',
     amount: 300,
     summary:
@@ -158,9 +158,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     complianceNote:
       'This is a preparation and support package. Issuers and lenders still decide approvals, terms, and final funding outcomes.',
     primaryRoute: '/funding/business-funding-strategy',
-    primaryCta: 'Request Assisted Review',
-    secondaryRoute: '/dashboard/funding',
-    secondaryCta: 'Open Funding Assistant',
+    primaryCta: 'Start The Funding Prep Plan',
+    secondaryRoute: '/funding#free-eligibility-check',
+    secondaryCta: 'Check Eligibility First',
     parentServiceRoute: '/services/business-funding-strategy',
     parentServiceLabel: 'Business Funding Strategy',
   },
@@ -169,7 +169,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     category: 'funding_assistant',
     serviceKey: 'real_estate_funding',
     slug: 'custom-funding-plan',
-    title: 'Custom Funding Plan',
+    title: 'Custom Funding Review',
     priceLabel: 'Custom',
     amount: null,
     summary:
@@ -184,7 +184,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     complianceNote:
       'Custom plans are reviewed case by case and do not imply approval, funding amount, or lender acceptance.',
     primaryRoute: '/funding/business-funding-strategy',
-    primaryCta: 'Request A Custom Review',
+    primaryCta: 'Request Custom Funding Review',
     secondaryRoute: '/real-estate-funding',
     secondaryCta: 'Submit A Real Estate Deal',
     parentServiceRoute: '/services/real-estate-funding',
@@ -213,9 +213,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/services/financial-growth?package=funding_readiness_snapshot#request-service',
     primaryCta: 'Request This Service',
     secondaryRoute: '/services/financial-growth',
-    secondaryCta: 'Compare Financial Packages',
+    secondaryCta: 'Compare Prep Reviews',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Funding & Business Credit Prep Reviews',
   },
   {
     key: 'business_credit_builder_sprint',
@@ -240,9 +240,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/services/financial-growth?package=business_credit_builder_sprint#request-service',
     primaryCta: 'Request This Service',
     secondaryRoute: '/services/financial-growth',
-    secondaryCta: 'Compare Financial Packages',
+    secondaryCta: 'Compare Prep Reviews',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Funding & Business Credit Prep Reviews',
   },
   {
     key: 'grant_application_prep',
@@ -267,9 +267,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/services/financial-growth?package=grant_application_prep#request-service',
     primaryCta: 'Request This Service',
     secondaryRoute: '/services/financial-growth',
-    secondaryCta: 'Compare Financial Packages',
+    secondaryCta: 'Compare Prep Reviews',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Funding & Business Credit Prep Reviews',
   },
   {
     key: 'debt_utilization_plan',
@@ -294,9 +294,9 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/services/financial-growth?package=debt_utilization_plan#request-service',
     primaryCta: 'Request This Service',
     secondaryRoute: '/services/financial-growth',
-    secondaryCta: 'Compare Financial Packages',
+    secondaryCta: 'Compare Prep Reviews',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Funding & Business Credit Prep Reviews',
   },
   {
     key: 'cash_flow_document_review',
@@ -321,27 +321,27 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     primaryRoute: '/services/financial-growth?package=cash_flow_document_review#request-service',
     primaryCta: 'Request This Service',
     secondaryRoute: '/services/financial-growth',
-    secondaryCta: 'Compare Financial Packages',
+    secondaryCta: 'Compare Prep Reviews',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Funding & Business Credit Prep Reviews',
   },
   {
     key: 'real_estate_deal_review',
     category: 'financial_growth',
     serviceKey: 'real_estate_funding',
     slug: 'real-estate-deal-funding-review',
-    title: 'Real Estate Deal Funding Review',
+    title: 'Real Estate Deal Review',
     priceLabel: '$300',
     amount: 300,
     summary:
-      'A deal-prep review for DSCR, hard-money, fix-and-flip, or rental funding conversations.',
+      'A deal-prep review for DSCR, hard-money, fix-and-flip, rental, buyer-fit, or lender-routing conversations.',
     bestFor:
-      'Investors with a specific deal who need to prepare lender-facing details.',
+      'Investors, buyers, and operators with a specific deal who need cleaner lender-facing or partner-facing details.',
     deliverables: [
       'Deal summary review',
       'Funding product notes',
       'Document and timeline checklist',
-      'Partner or lender follow-up routing',
+      'Buyer, partner, or lender follow-up routing',
     ],
     complianceNote:
       'Does not promise financing, appraised value, terms, closing, or lender approval.',
@@ -350,7 +350,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     secondaryRoute: '/real-estate-funding',
     secondaryCta: 'Submit A Real Estate Deal',
     parentServiceRoute: '/services/financial-growth',
-    parentServiceLabel: 'Financial Growth Services',
+    parentServiceLabel: 'Real Estate Funding and Buyer/Lender Routing',
   },
   ...automationPackages.map((pkg) => ({
     key: pkg.key,
@@ -369,7 +369,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     secondaryRoute: '/ai-assistant',
     secondaryCta: 'Compare Automation Packages',
     parentServiceRoute: '/ai-assistant',
-    parentServiceLabel: 'AI Receptionist And Website Systems',
+    parentServiceLabel: 'AI Receptionist & Booking',
   })),
   ...visibilityExpansionPackages.map((pkg) => ({
     key: pkg.key,
@@ -388,7 +388,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     secondaryRoute: '/visibility-expansion',
     secondaryCta: 'Compare Visibility Packages',
     parentServiceRoute: '/visibility-expansion',
-    parentServiceLabel: 'Visibility Expansion',
+    parentServiceLabel: 'Search Visibility',
   })),
 ];
 

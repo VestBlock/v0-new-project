@@ -233,6 +233,15 @@ export default function DealVaultLandingPage() {
               </Button>
             </div>
 
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <Link href="/services/dealvault" className="underline-offset-4 hover:underline">
+                Read the DealVault service guide
+              </Link>
+              <Link href="/services" className="underline-offset-4 hover:underline">
+                Compare all services
+              </Link>
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2">
               {trustPoints.map((item) => (
                 <div key={item} className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04] p-4">

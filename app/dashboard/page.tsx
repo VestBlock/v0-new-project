@@ -33,6 +33,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditReportStatusCard } from '@/components/credit-report-status-card';
 import { AccessStatusCard } from '@/components/access-status-card';
 import { getAccessProfile } from '@/lib/auth/access';
+import { NetworkIntakePanel } from '@/components/dashboard/network-intake-panel';
 
 type DashboardCreditReport = {
   id: string;
@@ -223,7 +224,7 @@ function DashboardPageContent() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Welcome back!</h2>
           <p className="text-muted-foreground">
-            Here's your financial command center.
+            Here is your VestBlock workspace for partner paths, funding, DealVault records, and prepared growth support.
           </p>
         </div>
         {isProMember && (
@@ -243,13 +244,15 @@ function DashboardPageContent() {
         description="Your current VestBlock access tier, including paid and admin permissions."
       />
 
+      <NetworkIntakePanel />
+
       {!isProMember && (
         <Alert>
           <Rocket className="h-4 w-4" />
           <AlertTitle>Unlock Your Full Potential!</AlertTitle>
           <AlertDescription>
             Upgrade to Pro to access our full suite of AI-powered tools,
-            including the Super Dispute Letter generator and personalized
+            including the advanced dispute draft builder and personalized
             financial roadmaps.
           </AlertDescription>
           <div className="mt-4">
@@ -277,18 +280,17 @@ function DashboardPageContent() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-cyan-200">
               <Sparkles className="h-4 w-4" />
-              <span className="text-sm font-medium">VestBlock Funding Assistant</span>
+              <span className="text-sm font-medium">VestBlock Growth System</span>
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Build a funding strategy before you apply.</h3>
+              <h3 className="text-xl font-semibold">Start with the right real estate partner path.</h3>
               <p className="mt-1 text-sm text-slate-300">
-                Compare business, personal, hybrid, or build-first paths with a readiness score, tracked sequence,
-                approval logging, and payment-plan options.
+                Review your starter workspace, seller or buyer criteria, lender fit, DealVault records, and AI visibility next steps in one place.
               </p>
             </div>
           </div>
           <Button asChild className="bg-cyan-500 text-slate-950 hover:bg-cyan-400">
-            <Link href="/dashboard/funding">Open Funding Assistant</Link>
+            <Link href="/dashboard/services">Open Growth System</Link>
           </Button>
         </CardContent>
       </Card>
@@ -298,18 +300,18 @@ function DashboardPageContent() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-cyan-600">
               <FileText className="h-4 w-4" />
-              <span className="text-sm font-medium">Paid Service Deliverables</span>
+              <span className="text-sm font-medium">Funding & Deal Prep</span>
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Review your prepared service packages in one place.</h3>
+              <h3 className="text-xl font-semibold">Build a funding strategy before you apply.</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                When VestBlock finishes a funding snapshot, grant prep review, business credit sprint,
-                utilization plan, or real-estate package, it will appear in your service dashboard.
+                Compare business, personal, hybrid, or build-first paths with a readiness review, tracked sequence,
+                approval logging, and payment-plan options.
               </p>
             </div>
           </div>
           <Button asChild variant="outline">
-            <Link href="/dashboard/services">Open My Services</Link>
+            <Link href="/dashboard/funding">Open Funding Assistant</Link>
           </Button>
         </CardContent>
       </Card>

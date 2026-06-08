@@ -4,104 +4,119 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
-  Bot,
   BriefcaseBusiness,
-  Search,
+  Home,
+  Landmark,
   ShieldCheck,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-const primaryLanes = [
+const primaryOffers = [
   {
-    title: 'DealVault',
+    title: 'Seller Property Review',
     summary:
-      'A premium proof, payout, and milestone layer for deal-driven businesses that need cleaner records and stronger accountability.',
+      'A direct path for property owners to share deal details, timing, condition, payoff context, and preferred sale route before follow-up.',
     points: [
-      'Agreement tracking and proof records',
-      'Payout logic and partner visibility',
-      'Milestone trails and certificate-ready activity',
+      'Property and seller intake',
+      'Fast cash, creative, or novation review paths',
+      'Cleaner follow-up for serious seller opportunities',
     ],
-    route: '/dealvault/demo',
-    cta: 'See DealVault Demo',
-    label: 'Flagship',
-    icon: ShieldCheck,
+    route: '/sell',
+    cta: 'Submit Property',
+    label: 'Seller path',
+    icon: Home,
     accent:
       'border-cyan-500/25 bg-[linear-gradient(180deg,rgba(34,211,238,0.14),rgba(255,255,255,0.02))]',
   },
   {
-    title: 'Visibility Expansion',
+    title: 'Buyer Buy Box',
     summary:
-      'A recurring search and credibility service for businesses that want to be easier to find and easier to trust.',
+      'A dedicated path for buyers to share markets, asset types, price range, proof, and close speed.',
     points: [
-      'City and service pages',
-      'Search, AI-answer, and PR support',
-      'Clear monthly work instead of vague marketing',
+      'Markets and asset criteria',
+      'Price range and proof status',
+      'Cleaner matching before seller opportunities are sent',
     ],
-    route: '/visibility-expansion',
-    cta: 'Open Visibility Expansion',
-    label: 'Growth',
-    icon: Search,
+    route: '/buyers',
+    cta: 'Share Buy Box',
+    label: 'Buyer path',
+    icon: Users,
     accent:
       'border-blue-500/20 bg-[linear-gradient(180deg,rgba(59,130,246,0.12),rgba(255,255,255,0.02))]',
   },
   {
-    title: 'AI Receptionist',
+    title: 'Lender Network',
     summary:
-      'A cleaner lead-capture and booking layer for teams that need faster response, better qualification, and less front-desk leakage.',
+      'A clean signup path for lenders to share states, loan range, borrower fit, and no-go criteria.',
     points: [
-      'After-hours response coverage',
-      'Booking and intake improvement',
-      'Higher-quality lead handoff',
+      'Lending box intake',
+      'States, loan size, and borrower fit',
+      'Introductions only when criteria fit',
     ],
-    route: '/ai-assistant',
-    cta: 'Open AI Receptionist',
-    label: 'Growth',
-    icon: Bot,
+    route: '/lenders',
+    cta: 'Join Lender Network',
+    label: 'Lender path',
+    icon: Landmark,
+    accent:
+      'border-amber-400/20 bg-[linear-gradient(180deg,rgba(251,191,36,0.12),rgba(255,255,255,0.02))]',
+  },
+  {
+    title: 'DealVault Records',
+    summary:
+      'Deal records, payout splits, proof certificates, and milestone tracking for real estate teams that need accountability.',
+    points: [
+      'Tamper-evident agreement records',
+      'Payout ledger and partner split visibility',
+      'Milestone history and certificate-ready audit trail',
+    ],
+    route: '/dealvault/demo',
+    cta: 'Request Private Demo',
+    label: 'Flagship',
+    icon: ShieldCheck,
     accent:
       'border-violet-500/20 bg-[linear-gradient(180deg,rgba(139,92,246,0.12),rgba(255,255,255,0.02))]',
   },
 ] as const;
 
-const supportLanes = [
+const supportOffers = [
+  { label: 'Partner Intake Support', href: '/dealflow-growth-system' },
+  { label: 'Developer / Contractor Network', href: '/real-estate-funding' },
+  { label: 'AI Intake & Reception', href: '/ai-assistant' },
   { label: 'Funding Prep', href: '/funding' },
   { label: 'Business Setup', href: '/business-setup' },
   { label: 'Credit Support', href: '/services/ai-credit-analysis' },
-  { label: 'Real Estate Funding', href: '/real-estate-funding' },
-  { label: 'Seller Path', href: '/sell' },
-  { label: 'Financial Packages', href: '/services/financial-growth' },
+  { label: 'Prep Reviews', href: '/services/financial-growth' },
 ] as const;
 
 export function ServiceCards() {
   return (
-    <section className="px-4 py-20">
+    <section className="px-4 py-14 md:py-20">
       <div className="container mx-auto">
-        <div className="mx-auto mb-12 max-w-3xl text-center">
+        <div className="mx-auto mb-8 max-w-3xl text-center md:mb-12">
           <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Core products</p>
-          <h2 className="mt-3 text-3xl font-semibold text-white md:text-5xl">
-            Three clear offers. One stronger brand.
+          <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl md:text-5xl">
+            Real estate partnerships first. Support behind them.
           </h2>
-          <p className="mt-4 text-lg leading-8 text-slate-300">
-            DealVault is the flagship demo path. Visibility helps customers find you. AI Receptionist helps you respond faster.
+          <p className="mt-4 text-sm leading-7 text-slate-300 sm:text-base md:text-lg md:leading-8">
+            VestBlock brings seller intake, buyer criteria, lender fit, operator partners, and DealVault records into one connected partner experience.
           </p>
         </div>
 
-        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-3">
-          {primaryLanes.map((lane, index) => {
-            const Icon = lane.icon;
+        <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {primaryOffers.map((offer) => {
+            const Icon = offer.icon;
 
             return (
               <motion.div
-                key={lane.title}
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: index * 0.06 }}
-                viewport={{ once: true }}
+                key={offer.title}
+                transition={{ duration: 0.25 }}
                 whileHover={{ y: -8 }}
               >
                 <Link
-                  href={lane.route}
-                  className={`group flex h-full flex-col rounded-[1.75rem] border ${lane.accent} p-6 backdrop-blur-xl transition-[border-color,box-shadow,transform,background-color] duration-300 hover:border-cyan-300/35 hover:shadow-[0_28px_70px_rgba(8,145,178,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+                  href={offer.route}
+                  className={`group flex h-full flex-col rounded-[1.75rem] border ${offer.accent} p-6 backdrop-blur-xl transition-[border-color,box-shadow,transform,background-color] duration-300 hover:border-cyan-300/35 hover:shadow-[0_28px_70px_rgba(8,145,178,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
                 >
                   <div>
                     <div className="mb-4 flex items-center justify-between gap-3">
@@ -109,17 +124,17 @@ export function ServiceCards() {
                         <Icon className="h-5 w-5 text-white" />
                       </div>
                       <Badge variant="outline" className="border-white/10 bg-white/[0.03] text-slate-200">
-                        {lane.label}
+                        {offer.label}
                       </Badge>
                     </div>
-                    <h3 className="text-2xl font-semibold text-white">{lane.title}</h3>
+                    <h3 className="text-2xl font-semibold text-white">{offer.title}</h3>
                     <p className="mt-2 text-base leading-7 text-slate-300">
-                      {lane.summary}
+                      {offer.summary}
                     </p>
                   </div>
                   <div className="mt-6 flex h-full flex-col">
                     <div className="space-y-3 text-sm text-slate-300">
-                      {lane.points.map((point) => (
+                      {offer.points.map((point) => (
                         <div key={point} className="flex items-start gap-3">
                           <div className="mt-1 h-2 w-2 rounded-full bg-cyan-300" />
                           <p className="leading-6">{point}</p>
@@ -128,7 +143,7 @@ export function ServiceCards() {
                     </div>
 
                     <div className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-white">
-                      {lane.cta}
+                      {offer.cta}
                       <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                     </div>
                   </div>
@@ -138,18 +153,18 @@ export function ServiceCards() {
           })}
         </div>
 
-        <div className="premium-section mx-auto mt-10 max-w-5xl p-6 text-center">
+        <div className="premium-section mx-auto mt-8 max-w-5xl p-5 text-center md:mt-10 md:p-6">
           <div className="mb-3 flex items-center justify-center gap-2 text-sm font-medium text-white">
             <BriefcaseBusiness className="h-4 w-4 text-cyan-400" />
             More support when you need it.
           </div>
-          <p className="mx-auto max-w-3xl text-sm leading-7 text-slate-400">
-            Funding, setup, credit, and seller-specific services are still available. They work best after the main need is already clear.
+          <p className="mx-auto max-w-3xl text-sm leading-6 text-slate-400 md:leading-7">
+            Real estate funding review, developer and contractor routing, AI intake, setup, and credit services are available as support around seller, buyer, lender, operator, and DealVault paths.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {supportLanes.map((lane) => (
-              <Button key={lane.label} asChild size="sm" variant="outline" className="border-white/10 bg-transparent hover:bg-white/[0.04]">
-                <Link href={lane.href}>{lane.label}</Link>
+            {supportOffers.map((offer) => (
+              <Button key={offer.label} asChild size="sm" variant="outline" className="border-white/10 bg-transparent hover:bg-white/[0.04]">
+                <Link href={offer.href}>{offer.label}</Link>
               </Button>
             ))}
           </div>

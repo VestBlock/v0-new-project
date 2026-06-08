@@ -14,7 +14,6 @@ function classifyCategoryFromNiche(niche: string, detected: LenderCategory[]): L
   if (/dscr/.test(lower)) return 'dscr'
   if (/equipment/.test(lower)) return 'equipment_finance'
   if (/sba/.test(lower)) return 'sba_7a'
-  if (/truck/.test(lower)) return 'trucking_finance'
   if (/restaurant/.test(lower)) return 'restaurant_finance'
   if (/contractor/.test(lower)) return 'contractor_finance'
   if (/community development financial institution/.test(lower)) return 'cdfi'

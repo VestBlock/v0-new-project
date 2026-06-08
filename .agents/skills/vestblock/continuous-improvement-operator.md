@@ -41,3 +41,20 @@ VestBlock should improve through measured results, not random tweaks.
 - test dry-run cron responses
 - confirm admin pages load
 - confirm queued strategy updates can be approved or applied
+
+## Daily Scorecard Contract
+
+Every daily optimization pass should produce a short status using:
+
+- Revenue: `/admin/revenue-command`
+- Outreach: `npm run outreach:scorecard`, `npm run outreach:preflight`, `npm run outreach:v2-audit`
+- Visibility: `npm run visibility:aeo-scorecard`, `npm run visibility:indexing-dry-run`
+- Technical health: `npm run typecheck` and targeted lint when code changed
+
+Use these status colors:
+
+- Green: target met and no critical blockers.
+- Yellow: partial progress, queue exists, or manual review required.
+- Red: blocked by empty qualified pool, failed provider, broken build, missing env, or unsafe send state.
+
+Store durable learning in `docs/VESTBLOCK_DAILY_LEARNING_LOG.md`, `docs/VESTBLOCK_GROWTH_BACKLOG.md`, or the relevant operator skill. Do not leave the learning only in chat.

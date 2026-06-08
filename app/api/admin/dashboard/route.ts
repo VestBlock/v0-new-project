@@ -1149,6 +1149,12 @@ export async function GET() {
           process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL
         ),
         fromEmailConfigured: Boolean(process.env.FROM_EMAIL || process.env.RESEND_EMAIL),
+        outreachMailingAddressConfigured: Boolean(
+          process.env.OUTREACH_MAILING_ADDRESS ||
+            process.env.BUSINESS_MAILING_ADDRESS ||
+            process.env.COMPANY_MAILING_ADDRESS ||
+            process.env.PUBLIC_BUSINESS_ADDRESS
+        ),
         siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL || process.env.WEB_HOST_URL),
       },
       payments: {
@@ -1198,13 +1204,6 @@ export async function GET() {
           schedule: '0 */6 * * *',
           purpose:
             'Checks the hard scoreboard, identifies missed daily quotas, and creates red-flag admin tasks when growth or revenue cadence falls behind.',
-        },
-        {
-          label: 'Partner send autopilot',
-          path: '/api/cron/partners-send-autopilot',
-          schedule: '5 */2 * * *',
-          purpose:
-            'Sends approved lender and buyer outreach automatically, and creates admin tasks when autopilot is blocked or a send fails.',
         },
         {
           label: 'PR target discovery',

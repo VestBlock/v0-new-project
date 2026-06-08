@@ -16,11 +16,12 @@ import {
   vestblockAeoTopics,
   type AeoTopic,
 } from '@/lib/aeo/topics';
+import { RevenuePathLinks } from '@/components/marketing/revenue-path-links';
 
 export const metadata: Metadata = {
-  title: 'Credit Repair, Business Credit, And Funding Guides | VestBlock',
+  title: 'Real Estate Operations, Funding, And DealVault Guides | VestBlock',
   description:
-    'Practical VestBlock guides for AI credit repair, dispute letters, business credit, funding preparation, grants, and credit builder tools.',
+    'Practical VestBlock guides for real estate operations, DealVault proof records, funding preparation, credit tools, and lead capture.',
 };
 
 function topicsByCluster() {
@@ -46,23 +47,23 @@ export default function LearnPage() {
           </Badge>
           <div className="max-w-3xl space-y-3">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Practical credit repair, funding, and business credit guides
+              Practical guides for getting found, capturing leads, and keeping cleaner proof records
             </h1>
             <p className="text-lg text-muted-foreground">
-              Short, useful explainers that connect education to the tools inside
-              VestBlock. No guaranteed score promises, no fake shortcuts, and no
-              thin SEO clutter.
+              Short, useful explainers that connect real buyer questions to
+              VestBlock services: real estate operations, AI receptionist, DealVault,
+              funding prep, and website lead capture. No fake shortcuts or thin clutter.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Button asChild>
-              <Link href="/credit-upload">
-                Upload A Credit Report
+              <Link href="/get-started">
+                Choose your path
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/funding">Explore Funding</Link>
+              <Link href="/dealvault/demo-record">View DealVault Demo</Link>
             </Button>
           </div>
         </div>
@@ -70,6 +71,12 @@ export default function LearnPage() {
 
       <section className="px-4 py-10">
         <div className="container mx-auto grid max-w-6xl gap-6">
+          <RevenuePathLinks
+            eyebrow="Start here"
+            title="Use the guides, then open the product path that matches the problem."
+            description="The learning center now connects directly to the demos and proof pages buyers ask about most: DealVault, smart contract records, funding review, and AI receptionist."
+          />
+
           {Object.entries(groupedTopics).map(([cluster, topics]) => (
             <div key={cluster} className="space-y-3">
               <div className="flex items-center gap-2">

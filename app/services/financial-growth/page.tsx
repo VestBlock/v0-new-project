@@ -27,22 +27,38 @@ import { pricedVestBlockOffers } from '@/lib/services/pricedOffers';
 import { absoluteUrl } from '@/lib/seo/site';
 import { buildPartnerReferralPath } from '@/lib/partners/referrals';
 import {
+  breadcrumbJsonLd,
   financialGrowthFaqJsonLd,
   financialGrowthServiceJsonLd,
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Financial Growth Services For Funding, Credit, Grants, and Real Estate',
+  title: 'Funding & Business Credit Prep Reviews',
   description:
-    'Paid VestBlock financial prep packages for funding preparation, business credit, grant applications, debt utilization, cash-flow document review, and real estate deal funding review.',
+    'Request focused VestBlock prep reviews for funding readiness, business credit, grant applications, debt utilization, cash-flow documents, and real estate deal funding review.',
   alternates: {
     canonical: '/services/financial-growth',
   },
   openGraph: {
-    title: 'VestBlock Financial Growth Services',
+    title: 'VestBlock Funding & Business Credit Prep Reviews',
     description:
-      'Request paid financial prep packages for business funding preparation, business credit, grant applications, utilization planning, cash-flow review, and real estate funding preparation.',
+      'Request focused prep reviews for business funding, business credit, grants, utilization, cash-flow documents, and real estate funding preparation.',
     url: absoluteUrl('/services/financial-growth'),
+    images: [
+      {
+        url: absoluteUrl('/opengraph-image'),
+        width: 1200,
+        height: 630,
+        alt: 'VestBlock funding prep reviews preview',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'VestBlock Funding & Business Credit Prep Reviews',
+    description:
+      'Request focused prep reviews for business funding, business credit, grants, utilization, cash-flow documents, and real estate funding preparation.',
+    images: [absoluteUrl('/opengraph-image')],
   },
 };
 
@@ -62,12 +78,19 @@ const packageOfferByKey = Object.fromEntries(
 );
 
 export default function FinancialGrowthServicesPage() {
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: 'VestBlock', path: '/' },
+    { name: 'Services', path: '/services' },
+    { name: 'Funding & Business Credit Prep Reviews', path: '/services/financial-growth' },
+  ]);
+
   return (
     <main className="min-h-screen bg-background px-4 py-24">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify([
+            breadcrumbs,
             financialGrowthServiceJsonLd(),
             financialGrowthFaqJsonLd(),
           ]),
@@ -77,20 +100,18 @@ export default function FinancialGrowthServicesPage() {
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-5">
             <Badge className="w-fit bg-cyan-600 text-white">
-              Paid financial services
+              Prep reviews
             </Badge>
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight md:text-5xl">
-              Paid service hub for credit, funding, grants, and deal prep.
+              Funding and business credit prep reviews with a clear next step.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              Use this page when you want a clearly scoped paid review, document
-              prep package, or guided next step after a free tool or funding
-              check showed that more help is needed.
+              Choose a focused review when you need cleaner documents, better timing, or a practical plan before applying for funding, grants, business credit, or real estate financing.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
                 <a href="#request-service">
-                  Request A Service
+                  Request Prep Review
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>
               </Button>
@@ -98,23 +119,30 @@ export default function FinancialGrowthServicesPage() {
                 <Link href="/services">Compare All Services</Link>
               </Button>
             </div>
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <Link href="/services/financial-growth-services" className="underline-offset-4 hover:underline">
+                Read the prep reviews service guide
+              </Link>
+              <Link href="/services/business-funding-eligibility" className="underline-offset-4 hover:underline">
+                Funding eligibility guide
+              </Link>
+            </div>
           </div>
 
           <Card className="border-cyan-500/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-cyan-600" />
-                How these services are structured
+                How prep reviews work
               </CardTitle>
               <CardDescription>
-                Each package has a clear scope, price, and next step so clients know
-                exactly what support they are requesting.
+                Each review has a clear scope, price range, and follow-up path. No payment is collected from this request form.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Start with the package that matches your immediate goal.</p>
-              <p>Use the service page to compare scope before requesting support.</p>
-              <p>VestBlock keeps the offer focused on preparation, review, and guided next steps.</p>
+              <p>Start with the review that matches the immediate blocker.</p>
+              <p>Tell us what you are trying to accomplish and what documents or timeline you already have.</p>
+              <p>VestBlock confirms the right scope before any paid next step.</p>
             </CardContent>
           </Card>
         </section>
@@ -122,33 +150,33 @@ export default function FinancialGrowthServicesPage() {
         <section className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">From funding</CardTitle>
+              <CardTitle className="text-lg">Funding cleanup</CardTitle>
               <CardDescription>
-                Move here when documents, utilization, or application sequencing need manual cleanup.
+                For owners who need documents, timing, or application sequence cleaned up before they apply.
               </CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">From credit repair</CardTitle>
+              <CardTitle className="text-lg">Business credit profile</CardTitle>
               <CardDescription>
-                Move here when the user needs more than a self-serve report analysis or dispute workflow.
+                For businesses that need a cleaner profile, vendor roadmap, or utilization plan before seeking credit.
               </CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">From grants</CardTitle>
+              <CardTitle className="text-lg">Grant package prep</CardTitle>
               <CardDescription>
-                Move here when grant fit is decent but the documents, narrative, or structure are still weak.
+                For owners who found an opportunity but need a stronger story, checklist, and document package.
               </CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">From real estate</CardTitle>
+              <CardTitle className="text-lg">Real estate deal prep</CardTitle>
               <CardDescription>
-                Move here when a deal needs deeper review before the right lender or partner conversation.
+                For investors who need deal details organized before a lender, broker, or partner conversation.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -191,11 +219,11 @@ export default function FinancialGrowthServicesPage() {
                       </ul>
                     </div>
                     <div>
-                      <p className="font-medium">Next sale path</p>
+                      <p className="font-medium">Recommended next step</p>
                       <p className="text-muted-foreground">{servicePackage.upsellPath}</p>
                     </div>
                     <div>
-                      <p className="font-medium">Guardrail</p>
+                      <p className="font-medium">Important note</p>
                       <p className="text-muted-foreground">{servicePackage.complianceNote}</p>
                     </div>
                   </div>
@@ -207,11 +235,25 @@ export default function FinancialGrowthServicesPage() {
                     )}
                     <Button asChild variant="outline">
                       <Link href={`/services/financial-growth?package=${servicePackage.key}#request-service`}>
-                        Request This Service
+                        Request This Review
                       </Link>
                     </Button>
                     {servicePackage.key === 'real_estate_deal_review' && (
                       <>
+                        <Button asChild variant="outline">
+                          <Link
+                            href={buildPartnerReferralPath({
+                              partnerKey: 'nlc',
+                              source: 'financial-growth-service',
+                              service: 'real_estate_deal_review',
+                              packageKey: servicePackage.key,
+                            })}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            No Limit Capital Path
+                          </Link>
+                        </Button>
                         <Button asChild variant="outline">
                           <Link
                             href={buildPartnerReferralPath({
@@ -255,9 +297,9 @@ export default function FinancialGrowthServicesPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Simple pricing flow</CardTitle>
+              <CardTitle>Simple review path</CardTitle>
               <CardDescription>
-                Keep the decision simple so clients understand what to do next.
+                Keep the decision clear before a customer pays for deeper help.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
@@ -269,20 +311,19 @@ export default function FinancialGrowthServicesPage() {
                 </p>
               </div>
               <div>
-                <p className="font-medium">$149-$300 one-time reviews</p>
+                <p className="font-medium">$149-$300 focused reviews</p>
                 <p className="text-muted-foreground">
-                  Paid snapshots for clients who need a professional review before
-                  applying, disputing, or submitting a grant.
+                  Focused reviews for owners who need a practical plan before applying, improving documents, or submitting a grant.
                 </p>
               </div>
               <div>
-                <p className="font-medium">$300 funding prep plan plus success fee</p>
+                <p className="font-medium">$300 funding prep plan when hands-on help is needed</p>
                 <p className="text-muted-foreground">
-                  Deeper funding prep for business credit lines and business funding cases.
+                  Guided funding prep for business credit lines and business funding cases that need closer review.
                 </p>
               </div>
               <div>
-                <p className="font-medium">$499 sprint</p>
+                <p className="font-medium">$499 business credit sprint</p>
                 <p className="text-muted-foreground">
                   Higher-touch business credit setup support for owners who need
                   structure before they can pursue larger funding paths.
@@ -294,15 +335,15 @@ export default function FinancialGrowthServicesPage() {
           <div className="space-y-6">
             <Card className="border-cyan-500/20">
               <CardHeader>
-                <CardTitle>When this page fits best</CardTitle>
+                <CardTitle>When this review path fits best</CardTitle>
                 <CardDescription>
-                  Choose this page when you want a defined paid review instead of a vague consultation.
+                  Choose this when you want a defined review instead of a vague consultation.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <p>Choose this after a funding check shows the business needs cleanup before applying.</p>
                 <p>Use it when a real-estate deal or grant opportunity needs a more manual review.</p>
-                <p>Start here when you want a paid prep package with a clear scope and next step.</p>
+                <p>Start here when you want a prep review with a clear scope and next step before payment.</p>
               </CardContent>
             </Card>
 
