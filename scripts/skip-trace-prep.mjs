@@ -1,29 +1,31 @@
 /**
  * Skip-trace prep — turns the distress-stack MASTER into an upload-ready file
- * for any skip-trace service (PropStream, BatchData, REISkip, Skip Genie, etc.).
+ * for DealMachine or any other skip-trace service.
  *
- * We already have owner name + property address from public records. Skip-trace
- * services take Owner Name + Property Address and return phone/email/current
- * mailing. This script formats that input cleanly and dedupes it.
- *
- * It does NOT call a paid API by default (no free phone/email skip tracing exists).
- * If a BATCHDATA_API_KEY is set, pass --batchdata to also POST for live results.
+ * We already have owner name + property address from public records.
+ * Upload this file to DealMachine → Lists → Import to run skip-trace,
+ * then export the Contacts CSV from DealMachine and place it in data/dm-exports/.
  *
  * USAGE:
  *   node scripts/skip-trace-prep.mjs
- *   node --env-file=.env.local scripts/skip-trace-prep.mjs --batchdata   (optional, needs key)
+ *   node scripts/skip-trace-prep.mjs --market=philadelphia
  */
 
 import fs from "node:fs"
 import path from "node:path"
 
 const args = process.argv.slice(2)
-const USE_BATCHDATA = args.includes("--batchdata")
+const getArg = (name) => {
+  const hit = args.find((a) => a.startsWith(`--${name}=`))
+  return hit ? hit.split("=").slice(1).join("=") : null
+}
+const MARKET_FILTER = (getArg("market") || "").toLowerCase().trim()
+
 const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
 const MASTER = path.join(OUT_DIR, "MASTER-distress-stack.csv")
 const OUT = path.join(OUT_DIR, "skip-trace-upload.csv")
 
-const STATE_BY_MARKET = { cincinnati: "OH", toledo: "OH", milwaukee: "WI", detroit: "MI" }
+const STATE_BY_MARKET = { cincinnati: "OH", toledo: "OH", milwaukee: "WI", detroit: "MI", columbus: "OH" }
 
 function parseCsv(file) {
   const text = fs.readFileSync(file, "utf8")
@@ -50,13 +52,13 @@ function main() {
   const out = []
   for (const r of rows.slice(1)) {
     if (!r.length) continue
-    const market = r[idx.market] || ""
+    const market = (r[idx.market] || "").trim().toLowerCase()
     const address = (r[idx.address] || "").trim()
-    if (!address) continue
+    if (!address || !market) continue
+    if (MARKET_FILTER && !market.includes(MARKET_FILTER)) continue
     const key = `${market}|${address.toLowerCase()}`
     if (seen.has(key)) continue
     seen.add(key)
-    // owner: strip the Detroit "(mails from CITY)" annotation for a clean name
     const owner = (r[idx.delinquent_owner] || "").replace(/\s*\(mails from [^)]*\)/i, "").trim()
     out.push({
       market,
@@ -75,25 +77,19 @@ function main() {
 
   const withOwner = out.filter((r) => r.owner_name).length
   console.log("=== Skip-trace upload prepared ===")
-  console.log(`Records:        ${out.length} (deduped)`)
+  console.log(`Records:         ${out.length} (deduped${MARKET_FILTER ? `, ${MARKET_FILTER} only` : ""})`)
   console.log(`With owner name: ${withOwner} (${Math.round((withOwner / out.length) * 100)}%)`)
-  console.log(`File:           ${OUT}`)
+  console.log(`File:            ${OUT}`)
   console.log("")
-  console.log("Next: upload this CSV to a skip-trace service to append phone/email.")
-  console.log("  - PropStream (built-in skip trace), BatchData, REISkip, Skip Genie, IDI/IDICORE")
-  console.log("Map columns: owner_name -> Owner, property_address/city/state -> Property Address.")
-
-  if (USE_BATCHDATA) {
-    if (!process.env.BATCHDATA_API_KEY) {
-      console.log("\n--batchdata set but BATCHDATA_API_KEY missing. Skipping live call.")
-      return
-    }
-    console.log("\n(BatchData live skip-trace would run here — wire endpoint /api/v1/property/skip-trace with your key.)")
-    // Intentionally not executing paid calls automatically. Implement when ready:
-    //   POST https://api.batchdata.com/api/v1/property/skip-trace
-    //   Authorization: Bearer ${process.env.BATCHDATA_API_KEY}
-    //   body: { requests: [{ propertyAddress: {...}, name: {...} }, ...] }  (batch ~1000)
-  }
+  console.log("Next steps (DealMachine):")
+  console.log("  1. Go to DealMachine → Lists → Import List")
+  console.log("  2. Upload: data/distress-leads/skip-trace-upload.csv")
+  console.log("  3. Map: owner_name → Owner Name, property_address → Street Address,")
+  console.log("          city → City, state → State")
+  console.log("  4. Let DealMachine skip-trace the list (included in your plan)")
+  console.log("  5. Export → Contacts → save to: data/dm-exports/<market>-YYYY-MM-DD.csv")
+  console.log("  6. Run: npm run distress:dealmachine:ingest-export")
+  console.log("  7. Then send: npm run distress:dealmachine:export-outreach -- --send")
 }
 
 main()

@@ -1,13 +1,13 @@
 /**
  * DealMachine export outreach for VestBlock.
  *
- * Matches Atlas-exported DealMachine contact CSVs against ranked market queues,
- * builds property-specific owner outreach, sends email through Resend, and
- * writes a DNC-aware phone queue for Messages.
+ * Builds owner outreach directly from DealMachine Contacts exports, optionally
+ * enriching rows with a local ranked queue when one exists. Sends email through
+ * Resend and writes a DNC-aware phone queue for Messages.
  *
  * Usage:
  *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs
- *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --limit=150 --send
+ *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=150 --send
  */
 
 import { Resend } from "resend"
@@ -24,33 +24,108 @@ const getArg = (name) => {
 const LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : 150
 const THROTTLE_MS = getArg("throttle") ? Number.parseInt(getArg("throttle"), 10) : 1800
 const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
+const DM_EXPORT_DIR = path.join(process.cwd(), "data", "dm-exports")
 const OUTREACH_DIR = path.join(process.cwd(), "tmp", "outreach")
 const BCC = getArg("bcc") || ""
 const CONFIG_FILE = getArg("config-file")
+const EXPORT_CSV = getArg("export-csv")
+const MARKET_ARG = (getArg("market") || "").trim().toLowerCase()
+const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 7
 
-const DEFAULT_MARKET_CONFIGS = [
-  {
-    market: "milwaukee",
-    queueCsv: path.join(OUT_DIR, "dealmachine-api-milwaukee-wi-atlas-export-needed.csv"),
-    exportCsv: "/Users/mrsanders/Downloads/dealmachine-contacts-2026-06-05-130846.csv",
-  },
-  {
-    market: "toledo",
-    queueCsv: path.join(OUT_DIR, "dealmachine-api-toledo-oh-atlas-export-needed.csv"),
-    exportCsv: "/Users/mrsanders/Downloads/dealmachine-contacts-2026-06-05-123802.csv",
-  },
-]
+function normalizeMarketSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+function findLatestExportForMarket(market) {
+  if (!fs.existsSync(DM_EXPORT_DIR)) return ""
+  const slug = normalizeMarketSlug(market)
+  const compact = slug.replace(/-/g, "")
+  const threshold = Date.now() - MAX_EXPORT_AGE_DAYS * 24 * 60 * 60 * 1000
+
+  const candidates = fs
+    .readdirSync(DM_EXPORT_DIR)
+    .filter((name) => name.toLowerCase().endsWith(".csv"))
+    .map((name) => {
+      const file = path.join(DM_EXPORT_DIR, name)
+      const stat = fs.statSync(file)
+      return { file, name: name.toLowerCase(), mtimeMs: stat.mtimeMs }
+    })
+    .filter((entry) => entry.mtimeMs >= threshold)
+    .filter((entry) => {
+      const normalized = normalizeMarketSlug(entry.name)
+      return normalized.includes(slug) || normalized.replace(/-/g, "").includes(compact)
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+
+  return candidates[0]?.file || ""
+}
+
+function findQueueCsvForMarket(market) {
+  const normalizedMarket = normalizeMarketSlug(market)
+  const preferred = [
+    `dealmachine-api-${normalizedMarket}-atlas-export-needed.csv`,
+    `dealmachine-api-${normalizedMarket}-ready-now.csv`,
+    `dealmachine-api-${normalizedMarket}-contactable-nurture-stack.csv`,
+    `dealmachine-api-${normalizedMarket}.csv`,
+  ]
+
+  for (const filename of preferred) {
+    const file = path.join(OUT_DIR, filename)
+    if (fs.existsSync(file)) return file
+  }
+
+  if (!fs.existsSync(OUT_DIR)) return ""
+  const fallback = fs
+    .readdirSync(OUT_DIR)
+    .filter((name) => name.includes(normalizedMarket) && name.endsWith(".csv"))
+    .sort()
+
+  return fallback.length ? path.join(OUT_DIR, fallback[0]) : ""
+}
+
+function buildDefaultMarketConfigs() {
+  throw new Error(
+    "Explicit export selection is now required. Use --market=<city-state> --export-csv=<path> or --config-file=<json>."
+  )
+}
 
 function loadMarketConfigs() {
-  if (!CONFIG_FILE) return DEFAULT_MARKET_CONFIGS
-  const file = path.resolve(CONFIG_FILE)
-  const parsed = JSON.parse(fs.readFileSync(file, "utf8"))
-  if (!Array.isArray(parsed)) throw new Error("Config file must be a JSON array.")
-  return parsed.map((entry) => ({
-    market: String(entry.market || "").trim(),
-    queueCsv: String(entry.queueCsv || "").trim(),
-    exportCsv: String(entry.exportCsv || "").trim(),
-  }))
+  if (CONFIG_FILE) {
+    const file = path.resolve(CONFIG_FILE)
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"))
+    if (!Array.isArray(parsed)) throw new Error("Config file must be a JSON array.")
+    return parsed.map((entry) => ({
+      market: normalizeMarketSlug(entry.market),
+      queueCsv: String(entry.queueCsv || "").trim(),
+      exportCsv: String(entry.exportCsv || "").trim(),
+    }))
+  }
+
+  if (!MARKET_ARG) {
+    throw new Error("Provide --market=<city-state> and --export-csv=<path>, or pass --config-file=<json>.")
+  }
+
+  if (SEND && !EXPORT_CSV) {
+    throw new Error("Live send requires --export-csv=<path> so the exact DealMachine export file is explicit.")
+  }
+
+  const market = normalizeMarketSlug(MARKET_ARG)
+  const exportCsv = EXPORT_CSV ? path.resolve(EXPORT_CSV) : findLatestExportForMarket(market)
+  if (!exportCsv) {
+    throw new Error(
+      `No DealMachine export CSV found for ${market}. Place a fresh Contacts export in ${DM_EXPORT_DIR} or pass --export-csv=<path>.`
+    )
+  }
+
+  return [{
+    market,
+    queueCsv: findQueueCsvForMarket(market),
+    exportCsv,
+  }]
 }
 
 function env(name) {
@@ -122,6 +197,53 @@ function loadCsv(file) {
   return rows.slice(1).map((values) => Object.fromEntries(header.map((col, index) => [String(col || "").trim(), String(values[index] || "").trim()])))
 }
 
+function queueAddress(row) {
+  if (row.property_address_full) return row.property_address_full
+  return [row.property_address, row.city, row.state, row.zip].filter(Boolean).join(", ")
+}
+
+function queueMarketLabel(row) {
+  if (row.market_city && row.market_state) return `${row.market_city}, ${row.market_state}`
+  return [row.city, row.state].filter(Boolean).join(", ")
+}
+
+function queueOwnerName(row) {
+  return String(row.owner_name || "").trim()
+}
+
+function queueDistressScore(row) {
+  const value = row.distress_score || row.priority_score || "0"
+  return Number.parseInt(String(value), 10) || 0
+}
+
+function exportAddress(row) {
+  return (
+    row.associated_property_address_full ||
+    row.property_address_full ||
+    [row.property_address, row.property_city, row.property_state, row.property_zip].filter(Boolean).join(", ")
+  )
+}
+
+function marketLabelFromAddress(address) {
+  const parts = String(address || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length >= 3) return `${parts[1]}, ${parts[2].split(/\s+/)[0]}`
+  if (parts.length >= 2) return parts.slice(-2).join(", ")
+  return ""
+}
+
+function exportOwnerName(row) {
+  return (
+    `${row.first_name || ""} ${row.last_name || ""}`.trim() ||
+    row.full_name ||
+    row.contact_name ||
+    row.owner_name ||
+    ""
+  )
+}
+
 function normalizeAddress(value) {
   return String(value || "")
     .trim()
@@ -165,16 +287,25 @@ function pathLabelList(value) {
     .split("|")
     .map((part) => part.trim())
     .filter(Boolean)
+    .filter((path) => path !== "lender_review")
     .map((path) => {
       if (path === "fast_cash") return "a fast cash review"
       if (path === "creative_structure") return "a creative structure"
       if (path === "novation") return "a market-assisted sale"
       if (path === "rental_hold") return "a rental-buyer review"
-      if (path === "lender_review") return "funding partner review"
       return path.replace(/_/g, " ")
     })
 
   return [...new Set(labels)].filter((label) => label !== "manual review").slice(0, 4).join(", ")
+}
+
+function sellerPathList(value) {
+  return String(value || "")
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((path) => path !== "lender_review")
+    .join(" | ")
 }
 
 function buildEmail(contact) {
@@ -202,7 +333,7 @@ function buildEmail(contact) {
     "contact@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee funding, approvals, sale timelines, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -213,8 +344,18 @@ function buildEmail(contact) {
 
 function buildText(contact) {
   const line = contact.property_address_full.split(",")[0]
-  const pathLine = pathLabelList(contact.suggested_exit_paths)
-  return `Hi, this is Robert with VestBlock. I wanted to ask whether you would consider options for ${line}${pathLine ? `, including ${pathLine}` : ""}. Reply STOP and I will not message again.`
+  const first = String(contact.first_name || "").trim().toLowerCase()
+  const greeting = first && first !== "there"
+    ? `Hi ${contact.first_name},`
+    : "Hi,"
+  return `${greeting} Robert with VestBlock here. Reaching out about ${line}. Wanted to see if you'd consider selling if the numbers made sense. We have various options depending on the property. Worth a quick conversation? Reply STOP to opt out.`
+}
+
+function normalizeUsPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "")
+  if (digits.length === 10) return digits
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1)
+  return ""
 }
 
 function isTextablePhone(phone) {
@@ -223,7 +364,7 @@ function isTextablePhone(phone) {
   if (/do not call/.test(dnc)) return false
   if (type === "landline") return false
   if (!/(mobile|wireless|cell)/.test(type)) return false
-  return Boolean(String(phone?.number || "").trim())
+  return Boolean(normalizeUsPhone(phone?.number))
 }
 
 function loadAlreadySent() {
@@ -242,59 +383,53 @@ function loadAlreadySent() {
   return sent
 }
 
-function loadMatches() {
+function loadMatches(marketConfigs) {
   const contacts = []
-  for (const config of loadMarketConfigs()) {
-    if (!fs.existsSync(config.queueCsv) || !fs.existsSync(config.exportCsv)) continue
-    const queueRows = loadCsv(config.queueCsv)
+  for (const config of marketConfigs) {
     const exportRows = loadCsv(config.exportCsv)
-    const byAddress = new Map()
-    for (const row of exportRows) {
-      const key = normalizeAddress(row.associated_property_address_full)
-      if (!key) continue
-      const bucket = byAddress.get(key) || []
-      bucket.push(row)
-      byAddress.set(key, bucket)
+    const queueRows = config.queueCsv && fs.existsSync(config.queueCsv) ? loadCsv(config.queueCsv) : []
+    const queueByAddress = new Map()
+    for (const row of queueRows) {
+      const key = normalizeAddress(queueAddress(row))
+      if (key) queueByAddress.set(key, row)
     }
 
-    for (const queue of queueRows) {
-      const hits = byAddress.get(normalizeAddress(queue.property_address_full)) || []
-      if (!hits.length) continue
+    for (const hit of exportRows) {
+      const propertyAddressFull = exportAddress(hit)
+      const addressKey = normalizeAddress(propertyAddressFull)
+      if (!addressKey) continue
 
-      const marketLabel = `${queue.market_city}, ${queue.market_state}`
-      for (const hit of hits) {
-        const ownerName = `${hit.first_name || ""} ${hit.last_name || ""}`.trim() || queue.owner_name
-        const firstName = hit.first_name || firstNameFromOwnerName(ownerName)
-        const emails = [hit.email_address_1, hit.email_address_2, hit.email_address_3].filter(isUsableOwnerEmail)
-        const phones = [1, 2, 3]
-          .map((index) => ({
-            number: String(hit[`phone_${index}`] || "").trim(),
-            dnc: String(hit[`phone_${index}_do_not_call`] || "").trim(),
-            type: String(hit[`phone_${index}_type`] || "").trim(),
-          }))
-          .filter((entry) => entry.number)
+      const queue = queueByAddress.get(addressKey) || null
+      const ownerName = queue ? `${hit.first_name || ""} ${hit.last_name || ""}`.trim() || queueOwnerName(queue) : exportOwnerName(hit)
+      const firstName = hit.first_name || firstNameFromOwnerName(ownerName)
+      const emails = [hit.email_address_1, hit.email_address_2, hit.email_address_3, hit.email].filter(isUsableOwnerEmail)
+      const phones = [1, 2, 3]
+        .map((index) => ({
+          number: String(hit[`phone_${index}`] || "").trim(),
+          dnc: String(hit[`phone_${index}_do_not_call`] || "").trim(),
+          type: String(hit[`phone_${index}_type`] || "").trim(),
+        }))
+        .filter((entry) => entry.number)
 
-        contacts.push({
-          market: config.market,
-          market_label: marketLabel,
-          property_address_full: queue.property_address_full,
-          owner_name: ownerName,
-          first_name: firstName || "there",
-          tax_delinquent: queue.tax_delinquent,
-          estimated_value: queue.estimated_value,
-          rent_estimate: queue.rent_estimate,
-          estimated_ltv: queue.estimated_ltv,
-          cash_review_low: queue.cash_review_low,
-          cash_review_high: queue.cash_review_high,
-          suggested_exit_paths: queue.suggested_exit_paths,
-          buyer_packet_summary: queue.buyer_packet_summary,
-          lender_packet_summary: queue.lender_packet_summary,
-          distress_score: Number.parseInt(queue.distress_score || "0", 10) || 0,
-          dealmachine_id: queue.dealmachine_id,
-          emails,
-          phones,
-        })
-      }
+      contacts.push({
+        market: config.market,
+        market_label: queue ? queueMarketLabel(queue) : marketLabelFromAddress(propertyAddressFull),
+        property_address_full: propertyAddressFull,
+        owner_name: ownerName,
+        first_name: firstName || "there",
+        tax_delinquent: queue?.tax_delinquent || hit.tax_delinquent || "",
+        estimated_value: queue?.estimated_value || hit.estimated_value || "",
+        rent_estimate: queue?.rent_estimate || "",
+        estimated_ltv: queue?.estimated_ltv || "",
+        cash_review_low: queue?.cash_review_low || "",
+        cash_review_high: queue?.cash_review_high || "",
+        suggested_exit_paths: queue?.suggested_exit_paths || "seller_options",
+        buyer_packet_summary: queue?.buyer_packet_summary || queue?.notes || "",
+        distress_score: queue ? queueDistressScore(queue) : 0,
+        dealmachine_id: queue?.dealmachine_id || hit.lead_id || hit.id || "",
+        emails,
+        phones,
+      })
     }
   }
   return contacts
@@ -319,9 +454,16 @@ async function main() {
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
 
+  fs.mkdirSync(DM_EXPORT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
+  const marketConfigs = loadMarketConfigs()
+  for (const config of marketConfigs) {
+    if (!fs.existsSync(config.exportCsv)) throw new Error(`Missing DealMachine export CSV for ${config.market}: ${config.exportCsv}`)
+  }
   const alreadySent = loadAlreadySent()
-  const rawContacts = loadMatches().sort((a, b) => b.distress_score - a.distress_score || a.property_address_full.localeCompare(b.property_address_full))
+  const rawContacts = loadMatches(marketConfigs).sort(
+    (a, b) => b.distress_score - a.distress_score || a.property_address_full.localeCompare(b.property_address_full)
+  )
 
   const emailDrafts = []
   const phoneQueue = []
@@ -346,9 +488,8 @@ async function main() {
         estimated_ltv: contact.estimated_ltv,
         cash_review_low: contact.cash_review_low,
         cash_review_high: contact.cash_review_high,
-        suggested_exit_paths: contact.suggested_exit_paths,
+        suggested_exit_paths: sellerPathList(contact.suggested_exit_paths),
         buyer_packet_summary: contact.buyer_packet_summary,
-        lender_packet_summary: contact.lender_packet_summary,
         distress_score: contact.distress_score,
         ...buildEmail(contact),
       })
@@ -364,13 +505,12 @@ async function main() {
         property_address_full: contact.property_address_full,
         owner_name: contact.owner_name,
         dealmachine_id: contact.dealmachine_id,
-        phone: phone.number,
+        phone: normalizeUsPhone(phone.number),
         do_not_call: phone.dnc,
         phone_type: phone.type,
         can_text: isTextablePhone(phone) ? "true" : "false",
-        suggested_exit_paths: contact.suggested_exit_paths,
+        suggested_exit_paths: sellerPathList(contact.suggested_exit_paths),
         buyer_packet_summary: contact.buyer_packet_summary,
-        lender_packet_summary: contact.lender_packet_summary,
         distress_score: contact.distress_score,
         text_message: buildText(contact),
       })
@@ -399,7 +539,6 @@ async function main() {
     "cash_review_high",
     "suggested_exit_paths",
     "buyer_packet_summary",
-    "lender_packet_summary",
     "distress_score",
     "subject",
     "body",
@@ -417,7 +556,6 @@ async function main() {
     "can_text",
     "suggested_exit_paths",
     "buyer_packet_summary",
-    "lender_packet_summary",
     "distress_score",
     "text_message",
   ]

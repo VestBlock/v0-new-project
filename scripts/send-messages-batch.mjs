@@ -4,11 +4,10 @@ import fs from "node:fs"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-const DEFAULT_QUEUE = path.resolve("data/distress-leads/dealmachine-export-phone-queue-2026-06-05T19-10-33-046Z.csv")
 const RESULTS_DIR = path.resolve("tmp/outreach")
 
 function parseArgs(argv) {
-  const args = { queue: DEFAULT_QUEUE, limit: Infinity, delayMs: 900, send: false, dryRun: false, service: "sms" }
+  const args = { queue: "", limit: Infinity, delayMs: 900, send: false, dryRun: false, service: "sms" }
   for (const raw of argv) {
     if (raw.startsWith("--queue=")) args.queue = path.resolve(raw.slice(8))
     else if (raw.startsWith("--limit=")) args.limit = Number(raw.slice(8)) || Infinity
@@ -69,7 +68,13 @@ function normalizePhone(phone) {
   const digits = String(phone || "").replace(/\D/g, "")
   if (digits.length === 10) return `+1${digits}`
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`
-  return digits ? `+${digits}` : ""
+  return ""
+}
+
+function isMobileRow(row) {
+  const type = String(row.phone_type || row.type || "").trim().toLowerCase()
+  if (/(landline|home|voip)/.test(type)) return false
+  return /(mobile|wireless|cell|\bw\b)/.test(type)
 }
 
 function sleep(ms) {
@@ -139,6 +144,9 @@ end run
 
 function main() {
   const args = parseArgs(process.argv.slice(2))
+  if (!args.queue) {
+    throw new Error("Missing --queue=/absolute/or/relative/path.csv")
+  }
   fs.mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, "-")
   const queue = parseCsv(fs.readFileSync(args.queue, "utf8"))
@@ -150,7 +158,7 @@ function main() {
       phone: normalizePhone(row.phone),
       sent_key: `${normalizePhone(row.phone)}::${row.text_message}`,
     }))
-    .filter((row) => row.phone && row.text_message && !alreadySent.has(row.sent_key))
+    .filter((row) => isMobileRow(row) && row.phone && row.text_message && !alreadySent.has(row.sent_key))
     .slice(0, args.limit)
 
   const results = []

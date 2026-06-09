@@ -200,10 +200,10 @@ const packagePlaybooks: Record<ServicePackageKey, PackagePlaybook> = {
     ],
   },
   visibility_starter: {
-    primaryGoal: 'Create a baseline search, AI-answer, and local visibility plan that can improve month after month.',
+    primaryGoal: 'Create a baseline AEO/SEO Booster plan that can improve month after month.',
     sections: [
       'Current visibility gap summary',
-      'Search and AI-answer priorities',
+      'AEO/SEO priorities',
       'Content and page opportunity list',
       'First 30-day execution plan',
     ],
@@ -214,7 +214,7 @@ const packagePlaybooks: Record<ServicePackageKey, PackagePlaybook> = {
     ],
   },
   city_expansion_engine: {
-    primaryGoal: 'Build a repeatable city growth plan across search, AI answers, and local landing pages.',
+    primaryGoal: 'Build a repeatable city growth plan across SEO, AEO, and local landing pages.',
     sections: [
       'City and service priorities',
       'Location-page opportunity queue',
@@ -238,7 +238,7 @@ const packagePlaybooks: Record<ServicePackageKey, PackagePlaybook> = {
     followUpFocus: [
       'best stories or proof points to lead with',
       'which PR channels are highest value first',
-      'how authority work should support search and AI-answer visibility',
+      'how authority work should support AEO/SEO growth',
     ],
   },
 };

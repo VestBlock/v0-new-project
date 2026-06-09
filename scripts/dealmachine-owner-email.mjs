@@ -513,7 +513,7 @@ function buildEmail(contact) {
     "contact@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee funding, approvals, sale timelines, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     address,
   ]

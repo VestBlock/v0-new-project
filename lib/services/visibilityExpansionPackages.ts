@@ -29,12 +29,12 @@ export const visibilityExpansionPackages: VisibilityExpansionPackage[] = [
     amount: 299,
     billingModel: 'monthly',
     summary:
-      'Turn a service website into something search engines can understand more clearly and show more confidently.',
+      'Turn a service website into something buyers, search engines, and answer engines can understand more clearly.',
     bestFor:
       'Single-location service businesses that need a cleaner local search and content foundation before they try to scale.',
     deliverables: [
-      'Search visibility and website review',
-      'Customer question and topic map',
+      'AEO/SEO Booster review',
+      'Customer question and answer-ready topic map',
       'Monthly content and update plan',
       'Priority action list with next steps',
     ],
@@ -50,12 +50,12 @@ export const visibilityExpansionPackages: VisibilityExpansionPackage[] = [
     amount: 750,
     billingModel: 'setup_and_monthly',
     summary:
-      'Launch repeatable city and service pages with clear priorities and reporting that builds over time.',
+      'Launch repeatable city and service pages with clearer answers, proof, priorities, and reporting that build over time.',
     bestFor:
       'Businesses growing into multiple cities or service areas that need clearer local search coverage.',
     deliverables: [
       'City and service page plan',
-      'Priority visibility opportunities by market',
+      'Priority AEO/SEO opportunities by market',
       'Location-page and resource brief list',
       'Monthly indexing and market review',
     ],
@@ -78,7 +78,7 @@ export const visibilityExpansionPackages: VisibilityExpansionPackage[] = [
       'PR angle and authority plan',
       'Target list for podcasts, newsletters, and local media',
       'Recurring pitch and follow-up batch planning',
-      'Monthly authority and citation progress review',
+      'Monthly authority, citation, and AEO/SEO review',
     ],
     turnaround: 'Typical first authority sprint begins within 7 business days after signup and website review.',
     complianceNote:

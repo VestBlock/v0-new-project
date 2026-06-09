@@ -199,9 +199,8 @@ function buildDealFit({ lead, estimatedValueValue, equityAmountValue, equityPerc
 
   if (preforeclosure === "In Preforeclosure" || vacant || liveProblemSignals >= 2) paths.push("fast_cash")
   if ((Number.isFinite(estimatedLtv) && estimatedLtv >= 72) || (equityAmountValue > 0 && equityAmountValue < 30000)) paths.push("creative_structure")
-  if (equityPercentValue >= 35 && !vacant && preforeclosure !== "In Preforeclosure") paths.push("novation")
-  if (rentEstimateValue > 0 || outOfStateOwner) paths.push("rental_hold", "lender_review")
-  if (estimatedValueValue > 0) paths.push("lender_review")
+  if (equityPercentValue >= 35 && !vacant && preforeclosure !== "In Preforeclosure") paths.push("seller_options_review")
+  if (rentEstimateValue > 0 || outOfStateOwner) paths.push("rental_hold")
   paths.push("manual_review")
 
   const uniquePaths = [...new Set(paths)]
@@ -225,12 +224,12 @@ function buildDealFit({ lead, estimatedValueValue, equityAmountValue, equityPerc
         outOfStateOwner ? "out-of-state owner" : "",
       ].filter(Boolean).join(", ") || "needs review"}`,
     ].join("; "),
-    lender_packet_summary: [
+    seller_review_summary: [
       `Address: ${address}`,
       `rough value: ${moneyLabel(estimatedValueValue)}`,
       `rough rent: ${moneyLabel(rentEstimateValue)}`,
       estimatedLtv !== "" ? `estimated LTV: ${estimatedLtv}%` : "estimated LTV: needs debt details",
-      `exit paths: ${uniquePaths.join(", ")}`,
+      `seller paths: ${uniquePaths.join(", ")}`,
     ].join("; "),
     deal_fit_notes:
       "Internal rough review only. Verify title, comps, condition, occupancy, debt, and owner authorization before making offers or routing to partners.",
@@ -381,7 +380,7 @@ function buildRow(lead, market) {
     cash_review_high: dealFit.cash_review_high,
     suggested_exit_paths: dealFit.suggested_exit_paths,
     buyer_packet_summary: dealFit.buyer_packet_summary,
-    lender_packet_summary: dealFit.lender_packet_summary,
+    seller_review_summary: dealFit.seller_review_summary,
     deal_fit_notes: dealFit.deal_fit_notes,
     tax_delinquent: taxDelinquent,
     tax_delinquent_year: labelish(lead.TaxDelinquentYear),
@@ -474,7 +473,7 @@ function writeCsv(file, rows) {
     "cash_review_high",
     "suggested_exit_paths",
     "buyer_packet_summary",
-    "lender_packet_summary",
+    "seller_review_summary",
     "deal_fit_notes",
     "tax_delinquent_year",
     "past_due_amount",

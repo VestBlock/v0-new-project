@@ -668,14 +668,14 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
   {
     serviceKey: 'visibility_expansion',
     slug: 'visibility-expansion-saas',
-    title: 'Search Visibility for SEO, AI Answers, and PR Growth',
-    seoTitle: 'Search Visibility for SEO, AI Answers, and PR | VestBlock',
+    title: 'AEO/SEO Booster for Search, Answer Engines, and PR Growth',
+    seoTitle: 'AEO/SEO Booster for Search, Answer Engines, and PR | VestBlock',
     metaDescription:
-      'Use VestBlock visibility packages to improve search presence, AI-answer coverage, city pages, and authority-building without vague retainers.',
+      'Use VestBlock AEO/SEO Booster packages to improve search presence, answer-engine coverage, city pages, and authority-building without vague retainers.',
     excerpt:
-      'VestBlock packages SEO, AI-answer coverage, city pages, and PR authority work into clearer monthly services.',
+      'VestBlock packages SEO, AEO, city pages, and PR authority work into clearer monthly services.',
     audience:
-      'Businesses that want clearer search presence, stronger AI-answer coverage, and more trusted brand mentions.',
+      'Businesses that want clearer search presence, stronger AEO coverage, and more trusted brand mentions.',
     primaryRoute: '/visibility-expansion',
     primaryCta: 'Compare Visibility Packages',
     secondaryRoute: '/pricing#visibility-expansion',
@@ -684,10 +684,10 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         heading: 'What this service is for',
         body:
-          'This visibility service is built for businesses that want more than isolated blog posts or generic SEO retainers. The goal is simple: clearer search presence, stronger AI-answer coverage, smarter city pages, and authority work that helps buyers find and trust the company.',
+          'This AEO/SEO Booster service is built for businesses that want more than isolated blog posts or generic SEO retainers. The goal is simple: clearer search presence, stronger answer-engine coverage, smarter city pages, and authority work that helps buyers find and trust the company.',
         bullets: [
           'Search structure and page priorities',
-          'AI-answer question and topic coverage',
+          'AEO question and topic coverage',
           'City and service page planning',
           'PR and authority-building support',
         ],
@@ -707,7 +707,7 @@ const baseServiceSeoPages: ServiceSeoPage[] = [
       {
         question: 'What is the difference between SEO, AI answers, and PR in this offer?',
         answer:
-          'SEO focuses on search discovery, AI-answer coverage helps buyers find you in answer tools, and PR supports authority, mentions, backlinks, and brand trust. The packages combine them where they reinforce each other.',
+          'SEO focuses on search discovery, AEO helps answer engines understand the business, and PR supports authority, mentions, backlinks, and brand trust. The packages combine them where they reinforce each other.',
       },
       {
         question: 'Does this guarantee rankings or traffic?',

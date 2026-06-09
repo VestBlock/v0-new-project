@@ -307,10 +307,10 @@ export function visibilityExpansionServiceJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'Service',
-    name: 'VestBlock Search Visibility Growth',
+    name: 'VestBlock AEO/SEO Booster',
     url: absoluteUrl('/visibility-expansion'),
     description:
-      'Productized visibility packages for service businesses: clearer crawlable pages, city expansion support, and authority-building without ranking guarantees.',
+      'Productized AEO/SEO Booster packages for service businesses: clearer crawlable pages, city expansion support, answer-engine readiness, and authority-building without ranking or citation guarantees.',
     provider: {
       '@type': 'Organization',
       name: vestBlockSiteName,
@@ -320,7 +320,7 @@ export function visibilityExpansionServiceJsonLd() {
     audience: {
       '@type': 'Audience',
       audienceType:
-        'Service businesses improving search visibility, city coverage, and authority signals',
+        'Service businesses improving SEO, AEO, city coverage, and authority signals',
     },
     hasOfferCatalog: {
       '@type': 'OfferCatalog',

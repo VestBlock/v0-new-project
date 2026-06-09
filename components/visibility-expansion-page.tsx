@@ -270,14 +270,15 @@ export function VisibilityExpansionPage() {
         <div className="container mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-5">
             <Badge className="w-fit bg-cyan-600 text-white">
-              Search visibility and authority
+              AEO/SEO Booster and authority
             </Badge>
             <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
-              Show up in more places when people search for what you sell.
+              Boost how your business gets found and trusted.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              VestBlock helps service businesses improve local search coverage, city pages,
-              credibility proof, and the content people need before they contact you.
+              VestBlock helps service businesses improve Google search, answer-engine
+              readiness, city pages, credibility proof, and authority signals so more
+              serious buyers understand why to contact you.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
@@ -323,7 +324,7 @@ export function VisibilityExpansionPage() {
                 <CardContent className="p-4">
                   <p className="text-sm font-medium text-foreground">Show up in more customer searches</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Build clearer service pages and answers that help customers find you.
+                    Build clearer service pages and answers around the questions customers already ask.
                   </p>
                 </CardContent>
               </Card>
@@ -339,7 +340,7 @@ export function VisibilityExpansionPage() {
                 <CardContent className="p-4">
                   <p className="text-sm font-medium text-foreground">Layer in authority</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Build stronger trust with proof, mentions, and credibility pages.
+                    Build stronger trust with proof, partner mentions, and credibility pages.
                   </p>
                 </CardContent>
               </Card>
@@ -353,20 +354,20 @@ export function VisibilityExpansionPage() {
                 A clearer alternative to a vague marketing retainer
               </CardTitle>
               <CardDescription>
-                These packages are easier to explain and easier to buy than open-ended monthly marketing work.
+                These packages turn SEO, AEO, and authority work into specific monthly priorities.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>
                 The customer gets a clearer plan for where the site needs to improve first,
-                which pages matter most, and how to support growth by city or service.
+                which pages matter most, and which proof points make the business easier to cite.
               </p>
               <p>
                 Every request starts with a sample plan so the next step is clearer before any larger scope is discussed.
               </p>
               <p>
                 No package is framed as guaranteed rankings or revenue. The value is a clearer,
-                more consistent way to improve how your business is found and trusted.
+                more consistent way to improve how your business is found, explained, and trusted.
               </p>
             </CardContent>
           </Card>
@@ -786,7 +787,7 @@ export function VisibilityExpansionPage() {
                       name="biggestGap"
                       value={formData.biggestGap}
                       onChange={handleInputChange}
-                      placeholder="We barely show up outside our main city and AI answer tools rarely mention us."
+                      placeholder="We barely show up outside our main city and need a stronger AEO/SEO Booster plan."
                       required
                     />
                   </div>

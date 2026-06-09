@@ -66,6 +66,30 @@
       "schedule": "15 17 * * *"
     },
     {
+      "path": "/api/cron/investors-discover",
+      "schedule": "18 17 * * *"
+    },
+    {
+      "path": "/api/cron/investors-score",
+      "schedule": "22 17 * * *"
+    },
+    {
+      "path": "/api/cron/investors-outreach",
+      "schedule": "26 17 * * *"
+    },
+    {
+      "path": "/api/cron/investors-send",
+      "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/cron/investors-followup",
+      "schedule": "34 17 * * *"
+    },
+    {
+      "path": "/api/cron/investors-performance",
+      "schedule": "38 17 * * *"
+    },
+    {
       "path": "/api/cron/entity-seo-expansion",
       "schedule": "25 17 * * *"
     },

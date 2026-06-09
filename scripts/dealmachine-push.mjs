@@ -39,6 +39,8 @@ const PULL = args.includes("--pull")
 const SKIP_NOTES = args.includes("--skip-notes")
 const GEOCODE = !args.includes("--no-geocode")
 const SKIP_RANGED = args.includes("--skip-ranged")
+const SKIP_COMPLEX = args.includes("--skip-complex")
+const RETRY_FAILED = args.includes("--retry-failed")
 
 const getArg = (name) => {
   const hit = args.find((arg) => arg.startsWith(`--${name}=`))
@@ -46,6 +48,7 @@ const getArg = (name) => {
 }
 
 const LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : null
+const OFFSET = getArg("offset") ? Number.parseInt(getArg("offset"), 10) : 0
 const MARKET = getArg("market") ? getArg("market").toLowerCase() : null
 const INPUT_CSV = getArg("input-csv") || ""
 const LIST_IDS = splitIds(getArg("list-ids") || process.env.DEALMACHINE_LIST_IDS || "")
@@ -57,6 +60,7 @@ const MASTER = path.join(OUT_DIR, "MASTER-distress-stack.csv")
 const IMPORT_CSV = path.join(OUT_DIR, "dealmachine-import.csv")
 const PUSHED_LOG = path.join(OUT_DIR, "dealmachine-pushed.json")
 const PUSHED_RECORDS = path.join(OUT_DIR, "dealmachine-pushed-records.json")
+const FAILED_LOG = path.join(OUT_DIR, "dealmachine-failed.json")
 const GEOCODE_CACHE = path.join(OUT_DIR, "dealmachine-geocode-cache.json")
 
 const API_BASE = "https://api.dealmachine.com/public/v1"
@@ -154,6 +158,23 @@ function readPushedLog() {
   } catch {
     return new Set()
   }
+}
+
+function readFailedLog() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(FAILED_LOG, "utf8"))
+    if (!Array.isArray(parsed)) return new Map()
+    return new Map(parsed.map((item) => [item?.key, item]).filter(([key]) => key))
+  } catch {
+    return new Map()
+  }
+}
+
+function writeFailedLog(failed) {
+  fs.writeFileSync(
+    FAILED_LOG,
+    JSON.stringify([...failed.values()].sort((a, b) => String(a.key).localeCompare(String(b.key))), null, 2)
+  )
 }
 
 function writePushedLog(pushed) {
@@ -287,7 +308,20 @@ function leadKey(lead) {
 }
 
 function isRangedAddress(lead) {
-  return /(^|\s)\d+\s*\/\s*\d+\b/.test(String(lead.property_address || ""))
+  return addressQualityIssue(lead.property_address) === "address_range"
+}
+
+function addressQualityIssue(address) {
+  const value = String(address || "").trim()
+  if (!value) return "missing_address"
+  if (!/^\d+\s+\S+/.test(value)) return "no_street_number"
+  if (/^\d+\s*[-/]\s*\d+\b/.test(value)) return "address_range"
+  if (/\b(?:apt|apartment|unit|suite|ste|bldg|building|lot|room|rm|floor|fl)\b/i.test(value)) {
+    return "unit_or_complex"
+  }
+  if (/#\s*\w+/.test(value)) return "unit_or_complex"
+  if (/\b(?:rear|garage|parking|parcel|block|intersection|alley)\b/i.test(value)) return "non_primary_address"
+  return ""
 }
 
 function buildLeadNote(lead) {
@@ -558,9 +592,23 @@ async function main() {
   }
 
   const pushed = readPushedLog()
+  const failedLog = readFailedLog()
   const pushedRecords = readPushedRecords()
-  let leads = loadLeads().filter((lead) => !pushed.has(leadKey(lead)))
-  if (SKIP_RANGED) leads = leads.filter((lead) => !isRangedAddress(lead))
+  let leads = loadLeads().filter((lead) => !pushed.has(leadKey(lead)) && (RETRY_FAILED || !failedLog.has(leadKey(lead))))
+  const preQualityFilterCount = leads.length
+  const skippedByQuality = new Map()
+  if (SKIP_RANGED || SKIP_COMPLEX) {
+    leads = leads.filter((lead) => {
+      const issue = addressQualityIssue(lead.property_address)
+      const shouldSkip =
+        (SKIP_RANGED && issue === "address_range") ||
+        (SKIP_COMPLEX && issue && (issue !== "address_range" || SKIP_RANGED))
+      if (shouldSkip) skippedByQuality.set(issue, (skippedByQuality.get(issue) || 0) + 1)
+      return !shouldSkip
+    })
+  }
+  const postQualityFilterCount = leads.length
+  if (OFFSET) leads = leads.slice(OFFSET)
   if (LIMIT) leads = leads.slice(0, LIMIT)
 
   writeImportCsv(leads)
@@ -569,8 +617,16 @@ async function main() {
   console.log(`Mode:       ${PUSH ? "LIVE PUSH" : "DRY RUN"}`)
   console.log(`Market:     ${MARKET || "all"}`)
   console.log(`Input:      ${INPUT_CSV ? path.resolve(INPUT_CSV) : MASTER}`)
+  if (OFFSET) console.log(`Offset:     ${OFFSET}`)
   console.log(`New leads:  ${leads.length}${LIMIT ? ` (limit ${LIMIT})` : ""}`)
   console.log(`Already pushed locally: ${pushed.size}`)
+  if (!RETRY_FAILED) console.log(`Previously failed skipped: ${failedLog.size}`)
+  if (skippedByQuality.size) {
+    console.log(
+      `Skipped by address quality: ${preQualityFilterCount - postQualityFilterCount} ` +
+        [...skippedByQuality.entries()].map(([issue, count]) => `${issue}=${count}`).join(", ")
+    )
+  }
   console.log(`Import CSV: ${IMPORT_CSV}`)
 
   if (!leads.length) return
@@ -637,12 +693,25 @@ async function main() {
       console.log(`  ${index + 1}/${leads.length} ok ${result.leadId}: ${fullAddress(lead)}${warn}`)
     } else {
       failed++
+      failedLog.set(leadKey(lead), {
+        key: leadKey(lead),
+        failed_at: new Date().toISOString(),
+        stage: result.stage || "",
+        error: result.error || "",
+        full_address: fullAddress(lead),
+        property_address: lead.property_address,
+        city: lead.city,
+        state: lead.state,
+        market: lead.market,
+        distress_stack: lead.signal || "public distress signal + tax delinquency",
+      })
       console.log(`  ${index + 1}/${leads.length} failed ${result.stage}: ${fullAddress(lead)} - ${result.error}`)
     }
   }
 
   writePushedLog(pushed)
   writePushedRecords(pushedRecords)
+  writeFailedLog(failedLog)
   console.log(`\nComplete. Pushed ${ok}/${leads.length}; failed ${failed}; API requests used this run: ${requestCount}.`)
   console.log("No mail sequence was started by this script.")
 }

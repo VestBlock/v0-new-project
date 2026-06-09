@@ -61,9 +61,9 @@ function buildSignupGrowthDeliverable(input: {
         ],
       },
       {
-        heading: 'Use AI visibility after the profile is clear',
+        heading: 'Use the AEO/SEO Booster after the profile is clear',
         body:
-          'VestBlock can support member visibility with SEO/AEO campaign planning around the seller, buyer, lender, operator, contractor, or developer profile once the offer and criteria are clear.',
+          'VestBlock can support member visibility with AEO/SEO Booster campaigns around the seller, buyer, lender, operator, contractor, or developer profile once the offer and criteria are clear.',
         bullets: [
           'Clarify what your profile should be known for before creating campaign content.',
           'Build useful pages, answers, and proof assets around real services and partner criteria.',
@@ -75,12 +75,12 @@ function buildSignupGrowthDeliverable(input: {
       'Open Get Started and choose the path that matches your role in the network.',
       'Submit the clearest criteria or opportunity details you have right now.',
       'Use My Services to track prepared recommendations and future VestBlock growth support.',
-      'Ask VestBlock to review partnership, DealVault, or AI visibility needs once your profile is clear.',
+      'Ask VestBlock to review partnership, DealVault, or AEO/SEO Booster needs once your profile is clear.',
     ],
     followUpQuestions: [
       'Are you joining as a seller, buyer, lender, developer, contractor, operator, or capital partner?',
       'What criteria, geography, property type, funding lane, or project scope should VestBlock understand first?',
-      'Do you need DealVault records, partner introductions, AI visibility support, or a combination?',
+      'Do you need DealVault records, partner introductions, AEO/SEO Booster support, or a combination?',
     ],
     adminReviewFocus: [
       `Confirm the best first path for ${displayName}.`,
@@ -170,7 +170,7 @@ export async function ensureSignupGrowthSystem(
     const packageDeliverables = pkg?.deliverables || [
       'Starter partner path',
       'DealVault readiness notes',
-      'AI visibility next steps',
+      'AEO/SEO Booster next steps',
     ];
 
     const { data: lead, error } = await admin
@@ -202,13 +202,13 @@ export async function ensureSignupGrowthSystem(
           onboardingType: 'signup_growth_system',
           userId: input.userId || null,
           primaryGoal:
-            'Choose the right VestBlock partner path and prepare for DealVault records or AI visibility support.',
+            'Choose the right VestBlock partner path and prepare for DealVault records or AEO/SEO Booster support.',
           templateTitle: 'Real estate partner starter workspace',
           templateIndustry: 'Real estate',
           templateFirstFocus: [
             'Choose seller, buyer, lender, operator, contractor, developer, or capital partner path.',
             'Clarify criteria, geography, project type, or partnership fit.',
-            'Decide whether DealVault records or AI visibility support should come next.',
+            'Decide whether DealVault records or AEO/SEO Booster support should come next.',
           ],
         },
         market_segment: 'member_growth_system',

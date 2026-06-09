@@ -624,7 +624,7 @@ export async function sendUserSignupGrowthSystemReadyEmail(details: {
       `
       <p>${greeting}</p>
       <p>Your VestBlock starter workspace is ready. Use it to choose the right seller, buyer, lender, developer, contractor, operator, or capital-partner path.</p>
-      <p>From there, VestBlock can support partnership review, DealVault records, and AI-powered SEO/AEO visibility planning when the profile is clear enough to build around.</p>
+      <p>From there, VestBlock can support partnership review, DealVault records, and AEO/SEO Booster planning when the profile is clear enough to build around.</p>
       <p><a href="${servicesUrl}" style="color:#67e8f9;">Open your Growth System dashboard</a></p>
       <p><a href="${getStartedUrl}" style="color:#67e8f9;">Choose your VestBlock path</a></p>
     `

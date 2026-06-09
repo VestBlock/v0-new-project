@@ -32,6 +32,7 @@ spy_swing_strategy.pine
 # local revenue/outreach operating data; keep scripts and docs tracked, not raw exports
 /data/distress-leads/
 /data/distress-sources/
+/data/dm-exports/*.csv
 /data/buffer/*results-*.json
 /data/buffer/vestblock-facebook-90-day-calendar.*
 /data/partnership-targets*.csv

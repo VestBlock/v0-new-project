@@ -257,11 +257,11 @@ export const vestblockMarketingServices: VestBlockMarketingService[] = [
   },
   {
     key: 'visibility_expansion',
-    label: 'Search Visibility',
+    label: 'AEO/SEO Booster',
     offerPath: '/visibility-expansion',
     audience: 'service businesses that want more search visibility, answer-engine coverage, and authority without a vague marketing retainer',
     valuePromise:
-      'Package search visibility, AI-answer visibility, city pages, and PR authority work into recurring growth plans that are easier to understand and easier to keep moving.',
+      'Package AEO, SEO, city pages, and PR authority work into recurring growth plans that are easier to understand and easier to keep moving.',
     proofPoints: [
       'Search visibility package page',
       'City and authority package offer paths',

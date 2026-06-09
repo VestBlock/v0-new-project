@@ -10,25 +10,27 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Search Visibility Service | Local Pages, Content, and PR',
+  title: 'AEO/SEO Booster | Google, Answer Engines, Local Pages, and PR',
   description:
-    'Compare VestBlock visibility offers for clearer service pages, local content, and PR authority growth.',
+    'Compare VestBlock AEO/SEO Booster offers for clearer service pages, local content, answer-engine readiness, and PR authority growth.',
   alternates: {
     canonical: '/visibility-expansion',
   },
   keywords: [
     'search visibility service',
+    'AEO SEO booster',
+    'answer engine optimization service',
     'local search visibility service',
     'small business SEO service',
     'city page SEO',
     'local business PR',
-    'AI receptionist visibility',
+    'answer engine optimization',
     'search visibility for service businesses',
   ],
   openGraph: {
-    title: 'Search Visibility Service',
+    title: 'AEO/SEO Booster Service',
     description:
-      'VestBlock packages search visibility, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
+      'VestBlock packages SEO, AEO, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
     url: absoluteUrl('/visibility-expansion'),
     images: [
       {
@@ -41,9 +43,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Search Visibility Service',
+    title: 'AEO/SEO Booster Service',
     description:
-      'VestBlock packages search visibility, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
+      'VestBlock packages SEO, AEO, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

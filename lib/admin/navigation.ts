@@ -67,6 +67,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'partners',
   },
   {
+    title: 'Investor Partnerships',
+    description: 'Investor discovery, scoring, outreach, and DealVault routing.',
+    href: '/admin/investor-partnerships',
+    group: 'partners',
+  },
+  {
     title: 'Buyer Outreach',
     description: 'Approved buyer messages and send queue.',
     href: '/admin/buyer-outreach',

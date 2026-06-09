@@ -102,7 +102,7 @@ const nextMilestones = [
   'Capture before-and-after screenshots for search results, sitemap health, llms.txt, and live route checks.',
   'Publish YouTube videos and descriptions that link back to the exact service and learn pages.',
   'Create off-site mentions through founder posts, PR pitches, partner pages, and public profiles.',
-  'Track indexed pages, exact-match brand searches, crawler access, and AI-answer readiness weekly.',
+  'Track indexed pages, exact-match brand searches, crawler access, and AEO readiness weekly.',
 ];
 
 const proofAssets = [
@@ -330,7 +330,7 @@ export default function VisibilityCaseStudyPage() {
           <Card className="border-white/10 bg-white/[0.04] text-white">
             <CardHeader>
               <Sparkles className="mb-2 h-6 w-6 text-cyan-200" />
-              <CardTitle>AI-answer readiness</CardTitle>
+              <CardTitle>AEO readiness</CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-6 text-slate-300">
               The new pages answer what DealVault, AI Receptionist, Search

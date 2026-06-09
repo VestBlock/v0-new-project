@@ -38,6 +38,7 @@ export const metadata: Metadata = {
     'DealVault records',
     'AI real estate intake',
     'search visibility for real estate',
+    'AEO SEO booster for real estate',
     'real estate funding',
     'developer contractor partner network',
   ],

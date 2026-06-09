@@ -255,21 +255,21 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
   {
     key: 'visibility_expansion',
     intent: 'grow_visibility',
-    title: 'Search Visibility Growth',
-    shortTitle: 'Search Visibility',
+    title: 'AEO/SEO Booster',
+    shortTitle: 'AEO/SEO Booster',
     summary:
-      'Improve how buyers, sellers, lenders, and partners find, understand, and trust a business across search, local pages, helpful content, and authority assets.',
+      'Improve how buyers, sellers, lenders, and partners find, understand, and trust a business across Google, answer engines, local pages, helpful content, and authority assets.',
     bestFor:
-      'Real estate operators and local businesses that want more discoverability and better authority without a vague marketing retainer.',
+      'Real estate operators and local businesses that want clearer discovery, stronger authority, and less vague marketing work.',
     route: '/visibility-expansion',
     primaryCta: 'Request Visibility Review',
     secondaryRoute: '/pricing#visibility-expansion',
     secondaryCta: 'Compare Visibility Pricing',
     priceNote: '$299/mo starter, city-page plan from $750 setup + $349/mo, authority PR from $995/mo',
     operatorNote:
-      'Creates lead records for search visibility, city pages, PR requests, deliverables, follow-up, and package tracking.',
+      'Creates lead records for AEO/SEO Booster, city pages, PR requests, deliverables, follow-up, and package tracking.',
     trustNote:
-      'Positioned around visibility, content, and authority building without guaranteeing rankings, traffic, media coverage, or revenue.',
+      'Positioned around SEO, AEO, content, and authority building without guaranteeing rankings, answer-engine mentions, traffic, media coverage, or revenue.',
     serviceStage: 'paid_plan',
     priority: 85,
   },
@@ -285,7 +285,7 @@ export const serviceIntentLabels: Record<VestBlockServiceIntent, string> = {
   fund_real_estate: 'Fund a real estate deal',
   sell_property: 'Sell a property',
   automate_followup: 'Automate lead capture',
-  grow_visibility: 'Grow search visibility',
+  grow_visibility: 'Boost AEO/SEO',
 };
 
 export function getServiceDirectoryByIntent(intent: VestBlockServiceIntent) {
