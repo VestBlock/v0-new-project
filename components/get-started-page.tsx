@@ -94,7 +94,7 @@ const workspaceCards: WorkspaceCard[] = [
   {
     title: 'Developer / Construction Partner',
     description:
-      'For developers, contractors, builders, and rehab crews that want project opportunities surfaced when property, capital, or operator fit makes sense.',
+      'For developers, contractors, builders, and rehab crews that want project opportunities sent over when property, capital, or operator fit makes sense.',
     icon: Hammer,
     primaryHref: '/real-estate-funding',
     primaryLabel: 'Share Project Fit',

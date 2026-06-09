@@ -207,7 +207,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Real Estate Funding and Buyer/Lender Routing',
     shortTitle: 'Buyer/Lender Routing',
     summary:
-      'Capture DSCR, rental, fix-and-flip, hard-money, buyer criteria, or lender-fit details so the team can review the opportunity.',
+      'Capture DSCR, rental, fix-and-flip, hard-money, buyer criteria, or lender details so the team can review the opportunity.',
     bestFor: 'Investors, buyers, private lenders, and property owners with a specific real estate deal or funding need.',
     route: '/real-estate-funding',
     primaryCta: 'Submit Funding Deal',
@@ -223,7 +223,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
     title: 'Seller Property Review',
     shortTitle: 'Seller Review',
     summary:
-      'Collect property details from sellers who want fast cash, creative structure, novation, or partner-fit sale review.',
+      'Collect property details from sellers who want fast cash, creative structure, novation, or partner sale review.',
     bestFor: 'Owners who want to sell a house, rental, land, or investment property and need the best path reviewed before follow-up.',
     route: '/sell',
     primaryCta: 'Request Property Review',
@@ -255,19 +255,19 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
   {
     key: 'visibility_expansion',
     intent: 'grow_visibility',
-    title: 'Search Visibility and AI Search Growth',
+    title: 'Search Visibility Growth',
     shortTitle: 'Search Visibility',
     summary:
-      'Improve how buyers, sellers, lenders, and partners find, understand, and trust a business across Google, AI search, local pages, and authority content.',
+      'Improve how buyers, sellers, lenders, and partners find, understand, and trust a business across search, local pages, helpful content, and authority assets.',
     bestFor:
-      'Real estate operators and local businesses that want more discoverability, stronger AI-answer visibility, and better authority without a vague marketing retainer.',
+      'Real estate operators and local businesses that want more discoverability and better authority without a vague marketing retainer.',
     route: '/visibility-expansion',
     primaryCta: 'Request Visibility Review',
     secondaryRoute: '/pricing#visibility-expansion',
     secondaryCta: 'Compare Visibility Pricing',
     priceNote: '$299/mo starter, city-page plan from $750 setup + $349/mo, authority PR from $995/mo',
     operatorNote:
-      'Creates lead records for search, AI-answer visibility, city pages, and PR requests with deliverables, follow-up, and package tracking.',
+      'Creates lead records for search visibility, city pages, PR requests, deliverables, follow-up, and package tracking.',
     trustNote:
       'Positioned around visibility, content, and authority building without guaranteeing rankings, traffic, media coverage, or revenue.',
     serviceStage: 'paid_plan',
@@ -277,7 +277,7 @@ export const vestBlockServiceDirectory: VestBlockServiceDirectoryItem[] = [
 
 export const serviceIntentLabels: Record<VestBlockServiceIntent, string> = {
   manage_deal_records: 'Manage records, payouts, or milestones',
-  operate_dealflow: 'Operate seller, buyer, lender, and proof workflows',
+  operate_dealflow: 'Operate seller, buyer, lender, and proof paths',
   repair_credit: 'Repair or understand credit',
   get_business_funding: 'Get business funding',
   prepare_business: 'Prepare for funding or grants',

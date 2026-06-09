@@ -59,7 +59,7 @@ const proofLinks = [
     href: '/visibility-expansion/case-study',
   },
   {
-    label: 'Scorecard graphic',
+    label: 'Visibility proof graphic',
     href: '/proof/visibility/vestblock-visibility-scorecard.svg',
   },
   {
@@ -137,7 +137,7 @@ export default function VisibilityProofHubPage() {
       'search visibility proof',
       'AI receptionist proof',
       'DealVault proof records',
-      'AI search visibility',
+      'Search visibility',
     ],
   });
 

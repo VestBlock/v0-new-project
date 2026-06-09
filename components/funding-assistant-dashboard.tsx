@@ -420,7 +420,7 @@ export function FundingAssistantDashboard() {
           <CardHeader>
             <CardTitle>Funding profile</CardTitle>
             <CardDescription>
-              This profile drives readiness scoring, strategy selection, timing, and assisted follow-up.
+              This profile guides readiness review, strategy selection, timing, and assisted follow-up.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -924,7 +924,7 @@ export function FundingAssistantDashboard() {
                 <div className="mt-1 text-xs text-slate-400">
                   {progress?.nextRecommendedItem
                     ? `Recommended day ${progress.nextRecommendedItem.recommended_day || 0}`
-                    : 'VestBlock will surface the next step after your strategy is generated.'}
+                    : 'VestBlock will show the next step after your strategy is generated.'}
                 </div>
               </div>
             </CardContent>

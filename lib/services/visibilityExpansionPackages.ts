@@ -36,7 +36,7 @@ export const visibilityExpansionPackages: VisibilityExpansionPackage[] = [
       'Search visibility and website review',
       'Customer question and topic map',
       'Monthly content and update plan',
-      'Visibility scorecard with priority next steps',
+      'Priority action list with next steps',
     ],
     turnaround: 'Typical setup begins within 5-7 business days after signup and website review.',
     complianceNote:

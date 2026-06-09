@@ -9,15 +9,15 @@ import { absoluteUrl } from '@/lib/seo/site';
 import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'VestBlock Visibility Case Study | From Blocked To AI-Search Ready',
+  title: 'VestBlock Visibility Case Study | From Blocked To Search Ready',
   description:
-    'See how VestBlock is using its own Search Visibility process to recover crawlability, publish AI-search pages, improve llms.txt coverage, and build public proof materials.',
+    'See how VestBlock is using its own Search Visibility process to recover crawlability, publish clearer service pages, improve crawl coverage, and build public proof materials.',
   alternates: {
     canonical: '/visibility-expansion/case-study',
   },
   keywords: [
     'VestBlock visibility case study',
-    'AI search visibility case study',
+    'search visibility case study',
     'small business search visibility proof',
     'llms.txt case study',
     'DealVault visibility',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'VestBlock Visibility Case Study',
     description:
-      'How VestBlock is documenting its own climb from blocked site to crawlable AI-search-ready brand.',
+      'How VestBlock is documenting its own climb from blocked site to crawlable search-ready brand.',
     url: absoluteUrl('/visibility-expansion/case-study'),
     type: 'article',
     images: [
@@ -64,10 +64,10 @@ const scoreMilestones = [
   },
   {
     score: '60/100',
-    label: 'AI-search ready foundation',
+    label: 'Search-ready foundation',
     date: 'May 13, 2026',
     description:
-      'VestBlock added exact-match learn pages for DealVault proof records, smart contract records, AI Receptionist, Search Visibility, AI-search visibility, and website lead capture.',
+      'VestBlock added focused learn pages for DealVault proof records, smart contract records, AI Receptionist, Search Visibility, local discovery, and website lead capture.',
   },
 ];
 
@@ -89,7 +89,7 @@ const proofUrls = [
     href: '/learn/search-visibility-for-small-business',
   },
   {
-    label: 'AI search visibility',
+    label: 'Search visibility',
     href: '/learn/ai-search-visibility',
   },
   {
@@ -107,7 +107,7 @@ const nextMilestones = [
 
 const proofAssets = [
   {
-    label: 'Visibility scorecard graphic',
+    label: 'Visibility proof graphic',
     href: '/proof/visibility/vestblock-visibility-scorecard.svg',
   },
   {
@@ -154,9 +154,9 @@ const proofAssets = [
 
 const faqs = [
   {
-    question: 'Does the VestBlock visibility score guarantee rankings or leads?',
+    question: 'Does the VestBlock visibility review guarantee rankings or leads?',
     answer:
-      'No. The score is a readiness review for crawlability, page clarity, AI-search structure, proof materials, and off-site trust signals. Rankings, traffic, leads, and revenue depend on competition, timing, offer strength, and buyer demand.',
+      'No. The review looks at crawlability, page clarity, proof materials, and off-site trust signals. Rankings, traffic, leads, and revenue depend on competition, timing, offer strength, and buyer demand.',
   },
   {
     question: 'Why did the score start so low?',
@@ -164,9 +164,9 @@ const faqs = [
       'VestBlock was temporarily blocked by a Vercel deployment issue, so buyers and crawlers could not reliably access the site. Restoring production access was the first visibility milestone.',
   },
   {
-    question: 'What does 100/100 require?',
+    question: 'What does a stronger visibility foundation require?',
     answer:
-      'A 100/100 score requires a live, crawlable site, strong service pages, AI-search-ready answers, sitemap and llms.txt coverage, proof materials, videos, screenshots, off-site mentions, and recurring tracking.',
+      'A stronger foundation requires a live, crawlable site, strong service pages, helpful answers, sitemap and llms.txt coverage, proof materials, videos, screenshots, off-site mentions, and recurring tracking.',
   },
   {
     question: 'Can a small business use the same process?',
@@ -199,12 +199,12 @@ export default function VisibilityCaseStudyPage() {
   const article = articleJsonLd({
     headline: 'VestBlock Visibility Case Study',
     description:
-      'A live proof log showing how VestBlock is using its own Search Visibility process to improve crawlability, AI-search readiness, and public proof.',
+      'A live proof log showing how VestBlock is using its own Search Visibility process to improve crawlability, page clarity, and public proof.',
     path: '/visibility-expansion/case-study',
     keywords: [
       'VestBlock',
       'Search Visibility',
-      'AI search visibility',
+      'Search visibility',
       'DealVault',
       'AI Receptionist',
       'llms.txt',
@@ -243,7 +243,7 @@ export default function VisibilityCaseStudyPage() {
             </h1>
             <p className="text-lg leading-8 text-slate-300">
               This page tracks the real work behind our Search Visibility offer:
-              restoring crawlability, publishing AI-search-ready pages, improving
+              restoring crawlability, publishing search-ready pages, improving
               llms.txt coverage, and building public proof that buyers can inspect.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -357,7 +357,7 @@ export default function VisibilityCaseStudyPage() {
             <p className="leading-7 text-slate-300">
               A higher score requires more than our own website. The next stage is
               public corroboration: videos, posts, citations, partner mentions,
-              screenshots, and recurring scorecard proof.
+              screenshots, and recurring proof.
             </p>
             <div className="grid gap-3">
               {nextMilestones.map((item) => (

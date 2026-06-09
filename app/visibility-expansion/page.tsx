@@ -10,15 +10,15 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Search Visibility Service | SEO, AI Answers, and PR',
+  title: 'Search Visibility Service | Local Pages, Content, and PR',
   description:
-    'Compare VestBlock visibility offers for SEO, AI-answer visibility, city pages, and PR authority growth.',
+    'Compare VestBlock visibility offers for clearer service pages, local content, and PR authority growth.',
   alternates: {
     canonical: '/visibility-expansion',
   },
   keywords: [
-    'answer engine optimization service',
-    'AI search visibility service',
+    'search visibility service',
+    'local search visibility service',
     'small business SEO service',
     'city page SEO',
     'local business PR',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Search Visibility Service',
     description:
-      'VestBlock packages SEO, AI-answer visibility, and PR into productized offers that are easier to understand and easier to buy.',
+      'VestBlock packages search visibility, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
     url: absoluteUrl('/visibility-expansion'),
     images: [
       {
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Search Visibility Service',
     description:
-      'VestBlock packages SEO, AI-answer visibility, and PR into productized offers that are easier to understand and easier to buy.',
+      'VestBlock packages search visibility, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

@@ -119,7 +119,7 @@ export const pricedVestBlockOffers: PricedOffer[] = [
     priceLabel: '$99',
     amount: 99,
     summary:
-      'A one-time funding plan with scoring, recommended next steps, timing notes, and a follow-up checklist.',
+      'A one-time funding plan with a clear review, recommended next steps, timing notes, and a follow-up checklist.',
     bestFor:
       'Users who want a clearer action plan before choosing higher-touch support.',
     deliverables: [

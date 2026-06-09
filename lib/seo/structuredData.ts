@@ -307,7 +307,7 @@ export function visibilityExpansionServiceJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'Service',
-    name: 'VestBlock Search Visibility & AI Answer Readiness',
+    name: 'VestBlock Search Visibility Growth',
     url: absoluteUrl('/visibility-expansion'),
     description:
       'Productized visibility packages for service businesses: clearer crawlable pages, city expansion support, and authority-building without ranking guarantees.',
@@ -320,7 +320,7 @@ export function visibilityExpansionServiceJsonLd() {
     audience: {
       '@type': 'Audience',
       audienceType:
-        'Service businesses improving SEO, AI-search readiness, city coverage, and authority signals',
+        'Service businesses improving search visibility, city coverage, and authority signals',
     },
     hasOfferCatalog: {
       '@type': 'OfferCatalog',
