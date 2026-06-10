@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { ArrowRight, Calculator, CheckCircle2, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp, Users } from "lucide-react"
+import { ArrowRight, Calculator, CheckCircle2, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -47,6 +47,13 @@ type AnalyzerForm = {
   monthlyTaxes: string
   monthlyInsurance: string
   monthlyDebtService: string
+  targetMonthlyCashFlow: string
+  creativeDownPayment: string
+  creativeNoteInterestRate: string
+  creativeAmortizationYears: string
+  creativeBalloonYears: string
+  existingLoanInterestRate: string
+  existingLoanRemainingTermYears: string
 }
 
 type AnalyzerResult = {
@@ -81,6 +88,30 @@ type AnalyzerResult = {
       estimatedMonthlyCashFlow: number | null
       dscr: number | null
     }
+    creativeOffers: Array<{
+      key: "seller_finance" | "subject_to"
+      label: string
+      viability: "Meets target" | "Borderline" | "Below target" | "Needs more inputs"
+      summary: string
+      caution: string | null
+      metrics: {
+        targetMonthlyCashFlow: number | null
+        maxPriceToHitTargetCashFlow: number | null
+        suggestedPurchasePrice: number | null
+        cashToSellerNow: number | null
+        cashToClose: number | null
+        financedBalance: number | null
+        existingLoanBalance: number | null
+        existingLoanPayment: number | null
+        noteRatePercent: number | null
+        amortizationYears: number | null
+        balloonYears: number | null
+        monthlyPayment: number | null
+        totalMonthlyPayment: number | null
+        estimatedMonthlyCashFlow: number | null
+        balloonBalance: number | null
+      }
+    }>
     routeFit: Array<{
       key: string
       label: string
@@ -118,6 +149,13 @@ const initialForm: AnalyzerForm = {
   monthlyTaxes: "",
   monthlyInsurance: "",
   monthlyDebtService: "",
+  targetMonthlyCashFlow: "",
+  creativeDownPayment: "",
+  creativeNoteInterestRate: "",
+  creativeAmortizationYears: "",
+  creativeBalloonYears: "",
+  existingLoanInterestRate: "",
+  existingLoanRemainingTermYears: "",
 }
 
 function parseMoney(value: string | number | null | undefined) {
@@ -146,6 +184,18 @@ function routeColor(score: number) {
   if (score >= 58) return "text-blue-200"
   if (score >= 38) return "text-amber-100"
   return "text-slate-300"
+}
+
+function creativeViabilityTone(value: AnalyzerResult["opportunity"]["creativeOffers"][number]["viability"]) {
+  if (value === "Meets target") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+  if (value === "Borderline") return "border-amber-400/20 bg-amber-400/10 text-amber-100"
+  if (value === "Below target") return "border-rose-400/20 bg-rose-400/10 text-rose-100"
+  return "border-white/10 bg-white/[0.04] text-slate-200"
+}
+
+function formatYears(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "Needs details"
+  return `${value} yrs`
 }
 
 function buildSellerHref(form: AnalyzerForm) {
@@ -267,14 +317,14 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
               Screen a property for rough value, cash-review range, buyer interest, creative paths, novation fit,
-              rental signals, and lender review before it becomes a serious VestBlock routing packet.
+              rental signals, lender review, and rough seller-finance or subject-to offer math before it becomes a serious VestBlock routing packet.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { label: "Seller paths", value: "Cash / Creative / Novation" },
               { label: "Buyer routing", value: "Buy-box fit signals" },
-              { label: "Funding angle", value: "Rent and DSCR hints" },
+              { label: "Funding angle", value: "Rent, DSCR, and note math" },
             ].map((item) => (
               <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
@@ -447,12 +497,12 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
 
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-4">
-              {[
-                { label: "Rough value", value: formatMoney(result?.estimate.estimateValue), icon: TrendingUp },
-                { label: "MAO 70%", value: formatMoney(calculator.mao70), icon: Calculator },
-                { label: "Rent hint", value: formatMoney(result?.estimate.rentEstimate), icon: Home },
-                { label: "Buyer interest", value: result?.opportunity.buyerInterest.label || "Run analyzer", icon: Users },
-              ].map((item) => {
+            {[
+              { label: "Rough value", value: formatMoney(result?.estimate.estimateValue), icon: TrendingUp },
+              { label: "MAO 70%", value: formatMoney(calculator.mao70), icon: Calculator },
+              { label: "Rent hint", value: formatMoney(result?.estimate.rentEstimate), icon: Home },
+              { label: "Creative max", value: formatMoney(result?.opportunity.creativeOffers?.[0]?.metrics.maxPriceToHitTargetCashFlow ?? null), icon: Route },
+            ].map((item) => {
                 const Icon = item.icon
                 return (
                   <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl">
@@ -569,10 +619,140 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     <Input id="monthlyInsurance" value={form.monthlyInsurance} onChange={(event) => updateField("monthlyInsurance", event.target.value)} placeholder="$" className="bg-slate-950/70" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="monthlyDebtService">Monthly debt service</Label>
+                    <Label htmlFor="monthlyDebtService">Existing loan payment / debt service</Label>
                     <Input id="monthlyDebtService" value={form.monthlyDebtService} onChange={(event) => updateField("monthlyDebtService", event.target.value)} placeholder="$" className="bg-slate-950/70" />
                   </div>
                 </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="targetMonthlyCashFlow">Target monthly cash flow</Label>
+                    <Input id="targetMonthlyCashFlow" value={form.targetMonthlyCashFlow} onChange={(event) => updateField("targetMonthlyCashFlow", event.target.value)} placeholder="$250" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="creativeDownPayment">Cash to seller now</Label>
+                    <Input id="creativeDownPayment" value={form.creativeDownPayment} onChange={(event) => updateField("creativeDownPayment", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="creativeNoteInterestRate">Creative note rate</Label>
+                    <Input id="creativeNoteInterestRate" value={form.creativeNoteInterestRate} onChange={(event) => updateField("creativeNoteInterestRate", event.target.value)} placeholder="6%" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="existingLoanInterestRate">Existing loan rate</Label>
+                    <Input id="existingLoanInterestRate" value={form.existingLoanInterestRate} onChange={(event) => updateField("existingLoanInterestRate", event.target.value)} placeholder="3.25%" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="creativeAmortizationYears">Amortization</Label>
+                    <Input id="creativeAmortizationYears" value={form.creativeAmortizationYears} onChange={(event) => updateField("creativeAmortizationYears", event.target.value)} placeholder="30" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="creativeBalloonYears">Balloon</Label>
+                    <Input id="creativeBalloonYears" value={form.creativeBalloonYears} onChange={(event) => updateField("creativeBalloonYears", event.target.value)} placeholder="7" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="existingLoanRemainingTermYears">Existing term left</Label>
+                    <Input id="existingLoanRemainingTermYears" value={form.existingLoanRemainingTermYears} onChange={(event) => updateField("existingLoanRemainingTermYears", event.target.value)} placeholder="22" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-6 text-slate-500">
+                  Leave the creative fields blank if you want the analyzer to use default screening assumptions.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Calculator className="h-5 w-5 text-cyan-300" />
+                  Creative offer generator
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Rough seller-finance and subject-to structures based on rent, carry, payoff, and the cash-flow target you want to protect.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {result ? (
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {result.opportunity.creativeOffers.map((offer) => (
+                      <div key={offer.key} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-lg font-semibold text-white">{offer.label}</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{offer.summary}</p>
+                          </div>
+                          <Badge className={creativeViabilityTone(offer.viability)}>{offer.viability}</Badge>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Max price</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.maxPriceToHitTargetCashFlow)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Suggested price</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.suggestedPurchasePrice)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Cash to seller now</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.cashToSellerNow)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Cash to close</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.cashToClose)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                              {offer.key === "subject_to" ? "Seller carry payment" : "Note payment"}
+                            </p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.monthlyPayment)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Monthly cash flow</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.estimatedMonthlyCashFlow)}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Rate</p>
+                            <p className="mt-1 text-sm font-medium text-white">{formatPercent(offer.metrics.noteRatePercent)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Amortization</p>
+                            <p className="mt-1 text-sm font-medium text-white">{formatYears(offer.metrics.amortizationYears)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Balloon</p>
+                            <p className="mt-1 text-sm font-medium text-white">{formatYears(offer.metrics.balloonYears)}</p>
+                          </div>
+                        </div>
+                        {offer.key === "subject_to" && (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Existing loan stack</p>
+                            <p className="mt-2 text-sm text-slate-300">
+                              Balance {formatMoney(offer.metrics.existingLoanBalance)} • Payment {formatMoney(offer.metrics.existingLoanPayment)}
+                            </p>
+                          </div>
+                        )}
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-sm text-slate-400">
+                          <span>Balloon due estimate {formatMoney(offer.metrics.balloonBalance)}</span>
+                          <span>Target cash flow {formatMoney(offer.metrics.targetMonthlyCashFlow)}</span>
+                        </div>
+                        {offer.caution ? (
+                          <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
+                            {offer.caution}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <Calculator className="mx-auto h-8 w-8 text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Run the analyzer to size rough seller-finance and subject-to structures.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

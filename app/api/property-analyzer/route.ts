@@ -27,6 +27,13 @@ const analyzerSchema = z.object({
   monthlyTaxes: z.string().trim().max(80).optional().default(''),
   monthlyInsurance: z.string().trim().max(80).optional().default(''),
   monthlyDebtService: z.string().trim().max(80).optional().default(''),
+  targetMonthlyCashFlow: z.string().trim().max(80).optional().default(''),
+  creativeDownPayment: z.string().trim().max(80).optional().default(''),
+  creativeNoteInterestRate: z.string().trim().max(40).optional().default(''),
+  creativeAmortizationYears: z.string().trim().max(40).optional().default(''),
+  creativeBalloonYears: z.string().trim().max(40).optional().default(''),
+  existingLoanInterestRate: z.string().trim().max(40).optional().default(''),
+  existingLoanRemainingTermYears: z.string().trim().max(40).optional().default(''),
   preferredSalePath: z.string().trim().max(120).optional().default('not_sure'),
 })
 
@@ -90,6 +97,13 @@ export async function POST(request: NextRequest) {
         monthlyTaxes: data.monthlyTaxes || null,
         monthlyInsurance: data.monthlyInsurance || null,
         monthlyDebtService: data.monthlyDebtService || null,
+        targetMonthlyCashFlow: data.targetMonthlyCashFlow || null,
+        creativeDownPayment: data.creativeDownPayment || null,
+        creativeNoteInterestRate: data.creativeNoteInterestRate || null,
+        creativeAmortizationYears: data.creativeAmortizationYears || null,
+        creativeBalloonYears: data.creativeBalloonYears || null,
+        existingLoanInterestRate: data.existingLoanInterestRate || null,
+        existingLoanRemainingTermYears: data.existingLoanRemainingTermYears || null,
       },
       estimate
     )
