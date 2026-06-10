@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { ArrowRight, Calculator, CheckCircle2, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp } from "lucide-react"
+import { ArrowRight, Building2, Calculator, CheckCircle2, Download, FileText, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -335,6 +335,7 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
   const [result, setResult] = useState<AnalyzerResult | null>(null)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isDownloading, setIsDownloading] = useState<null | "investor" | "buyer" | "lender">(null)
 
   const updateField = (field: keyof AnalyzerForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -407,6 +408,48 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
       setError(caught instanceof Error ? caught.message : "Something went wrong.")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleDownloadReport = async (reportType: "investor" | "buyer" | "lender") => {
+    if (!result) return
+
+    setIsDownloading(reportType)
+    try {
+      const response = await fetch("/api/property-analyzer/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportType,
+          address: result.address,
+          form,
+          estimate: result.estimate,
+          opportunity: result.opportunity,
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || "Unable to generate the report.")
+      }
+
+      const blob = await response.blob()
+      const disposition = response.headers.get("content-disposition") || ""
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/)
+      const fallbackExtension = response.headers.get("content-type")?.includes("pdf") ? "pdf" : "html"
+      const fileName = match?.[1] || `vestblock-${reportType}-packet.${fallbackExtension}`
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to generate the report.")
+    } finally {
+      setIsDownloading(null)
     }
   }
 
@@ -1238,12 +1281,91 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                       Submit the property so VestBlock can review fast cash, creative, novation, buyer, lender, and partner routes with real context.
                     </p>
                   </div>
-                  <Button asChild className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
-                    <Link href={sellerHref}>
-                      Submit for Routing
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-white/15 bg-slate-950/25 text-white hover:bg-white/[0.08]"
+                      onClick={() => void handleDownloadReport("investor")}
+                      disabled={isDownloading !== null}
+                    >
+                      {isDownloading === "investor" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                      Investor Report
+                    </Button>
+                    <Button asChild className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+                      <Link href={sellerHref}>
+                        Submit for Routing
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {result && (
+              <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <Download className="h-5 w-5 text-cyan-300" />
+                    Routing packets
+                  </CardTitle>
+                  <p className="text-sm text-slate-400">
+                    Export the current analyzer readout into operator-friendly packets for investors, buyers, and lenders.
+                  </p>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadReport("investor")}
+                    disabled={isDownloading !== null}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-cyan-200" />
+                      <div>
+                        <div className="font-medium text-white">Investor report</div>
+                        <div className="text-sm text-slate-400">Deal math, routes, risk, and next steps.</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-sm text-cyan-100">
+                      {isDownloading === "investor" ? "Generating..." : "Download"}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadReport("buyer")}
+                    disabled={isDownloading !== null}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Users className="h-5 w-5 text-cyan-200" />
+                      <div>
+                        <div className="font-medium text-white">Buyer packet</div>
+                        <div className="text-sm text-slate-400">Property summary, price framing, and buyer-fit notes.</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-sm text-cyan-100">
+                      {isDownloading === "buyer" ? "Generating..." : "Download"}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadReport("lender")}
+                    disabled={isDownloading !== null}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-5 w-5 text-cyan-200" />
+                      <div>
+                        <div className="font-medium text-white">Lender packet</div>
+                        <div className="text-sm text-slate-400">Funding readiness, DSCR, capital stack, and missing items.</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-sm text-cyan-100">
+                      {isDownloading === "lender" ? "Generating..." : "Download"}
+                    </div>
+                  </button>
                 </CardContent>
               </Card>
             )}
