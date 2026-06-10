@@ -28,6 +28,8 @@ const publicCrawlerAccess = [
   '/es',
   '/resources',
   '/real-estate-funding',
+  '/property-analyzer',
+  '/calculators',
   '/ai-assistant',
   '/sell',
   '/sell/milwaukee',

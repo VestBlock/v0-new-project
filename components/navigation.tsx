@@ -53,6 +53,7 @@ export function Navigation() {
   // Main public navigation links
   const mainNavLinks = [
     { href: '/sell', label: 'Sellers' },
+    { href: '/property-analyzer', label: 'Analyzer' },
     { href: '/buyers', label: 'Buyers' },
     { href: '/lenders', label: 'Lenders' },
     { href: '/dealvault', label: 'DealVault' },

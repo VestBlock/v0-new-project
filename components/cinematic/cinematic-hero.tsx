@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Building2, ShieldCheck, Sparkles, TrendingUp } from "lucide-react"
+import { ArrowRight, Building2, Calculator, ShieldCheck, Sparkles, TrendingUp } from "lucide-react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
@@ -199,6 +199,13 @@ export function CinematicHero() {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.05] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-xl transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:w-auto"
           >
             Submit a Property
+          </Link>
+          <Link
+            href="/property-analyzer"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.08] px-7 py-3.5 text-sm font-semibold text-cyan-50 backdrop-blur-xl transition-colors hover:bg-cyan-300/[0.13] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:w-auto"
+          >
+            <Calculator className="h-4 w-4" />
+            Analyze First
           </Link>
         </motion.div>
       </div>

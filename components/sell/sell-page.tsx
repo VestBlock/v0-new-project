@@ -62,6 +62,22 @@ const SELLING_REASONS = [
   "Other"
 ]
 
+const QUERY_PREFILL_FIELDS = [
+  "propertyAddress",
+  "city",
+  "state",
+  "propertyType",
+  "bedrooms",
+  "bathrooms",
+  "propertyCondition",
+  "timelineToSell",
+  "estimatedValue",
+  "askingPrice",
+  "mortgageBalance",
+  "liensOrTaxes",
+  "occupancyStatus",
+] as const
+
 type SellPageMarket = {
   city: string
   state: string
@@ -104,6 +120,24 @@ export function SellPage({ market }: SellPageProps) {
   const [submitError, setSubmitError] = useState("")
 
   const [formData, setFormData] = useState(() => getInitialFormData(market))
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    if (!QUERY_PREFILL_FIELDS.some((field) => params.has(field))) return
+
+    setFormData((current) => {
+      const next = { ...current }
+
+      for (const field of QUERY_PREFILL_FIELDS) {
+        const value = params.get(field)
+        if (value && !next[field]) next[field] = value
+      }
+
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     const email = user?.email || ""

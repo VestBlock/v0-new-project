@@ -39,6 +39,8 @@ const publicRoutes = [
   { path: '/business-setup', priority: 0.82, changeFrequency: 'weekly' },
   { path: '/es/vestblock', priority: 0.84, changeFrequency: 'weekly' },
   { path: '/real-estate-funding', priority: 0.87, changeFrequency: 'weekly' },
+  { path: '/property-analyzer', priority: 0.9, changeFrequency: 'weekly' },
+  { path: '/calculators', priority: 0.84, changeFrequency: 'weekly' },
   { path: '/buyers', priority: 0.88, changeFrequency: 'weekly' },
   { path: '/lenders', priority: 0.87, changeFrequency: 'weekly' },
   { path: '/sell', priority: 0.86, changeFrequency: 'weekly' },
