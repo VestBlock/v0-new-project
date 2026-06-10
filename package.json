@@ -71,6 +71,7 @@
     "distress:skiptrace-prep": "node scripts/skip-trace-prep.mjs",
     "distress:dealmachine:ingest-export": "node scripts/dealmachine-ingest-export.mjs",
     "distress:dealmachine:ingest-export:apply": "node scripts/dealmachine-ingest-export.mjs --apply",
+    "distress:dealmachine:research-checklists": "node --env-file=.env.local scripts/dealmachine-research-checklists.mjs",
     "distress:clean-csv": "node scripts/export-clean-distress-stack-csv.mjs",
     "distress:dealmachine": "node scripts/dealmachine-push.mjs",
     "distress:dealmachine:import": "node scripts/dealmachine-push.mjs",

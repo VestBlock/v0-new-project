@@ -78,6 +78,25 @@ npm run distress:dealmachine:ingest-export:apply
 
 ## 6. Preview outreach
 
+Create internal research records first:
+
+```bash
+npm run distress:dealmachine:research-checklists -- \
+  --market=<city-state> \
+  --export-csv=data/dm-exports/<market>-YYYY-MM-DD.csv
+```
+
+To write records for admin review:
+
+```bash
+npm run distress:dealmachine:research-checklists -- \
+  --market=<city-state> \
+  --export-csv=data/dm-exports/<market>-YYYY-MM-DD.csv \
+  --apply
+```
+
+Review `/admin/research-checklists` before live outreach.
+
 ```bash
 node --env-file=.env.local scripts/dealmachine-export-outreach.mjs \
   --market=<city-state> \

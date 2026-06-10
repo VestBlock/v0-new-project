@@ -73,6 +73,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'partners',
   },
   {
+    title: 'Research Checklist',
+    description: 'Property, contact, and partner diligence before outreach.',
+    href: '/admin/research-checklists',
+    group: 'partners',
+  },
+  {
     title: 'Buyer Outreach',
     description: 'Approved buyer messages and send queue.',
     href: '/admin/buyer-outreach',

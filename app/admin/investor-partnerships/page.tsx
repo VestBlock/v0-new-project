@@ -30,6 +30,9 @@ export default async function AdminInvestorPartnershipsPage() {
             <Link href="/admin/lenders">Lender Network</Link>
           </Button>
           <Button asChild variant="outline">
+            <Link href="/admin/research-checklists">Research Checklist</Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link href="/admin-panel">Admin Overview</Link>
           </Button>
         </div>

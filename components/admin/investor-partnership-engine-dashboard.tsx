@@ -110,6 +110,7 @@ export function InvestorPartnershipEngineDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [bulkLoading, setBulkLoading] = useState<string | null>(null)
   const [agentLoading, setAgentLoading] = useState(false)
+  const [researchLoadingId, setResearchLoadingId] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [market, setMarket] = useState<string>('all')
@@ -259,6 +260,38 @@ export function InvestorPartnershipEngineDashboard() {
     }
   }
 
+  const createResearchChecklist = async (investorId: string) => {
+    setResearchLoadingId(investorId)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+
+      const response = await fetch('/api/admin/research-checklists/from-investor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ investorId }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Unable to create research checklist.')
+
+      toast({ title: 'Research checklist ready', description: 'Investor moved into internal diligence review.' })
+      router.push('/admin/research-checklists')
+    } catch (error) {
+      toast({
+        title: 'Research checklist failed',
+        description: error instanceof Error ? error.message : 'Try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setResearchLoadingId(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-slate-300">
@@ -398,6 +431,7 @@ export function InvestorPartnershipEngineDashboard() {
                     <TableHead>Sequence</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Research</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -439,11 +473,22 @@ export function InvestorPartnershipEngineDashboard() {
                           </div>
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => createResearchChecklist(investor.id)}
+                          disabled={researchLoadingId === investor.id}
+                        >
+                          {researchLoadingId === investor.id ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
+                          Checklist
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {!investors.length ? (
                     <TableRow className="border-slate-800">
-                      <TableCell colSpan={7} className="py-8 text-center text-slate-400">
+                      <TableCell colSpan={8} className="py-8 text-center text-slate-400">
                         No investor profiles match the current filters.
                       </TableCell>
                     </TableRow>

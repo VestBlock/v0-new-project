@@ -109,6 +109,27 @@ data/dm-exports/<market>-YYYY-MM-DD.csv
 
 ### 5. Preview outreach
 
+Before sending, create internal Research Checklist records from the same export:
+
+```bash
+npm run distress:dealmachine:research-checklists -- \
+  --market=philadelphia-pa \
+  --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv \
+  --limit=150
+```
+
+Dry run is default. To write internal records for review:
+
+```bash
+npm run distress:dealmachine:research-checklists -- \
+  --market=philadelphia-pa \
+  --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv \
+  --limit=150 \
+  --apply
+```
+
+Review `/admin/research-checklists` before live outreach.
+
 ```bash
 node --env-file=.env.local scripts/dealmachine-export-outreach.mjs \
   --market=philadelphia-pa \
@@ -151,6 +172,7 @@ Use DealMachine for:
 
 Use our local scripts for:
 - file ingest
+- internal research checklist creation
 - message generation
 - send throttling
 - mobile-only phone filtering
