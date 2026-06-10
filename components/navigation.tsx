@@ -50,6 +50,11 @@ export function Navigation() {
     [user?.email, userProfile?.role]
   );
 
+  // Admin surfaces run their own command shell; the marketing header stays out of the cockpit.
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
+
   // Main public navigation links
   const mainNavLinks = [
     { href: '/sell', label: 'Sellers' },

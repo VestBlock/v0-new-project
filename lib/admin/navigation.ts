@@ -14,7 +14,13 @@ export type AdminNavItem = {
 export const adminNavItems: AdminNavItem[] = [
   {
     title: 'Command Center',
-    description: 'Main overview, tasks, quotas, diagnostics, and activity.',
+    description: 'Operator cockpit: agents, priorities, market heat, and the live system feed.',
+    href: '/admin/command-center',
+    group: 'command',
+  },
+  {
+    title: 'Operations Panel',
+    description: 'Tasks, payments, users, alerts, diagnostics, and activity.',
     href: '/admin-panel',
     group: 'command',
   },

@@ -24,6 +24,7 @@ const floatingCards = [
     icon: Building2,
     className: "hidden md:block md:left-8 md:top-[22%] lg:left-16",
     delay: 0,
+    depth: 18,
   },
   {
     title: "Find the right match",
@@ -31,6 +32,7 @@ const floatingCards = [
     icon: TrendingUp,
     className: "hidden md:block md:right-8 md:top-[26%] lg:right-20",
     delay: 0.6,
+    depth: -24,
   },
   {
     title: "Keep the record clean",
@@ -38,17 +40,30 @@ const floatingCards = [
     icon: ShieldCheck,
     className: "hidden md:block md:bottom-[24%] md:right-16 lg:right-40",
     delay: 1.1,
+    depth: 12,
   },
+]
+
+const HEADLINE_WORDS: Array<{ text: string; gradient?: boolean; break?: boolean }> = [
+  { text: "Connect" },
+  { text: "real" },
+  { text: "estate", break: true },
+  { text: "opportunities" },
+  { text: "with" },
+  { text: "the", gradient: true },
+  { text: "right", gradient: true },
+  { text: "partners.", gradient: true },
 ]
 
 export function CinematicHero() {
   const sectionRef = useRef<HTMLDivElement | null>(null)
   const videoWrapRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
   const [videoOk, setVideoOk] = useState(true)
 
-  // GSAP scroll-scrub parallax on the city footage
+  // Scroll choreography: footage parallax in, content lifts away with depth
   useEffect(() => {
     if (reduceMotion) return
     if (!sectionRef.current || !videoWrapRef.current) return
@@ -66,9 +81,50 @@ export function CinematicHero() {
           scrub: true,
         },
       })
+
+      if (contentRef.current) {
+        gsap.to(contentRef.current, {
+          yPercent: -14,
+          opacity: 0.08,
+          scale: 0.965,
+          ease: "none",
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: "12% top",
+            end: "75% top",
+            scrub: true,
+          },
+        })
+      }
     }, sectionRef)
 
     return () => ctx.revert()
+  }, [reduceMotion])
+
+  // Pointer-depth parallax on the floating cards (single listener, CSS vars)
+  useEffect(() => {
+    if (reduceMotion) return
+    const section = sectionRef.current
+    if (!section) return
+
+    let raf = 0
+    const handlePointerMove = (event: PointerEvent) => {
+      if (raf) return
+      raf = window.requestAnimationFrame(() => {
+        raf = 0
+        const rect = section.getBoundingClientRect()
+        const x = ((event.clientX - rect.left) / rect.width - 0.5) * 2
+        const y = ((event.clientY - rect.top) / rect.height - 0.5) * 2
+        section.style.setProperty("--hero-px", x.toFixed(3))
+        section.style.setProperty("--hero-py", y.toFixed(3))
+      })
+    }
+
+    section.addEventListener("pointermove", handlePointerMove)
+    return () => {
+      section.removeEventListener("pointermove", handlePointerMove)
+      if (raf) window.cancelAnimationFrame(raf)
+    }
   }, [reduceMotion])
 
   // Respect reduced motion for the video itself
@@ -111,41 +167,52 @@ export function CinematicHero() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,15,0.72)_0%,rgba(3,6,15,0.45)_38%,rgba(3,6,15,0.72)_72%,rgba(3,6,15,0.97)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_0%,transparent_40%,rgba(3,6,15,0.6)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_46%,rgba(34,211,238,0.10),transparent_60%),radial-gradient(50%_40%_at_85%_75%,rgba(245,158,11,0.10),transparent_60%)] mix-blend-screen" />
+        <div className="vb-scan-grid absolute inset-0 opacity-30" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
       </div>
 
-      {/* Floating glass data cards */}
+      {/* Floating glass data cards with pointer depth */}
       {!reduceMotion &&
         floatingCards.map((card) => {
           const Icon = card.icon
           return (
-            <motion.div
+            <div
               key={card.title}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: [0, -10, 0] }}
-              transition={{
-                opacity: { duration: 0.8, delay: 0.6 + card.delay },
-                y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: card.delay },
-              }}
               className={`pointer-events-none absolute z-10 ${card.className}`}
+              style={{
+                transform: `translate3d(calc(var(--hero-px, 0) * ${card.depth}px), calc(var(--hero-py, 0) * ${card.depth * 0.7}px), 0)`,
+                transition: "transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
             >
-              <div className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-3 shadow-[0_20px_60px_rgba(2,6,23,0.5)] backdrop-blur-2xl">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] text-cyan-200">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold leading-4 text-white">{card.title}</span>
-                  <span className="mt-0.5 block font-mono text-[0.65rem] uppercase tracking-[0.14em] text-slate-400">
-                    {card.meta}
+              <motion.div
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: [0, -10, 0] }}
+                transition={{
+                  opacity: { duration: 0.8, delay: 0.6 + card.delay },
+                  y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: card.delay },
+                }}
+              >
+                <div className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-3 shadow-[0_20px_60px_rgba(2,6,23,0.5)] backdrop-blur-2xl">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] text-cyan-200">
+                    <Icon className="h-4 w-4" />
                   </span>
-                </span>
-              </div>
-            </motion.div>
+                  <span>
+                    <span className="block text-sm font-semibold leading-4 text-white">{card.title}</span>
+                    <span className="mt-0.5 block font-mono text-[0.65rem] uppercase tracking-[0.14em] text-slate-400">
+                      {card.meta}
+                    </span>
+                  </span>
+                </div>
+              </motion.div>
+            </div>
           )
         })}
 
       {/* Hero content */}
-      <div className="relative z-20 mx-auto flex min-h-[100svh] max-w-5xl flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
+      <div
+        ref={contentRef}
+        className="relative z-20 mx-auto flex min-h-[100svh] max-w-5xl flex-col items-center justify-center px-4 pb-24 pt-28 text-center will-change-transform"
+      >
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -156,24 +223,37 @@ export function CinematicHero() {
           Sell · Buy · Fund · Build
         </motion.div>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.06 }}
-          className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-white sm:text-6xl md:text-7xl xl:text-[5.5rem]"
-        >
-          Connect real estate
-          <br className="hidden sm:block" />{" "}
-          opportunities with{" "}
-          <span className="bg-gradient-to-r from-cyan-200 via-sky-100 to-amber-200 bg-clip-text text-transparent">
-            the right partners.
-          </span>
-        </motion.h1>
+        <h1 className="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-tight text-white sm:text-6xl md:text-7xl xl:text-[5.5rem]">
+          {HEADLINE_WORDS.map((word, index) => (
+            <span key={`${word.text}-${index}`}>
+              <span className="vb-word-mask">
+                <span
+                  className={
+                    word.gradient
+                      ? "vb-word vb-text-glow bg-gradient-to-r from-cyan-200 via-sky-100 to-amber-200 bg-clip-text text-transparent"
+                      : "vb-word"
+                  }
+                  style={{ ["--vb-word-delay" as string]: `${140 + index * 75}ms` }}
+                >
+                  {word.text}
+                </span>
+              </span>
+              {word.break ? (
+                <>
+                  <br className="hidden sm:block" />
+                  <span className="sm:hidden"> </span>
+                </>
+              ) : (
+                " "
+              )}
+            </span>
+          ))}
+        </h1>
 
         <motion.p
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.14 }}
+          transition={{ duration: 0.75, delay: 0.55 }}
           className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-slate-300/90 md:text-lg md:leading-8"
         >
           VestBlock connects property owners, buyers, lenders, developers, contractors, operators, and capital partners
@@ -184,7 +264,7 @@ export function CinematicHero() {
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.22 }}
+          transition={{ duration: 0.75, delay: 0.68 }}
           className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
         >
           <Link
@@ -208,6 +288,20 @@ export function CinematicHero() {
             Analyze First
           </Link>
         </motion.div>
+
+        {/* Scroll cue */}
+        {!reduceMotion ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1.4 }}
+            className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2"
+          >
+            <div className="flex h-12 w-7 items-start justify-center rounded-full border border-white/20 bg-white/[0.03] p-1.5 backdrop-blur">
+              <span className="animate-vb-scroll-cue block h-2 w-1 rounded-full bg-cyan-200/90" />
+            </div>
+          </motion.div>
+        ) : null}
       </div>
 
       {/* Bloomberg-style ticker */}

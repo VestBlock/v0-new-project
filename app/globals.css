@@ -158,6 +158,92 @@
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   }
 
+  /* Futuristic fine-grid + scanline texture (very low contrast, layered over media) */
+  .vb-scan-grid {
+    background-image:
+      repeating-linear-gradient(0deg, rgba(148, 197, 253, 0.05) 0 1px, transparent 1px 3px),
+      linear-gradient(rgba(148, 197, 253, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 197, 253, 0.045) 1px, transparent 1px);
+    background-size: 100% 3px, 64px 64px, 64px 64px;
+  }
+
+  /* Rotating conic border beam — apply to a relatively-positioned rounded container */
+  .vb-border-beam {
+    position: relative;
+  }
+
+  .vb-border-beam::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--vb-beam-angle, 0deg),
+      transparent 0%,
+      rgba(34, 211, 238, 0.7) 8%,
+      rgba(167, 139, 250, 0.55) 16%,
+      transparent 26%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: vb-beam-spin 7s linear infinite;
+    pointer-events: none;
+  }
+
+  @property --vb-beam-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes vb-beam-spin {
+    to {
+      --vb-beam-angle: 360deg;
+    }
+  }
+
+  /* Soft cyan text glow for hero emphasis */
+  .vb-text-glow {
+    text-shadow:
+      0 0 24px rgba(34, 211, 238, 0.35),
+      0 0 80px rgba(34, 211, 238, 0.16);
+  }
+
+  /* Scroll cue: falling dot inside a capsule */
+  @keyframes vb-scroll-cue {
+    0% { transform: translateY(0); opacity: 0; }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { transform: translateY(14px); opacity: 0; }
+  }
+
+  .animate-vb-scroll-cue {
+    animation: vb-scroll-cue 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
+  /* Headline word-reveal mask */
+  .vb-word-mask {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+  }
+
+  .vb-word {
+    display: inline-block;
+    transform: translateY(110%);
+    animation: vb-word-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--vb-word-delay, 0ms);
+  }
+
+  @keyframes vb-word-up {
+    to {
+      transform: translateY(0);
+    }
+  }
+
   .deal-command-hero {
     isolation: isolate;
   }
@@ -195,6 +281,20 @@
   }
 
   .animate-vb-ticker {
+    animation: none;
+  }
+
+  .vb-border-beam::before {
+    animation: none;
+    opacity: 0.45;
+  }
+
+  .animate-vb-scroll-cue {
+    animation: none;
+  }
+
+  .vb-word {
+    transform: none;
     animation: none;
   }
 }

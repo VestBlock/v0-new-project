@@ -24,7 +24,7 @@ export function DealVaultProofSection() {
   return (
     <section className="relative px-4 py-20 md:py-28">
       <div className="container mx-auto max-w-6xl">
-        <div className="overflow-hidden rounded-[2rem] border border-violet-300/15 bg-[radial-gradient(circle_at_15%_15%,rgba(139,92,246,0.14),transparent_45%),radial-gradient(circle_at_85%_30%,rgba(34,211,238,0.12),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-7 backdrop-blur-xl md:p-12">
+        <div className="vb-border-beam overflow-hidden rounded-[2rem] border border-violet-300/15 bg-[radial-gradient(circle_at_15%_15%,rgba(139,92,246,0.14),transparent_45%),radial-gradient(circle_at_85%_30%,rgba(34,211,238,0.12),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-7 backdrop-blur-xl md:p-12">
           <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
             <MarketingReveal>
               <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-100">

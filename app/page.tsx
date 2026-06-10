@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { LenisProvider } from '@/components/cinematic/lenis-provider';
 import { CinematicHero } from '@/components/cinematic/cinematic-hero';
-import { CapitalFlowSection } from '@/components/cinematic/capital-flow-section';
+import { DealJourneySection } from '@/components/cinematic/deal-journey-section';
 import { IntelligenceSection } from '@/components/cinematic/intelligence-section';
 import { NetworkSection } from '@/components/cinematic/network-section';
 import { DealVaultProofSection } from '@/components/home/dealvault-proof-section';
@@ -71,7 +71,7 @@ export default function HomePage() {
       />
       <LenisProvider />
       <CinematicHero />
-      <CapitalFlowSection />
+      <DealJourneySection />
       <IntelligenceSection />
       <NetworkSection />
       <DealVaultProofSection />
