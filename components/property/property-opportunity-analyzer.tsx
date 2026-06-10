@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
 
 const propertyTypes = [
   "Single Family",
@@ -25,6 +26,20 @@ const propertyTypes = [
 const propertyConditions = ["Excellent", "Good", "Fair / Dated", "Needs Repairs", "Major Repairs", "Vacant / Distressed"]
 const occupancyStatuses = ["Owner Occupied", "Tenant Occupied", "Vacant", "Unknown"]
 const timelines = ["ASAP", "Within 30 days", "30-60 days", "60-90 days", "Flexible"]
+const exitStrategies = [
+  { value: "not_sure", label: "Not sure yet" },
+  { value: "flip", label: "Fix and flip" },
+  { value: "rental", label: "Rental hold" },
+  { value: "brrrr", label: "BRRRR" },
+  { value: "dscr_refinance", label: "DSCR refinance" },
+  { value: "wholesale", label: "Wholesale" },
+  { value: "wholetail", label: "Wholetail" },
+  { value: "seller_finance", label: "Seller finance hold" },
+  { value: "hold_long_term", label: "Long-term hold" },
+]
+const creditScoreRanges = ["740+", "700-739", "660-699", "620-659", "Below 620", "Unknown"]
+const entityStatuses = ["Active LLC / Corp", "Entity forming", "No entity yet", "Personal name only"]
+const experienceLevels = ["New investor", "1-3 deals", "4-10 deals", "Experienced operator"]
 
 type AnalyzerForm = {
   propertyAddress: string
@@ -42,11 +57,34 @@ type AnalyzerForm = {
   askingPrice: string
   afterRepairValue: string
   repairBudget: string
+  closingCosts: string
+  holdingPeriodMonths: string
   mortgageBalance: string
   liensOrTaxes: string
   monthlyTaxes: string
   monthlyInsurance: string
+  monthlyUtilities: string
+  propertyManagementPercent: string
+  vacancyPercent: string
+  maintenancePercent: string
+  otherMonthlyExpenses: string
   monthlyDebtService: string
+  downPayment: string
+  interestRate: string
+  loanTermYears: string
+  points: string
+  lenderFees: string
+  loanToCost: string
+  loanToValue: string
+  privateMoneyAmount: string
+  gapFundingAmount: string
+  sellerFinanceAmount: string
+  operatorCashAvailable: string
+  exitStrategy: string
+  creditScoreRange: string
+  entityStatus: string
+  realEstateExperience: string
+  documentsAvailable: string
   targetMonthlyCashFlow: string
   creativeDownPayment: string
   creativeNoteInterestRate: string
@@ -87,7 +125,47 @@ type AnalyzerResult = {
       estimatedMonthlyCarry: number | null
       estimatedMonthlyCashFlow: number | null
       dscr: number | null
+      monthlyOperatingExpenses: number | null
+      annualDebtService: number | null
+      netOperatingIncomeAnnual: number | null
+      capRatePercent: number | null
+      cashOnCashReturnPercent: number | null
+      debtYieldPercent: number | null
+      breakEvenRent: number | null
+      rentToPriceRatioPercent: number | null
+      flipProfit: number | null
+      flipRoiPercent: number | null
+      recommendedLoanAmount: number | null
+      totalProjectCost: number | null
+      totalCashNeeded: number | null
+      fundingGap: number | null
     }
+    dealStrength: {
+      score: number
+      label: "Strong" | "Promising" | "Watchlist" | "Weak"
+      summary: string
+      strengths: string[]
+    }
+    fundingReadiness: {
+      score: number
+      label: "Ready to route" | "Needs more file prep" | "Needs borrower cleanup" | "Manual review"
+      recommendedPath: "DSCR" | "Hard money" | "Private money" | "Gap funding" | "Transactional funding" | "Business credit builder" | "Credit prep" | "Manual review"
+      summary: string
+      missingItems: string[]
+    }
+    capitalStack: {
+      totalProjectCost: number | null
+      seniorDebt: number | null
+      privateMoney: number | null
+      sellerFinance: number | null
+      gapFunding: number | null
+      operatorCash: number | null
+      estimatedReserves: number | null
+      totalCapitalAvailable: number | null
+      fundingGap: number | null
+      notes: string[]
+    }
+    riskFlags: string[]
     creativeOffers: Array<{
       key: "seller_finance" | "subject_to"
       label: string
@@ -144,11 +222,34 @@ const initialForm: AnalyzerForm = {
   askingPrice: "",
   afterRepairValue: "",
   repairBudget: "",
+  closingCosts: "",
+  holdingPeriodMonths: "",
   mortgageBalance: "",
   liensOrTaxes: "",
   monthlyTaxes: "",
   monthlyInsurance: "",
+  monthlyUtilities: "",
+  propertyManagementPercent: "",
+  vacancyPercent: "",
+  maintenancePercent: "",
+  otherMonthlyExpenses: "",
   monthlyDebtService: "",
+  downPayment: "",
+  interestRate: "",
+  loanTermYears: "",
+  points: "",
+  lenderFees: "",
+  loanToCost: "",
+  loanToValue: "",
+  privateMoneyAmount: "",
+  gapFundingAmount: "",
+  sellerFinanceAmount: "",
+  operatorCashAvailable: "",
+  exitStrategy: "not_sure",
+  creditScoreRange: "",
+  entityStatus: "",
+  realEstateExperience: "",
+  documentsAvailable: "",
   targetMonthlyCashFlow: "",
   creativeDownPayment: "",
   creativeNoteInterestRate: "",
@@ -193,6 +294,13 @@ function creativeViabilityTone(value: AnalyzerResult["opportunity"]["creativeOff
   return "border-white/10 bg-white/[0.04] text-slate-200"
 }
 
+function dealStrengthTone(value: AnalyzerResult["opportunity"]["dealStrength"]["label"]) {
+  if (value === "Strong") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+  if (value === "Promising") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
+  if (value === "Watchlist") return "border-amber-400/20 bg-amber-400/10 text-amber-100"
+  return "border-rose-400/20 bg-rose-400/10 text-rose-100"
+}
+
 function formatYears(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "Needs details"
   return `${value} yrs`
@@ -209,6 +317,7 @@ function buildSellerHref(form: AnalyzerForm) {
     "bathrooms",
     "propertyCondition",
     "timelineToSell",
+    "exitStrategy",
     "estimatedValue",
     "askingPrice",
     "mortgageBalance",
@@ -444,6 +553,53 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     </Select>
                   </div>
                   <div className="space-y-2">
+                    <Label>Exit strategy</Label>
+                    <Select value={form.exitStrategy} onValueChange={(value) => updateField("exitStrategy", value)}>
+                      <SelectTrigger className="bg-slate-950/70">
+                        <SelectValue placeholder="Select exit path" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {exitStrategies.map((strategy) => (
+                          <SelectItem key={strategy.value} value={strategy.value}>
+                            {strategy.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="creditScoreRange">Credit range</Label>
+                    <Select value={form.creditScoreRange} onValueChange={(value) => updateField("creditScoreRange", value)}>
+                      <SelectTrigger className="bg-slate-950/70">
+                        <SelectValue placeholder="Borrower credit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditScoreRanges.map((range) => (
+                          <SelectItem key={range} value={range}>
+                            {range}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="entityStatus">Entity status</Label>
+                    <Select value={form.entityStatus} onValueChange={(value) => updateField("entityStatus", value)}>
+                      <SelectTrigger className="bg-slate-950/70">
+                        <SelectValue placeholder="Entity setup" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {entityStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label>Timeline</Label>
                     <Select value={form.timelineToSell} onValueChange={(value) => updateField("timelineToSell", value)}>
                       <SelectTrigger className="bg-slate-950/70">
@@ -458,6 +614,21 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="realEstateExperience">Real estate experience</Label>
+                  <Select value={form.realEstateExperience} onValueChange={(value) => updateField("realEstateExperience", value)}>
+                    <SelectTrigger className="bg-slate-950/70">
+                      <SelectValue placeholder="Experience level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {experienceLevels.map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {level}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
@@ -487,6 +658,16 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     <Input id="liensOrTaxes" value={form.liensOrTaxes} onChange={(event) => updateField("liensOrTaxes", event.target.value)} placeholder="$" className="bg-slate-950/70" />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="documentsAvailable">Documents available</Label>
+                  <Textarea
+                    id="documentsAvailable"
+                    value={form.documentsAvailable}
+                    onChange={(event) => updateField("documentsAvailable", event.target.value)}
+                    placeholder="Examples: bank statements, rehab scope, contractor bids, operating agreement, EIN, lease, rent roll"
+                    className="min-h-24 bg-slate-950/70"
+                  />
+                </div>
                 <Button type="submit" disabled={isLoading} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300">
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
                   Analyze Property
@@ -500,8 +681,8 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
             {[
               { label: "Rough value", value: formatMoney(result?.estimate.estimateValue), icon: TrendingUp },
               { label: "MAO 70%", value: formatMoney(calculator.mao70), icon: Calculator },
-              { label: "Rent hint", value: formatMoney(result?.estimate.rentEstimate), icon: Home },
-              { label: "Creative max", value: formatMoney(result?.opportunity.creativeOffers?.[0]?.metrics.maxPriceToHitTargetCashFlow ?? null), icon: Route },
+              { label: "Deal strength", value: result ? `${result.opportunity.dealStrength.score}/100` : "Needs details", icon: ShieldCheck },
+              { label: "Funding path", value: result?.opportunity.fundingReadiness.recommendedPath ?? "Needs details", icon: Route },
             ].map((item) => {
                 const Icon = item.icon
                 return (
@@ -568,6 +749,129 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
             <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
+                  <ShieldCheck className="h-5 w-5 text-cyan-300" />
+                  Underwriting command
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Deal strength, funding-readiness, and file quality signals for the route that should happen next.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {result ? (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">Deal strength</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{result.opportunity.dealStrength.summary}</p>
+                          </div>
+                          <Badge className={dealStrengthTone(result.opportunity.dealStrength.label)}>
+                            {result.opportunity.dealStrength.label}
+                          </Badge>
+                        </div>
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
+                            <span>Strength score</span>
+                            <span>{result.opportunity.dealStrength.score}/100</span>
+                          </div>
+                          <Progress value={result.opportunity.dealStrength.score} />
+                        </div>
+                        {result.opportunity.dealStrength.strengths.length > 0 ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {result.opportunity.dealStrength.strengths.map((strength) => (
+                              <Badge key={strength} className="border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
+                                {strength}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">Funding readiness</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{result.opportunity.fundingReadiness.summary}</p>
+                          </div>
+                          <Badge className="border-white/10 bg-white/[0.06] text-white">
+                            {result.opportunity.fundingReadiness.recommendedPath}
+                          </Badge>
+                        </div>
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
+                            <span>Readiness</span>
+                            <span>{result.opportunity.fundingReadiness.score}/100</span>
+                          </div>
+                          <Progress value={result.opportunity.fundingReadiness.score} />
+                        </div>
+                        <p className="mt-4 text-sm font-medium text-white">{result.opportunity.fundingReadiness.label}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">NOI</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.metrics.netOperatingIncomeAnnual)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Cap rate</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatPercent(result.opportunity.metrics.capRatePercent)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Debt yield</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatPercent(result.opportunity.metrics.debtYieldPercent)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Break-even rent</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.metrics.breakEvenRent)}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Missing file items</p>
+                        {result.opportunity.fundingReadiness.missingItems.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {result.opportunity.fundingReadiness.missingItems.map((item) => (
+                              <Badge key={item} className="border-amber-400/20 bg-amber-400/10 text-amber-100">
+                                {item}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-slate-300">The file has enough information to start a real review.</p>
+                        )}
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Risk flags</p>
+                        {result.opportunity.riskFlags.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {result.opportunity.riskFlags.map((flag) => (
+                              <Badge key={flag} className="border-rose-400/20 bg-rose-400/10 text-rose-100">
+                                {flag}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-slate-300">No major risk flags surfaced from the current inputs.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <ShieldCheck className="mx-auto h-8 w-8 text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Run the analyzer to score the file quality, funding path, and key investment math.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
                   <Calculator className="h-5 w-5 text-cyan-300" />
                   Deal calculators
                 </CardTitle>
@@ -623,6 +927,88 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     <Input id="monthlyDebtService" value={form.monthlyDebtService} onChange={(event) => updateField("monthlyDebtService", event.target.value)} placeholder="$" className="bg-slate-950/70" />
                   </div>
                 </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="monthlyUtilities">Monthly utilities</Label>
+                    <Input id="monthlyUtilities" value={form.monthlyUtilities} onChange={(event) => updateField("monthlyUtilities", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="propertyManagementPercent">Management %</Label>
+                    <Input id="propertyManagementPercent" value={form.propertyManagementPercent} onChange={(event) => updateField("propertyManagementPercent", event.target.value)} placeholder="8" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vacancyPercent">Vacancy %</Label>
+                    <Input id="vacancyPercent" value={form.vacancyPercent} onChange={(event) => updateField("vacancyPercent", event.target.value)} placeholder="5" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="maintenancePercent">Maintenance %</Label>
+                    <Input id="maintenancePercent" value={form.maintenancePercent} onChange={(event) => updateField("maintenancePercent", event.target.value)} placeholder="5" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="otherMonthlyExpenses">Other monthly expenses</Label>
+                    <Input id="otherMonthlyExpenses" value={form.otherMonthlyExpenses} onChange={(event) => updateField("otherMonthlyExpenses", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="closingCosts">Closing costs</Label>
+                    <Input id="closingCosts" value={form.closingCosts} onChange={(event) => updateField("closingCosts", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="holdingPeriodMonths">Holding months</Label>
+                    <Input id="holdingPeriodMonths" value={form.holdingPeriodMonths} onChange={(event) => updateField("holdingPeriodMonths", event.target.value)} placeholder="6" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="downPayment">Down payment / equity cash</Label>
+                    <Input id="downPayment" value={form.downPayment} onChange={(event) => updateField("downPayment", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="interestRate">Interest rate</Label>
+                    <Input id="interestRate" value={form.interestRate} onChange={(event) => updateField("interestRate", event.target.value)} placeholder="7.25%" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loanTermYears">Loan term</Label>
+                    <Input id="loanTermYears" value={form.loanTermYears} onChange={(event) => updateField("loanTermYears", event.target.value)} placeholder="30" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="points">Points</Label>
+                    <Input id="points" value={form.points} onChange={(event) => updateField("points", event.target.value)} placeholder="2" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="lenderFees">Lender fees</Label>
+                    <Input id="lenderFees" value={form.lenderFees} onChange={(event) => updateField("lenderFees", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loanToCost">LTC %</Label>
+                    <Input id="loanToCost" value={form.loanToCost} onChange={(event) => updateField("loanToCost", event.target.value)} placeholder="85" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loanToValue">LTV %</Label>
+                    <Input id="loanToValue" value={form.loanToValue} onChange={(event) => updateField("loanToValue", event.target.value)} placeholder="75" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="operatorCashAvailable">Operator cash available</Label>
+                    <Input id="operatorCashAvailable" value={form.operatorCashAvailable} onChange={(event) => updateField("operatorCashAvailable", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="privateMoneyAmount">Private money</Label>
+                    <Input id="privateMoneyAmount" value={form.privateMoneyAmount} onChange={(event) => updateField("privateMoneyAmount", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gapFundingAmount">Gap funding</Label>
+                    <Input id="gapFundingAmount" value={form.gapFundingAmount} onChange={(event) => updateField("gapFundingAmount", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sellerFinanceAmount">Seller finance amount</Label>
+                    <Input id="sellerFinanceAmount" value={form.sellerFinanceAmount} onChange={(event) => updateField("sellerFinanceAmount", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
+                </div>
                 <div className="mt-5 grid gap-4 md:grid-cols-4">
                   <div className="space-y-2">
                     <Label htmlFor="targetMonthlyCashFlow">Target monthly cash flow</Label>
@@ -658,6 +1044,90 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                 <p className="mt-3 text-xs leading-6 text-slate-500">
                   Leave the creative fields blank if you want the analyzer to use default screening assumptions.
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Route className="h-5 w-5 text-cyan-300" />
+                  Capital stack builder
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Modeled debt, reserves, and operator cash so VestBlock can see whether the deal is actually financeable.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {result ? (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Senior debt</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.capitalStack.seniorDebt)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Total cash needed</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.metrics.totalCashNeeded)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Funding gap</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.capitalStack.fundingGap)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Operator cash</p>
+                        <p className="mt-3 text-xl font-semibold text-cyan-100">{formatMoney(result.opportunity.capitalStack.operatorCash)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Private money</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatMoney(result.opportunity.capitalStack.privateMoney)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Seller finance</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatMoney(result.opportunity.capitalStack.sellerFinance)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Reserves</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatMoney(result.opportunity.capitalStack.estimatedReserves)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Cash on cash</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatPercent(result.opportunity.metrics.cashOnCashReturnPercent)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Rent / price</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatPercent(result.opportunity.metrics.rentToPriceRatioPercent)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Flip profit</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatMoney(result.opportunity.metrics.flipProfit)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Flip ROI</p>
+                        <p className="mt-3 text-lg font-semibold text-white">{formatPercent(result.opportunity.metrics.flipRoiPercent)}</p>
+                      </div>
+                    </div>
+                    {result.opportunity.capitalStack.notes.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {result.opportunity.capitalStack.notes.map((note) => (
+                          <Badge key={note} className="border-white/10 bg-white/[0.06] text-slate-100">
+                            {note}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <Route className="mx-auto h-8 w-8 text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Run the analyzer to see whether the capital stack really covers the modeled deal.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
