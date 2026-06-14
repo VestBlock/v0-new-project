@@ -62,7 +62,7 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
   const [editScore, setEditScore] = useState('')
   const [editPresetId, setEditPresetId] = useState(marketVerticalPresets[0]?.id || '')
 
-  const [scrapeProvider, setScrapeProvider] = useState<'auto' | 'google' | 'outscraper'>('auto')
+  const [scrapeProvider, setScrapeProvider] = useState<'auto' | 'google'>('auto')
   const [scrapeLimit, setScrapeLimit] = useState('8')
   const [scrapeLanguage, setScrapeLanguage] = useState('en')
   const [scrapeRegion, setScrapeRegion] = useState('US')
@@ -558,16 +558,18 @@ export function MarketExpansionConsole({ initialMarkets }: MarketExpansionConsol
                   </div>
                   <div className="space-y-2">
                     <Label>Provider</Label>
-                    <Select value={scrapeProvider} onValueChange={(value: 'auto' | 'google' | 'outscraper') => setScrapeProvider(value)}>
+                    <Select value={scrapeProvider} onValueChange={(value: 'auto' | 'google') => setScrapeProvider(value)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="auto">{GOOGLE_MAPS_PROVIDER_LABELS.auto}</SelectItem>
                         <SelectItem value="google">{GOOGLE_MAPS_PROVIDER_LABELS.google}</SelectItem>
-                        <SelectItem value="outscraper">{GOOGLE_MAPS_PROVIDER_LABELS.outscraper}</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-amber-600">
+                      Paid Outscraper scraping is quarantined until revenue or an explicit operator override justifies it.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="scrape-limit">Per niche</Label>

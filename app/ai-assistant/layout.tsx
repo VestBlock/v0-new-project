@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/ai-assistant",
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
   openGraph: {
     title: "AI Receptionist, Booking, And Website Upgrades | VestBlock",
     description:

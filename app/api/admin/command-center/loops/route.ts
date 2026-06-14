@@ -50,6 +50,7 @@ export async function GET() {
       openTaskCount: data.summary.openTasks,
       legacyDraftCount: data.summary.hiddenLegacyDrafts,
       archivedLegacyRuntimeRows: data.summary.archivedLegacyRuntimeRows,
+      analyzerOutcomeCount: data.dealMemory.totalAnalyses,
     })
     return NextResponse.json({ success: true, telemetry })
   } catch (error) {

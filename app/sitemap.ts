@@ -29,14 +29,9 @@ const publicRoutes = [
   { path: '/smart-contracts', priority: 0.89, changeFrequency: 'weekly' },
   { path: '/pricing', priority: 0.88, changeFrequency: 'weekly' },
   { path: '/services/financial-growth', priority: 0.86, changeFrequency: 'weekly' },
-  { path: '/visibility-expansion', priority: 0.85, changeFrequency: 'weekly' },
-  { path: '/visibility-expansion/case-study', priority: 0.86, changeFrequency: 'weekly' },
-  { path: '/visibility-expansion/proof-hub', priority: 0.87, changeFrequency: 'weekly' },
   { path: '/learn', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/resources', priority: 0.76, changeFrequency: 'weekly' },
   { path: '/funding', priority: 0.85, changeFrequency: 'weekly' },
-  { path: '/funding/business-funding-strategy', priority: 0.82, changeFrequency: 'weekly' },
-  { path: '/business-setup', priority: 0.82, changeFrequency: 'weekly' },
   { path: '/es/vestblock', priority: 0.84, changeFrequency: 'weekly' },
   { path: '/real-estate-funding', priority: 0.87, changeFrequency: 'weekly' },
   { path: '/property-analyzer', priority: 0.9, changeFrequency: 'weekly' },
@@ -49,7 +44,6 @@ const publicRoutes = [
   { path: '/sell/memphis', priority: 0.88, changeFrequency: 'weekly' },
   { path: '/dealflow-growth-system', priority: 0.86, changeFrequency: 'weekly' },
   { path: '/proof', priority: 0.84, changeFrequency: 'weekly' },
-  { path: '/ai-assistant', priority: 0.72, changeFrequency: 'monthly' },
 ] as const;
 
 async function getPublishedResourceRoutes(siteUrl: string) {

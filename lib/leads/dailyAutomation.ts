@@ -13,6 +13,7 @@ import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
 import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { buildOutreachV2EmailDraft, getOutreachV2DailyTarget, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { classifyLeadRevenueCampaign, getRevenueCampaignAllocation, REVENUE_CAMPAIGN_ORDER, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
+import { isOutscraperApproved } from '@/lib/leads/sourceCostGovernor'
 import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
 import { discoverMarkets, markMarketRunResult, pickDiscoveryTermsForMarket, updateMarketPerformance } from '@/lib/leads/marketExpansion'
 import {
@@ -607,7 +608,7 @@ function isInvalidGooglePlacesKeyError(error: unknown) {
 
 function resolveDailyMapsProvider() {
   if (process.env.GOOGLE_PLACES_API_KEY && !isLegacyGooglePlacesPhaseOutEnabled()) return 'google' as const
-  if (envBool('LEADS_ENABLE_OUTSCRAPER', false) && process.env.OUTSCRAPER_API_KEY) return 'outscraper' as const
+  if (isOutscraperApproved()) return 'outscraper' as const
   return null
 }
 
@@ -708,7 +709,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
       status: 'skipped',
       detail: isLegacyGooglePlacesPhaseOutEnabled()
         ? 'Daily maps scraping is paused because Google Places is phased out here and Outscraper is disabled until revenue justifies paid scraping.'
-        : 'Add GOOGLE_PLACES_API_KEY to enable free/owned daily maps scraping, or set LEADS_ENABLE_OUTSCRAPER=true when paid Outscraper usage is approved.',
+        : 'Add GOOGLE_PLACES_API_KEY to enable owned maps scraping, or set ALLOW_PAID_SCRAPING=true plus LEADS_ENABLE_OUTSCRAPER=true only when paid Outscraper usage is approved.',
     })
   } else {
     const refillMarketOffset = emailReadyRefillOnly

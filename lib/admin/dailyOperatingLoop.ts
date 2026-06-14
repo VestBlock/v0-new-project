@@ -172,6 +172,7 @@ export async function runDailyOperatingLoop(options: {
     openTaskCount: data.summary.openTasks,
     legacyDraftCount: data.summary.hiddenLegacyDrafts,
     archivedLegacyRuntimeRows: data.summary.archivedLegacyRuntimeRows,
+    analyzerOutcomeCount: data.dealMemory.totalAnalyses,
   })
 
   const dispatchResult =

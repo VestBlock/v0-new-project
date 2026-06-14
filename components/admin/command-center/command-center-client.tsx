@@ -2013,6 +2013,8 @@ export function CommandCenterClient({
         strategyLab={data.strategyLab}
         operatingLoops={data.operatingLoops}
         operatingArchitecture={data.operatingArchitecture}
+        dealMemory={data.dealMemory}
+        sourceGovernor={data.sourceGovernor}
         suppressionCenter={data.suppressionCenter}
         dealMachineFreshness={data.dealMachineFreshness}
         runningActionId={runningActionId}
@@ -2197,7 +2199,7 @@ export function CommandCenterClient({
           </TabsContent>
 
           <TabsContent value="property" id="property-command" className="mt-0 px-5 py-5">
-            <CommandCenterAnalyzerPanel commandSeed={propertyCommandSeed} />
+            <CommandCenterAnalyzerPanel key={propertyCommandSeed?.id ?? "manual-property-command"} commandSeed={propertyCommandSeed} />
           </TabsContent>
 
           <TabsContent value="strategy" id="strategy-engine" className="mt-0 px-5 py-5">
@@ -2206,6 +2208,8 @@ export function CommandCenterClient({
                 strategyLab={data.strategyLab}
                 operatingLoops={data.operatingLoops}
                 operatingArchitecture={data.operatingArchitecture}
+                dealMemory={data.dealMemory}
+                sourceGovernor={data.sourceGovernor}
                 suppressionCenter={data.suppressionCenter}
                 dealMachineFreshness={data.dealMachineFreshness}
                 runningActionId={runningActionId}

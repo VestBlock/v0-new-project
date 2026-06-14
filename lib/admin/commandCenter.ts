@@ -9,6 +9,8 @@ import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
+import { buildDealMemorySnapshot, type DealMemorySnapshot } from '@/lib/admin/dealMemory'
+import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
 
 export type CommandStatus = 'green' | 'yellow' | 'red'
 export type AgentStatus = 'active' | 'attention' | 'idle'
@@ -366,6 +368,8 @@ export type CommandCenterData = {
   strategyLab: CommandCenterStrategyLab
   operatingLoops: OperatingLoopTelemetry
   operatingArchitecture: CommandCenterOperatingArchitecture
+  dealMemory: DealMemorySnapshot
+  sourceGovernor: SourceGovernorSnapshot
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
   inbox: {
@@ -424,6 +428,23 @@ async function safeRows<T = AnyRow>(
     }
   }
 
+  return rows
+}
+
+async function optionalRows<T = AnyRow>(
+  buildQuery: () => {
+    range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>
+  },
+  label: string,
+  issues: DataSourceIssue[],
+  options: { pageSize?: number; maxRows?: number } = {}
+): Promise<T[]> {
+  const optionalIssues: DataSourceIssue[] = []
+  const rows = await safeRows(buildQuery, label, optionalIssues, options)
+  const missingOptionalTable = optionalIssues.some((issue) =>
+    /does not exist|schema cache|could not find|relation .* does not exist/i.test(issue.message || '')
+  )
+  if (!missingOptionalTable) issues.push(...optionalIssues)
   return rows
 }
 
@@ -963,6 +984,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     dailyReports,
     researchChecklists,
     targetMarkets,
+    propertyAnalysisRuns,
   ] = await Promise.all([
     safeRows(
       () =>
@@ -1139,6 +1161,18 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       maxRows: 500,
     }),
     safeRows(() => admin.from('target_markets').select('*'), 'target_markets', issues, { maxRows: 250 }),
+    optionalRows(
+      () =>
+        admin
+          .from('property_analysis_runs')
+          .select(
+            'id,property_address,city,state,zip_code,analysis_source,estimate_value,arv,repair_budget,assignment_fee,mao,seller_ask,spread,end_buyer_profit,grade,deal_strength_score,deal_strength_label,primary_route_key,primary_route_label,primary_route_score,buyer_interest_label,buyer_interest_score,builder_label,next_action,created_at'
+          )
+          .order('created_at', { ascending: false }),
+      'property_analysis_runs',
+      issues,
+      { maxRows: 500 }
+    ),
   ])
 
   return {
@@ -1168,6 +1202,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     dailyReports,
     researchChecklists,
     targetMarkets,
+    propertyAnalysisRuns,
   }
 }
 
@@ -1177,6 +1212,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const t = await loadTables(admin, issues)
   const local = loadLocalSignals()
   const liveDataReachable = issues.length === 0
+  const dealMemory = buildDealMemorySnapshot(t.propertyAnalysisRuns)
+  const sourceGovernor = buildSourceGovernorSnapshot({
+    scrapeRuns: t.scrapeRuns,
+    dealMachineExports: local.dmExports,
+  })
 
   // ── Shared signals ─────────────────────────────────────────────────────────
   const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 100)
@@ -1244,7 +1284,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       withinDays(lead.updated_at || lead.last_contacted_at || lead.created_at, 7)
   ).length
   const propertyLeadCount = currentLeads.filter((lead) => String(lead.property_address || '').trim()).length
-  const analyzerOutcomeCount = 0
+  const analyzerOutcomeCount = dealMemory.totalAnalyses
 
   const followupsDue = currentLeads.filter((lead) => lower(lead.outreach_status) === 'followup_due').length
   const outboundControl: CommandCenterOutboundControl = {
@@ -2089,6 +2129,20 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       message: `All ${staleExports} DealMachine contact exports on disk are older than 7 days. Export fresh contacts before the next send.`,
     })
   }
+  if (sourceGovernor.paidSourcesBlocked > 0) {
+    alerts.push({
+      severity: 'info',
+      message: `${sourceGovernor.paidSourcesBlocked} paid source${sourceGovernor.paidSourcesBlocked === 1 ? '' : 's'} blocked by the source governor.`,
+      href: '/admin/lead-sources',
+    })
+  }
+  if (dealMemory.totalAnalyses === 0) {
+    alerts.push({
+      severity: 'info',
+      message: 'No saved command-center deal twins yet. Save the next analyzer run before sending an offer.',
+      href: '/admin/command-center',
+    })
+  }
   if (missingSuppressionDb) {
     alerts.push({
       severity: 'critical',
@@ -2728,6 +2782,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     strategyLab,
     operatingLoops,
     operatingArchitecture,
+    dealMemory,
+    sourceGovernor,
     suppressionCenter,
     dealMachineFreshness,
     inbox: {

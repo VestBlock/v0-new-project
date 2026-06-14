@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
+import { recordPropertyAnalysisRun } from '@/lib/admin/dealMemory'
 
 const compFieldSchema = z.union([z.string(), z.number()]).optional().transform((value) => {
   if (value === undefined || value === null) return ''
@@ -82,6 +83,9 @@ const analyzerSchema = z.object({
   existingLoanInterestRate: z.string().trim().max(40).optional().default(''),
   existingLoanRemainingTermYears: z.string().trim().max(40).optional().default(''),
   preferredSalePath: z.string().trim().max(120).optional().default('not_sure'),
+  persistToCommandCenter: z.boolean().optional().default(false),
+  analysisSource: z.enum(['command_center', 'public_analyzer', 'automation']).optional().default('public_analyzer'),
+  leadId: z.string().uuid().nullable().optional(),
 })
 
 function buildFullAddress(data: z.infer<typeof analyzerSchema>) {
@@ -90,6 +94,12 @@ function buildFullAddress(data: z.infer<typeof analyzerSchema>) {
     .filter(Boolean)
 
   return parts.join(', ').replace(/\s+,/g, ',').replace(/,\s*,/g, ', ')
+}
+
+function envBool(name: string, fallback = false) {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
 }
 
 export async function POST(request: NextRequest) {
@@ -187,12 +197,24 @@ export async function POST(request: NextRequest) {
       },
       estimate
     )
+    const shouldPersist = data.persistToCommandCenter || envBool('PROPERTY_ANALYZER_AUTO_MEMORY', false)
+    const memory = shouldPersist
+      ? await recordPropertyAnalysisRun({
+          address,
+          form: data,
+          estimate,
+          opportunity,
+          analysisSource: data.analysisSource || 'command_center',
+          leadId: data.leadId || null,
+        })
+      : null
 
     return NextResponse.json({
       success: true,
       address,
       estimate,
       opportunity,
+      memory,
     })
   } catch (error) {
     console.error('Property analyzer error:', error)

@@ -14,14 +14,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import {
   Menu,
   Loader2,
   User,
@@ -31,6 +23,7 @@ import {
   Briefcase,
   LayoutDashboard,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isClientAdmin } from '@/lib/auth/client-admin';
@@ -125,20 +118,27 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-6 w-6" />
-                  <span className="sr-only">Toggle Menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="overflow-y-auto">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Site navigation</SheetTitle>
-                  <SheetDescription>
-                    Browse VestBlock seller, buyer, lender, funding, and DealVault paths.
-                  </SheetDescription>
-                </SheetHeader>
+            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}>
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Toggle Menu</span>
+            </Button>
+            {isMobileMenuOpen ? (
+              <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label="Site navigation">
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  className="absolute inset-0 cursor-default bg-background/70 backdrop-blur-sm"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <div className="relative h-full w-80 max-w-[85vw] overflow-y-auto border-r border-border bg-background p-6 shadow-2xl">
+                  <button
+                    type="button"
+                    aria-label="Close navigation"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 <Link href="/" className="group mb-6 flex items-center">
                   <BrandLogo showTagline />
                 </Link>
@@ -196,8 +196,9 @@ export function Navigation() {
                     </>
                   )}
                 </div>
-              </SheetContent>
-            </Sheet>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Desktop Auth Section */}

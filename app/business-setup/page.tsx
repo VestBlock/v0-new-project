@@ -26,6 +26,10 @@ export const metadata: Metadata = {
       es: '/es/vestblock',
     },
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 const nextSteps = [

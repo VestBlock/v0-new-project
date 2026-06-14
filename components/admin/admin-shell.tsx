@@ -3,12 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronDown, Command, Menu, Radar, Search } from 'lucide-react'
+import { ChevronDown, Command, Menu, Radar, Search, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { adminNavGroups, adminNavItems } from '@/lib/admin/navigation'
 import { CommandPalette } from '@/components/admin/command-palette'
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -89,32 +88,48 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-[80] lg:hidden" role="dialog" aria-modal="true" aria-label="Admin navigation">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 cursor-default bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="relative h-full w-72 border-r border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/50">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Radar className="h-4 w-4 text-cyan-300" />
+                <p className="text-sm font-semibold text-white">VestBlock Admin</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close navigation"
+                onClick={() => setMobileOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+              <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Top command bar */}
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-slate-950/85 backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-[1700px] items-center gap-3 px-4 lg:px-6">
           {/* Mobile nav */}
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                aria-label="Open navigation"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 lg:hidden"
-              >
-                <Menu className="h-4 w-4" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 border-white/10 bg-slate-950 p-4">
-              <SheetTitle className="sr-only">Admin navigation</SheetTitle>
-              <div className="mb-4 flex items-center gap-2">
-                <Radar className="h-4 w-4 text-cyan-300" />
-                <p className="text-sm font-semibold text-white">VestBlock Admin</p>
-              </div>
-              <div className="max-h-[calc(100vh-7rem)] overflow-y-auto pr-1">
-                <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
-              </div>
-            </SheetContent>
-          </Sheet>
+          <button
+            type="button"
+            aria-label="Open navigation"
+            onClick={() => setMobileOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 lg:hidden"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
 
           <Link href="/admin/command-center" className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10">

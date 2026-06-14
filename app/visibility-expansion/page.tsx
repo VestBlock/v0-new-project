@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: '/visibility-expansion',
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
   keywords: [
     'search visibility service',
     'AEO SEO booster',

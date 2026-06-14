@@ -4,8 +4,9 @@ export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
-import { listSuppressions } from '@/lib/leads/repository'
+import { listSuppressions, upsertSuppression } from '@/lib/leads/repository'
 import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
+import { recordLeadOutcomeEvent } from '@/lib/admin/dealMemory'
 import { logEvent } from '@/lib/system/logEvent'
 
 function cleanLeadSearch(value: string) {
@@ -259,6 +260,26 @@ export async function PATCH(request: NextRequest) {
         bestOffer: bestOffer || null,
       },
     })
+
+    await recordLeadOutcomeEvent({
+      leadId: id,
+      status: status || null,
+      outreachStatus: outreachStatus || null,
+      lead: data,
+      actorUserId: user?.id || null,
+    }).catch(() => null)
+
+    if (status === 'do_not_contact' || outreachStatus === 'do_not_contact') {
+      await upsertSuppression({
+        email: data.email || null,
+        phone: data.phone || null,
+        website: data.website || null,
+        businessName: data.business_name || data.name || null,
+        city: data.city || null,
+        state: data.state || null,
+        reason: 'command_center_do_not_contact',
+      }).catch(() => null)
+    }
 
     return NextResponse.json({ success: true, lead: data })
   } catch (error) {

@@ -59,6 +59,11 @@ const OFFER_MODE = normalizeSlug(getArg("offer-mode") || getArg("strategy") || "
 const SOURCE = normalizeSlug(getArg("source") || (INPUT_CSV ? "csv" : "manual"))
 const LOWBALL_MODE = ["lowball", "cash-lowball", "as-is-cash", "on-market-lowball"].includes(OFFER_MODE)
 const SKIP_ANALYZER = args.includes("--skip-analyzer") || LOWBALL_MODE
+const PAID_SCRAPING_APPROVED = /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_PAID_SCRAPING || "").trim())
+const OUTSCRAPER_APPROVED =
+  PAID_SCRAPING_APPROVED &&
+  /^(1|true|yes|on)$/i.test(String(process.env.LEADS_ENABLE_OUTSCRAPER || "").trim()) &&
+  Boolean(String(process.env.OUTSCRAPER_API_KEY || "").trim())
 const HOMEHARVEST_PYTHON = getArg("homeharvest-python") || path.join(process.cwd(), ".venv-homeharvest", "bin", "python")
 const HOMEHARVEST_LIMIT_PER_MARKET = Number.parseInt(getArg("harvest-limit-per-market") || String(Math.max(LIMIT * 3, 150)), 10)
 const PRICE_MAX = Number.parseInt(getArg("price-max") || "450000", 10)
@@ -250,6 +255,15 @@ function listingDistressProfile(listing) {
 // ── Harvest: Outscraper Zillow ────────────────────────────────────────────────
 
 async function harvestOutscraper(market) {
+  if (!OUTSCRAPER_APPROVED) {
+    return {
+      ok: false,
+      reason:
+        "Outscraper is quarantined. Use --source=homeharvest, or set ALLOW_PAID_SCRAPING=true plus LEADS_ENABLE_OUTSCRAPER=true only after paid scraping is approved.",
+      listings: [],
+    }
+  }
+
   const apiKey = env("OUTSCRAPER_API_KEY")
   if (!apiKey) {
     return { ok: false, reason: "OUTSCRAPER_API_KEY missing — use --input-csv or add the key to .env.local", listings: [] }
@@ -668,7 +682,7 @@ async function main() {
     console.log("\nNo listings harvested. Options:")
     console.log("  - Run with --source=homeharvest for fresh Realtor.com-style on-market listings")
     console.log("  - Export listings manually and rerun with --input-csv=path/to/file.csv")
-    console.log("  - Or explicitly pass --source=outscraper when we are ready to spend Outscraper credits again")
+    console.log("  - Or explicitly pass --source=outscraper only after ALLOW_PAID_SCRAPING=true and LEADS_ENABLE_OUTSCRAPER=true are approved")
     console.log("    (columns: address, city, state, zip, price, days_on_market, agent_name, agent_email, agent_phone)")
     return
   }

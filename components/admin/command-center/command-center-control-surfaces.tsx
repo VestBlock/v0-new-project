@@ -54,6 +54,15 @@ function kpiTone(status?: AgentKpi["status"]) {
   return "text-white"
 }
 
+function money(value: number | null | undefined) {
+  if (!Number.isFinite(value)) return "--"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value))
+}
+
 function itemTone(priority: CommandCenterStreamItem["priority"]) {
   if (priority === "critical") return "border-rose-400/20 bg-rose-400/[0.06]"
   if (priority === "warning") return "border-amber-300/20 bg-amber-300/[0.05]"
@@ -154,6 +163,8 @@ export function CommandCenterStrategyOpsPanel({
   strategyLab,
   operatingLoops,
   operatingArchitecture,
+  dealMemory,
+  sourceGovernor,
   suppressionCenter,
   dealMachineFreshness,
   runningActionId,
@@ -163,6 +174,8 @@ export function CommandCenterStrategyOpsPanel({
   strategyLab: CommandCenterStrategyLab
   operatingLoops: OperatingLoops
   operatingArchitecture: OperatingArchitecture
+  dealMemory: CommandCenterData["dealMemory"]
+  sourceGovernor: CommandCenterData["sourceGovernor"]
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
   runningActionId: string | null
@@ -352,6 +365,94 @@ export function CommandCenterStrategyOpsPanel({
                   {campaign.latestArtifact ? (
                     <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[0.62rem] text-slate-500">
                       {timeAgo(campaign.lastEventAt) || "saved"}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
+          <div className="flex items-center gap-2">
+            <Home className="h-4 w-4 text-cyan-200" />
+            <h3 className="text-sm font-semibold text-white">Deal twin memory</h3>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            {dealMemory.totalAnalyses
+              ? `${dealMemory.totalAnalyses} saved analyzer outcome${dealMemory.totalAnalyses === 1 ? "" : "s"} · avg strength ${dealMemory.averageDealStrength ?? "--"}/100.`
+              : "No saved property analyses yet. The next command-center analyzer run will create the first deal twin."}
+          </p>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: "Saved", value: dealMemory.totalAnalyses, tone: dealMemory.totalAnalyses ? "green" : "yellow" },
+              { label: "Risky", value: dealMemory.riskyCount, tone: dealMemory.riskyCount ? "yellow" : "green" },
+              { label: "Good", value: dealMemory.goodCount, tone: dealMemory.goodCount ? "green" : undefined },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <p className="vb-mono text-[0.55rem] uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
+                <p className={cn("mt-1 text-lg font-semibold tabular-nums", kpiTone(metric.tone as AgentKpi["status"]))}>
+                  {metric.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {dealMemory.recentAnalyses.length ? (
+              dealMemory.recentAnalyses.slice(0, 3).map((analysis) => (
+                <div key={analysis.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-100">{analysis.propertyAddress}</p>
+                      <p className="mt-1 text-[0.65rem] text-slate-500">
+                        {analysis.grade || "Needs details"} · {analysis.dealStrengthLabel || "ungraded"} · {analysis.primaryRouteLabel || "route pending"}
+                      </p>
+                    </div>
+                    <span className={cn("vb-mono shrink-0 text-[0.62rem]", Number(analysis.spread || 0) >= 0 ? "text-emerald-300" : "text-rose-300")}>
+                      {money(analysis.spread)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs leading-5 text-slate-500">
+                Run Property Command to start storing ARV, MAO, spread, route fit, and next moves.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-cyan-200" />
+            <h3 className="text-sm font-semibold text-white">Source cost governor</h3>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{sourceGovernor.summary}</p>
+
+          <div className="mt-3 space-y-2">
+            {sourceGovernor.lanes.slice(0, 6).map((lane) => (
+              <div key={lane.provider} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-100">{lane.label}</p>
+                    <p className="mt-1 truncate text-[0.65rem] text-slate-500">{lane.reason}</p>
+                  </div>
+                  <span className={cn("vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em]", lane.status === "allowed" ? "text-emerald-300" : lane.status === "blocked" ? "text-rose-300" : "text-amber-300")}>
+                    {lane.status}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[0.6rem] text-slate-500">
+                    {lane.costTier}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[0.6rem] text-slate-500">
+                    {lane.usedToday}/{lane.dailyLimit || "--"} today
+                  </span>
+                  {lane.nextAllowedAt ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[0.6rem] text-slate-500">
+                      next {timeAgo(lane.nextAllowedAt) ? `in ${timeAgo(lane.nextAllowedAt)}` : "soon"}
                     </span>
                   ) : null}
                 </div>

@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: '/tools/grants',
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
   openGraph: {
     title: 'VestBlock Small Business Grants',
     description:

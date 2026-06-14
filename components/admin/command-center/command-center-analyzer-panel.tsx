@@ -161,6 +161,14 @@ type CommandCenterAnalyzerResult = {
     riskFlags: string[]
     nextSteps: string[]
   }
+  memory?: {
+    id: string
+    recorded: boolean
+    localWritten: boolean
+    dbWritten: boolean
+    eventWritten: boolean
+    warning?: string
+  } | null
 }
 
 const propertyTypes = [
@@ -197,8 +205,24 @@ const exitStrategies = [
   { value: "seller_finance", label: "Seller finance hold" },
 ]
 
-function createInitialForm(): CommandCenterAnalyzerForm {
+function applyPropertyDetailToForm(
+  form: CommandCenterAnalyzerForm,
+  detail?: PropertyCommandEventDetail | null
+): CommandCenterAnalyzerForm {
+  if (!detail?.propertyAddress?.trim()) return form
+
   return {
+    ...form,
+    ...Object.fromEntries(
+      Object.entries(detail)
+        .filter(([, value]) => typeof value === "string" && value.trim().length > 0)
+        .map(([field, value]) => [field, String(value).trim()])
+    ),
+  }
+}
+
+function createInitialForm(seed?: PropertyCommandEventDetail | null): CommandCenterAnalyzerForm {
+  const form = {
     propertyAddress: "",
     city: "",
     state: "",
@@ -219,6 +243,8 @@ function createInitialForm(): CommandCenterAnalyzerForm {
     preferredSalePath: "not_sure",
     exitStrategy: "not_sure",
   }
+
+  return applyPropertyDetailToForm(form, seed)
 }
 
 function money(value: number | null | undefined) {
@@ -244,7 +270,7 @@ function dealGradeTone(value: CommandCenterAnalyzerResult["opportunity"]["dealMa
 }
 
 export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: PropertyCommandSeed | null }) {
-  const [form, setForm] = useState<CommandCenterAnalyzerForm>(() => createInitialForm())
+  const [form, setForm] = useState<CommandCenterAnalyzerForm>(() => createInitialForm(commandSeed))
   const [result, setResult] = useState<CommandCenterAnalyzerResult | null>(null)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -253,22 +279,10 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
   const applyPropertyCommand = useCallback((detail: PropertyCommandEventDetail) => {
     if (!detail.propertyAddress?.trim()) return
 
-    setForm((current) => ({
-      ...current,
-      ...Object.fromEntries(
-        Object.entries(detail)
-          .filter(([, value]) => typeof value === "string" && value.trim().length > 0)
-          .map(([field, value]) => [field, String(value).trim()])
-      ),
-    }))
+    setForm((current) => applyPropertyDetailToForm(current, detail))
     setResult(null)
     setError("")
   }, [])
-
-  useEffect(() => {
-    if (!commandSeed) return
-    applyPropertyCommand(commandSeed)
-  }, [applyPropertyCommand, commandSeed])
 
   useEffect(() => {
     const handlePropertyCommand = (event: Event) => {
@@ -311,7 +325,11 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
       const response = await fetch("/api/property-analyzer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          persistToCommandCenter: true,
+          analysisSource: "command_center",
+        }),
       })
       const payload = (await response.json()) as CommandCenterAnalyzerResult & { error?: string }
       if (!response.ok) throw new Error(payload.error || "Unable to analyze this property.")
@@ -685,6 +703,11 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                   <Badge className={dealGradeTone(result.opportunity.dealMath.grade)}>
                     {result.opportunity.dealMath.grade ?? "Needs details"}
                   </Badge>
+                  {result.memory?.recorded ? (
+                    <Badge className="border border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                      Saved twin
+                    </Badge>
+                  ) : null}
                 </div>
               </div>
 
@@ -855,6 +878,13 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                       <Download className="h-4 w-4 text-cyan-200" />
                       <p className="text-xs font-semibold text-white">Packets & next moves</p>
                     </div>
+                    {result.memory ? (
+                      <div className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-2 text-[0.7rem] leading-5 text-emerald-100">
+                        {result.memory.recorded
+                          ? `Deal twin saved to ${result.memory.dbWritten ? "database memory" : "local memory"}.`
+                          : "Analysis ran, but memory persistence needs review."}
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(["builder", "lender", "buyer", "assignment_contract"] as const).map((type) => (
                         <Button

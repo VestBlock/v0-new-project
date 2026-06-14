@@ -19,6 +19,13 @@ const nextConfig = {
     'tesseract.js',
     '@react-pdf/renderer',
   ],
+  webpack(config, { dev }) {
+    if (dev) {
+      config.devtool = false;
+    }
+
+    return config;
+  },
   async headers() {
     return [
       {

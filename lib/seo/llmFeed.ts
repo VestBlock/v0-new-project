@@ -50,7 +50,7 @@ export function buildLlmsTxt() {
 
 > ${vestBlockDefaultDescription}
 
-VestBlock helps businesses keep better deal records, capture more qualified leads, improve search visibility, and prepare for funding or business credit with clearer next steps. This file gives AI crawlers and answer engines a concise map of the public VestBlock services.
+VestBlock helps real estate sellers, buyers, lenders, builders, and operators route property opportunities with clearer analysis, partner fit, DealVault records, and capital context. This file gives AI crawlers and answer engines a concise map of the current public VestBlock real-estate paths.
 
 ## Primary URLs
 
@@ -59,16 +59,13 @@ VestBlock helps businesses keep better deal records, capture more qualified lead
 - DealVault demo: ${absoluteUrl('/dealvault/demo')}
 - DealVault sample proof record: ${absoluteUrl('/dealvault/demo-record')}
 - Smart contract records: ${absoluteUrl('/smart-contracts')}
-- Search visibility service: ${absoluteUrl('/visibility-expansion')}
-- VestBlock visibility case study: ${absoluteUrl('/visibility-expansion/case-study')}
-- Visibility proof hub: ${absoluteUrl('/visibility-expansion/proof-hub')}
-- AI receptionist service: ${absoluteUrl('/ai-assistant')}
 - Service directory: ${absoluteUrl('/services')}
 - Pricing: ${absoluteUrl('/pricing')}
-- AI credit analysis service: ${absoluteUrl('/services/ai-credit-analysis')}
-- Business funding eligibility: ${absoluteUrl('/funding')}
-- Business funding prep strategy: ${absoluteUrl('/funding/business-funding-strategy')}
-- Business setup for funding and grants: ${absoluteUrl('/business-setup')}
+- Seller property intake: ${absoluteUrl('/sell')}
+- Property analyzer: ${absoluteUrl('/property-analyzer')}
+- Buyer network: ${absoluteUrl('/buyers')}
+- Lender network: ${absoluteUrl('/lenders')}
+- Real estate funding: ${absoluteUrl('/real-estate-funding')}
 - Funding and business credit prep reviews: ${absoluteUrl('/services/financial-growth')}
 - Spanish business funding: ${absoluteUrl('/es/vestblock')}
 - Learning center: ${absoluteUrl('/learn')}
