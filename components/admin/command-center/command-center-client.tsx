@@ -702,6 +702,29 @@ export function CommandCenterClient({
             }
             break
           }
+          case "command_center_autopilot": {
+            response = await postJson("/api/admin/command-center/autopilot", {
+              dryRun: action.dryRun !== false,
+              dispatch: Boolean(action.dispatch),
+              send: Boolean(action.send),
+            })
+            const payload = await response.clone().json().catch(() => ({}))
+            if (response.ok) {
+              const mode = payload?.snapshot?.mode || "plan"
+              const jobsSeeded = Number(payload?.persist?.jobsSeeded || 0)
+              const strategyRunsWritten = Number(payload?.persist?.strategyRunsWritten || 0)
+              const replyMemoriesWritten = Number(payload?.persist?.replyMemoriesWritten || 0)
+              successDescription = action.dryRun !== false
+                ? `Autopilot seeded ${jobsSeeded} job${jobsSeeded === 1 ? "" : "s"} and built a ${mode} plan.`
+                : `Autopilot dispatched ${strategyRunsWritten} strategy run${strategyRunsWritten === 1 ? "" : "s"}.`
+              partialWarning = [
+                replyMemoriesWritten ? `${replyMemoriesWritten} reply memor${replyMemoriesWritten === 1 ? "y" : "ies"} synced.` : "",
+                payload?.persist?.warning || "",
+                payload?.sendAttempt?.message || "",
+              ].filter(Boolean).join(" ")
+            }
+            break
+          }
           case "buyer_send_batch": {
             const results = await Promise.allSettled(
               action.messages.map((message) =>
@@ -2020,6 +2043,7 @@ export function CommandCenterClient({
         outcomeLearning={data.outcomeLearning}
         outboundGovernance={data.outboundGovernance}
         buyBoxGraph={data.buyBoxGraph}
+        autopilot={data.autopilot}
         runningActionId={runningActionId}
         onAction={(action) => void runInlineAction(action)}
       />
@@ -2218,6 +2242,7 @@ export function CommandCenterClient({
                 outcomeLearning={data.outcomeLearning}
                 outboundGovernance={data.outboundGovernance}
                 buyBoxGraph={data.buyBoxGraph}
+                autopilot={data.autopilot}
                 runningActionId={runningActionId}
                 onAction={(action) => void runInlineAction(action)}
                 sectionId="strategy-lab-command-dock"

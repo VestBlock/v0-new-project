@@ -11,6 +11,7 @@ import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/a
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
 import { buildDealMemorySnapshot, type DealMemorySnapshot } from '@/lib/admin/dealMemory'
 import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
+import { buildAutopilotSnapshot, type AutopilotSnapshot } from '@/lib/admin/autonomousOperatingCore'
 
 export type CommandStatus = 'green' | 'yellow' | 'red'
 export type AgentStatus = 'active' | 'attention' | 'idle'
@@ -126,6 +127,15 @@ export type CommandCenterInlineAction =
   | {
       id: string
       type: 'boss_daily_loop'
+      label: string
+      dryRun?: boolean
+      dispatch?: boolean
+      send?: boolean
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'command_center_autopilot'
       label: string
       dryRun?: boolean
       dispatch?: boolean
@@ -440,6 +450,7 @@ export type CommandCenterData = {
   outcomeLearning: CommandCenterOutcomeLearning
   outboundGovernance: CommandCenterOutboundGovernance
   buyBoxGraph: CommandCenterBuyBoxGraph
+  autopilot: AutopilotSnapshot
   inbox: {
     summary: AgentKpi[]
     sections: CommandCenterInboxSection[]
@@ -779,6 +790,14 @@ function bossDailyLoopAction(
   options: { dryRun?: boolean; dispatch?: boolean; send?: boolean; tone?: CommandActionTone } = {}
 ): CommandCenterInlineAction {
   return { id, type: 'boss_daily_loop', label, ...options }
+}
+
+function commandCenterAutopilotAction(
+  id: string,
+  label: string,
+  options: { dryRun?: boolean; dispatch?: boolean; send?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'command_center_autopilot', label, ...options }
 }
 
 function buyerSendBatchAction(
@@ -1366,6 +1385,10 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     targetMarkets,
     propertyAnalysisRuns,
     commandCenterEvents,
+    commandCenterJobs,
+    commandCenterStrategyRuns,
+    commandCenterReplyMemory,
+    commandCenterSuppressionDecisions,
   ] = await Promise.all([
     safeRows(
       () =>
@@ -1564,6 +1587,46 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       issues,
       { maxRows: 500 }
     ),
+    optionalRows(
+      () =>
+        admin
+          .from('command_center_jobs')
+          .select('id,job_key,job_type,title,status,cadence,priority,strategy_key,source_provider,market,next_run_at,last_run_at,last_status,last_error,config_json,metrics_json')
+          .order('priority', { ascending: false }),
+      'command_center_jobs',
+      issues,
+      { maxRows: 100 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('command_center_strategy_runs')
+          .select('id,strategy_key,strategy_name,status,source_provider,market,target_email_count,target_sms_count,lead_count,draft_count,approved_count,sent_count,sms_review_count,suppression_blocked_count,cost_guardrail_status,artifact_path,created_at,completed_at,metadata_json')
+          .order('created_at', { ascending: false }),
+      'command_center_strategy_runs',
+      issues,
+      { maxRows: 500 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('command_center_reply_memory')
+          .select('id,strategy_key,mailbox,from_email,subject,property_address,market,classification,received_at,next_step,reply_summary')
+          .order('received_at', { ascending: false }),
+      'command_center_reply_memory',
+      issues,
+      { maxRows: 500 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('command_center_suppression_decisions')
+          .select('id,strategy_key,channel,matched_value,decision,reason,created_at,metadata_json')
+          .order('created_at', { ascending: false }),
+      'command_center_suppression_decisions',
+      issues,
+      { maxRows: 500 }
+    ),
   ])
 
   return {
@@ -1595,6 +1658,10 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     targetMarkets,
     propertyAnalysisRuns,
     commandCenterEvents,
+    commandCenterJobs,
+    commandCenterStrategyRuns,
+    commandCenterReplyMemory,
+    commandCenterSuppressionDecisions,
   }
 }
 
@@ -1932,6 +1999,15 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       },
     ],
     actions: [
+      commandCenterAutopilotAction('autopilot-seed-preview', 'Seed autopilot', {
+        dryRun: true,
+        tone: 'primary',
+      }),
+      commandCenterAutopilotAction('autopilot-dispatch-plan', 'Dispatch autopilot', {
+        dryRun: false,
+        dispatch: true,
+        tone: 'success',
+      }),
       bossDailyLoopAction('strategy-lab-run-preview', 'Run loop preview', {
         dryRun: true,
         tone: 'primary',
@@ -2073,6 +2149,27 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     }))
     .sort((a, b) => b.heat - a.heat || b.leads - a.leads)
     .slice(0, 8)
+
+  const autopilot = buildAutopilotSnapshot({
+    remainingToday,
+    sentToday: outreach24h,
+    emailReady: sendReady,
+    needsReview,
+    followupsDue,
+    replySignals7d,
+    partnerBuyBoxesConfirmed,
+    sellerLeads: currentLeads.length,
+    activeSuppressionCount,
+    missingSuppressionDb,
+    sourceLanes: sourceGovernor.lanes,
+    marketHeat,
+    nextRefreshMarkets: dealMachineFreshness.nextRefreshMarkets,
+    campaigns: operatingLoops.campaigns,
+    jobs: t.commandCenterJobs,
+    strategyRuns: t.commandCenterStrategyRuns,
+    replyMemory: t.commandCenterReplyMemory,
+    suppressionDecisions: t.commandCenterSuppressionDecisions,
+  })
 
   // ── Inbox / outreach command surfaces ─────────────────────────────────────
   const hotLeadReplies: CommandCenterStreamItem[] = currentLeads
@@ -3208,6 +3305,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     outcomeLearning,
     outboundGovernance,
     buyBoxGraph,
+    autopilot,
     inbox: {
       summary: inboxSummary,
       sections: inboxSections,

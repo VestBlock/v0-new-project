@@ -170,6 +170,7 @@ export function CommandCenterStrategyOpsPanel({
   outcomeLearning,
   outboundGovernance,
   buyBoxGraph,
+  autopilot,
   runningActionId,
   onAction,
   sectionId = "strategy-lab-command",
@@ -184,6 +185,7 @@ export function CommandCenterStrategyOpsPanel({
   outcomeLearning: CommandCenterData["outcomeLearning"]
   outboundGovernance: CommandCenterData["outboundGovernance"]
   buyBoxGraph: CommandCenterData["buyBoxGraph"]
+  autopilot: CommandCenterData["autopilot"]
   runningActionId: string | null
   onAction: (action: CommandCenterInlineAction) => void
   sectionId?: string
@@ -255,6 +257,52 @@ export function CommandCenterStrategyOpsPanel({
             {strategyLab.activeDirectiveCount > 0
               ? `${strategyLab.activeDirectiveCount} lab directive${strategyLab.activeDirectiveCount === 1 ? "" : "s"} open${strategyLab.lastDirectiveAt ? ` · ${timeAgo(strategyLab.lastDirectiveAt)} ago` : ""}.`
               : "No open lab directives. Dispatch from the strategy engine when you want a fresh operating batch."}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-cyan-300/15 bg-slate-950/60 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="vb-mono text-[0.58rem] uppercase tracking-[0.14em] text-cyan-200/80">Durable autopilot</p>
+              <h3 className="mt-1 text-base font-semibold text-white">{autopilot.mode.replace("_", " ")}</h3>
+            </div>
+            <span className={cn("rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.14em]", kpiTone(autopilot.status))}>
+              {autopilot.status}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{autopilot.summary}</p>
+          <p className="mt-2 text-xs leading-5 text-cyan-100/80">{autopilot.nextMove}</p>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              { label: "Jobs", value: autopilot.durable.activeJobs || autopilot.durable.jobsConfigured, tone: autopilot.enabled ? "green" : "yellow" },
+              { label: "Due", value: autopilot.durable.jobsDue, tone: autopilot.durable.jobsDue ? "yellow" : "green" },
+              { label: "Runs 7d", value: autopilot.durable.strategyRuns7d, tone: autopilot.durable.strategyRuns7d ? "green" : "yellow" },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <p className="vb-mono text-[0.55rem] uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
+                <p className={cn("mt-1 text-lg font-semibold tabular-nums", kpiTone(metric.tone as AgentKpi["status"]))}>{metric.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {autopilot.batches.slice(0, 3).map((batch) => (
+              <div key={batch.strategyKey} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-100">{batch.strategyName}</p>
+                    <p className="mt-1 truncate text-[0.65rem] text-slate-500">
+                      {batch.markets.slice(0, 2).join(" + ")} · email {batch.targetEmailCount} · SMS review {batch.targetSmsReviewCount}
+                    </p>
+                  </div>
+                  <span className={cn("vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em]", kpiTone(batch.status))}>
+                    {batch.status}
+                  </span>
+                </div>
+                {batch.blockedReason ? <p className="mt-1 text-[0.62rem] leading-4 text-amber-200/80">{batch.blockedReason}</p> : null}
+              </div>
+            ))}
           </div>
         </div>
 

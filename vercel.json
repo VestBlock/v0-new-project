@@ -1,4 +1,9 @@
 {
   "installCommand": "pnpm install --frozen-lockfile",
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/cron/command-center-autopilot",
+      "schedule": "0 */4 * * *"
+    }
+  ]
 }
