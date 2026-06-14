@@ -278,6 +278,71 @@ export type CommandCenterDealMachineFreshness = {
   summary: string
 }
 
+export type CommandCenterOutcomeLearning = {
+  status: CommandStatus
+  totalEvents: number
+  sellerReplies: number
+  interested: number
+  qualified: number
+  doNotContact: number
+  followups: number
+  lastEventAt: string | null
+  summary: string
+  nextMove: string
+  lessons: {
+    label: string
+    detail: string
+    status: CommandStatus
+  }[]
+  recent: {
+    title: string
+    summary: string
+    status: string
+    source: string
+    occurredAt: string | null
+  }[]
+}
+
+export type CommandCenterOutboundGovernance = {
+  status: CommandStatus
+  sender: string
+  dailyLimit: number
+  sent24h: number
+  remainingToday: number
+  readyToSend: number
+  needsReview: number
+  replySignals7d: number
+  bounceRiskLeads: number
+  suppressionCount: number
+  paidSourcesBlocked: number
+  nextGate: string
+  checks: AgentKpi[]
+}
+
+export type CommandCenterBuyBoxGraph = {
+  status: CommandStatus
+  summary: string
+  nextMove: string
+  lanes: {
+    key: 'buyers' | 'lenders' | 'builders' | 'creative'
+    label: string
+    count: number
+    detail: string
+    status: CommandStatus
+  }[]
+  recentProperties: {
+    id: string
+    propertyAddress: string
+    market: string
+    grade: string
+    route: string
+    suggestedLane: string
+    routeReason: string
+    createdAt: string | null
+  }[]
+  actions: CommandCenterInlineAction[]
+}
+
 export type AgentPanelData = {
   key: AgentKey
   name: string
@@ -372,6 +437,9 @@ export type CommandCenterData = {
   sourceGovernor: SourceGovernorSnapshot
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
+  outcomeLearning: CommandCenterOutcomeLearning
+  outboundGovernance: CommandCenterOutboundGovernance
+  buyBoxGraph: CommandCenterBuyBoxGraph
   inbox: {
     summary: AgentKpi[]
     sections: CommandCenterInboxSection[]
@@ -956,6 +1024,318 @@ function loadLocalSignals() {
   return { dmExports, onMarketSweep, taxCodeStack, distressStackRows, suppressionRecords }
 }
 
+function eventMetadata(event: AnyRow): Record<string, any> {
+  const metadata = event.metadata_json || event.metadata || {}
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
+}
+
+function outcomeStatus(event: AnyRow) {
+  const metadata = eventMetadata(event)
+  return lower(metadata.status || metadata.outreachStatus || event.status || event.title || event.summary)
+}
+
+export function buildOutcomeLearningSnapshot(input: {
+  commandCenterEvents?: AnyRow[]
+  replySignals7d: number
+}): CommandCenterOutcomeLearning {
+  const outcomeEvents = (input.commandCenterEvents || [])
+    .filter((event) => {
+      const type = lower(event.event_type || event.eventType)
+      return (
+        type.includes('seller_reply') ||
+        type.includes('lead_outcome') ||
+        type.includes('outreach_reply') ||
+        type === 'seller_reply_outcome'
+      )
+    })
+    .sort((a, b) => Date.parse(b.occurred_at || b.occurredAt || b.created_at || '') - Date.parse(a.occurred_at || a.occurredAt || a.created_at || ''))
+
+  const interested = outcomeEvents.filter((event) => outcomeStatus(event).includes('interested')).length
+  const qualified = outcomeEvents.filter((event) => outcomeStatus(event).includes('qualified')).length
+  const doNotContact = outcomeEvents.filter((event) => /do_not_contact|unsubscribe|opt.?out|suppression/.test(outcomeStatus(event))).length
+  const followups = outcomeEvents.filter((event) => /followup|follow_up|follow-up/.test(outcomeStatus(event))).length
+  const sellerReplies = outcomeEvents.filter((event) => /replied|reply|interested|qualified/.test(outcomeStatus(event))).length
+  const lastEventAt = outcomeEvents[0]?.occurred_at || outcomeEvents[0]?.occurredAt || outcomeEvents[0]?.created_at || null
+
+  const lessons: CommandCenterOutcomeLearning['lessons'] = [
+    qualified > 0
+      ? {
+          label: 'Conversion before volume',
+          detail: `${qualified} qualified seller signal${qualified === 1 ? '' : 's'} should be advanced before opening another batch.`,
+          status: 'green',
+        }
+      : {
+          label: 'Qualification gap',
+          detail: 'No qualified seller outcomes are recorded yet. Keep asking for photos, access, asking price, and motivation in replies.',
+          status: input.replySignals7d > 0 ? 'yellow' : 'red',
+        },
+    interested > 0
+      ? {
+          label: 'Interest pattern',
+          detail: `${interested} interested seller outcome${interested === 1 ? '' : 's'} can teach the next segment and follow-up copy.`,
+          status: 'green',
+        }
+      : {
+          label: 'Interest pattern',
+          detail: 'The system needs more interested replies before it can reliably tell which seller angle is pulling.',
+          status: 'yellow',
+        },
+    doNotContact > 0
+      ? {
+          label: 'Suppression learning',
+          detail: `${doNotContact} opt-out or suppression outcome${doNotContact === 1 ? '' : 's'} should tighten future source and copy rules.`,
+          status: 'yellow',
+        }
+      : {
+          label: 'Suppression learning',
+          detail: 'No opt-out outcomes are recorded in the learning lane.',
+          status: 'green',
+        },
+  ]
+
+  const status: CommandStatus =
+    qualified > 0 || interested > 0 ? 'green' : outcomeEvents.length > 0 || input.replySignals7d > 0 ? 'yellow' : 'red'
+  const summary = outcomeEvents.length
+    ? `${outcomeEvents.length} seller outcome event${outcomeEvents.length === 1 ? '' : 's'} captured for strategy learning.`
+    : input.replySignals7d > 0
+      ? `${input.replySignals7d} lead repl${input.replySignals7d === 1 ? 'y' : 'ies'} visible, but no seller outcome events were captured yet.`
+      : 'No seller outcome learning events are visible yet.'
+  const nextMove =
+    qualified > 0
+      ? 'Convert the qualified replies first, then let the strategy lab compare what produced them.'
+      : interested > 0
+        ? 'Move interested replies into analysis and collect condition/photos before the next large send.'
+        : input.replySignals7d > 0
+          ? 'Use command-center reply actions so every reply becomes a learning event.'
+          : 'Run smaller strategy batches until replies start creating reusable outcome data.'
+
+  return {
+    status,
+    totalEvents: outcomeEvents.length,
+    sellerReplies,
+    interested,
+    qualified,
+    doNotContact,
+    followups,
+    lastEventAt,
+    summary,
+    nextMove,
+    lessons,
+    recent: outcomeEvents.slice(0, 4).map((event) => ({
+      title: String(event.title || 'Seller outcome'),
+      summary: String(event.summary || eventMetadata(event).propertyAddress || 'Outcome recorded'),
+      status: outcomeStatus(event) || 'logged',
+      source: String(event.source || 'command_center'),
+      occurredAt: event.occurred_at || event.occurredAt || event.created_at || null,
+    })),
+  }
+}
+
+export function buildOutboundGovernanceSnapshot(input: {
+  sender: string
+  dailyLimit: number
+  sent24h: number
+  remainingToday: number
+  readyToSend: number
+  needsReview: number
+  replySignals7d: number
+  bounceRiskLeads: number
+  suppressionCount: number
+  paidSourcesBlocked: number
+  mailingAddressConfigured: boolean
+  autoSendEnabled: boolean
+  missingSuppressionDb: boolean
+}): CommandCenterOutboundGovernance {
+  const usingAcquisitions = lower(input.sender).includes('acquisitions@vestblock.io')
+  const highBounceRisk = input.bounceRiskLeads >= 10
+  const status: CommandStatus =
+    input.missingSuppressionDb || !input.mailingAddressConfigured
+      ? 'red'
+      : !usingAcquisitions || highBounceRisk || input.needsReview > input.readyToSend
+        ? 'yellow'
+        : 'green'
+  const nextGate =
+    input.missingSuppressionDb
+      ? 'Restore suppression visibility before live sends.'
+      : !input.mailingAddressConfigured
+        ? 'Configure the physical mailing address before scaled email.'
+        : !usingAcquisitions
+          ? 'Move seller sends onto acquisitions@vestblock.io before volume.'
+          : input.replySignals7d > 0
+            ? 'Work replies before increasing batch size.'
+            : input.remainingToday <= 0
+              ? 'Daily email cap is reached.'
+              : input.readyToSend <= 0
+                ? 'Generate or approve more seller drafts.'
+                : `Safe to push up to ${Math.min(input.remainingToday, input.readyToSend)} seller email${Math.min(input.remainingToday, input.readyToSend) === 1 ? '' : 's'} from the ready queue.`
+
+  return {
+    status,
+    sender: input.sender,
+    dailyLimit: input.dailyLimit,
+    sent24h: input.sent24h,
+    remainingToday: input.remainingToday,
+    readyToSend: input.readyToSend,
+    needsReview: input.needsReview,
+    replySignals7d: input.replySignals7d,
+    bounceRiskLeads: input.bounceRiskLeads,
+    suppressionCount: input.suppressionCount,
+    paidSourcesBlocked: input.paidSourcesBlocked,
+    nextGate,
+    checks: [
+      {
+        label: 'Sender',
+        value: usingAcquisitions ? 'acquisitions' : 'review',
+        helper: input.sender,
+        status: usingAcquisitions ? 'green' : 'yellow',
+      },
+      {
+        label: 'Compliance',
+        value: input.mailingAddressConfigured ? 'ready' : 'blocked',
+        helper: input.autoSendEnabled ? 'auto-send enabled' : 'manual approval',
+        status: input.mailingAddressConfigured ? 'green' : 'red',
+      },
+      {
+        label: 'Suppressions',
+        value: input.suppressionCount,
+        helper: input.missingSuppressionDb ? 'database unavailable' : 'visible',
+        status: input.missingSuppressionDb ? 'red' : 'green',
+      },
+      {
+        label: 'Bounce risk',
+        value: input.bounceRiskLeads,
+        helper: highBounceRisk ? 'clean before scaling' : 'within guardrail',
+        status: highBounceRisk ? 'yellow' : 'green',
+      },
+      {
+        label: 'Paid sources',
+        value: input.paidSourcesBlocked,
+        helper: input.paidSourcesBlocked ? 'blocked until revenue' : 'no paid source pressure',
+        status: 'green',
+      },
+    ],
+  }
+}
+
+function buyBoxSuggestedLane(row: AnyRow) {
+  const route = lower(row.primary_route_label || row.primaryRouteLabel || row.builder_label || '')
+  const repairBudget = Number(row.repair_budget || row.repairBudget || 0)
+  const grade = lower(row.grade)
+  const profit = Number(row.end_buyer_profit || row.endBuyerProfit || 0)
+
+  if (/seller.?finance|subject.?to|wrap|lease.?option|creative/.test(route)) {
+    return { lane: 'creative', label: 'Creative route', reason: 'Route language points to seller finance, subject-to, wrap, or lease-option terms.' }
+  }
+  if (/builder|developer|infill|land|heavy|rehab/.test(route) || repairBudget >= 25000) {
+    return { lane: 'builders', label: 'Builder / developer', reason: 'Repair, infill, land, or builder signal is strongest.' }
+  }
+  if (/dscr|private|lender|capital|funding/.test(route)) {
+    return { lane: 'lenders', label: 'Capital route', reason: 'Route fit points to financing or capital placement.' }
+  }
+  if (grade === 'good' || profit > 0) {
+    return { lane: 'buyers', label: 'Buyer dispo', reason: 'Positive buyer-profit or GOOD math can move into buyer matching.' }
+  }
+  return { lane: 'buyers', label: 'Buyer review', reason: 'Default to buyer review until analysis or partner criteria adds a stronger path.' }
+}
+
+export function buildBuyBoxGraphSnapshot(input: {
+  propertyAnalysisRuns?: AnyRow[]
+  buyers?: AnyRow[]
+  lenders?: AnyRow[]
+  investorPipelineRows?: { investor: AnyRow; pipeline: AnyRow }[]
+  pendingBuyerMatches: number
+  pendingLenderMatches: number
+}): CommandCenterBuyBoxGraph {
+  const properties = (input.propertyAnalysisRuns || [])
+    .slice()
+    .sort((a, b) => Date.parse(b.created_at || b.createdAt || '') - Date.parse(a.created_at || a.createdAt || ''))
+    .slice(0, 5)
+  const buyers = (input.buyers || []).filter((buyer) => String(buyer.contact_email || buyer.email || '').trim())
+  const lenders = (input.lenders || []).filter((lender) => String(lender.contact_email || lender.email || '').trim())
+  const builders = (input.investorPipelineRows || []).filter(
+    (item) => item.pipeline?.builderLane || item.pipeline?.buyBoxConfirmed || item.pipeline?.dealMachineAligned
+  )
+  const creativeProfiles = (input.investorPipelineRows || []).filter((item) =>
+    /creative|seller.?finance|subject.?to|wrap|lease/i.test(
+      [item.investor?.display_name, item.investor?.notes, item.investor?.investment_criteria, item.investor?.buy_box_notes]
+        .filter(Boolean)
+        .join(' ')
+    )
+  )
+  const lanes: CommandCenterBuyBoxGraph['lanes'] = [
+    {
+      key: 'buyers',
+      label: 'Buyer dispo',
+      count: buyers.length,
+      detail: `${input.pendingBuyerMatches} open buyer match${input.pendingBuyerMatches === 1 ? '' : 'es'}.`,
+      status: buyers.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'lenders',
+      label: 'Capital route',
+      count: lenders.length,
+      detail: `${input.pendingLenderMatches} open lender match${input.pendingLenderMatches === 1 ? '' : 'es'}.`,
+      status: lenders.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'builders',
+      label: 'Builder / developer',
+      count: builders.length,
+      detail: 'Profiles with builder lane, DealMachine alignment, or confirmed criteria.',
+      status: builders.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'creative',
+      label: 'Creative finance',
+      count: creativeProfiles.length,
+      detail: 'Profiles that mention creative, subject-to, wrap, seller finance, or lease-option appetite.',
+      status: creativeProfiles.length > 0 ? 'green' : 'yellow',
+    },
+  ]
+
+  const recentProperties = properties.map((row) => {
+    const suggestion = buyBoxSuggestedLane(row)
+    const market = [row.city, row.state].filter(Boolean).join(', ') || 'Market pending'
+    return {
+      id: String(row.id || row.property_address || row.propertyAddress),
+      propertyAddress: String(row.property_address || row.propertyAddress || 'Property analysis'),
+      market,
+      grade: String(row.grade || 'Needs details'),
+      route: String(row.primary_route_label || row.primaryRouteLabel || 'Route pending'),
+      suggestedLane: suggestion.label,
+      routeReason: suggestion.reason,
+      createdAt: row.created_at || row.createdAt || null,
+    }
+  })
+
+  const stockedLaneCount = lanes.filter((lane) => lane.count > 0).length
+  const status: CommandStatus =
+    recentProperties.length === 0 ? 'yellow' : stockedLaneCount >= 3 ? 'green' : stockedLaneCount >= 1 ? 'yellow' : 'red'
+  const summary = recentProperties.length
+    ? `${recentProperties.length} saved deal twin${recentProperties.length === 1 ? '' : 's'} can route across ${stockedLaneCount}/4 partner lanes without ranking.`
+    : 'No saved deal twins are ready for buy-box routing yet.'
+  const nextMove =
+    recentProperties.length === 0
+      ? 'Save a command-center property analysis, then route it to buyers, lenders, builders, or creative finance lanes.'
+      : stockedLaneCount < 3
+        ? 'Stock the missing buyer, lender, builder, or creative profiles before scaling assignments.'
+        : 'Route each saved analysis into the strongest lane and record the outcome.'
+
+  return {
+    status,
+    summary,
+    nextMove,
+    lanes,
+    recentProperties,
+    actions: [
+      navigateAction('buy-box-open-buyers', 'Open buyers', '/admin/buyers'),
+      navigateAction('buy-box-open-lenders', 'Open lenders', '/admin/lenders'),
+      navigateAction('buy-box-open-builders', 'Open builders', '/admin/investor-partnerships?lane=builder'),
+      navigateAction('buy-box-open-property', 'Property command', '#property-command', 'primary'),
+    ],
+  }
+}
+
 async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSourceIssue[]) {
   const [
     leads,
@@ -985,6 +1365,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     researchChecklists,
     targetMarkets,
     propertyAnalysisRuns,
+    commandCenterEvents,
   ] = await Promise.all([
     safeRows(
       () =>
@@ -1173,6 +1554,16 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       issues,
       { maxRows: 500 }
     ),
+    optionalRows(
+      () =>
+        admin
+          .from('command_center_events')
+          .select('id,event_type,entity_type,entity_id,source,title,summary,priority,status,occurred_at,created_at,metadata_json')
+          .order('occurred_at', { ascending: false }),
+      'command_center_events',
+      issues,
+      { maxRows: 500 }
+    ),
   ])
 
   return {
@@ -1203,6 +1594,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     researchChecklists,
     targetMarkets,
     propertyAnalysisRuns,
+    commandCenterEvents,
   }
 }
 
@@ -1631,6 +2023,33 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     missingDb: missingSuppressionDb,
     recent: recentSuppressions,
   }
+  const outcomeLearning = buildOutcomeLearningSnapshot({
+    commandCenterEvents: t.commandCenterEvents,
+    replySignals7d,
+  })
+  const outboundGovernance = buildOutboundGovernanceSnapshot({
+    sender: outboundReadiness.sender,
+    dailyLimit: outreachTarget,
+    sent24h: outreach24h,
+    remainingToday,
+    readyToSend: sendReady,
+    needsReview,
+    replySignals7d,
+    bounceRiskLeads,
+    suppressionCount: activeSuppressionCount,
+    paidSourcesBlocked: sourceGovernor.paidSourcesBlocked,
+    mailingAddressConfigured: outboundReadiness.mailingAddressConfigured,
+    autoSendEnabled,
+    missingSuppressionDb,
+  })
+  const buyBoxGraph = buildBuyBoxGraphSnapshot({
+    propertyAnalysisRuns: t.propertyAnalysisRuns,
+    buyers: t.buyers,
+    lenders: t.lenders,
+    investorPipelineRows,
+    pendingBuyerMatches,
+    pendingLenderMatches,
+  })
 
   // ── Market heat ────────────────────────────────────────────────────────────
   const marketMap = new Map<string, MarketHeatRow>()
@@ -2786,6 +3205,9 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     sourceGovernor,
     suppressionCenter,
     dealMachineFreshness,
+    outcomeLearning,
+    outboundGovernance,
+    buyBoxGraph,
     inbox: {
       summary: inboxSummary,
       sections: inboxSections,

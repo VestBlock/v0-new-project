@@ -2017,6 +2017,9 @@ export function CommandCenterClient({
         sourceGovernor={data.sourceGovernor}
         suppressionCenter={data.suppressionCenter}
         dealMachineFreshness={data.dealMachineFreshness}
+        outcomeLearning={data.outcomeLearning}
+        outboundGovernance={data.outboundGovernance}
+        buyBoxGraph={data.buyBoxGraph}
         runningActionId={runningActionId}
         onAction={(action) => void runInlineAction(action)}
       />
@@ -2212,6 +2215,9 @@ export function CommandCenterClient({
                 sourceGovernor={data.sourceGovernor}
                 suppressionCenter={data.suppressionCenter}
                 dealMachineFreshness={data.dealMachineFreshness}
+                outcomeLearning={data.outcomeLearning}
+                outboundGovernance={data.outboundGovernance}
+                buyBoxGraph={data.buyBoxGraph}
                 runningActionId={runningActionId}
                 onAction={(action) => void runInlineAction(action)}
                 sectionId="strategy-lab-command-dock"

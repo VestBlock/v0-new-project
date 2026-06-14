@@ -167,6 +167,9 @@ export function CommandCenterStrategyOpsPanel({
   sourceGovernor,
   suppressionCenter,
   dealMachineFreshness,
+  outcomeLearning,
+  outboundGovernance,
+  buyBoxGraph,
   runningActionId,
   onAction,
   sectionId = "strategy-lab-command",
@@ -178,6 +181,9 @@ export function CommandCenterStrategyOpsPanel({
   sourceGovernor: CommandCenterData["sourceGovernor"]
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
+  outcomeLearning: CommandCenterData["outcomeLearning"]
+  outboundGovernance: CommandCenterData["outboundGovernance"]
+  buyBoxGraph: CommandCenterData["buyBoxGraph"]
   runningActionId: string | null
   onAction: (action: CommandCenterInlineAction) => void
   sectionId?: string
@@ -425,6 +431,111 @@ export function CommandCenterStrategyOpsPanel({
         </div>
 
         <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="h-4 w-4 text-cyan-200" />
+              <h3 className="text-sm font-semibold text-white">Reply learning loop</h3>
+            </div>
+            <span className={cn("vb-mono text-[0.62rem] uppercase tracking-[0.14em]", kpiTone(outcomeLearning.status))}>
+              {outcomeLearning.status}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{outcomeLearning.summary}</p>
+          <p className="mt-2 text-xs leading-5 text-cyan-100/80">{outcomeLearning.nextMove}</p>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: "Events", value: outcomeLearning.totalEvents, tone: outcomeLearning.totalEvents ? "green" : "yellow" },
+              { label: "Interested", value: outcomeLearning.interested, tone: outcomeLearning.interested ? "green" : undefined },
+              { label: "Qualified", value: outcomeLearning.qualified, tone: outcomeLearning.qualified ? "green" : "yellow" },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <p className="vb-mono text-[0.55rem] uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
+                <p className={cn("mt-1 text-lg font-semibold tabular-nums", kpiTone(metric.tone as AgentKpi["status"]))}>
+                  {metric.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {outcomeLearning.lessons.slice(0, 3).map((lesson) => (
+              <div key={lesson.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-slate-100">{lesson.label}</p>
+                  <span className={cn("vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em]", kpiTone(lesson.status))}>
+                    {lesson.status}
+                  </span>
+                </div>
+                <p className="mt-1 leading-5 text-slate-500">{lesson.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <GitBranch className="h-4 w-4 text-cyan-200" />
+              <h3 className="text-sm font-semibold text-white">Buy-box routing graph</h3>
+            </div>
+            <span className={cn("vb-mono text-[0.62rem] uppercase tracking-[0.14em]", kpiTone(buyBoxGraph.status))}>
+              {buyBoxGraph.status}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{buyBoxGraph.summary}</p>
+          <p className="mt-2 text-xs leading-5 text-cyan-100/80">{buyBoxGraph.nextMove}</p>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {buyBoxGraph.lanes.map((lane) => (
+              <div key={lane.key} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-medium text-slate-200">{lane.label}</p>
+                  <span className={cn("vb-mono text-xs font-semibold tabular-nums", kpiTone(lane.status))}>{lane.count}</span>
+                </div>
+                <p className="mt-1 text-[0.62rem] leading-4 text-slate-500">{lane.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {buyBoxGraph.recentProperties.length ? (
+              buyBoxGraph.recentProperties.slice(0, 3).map((property) => (
+                <div key={property.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-100">{property.propertyAddress}</p>
+                      <p className="mt-1 text-[0.65rem] text-slate-500">
+                        {property.market} · {property.grade} · {property.route}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-300/[0.08] px-2 py-0.5 text-[0.58rem] text-cyan-100">
+                      {property.suggestedLane}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[0.62rem] leading-4 text-slate-600">{property.routeReason}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs leading-5 text-slate-500">
+                Run and save an analyzer result to create the first routing object.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {buyBoxGraph.actions.map((action) => (
+              <StreamActionButton
+                key={action.id}
+                action={action}
+                runningActionId={runningActionId}
+                onAction={onAction}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
           <div className="flex items-center gap-2">
             <Gauge className="h-4 w-4 text-cyan-200" />
             <h3 className="text-sm font-semibold text-white">Source cost governor</h3>
@@ -462,13 +573,19 @@ export function CommandCenterStrategyOpsPanel({
         </div>
 
         <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-300" />
-            <h3 className="text-sm font-semibold text-white">Safety guardrails</h3>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              <h3 className="text-sm font-semibold text-white">Outbound governance</h3>
+            </div>
+            <span className={cn("vb-mono text-[0.62rem] uppercase tracking-[0.14em]", kpiTone(outboundGovernance.status))}>
+              {outboundGovernance.status}
+            </span>
           </div>
+          <p className="mt-2 text-xs leading-5 text-cyan-100/80">{outboundGovernance.nextGate}</p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {strategyLab.guardrails.map((metric) => (
+            {outboundGovernance.checks.map((metric) => (
               <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
                 <p className="vb-mono text-[0.55rem] uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
                 <p className={cn("mt-1 truncate text-sm font-semibold tabular-nums", kpiTone(metric.status))}>{metric.value}</p>

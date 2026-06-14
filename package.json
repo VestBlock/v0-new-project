@@ -28,6 +28,7 @@
     "smoke:dealvault:base-sepolia": "hardhat run scripts/smokeDealVault.ts --network baseSepolia",
     "start": "next start",
     "test:deal-analyzer-math": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-deal-analyzer-math.ts",
+    "test:command-center-ops": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-command-center-ops.ts",
     "test:deal-memory": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-deal-memory.ts",
     "test:operating-architecture": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-operating-architecture.ts",
     "test:operating-loops": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-operating-loops.ts",
