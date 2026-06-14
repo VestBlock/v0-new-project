@@ -2,6 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type {
   BuyerBuyBoxRecord,
   BuyerContactRecord,
+  BuyerPacketRecord,
+  BuyerPacketSendRecord,
   BuyerMarketRecord,
   BuyerMatchRecord,
   BuyerNoteRecord,
@@ -11,6 +13,7 @@ import type {
   BuyerRecord,
   BuyerRelationshipEventRecord,
   BuyerScoreBreakdown,
+  DealPipelineItemRecord,
   NormalizedBuyerInput,
   PropertyBuyerMatchInput,
 } from '@/lib/buyers/types'
@@ -396,6 +399,217 @@ export async function upsertBuyerMatch(input: {
   const { data, error } = await admin.from('buyer_matches').insert(payload).select('*').single()
   if (error) throw error
   return data as BuyerMatchRecord
+}
+
+export async function createBuyerPacket(input: {
+  propertyAnalysisRunId?: string | null
+  propertyAddress: string
+  city?: string | null
+  state?: string | null
+  zipCode?: string | null
+  title?: string | null
+  summary?: string | null
+  fileName?: string | null
+  selectedBuyerCount?: number
+  createdByUserId?: string | null
+  form?: Record<string, unknown>
+  estimate?: Record<string, unknown>
+  opportunity?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('property_buyer_packets')
+    .insert({
+      property_analysis_run_id: input.propertyAnalysisRunId || null,
+      property_address: input.propertyAddress,
+      city: input.city || null,
+      state: input.state || null,
+      zip_code: input.zipCode || null,
+      status: 'ready',
+      title: input.title || 'VestBlock Buyer Packet',
+      summary: input.summary || null,
+      file_name: input.fileName || null,
+      selected_buyer_count: input.selectedBuyerCount ?? 0,
+      created_by_user_id: input.createdByUserId || null,
+      input_json: input.form || {},
+      estimate_json: input.estimate || {},
+      opportunity_json: input.opportunity || {},
+      metadata_json: input.metadata || {},
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as BuyerPacketRecord
+}
+
+export async function getBuyerPacketById(id: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('property_buyer_packets').select('*').eq('id', id).single()
+  if (error) throw error
+  return data as BuyerPacketRecord
+}
+
+export async function updateBuyerPacket(id: string, updates: Record<string, unknown>) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('property_buyer_packets')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as BuyerPacketRecord
+}
+
+export async function upsertBuyerPacketSend(input: {
+  buyerPacketId: string
+  buyerId?: string | null
+  buyerMatchId?: string | null
+  buyerEmail?: string | null
+  subject?: string | null
+  status?: BuyerPacketSendRecord['status']
+  sendProvider?: string | null
+  providerMessageId?: string | null
+  sentAt?: string | null
+  sendError?: string | null
+  metadata?: Record<string, unknown>
+}) {
+  const admin = createAdminClient()
+  const payload = {
+    buyer_packet_id: input.buyerPacketId,
+    buyer_id: input.buyerId || null,
+    buyer_match_id: input.buyerMatchId || null,
+    buyer_email: input.buyerEmail || null,
+    subject: input.subject || null,
+    status: input.status || 'queued',
+    send_provider: input.sendProvider || null,
+    provider_message_id: input.providerMessageId || null,
+    sent_at: input.sentAt || null,
+    send_error: input.sendError || null,
+    metadata_json: input.metadata || {},
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.buyerId) {
+    const { data: existing } = await admin
+      .from('property_buyer_packet_sends')
+      .select('id')
+      .eq('buyer_packet_id', input.buyerPacketId)
+      .eq('buyer_id', input.buyerId)
+      .maybeSingle()
+
+    if (existing?.id) {
+      const { data, error } = await admin
+        .from('property_buyer_packet_sends')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+      if (error) throw error
+      return data as BuyerPacketSendRecord
+    }
+  }
+
+  const { data, error } = await admin.from('property_buyer_packet_sends').insert(payload).select('*').single()
+  if (error) throw error
+  return data as BuyerPacketSendRecord
+}
+
+export async function updateBuyerMatchStatus(
+  matchId: string,
+  updates: Pick<Partial<BuyerMatchRecord>, 'status' | 'metadata_json'> & Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_matches')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', matchId)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as BuyerMatchRecord
+}
+
+function dealStageLabel(stage: DealPipelineItemRecord['current_stage']) {
+  return stage
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+export async function upsertDealPipelineItem(input: {
+  propertyAnalysisRunId?: string | null
+  buyerPacketId?: string | null
+  leadId?: string | null
+  propertyAddress: string
+  city?: string | null
+  state?: string | null
+  zipCode?: string | null
+  currentStage?: DealPipelineItemRecord['current_stage']
+  priority?: DealPipelineItemRecord['priority']
+  dealGrade?: string | null
+  dealStrengthScore?: number | null
+  buyerPacketSentCount?: number
+  buyerReplyCount?: number
+  estimatedAssignmentFee?: number | null
+  expectedProfit?: number | null
+  nextAction?: string | null
+  nextActionAt?: string | null
+  metadata?: Record<string, unknown>
+}) {
+  const admin = createAdminClient()
+  const stage = input.currentStage || 'analyzed'
+  const payload = {
+    property_analysis_run_id: input.propertyAnalysisRunId || null,
+    buyer_packet_id: input.buyerPacketId || null,
+    lead_id: input.leadId || null,
+    property_address: input.propertyAddress,
+    city: input.city || null,
+    state: input.state || null,
+    zip_code: input.zipCode || null,
+    current_stage: stage,
+    stage_label: dealStageLabel(stage),
+    priority: input.priority || 'normal',
+    deal_grade: input.dealGrade || null,
+    deal_strength_score: input.dealStrengthScore ?? null,
+    buyer_packet_sent_count: input.buyerPacketSentCount ?? 0,
+    buyer_reply_count: input.buyerReplyCount ?? 0,
+    estimated_assignment_fee: input.estimatedAssignmentFee ?? null,
+    expected_profit: input.expectedProfit ?? null,
+    next_action: input.nextAction || null,
+    next_action_at: input.nextActionAt || null,
+    metadata_json: input.metadata || {},
+    updated_at: new Date().toISOString(),
+  }
+
+  const existingQuery = input.buyerPacketId
+    ? admin.from('deal_pipeline_items').select('id').eq('buyer_packet_id', input.buyerPacketId).limit(1)
+    : input.propertyAnalysisRunId
+      ? admin.from('deal_pipeline_items').select('id').eq('property_analysis_run_id', input.propertyAnalysisRunId).limit(1)
+      : admin.from('deal_pipeline_items').select('id').eq('property_address', input.propertyAddress).limit(1)
+
+  const { data: existing } = await existingQuery.maybeSingle()
+  if (existing?.id) {
+    const { data, error } = await admin.from('deal_pipeline_items').update(payload).eq('id', existing.id).select('*').single()
+    if (error) throw error
+    return data as DealPipelineItemRecord
+  }
+
+  const { data, error } = await admin.from('deal_pipeline_items').insert(payload).select('*').single()
+  if (error) throw error
+  return data as DealPipelineItemRecord
+}
+
+export async function listDealPipelineItems(limit = 100) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('deal_pipeline_items')
+    .select('*')
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data || []) as DealPipelineItemRecord[]
 }
 
 export async function listBuyersForScoring(limit = 150) {

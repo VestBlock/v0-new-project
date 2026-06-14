@@ -296,6 +296,8 @@ export type CommandCenterOutcomeLearning = {
   qualified: number
   doNotContact: number
   followups: number
+  buyerPacketsSent: number
+  buyerPacketReplies: number
   lastEventAt: string | null
   summary: string
   nextMove: string
@@ -351,6 +353,44 @@ export type CommandCenterBuyBoxGraph = {
     createdAt: string | null
   }[]
   actions: CommandCenterInlineAction[]
+}
+
+export type CommandCenterDealPipeline = {
+  status: CommandStatus
+  summary: string
+  nextMove: string
+  totals: {
+    activeDeals: number
+    packetReady: number
+    packetSent: number
+    buyerReplies: number
+  }
+  stages: {
+    key: string
+    label: string
+    count: number
+    value: number
+    items: {
+      id: string
+      propertyAddress: string
+      market: string
+      stage: string
+      priority: string
+      nextAction: string
+      sentCount: number
+      replyCount: number
+      updatedAt: string | null
+    }[]
+  }[]
+  recentPackets: {
+    id: string
+    propertyAddress: string
+    status: string
+    selectedBuyerCount: number
+    sentCount: number
+    repliedCount: number
+    createdAt: string | null
+  }[]
 }
 
 export type AgentPanelData = {
@@ -450,6 +490,7 @@ export type CommandCenterData = {
   outcomeLearning: CommandCenterOutcomeLearning
   outboundGovernance: CommandCenterOutboundGovernance
   buyBoxGraph: CommandCenterBuyBoxGraph
+  dealPipeline: CommandCenterDealPipeline
   autopilot: AutopilotSnapshot
   inbox: {
     summary: AgentKpi[]
@@ -1056,6 +1097,7 @@ function outcomeStatus(event: AnyRow) {
 export function buildOutcomeLearningSnapshot(input: {
   commandCenterEvents?: AnyRow[]
   replySignals7d: number
+  propertyBuyerPacketSends?: AnyRow[]
 }): CommandCenterOutcomeLearning {
   const outcomeEvents = (input.commandCenterEvents || [])
     .filter((event) => {
@@ -1074,6 +1116,12 @@ export function buildOutcomeLearningSnapshot(input: {
   const doNotContact = outcomeEvents.filter((event) => /do_not_contact|unsubscribe|opt.?out|suppression/.test(outcomeStatus(event))).length
   const followups = outcomeEvents.filter((event) => /followup|follow_up|follow-up/.test(outcomeStatus(event))).length
   const sellerReplies = outcomeEvents.filter((event) => /replied|reply|interested|qualified/.test(outcomeStatus(event))).length
+  const buyerPacketsSent = (input.propertyBuyerPacketSends || []).filter((send) =>
+    ['sent', 'opened', 'replied', 'interested'].includes(lower(send.status))
+  ).length
+  const buyerPacketReplies = (input.propertyBuyerPacketSends || []).filter((send) =>
+    ['replied', 'interested'].includes(lower(send.status))
+  ).length
   const lastEventAt = outcomeEvents[0]?.occurred_at || outcomeEvents[0]?.occurredAt || outcomeEvents[0]?.created_at || null
 
   const lessons: CommandCenterOutcomeLearning['lessons'] = [
@@ -1108,7 +1156,21 @@ export function buildOutcomeLearningSnapshot(input: {
       : {
           label: 'Suppression learning',
           detail: 'No opt-out outcomes are recorded in the learning lane.',
-          status: 'green',
+        status: 'green',
+      },
+    buyerPacketsSent > 0
+      ? {
+          label: 'Disposition learning',
+          detail:
+            buyerPacketReplies > 0
+              ? `${buyerPacketReplies} buyer packet reply signal${buyerPacketReplies === 1 ? '' : 's'} can tune buyer matching and packet content.`
+              : `${buyerPacketsSent} buyer packet${buyerPacketsSent === 1 ? '' : 's'} sent. Watch replies to learn which buy boxes are real.`,
+          status: buyerPacketReplies > 0 ? 'green' : 'yellow',
+        }
+      : {
+          label: 'Disposition learning',
+          detail: 'No buyer packets have been sent yet. Matching quality cannot improve until packets reach buyers and outcomes are tracked.',
+          status: 'yellow',
         },
   ]
 
@@ -1136,6 +1198,8 @@ export function buildOutcomeLearningSnapshot(input: {
     qualified,
     doNotContact,
     followups,
+    buyerPacketsSent,
+    buyerPacketReplies,
     lastEventAt,
     summary,
     nextMove,
@@ -1355,6 +1419,99 @@ export function buildBuyBoxGraphSnapshot(input: {
   }
 }
 
+export function buildDealPipelineSnapshot(input: {
+  dealPipelineItems?: AnyRow[]
+  propertyBuyerPackets?: AnyRow[]
+  propertyBuyerPacketSends?: AnyRow[]
+}): CommandCenterDealPipeline {
+  const stageOrder = [
+    { key: 'analyzed', label: 'Analyzed' },
+    { key: 'offer_sent', label: 'Offer Sent' },
+    { key: 'under_contract', label: 'Under Contract' },
+    { key: 'buyer_packet_sent', label: 'Packet Sent' },
+    { key: 'buyer_interested', label: 'Buyer Interested' },
+    { key: 'assignment_drafted', label: 'Assignment Drafted' },
+    { key: 'closed_won', label: 'Closed Won' },
+  ]
+  const activeItems = (input.dealPipelineItems || []).filter(
+    (item) => !['closed_lost', 'archived'].includes(lower(item.current_stage))
+  )
+  const packets = input.propertyBuyerPackets || []
+  const sends = input.propertyBuyerPacketSends || []
+  const sentSends = sends.filter((send) => ['sent', 'opened', 'replied', 'interested'].includes(lower(send.status)))
+  const replySends = sends.filter((send) => ['replied', 'interested'].includes(lower(send.status)))
+
+  const stages: CommandCenterDealPipeline['stages'] = stageOrder.map((stage) => {
+    const items = activeItems
+      .filter((item) => lower(item.current_stage) === stage.key)
+      .sort((a, b) => Date.parse(b.updated_at || b.created_at || '') - Date.parse(a.updated_at || a.created_at || ''))
+      .slice(0, 4)
+      .map((item) => ({
+        id: String(item.id),
+        propertyAddress: String(item.property_address || 'Property'),
+        market: [item.city, item.state].filter(Boolean).join(', ') || 'Market pending',
+        stage: String(item.stage_label || stage.label),
+        priority: String(item.priority || 'normal'),
+        nextAction: String(item.next_action || 'Review the next operator move.'),
+        sentCount: Number(item.buyer_packet_sent_count || 0),
+        replyCount: Number(item.buyer_reply_count || 0),
+        updatedAt: item.updated_at || item.created_at || null,
+      }))
+
+    return {
+      key: stage.key,
+      label: stage.label,
+      count: activeItems.filter((item) => lower(item.current_stage) === stage.key).length,
+      value: activeItems
+        .filter((item) => lower(item.current_stage) === stage.key)
+        .reduce((sum, item) => sum + Number(item.estimated_assignment_fee || item.expected_profit || 0), 0),
+      items,
+    }
+  })
+
+  const packetReady = packets.filter((packet) => ['ready', 'partial'].includes(lower(packet.status))).length
+  const packetSent = packets.filter((packet) => ['sent', 'partial'].includes(lower(packet.status))).length
+  const activeDeals = activeItems.length
+  const status: CommandStatus =
+    activeDeals === 0 && packets.length === 0 ? 'yellow' : packetReady > 0 || sentSends.length > 0 ? 'green' : 'yellow'
+  const summary =
+    activeDeals > 0
+      ? `${activeDeals} active pipeline deal${activeDeals === 1 ? '' : 's'}, ${packetSent} packet${packetSent === 1 ? '' : 's'} sent, ${replySends.length} buyer reply signal${replySends.length === 1 ? '' : 's'}.`
+      : packets.length > 0
+        ? `${packets.length} buyer packet${packets.length === 1 ? '' : 's'} exist, but no active pipeline item is visible yet.`
+        : 'No deal pipeline items exist yet. Run an analysis, match buyers, and send the first packet.'
+  const nextMove =
+    replySends.length > 0
+      ? 'Move buyer replies into assignment terms or buyer-interest stage.'
+      : packetReady > 0
+        ? 'Send ready buyer packets to matched buyers and track replies.'
+        : activeDeals > 0
+          ? 'Advance analyzed deals into offers, contracts, or packet sends.'
+          : 'Create a buyer packet from the next command-center analysis.'
+
+  return {
+    status,
+    summary,
+    nextMove,
+    totals: {
+      activeDeals,
+      packetReady,
+      packetSent,
+      buyerReplies: replySends.length,
+    },
+    stages,
+    recentPackets: packets.slice(0, 5).map((packet) => ({
+      id: String(packet.id),
+      propertyAddress: String(packet.property_address || 'Property packet'),
+      status: String(packet.status || 'ready'),
+      selectedBuyerCount: Number(packet.selected_buyer_count || 0),
+      sentCount: Number(packet.sent_count || 0),
+      repliedCount: Number(packet.replied_count || 0),
+      createdAt: packet.created_at || null,
+    })),
+  }
+}
+
 async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSourceIssue[]) {
   const [
     leads,
@@ -1389,6 +1546,9 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     commandCenterStrategyRuns,
     commandCenterReplyMemory,
     commandCenterSuppressionDecisions,
+    propertyBuyerPackets,
+    propertyBuyerPacketSends,
+    dealPipelineItems,
   ] = await Promise.all([
     safeRows(
       () =>
@@ -1627,6 +1787,36 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       issues,
       { maxRows: 500 }
     ),
+    optionalRows(
+      () =>
+        admin
+          .from('property_buyer_packets')
+          .select('id,property_analysis_run_id,property_address,city,state,zip_code,status,selected_buyer_count,sent_count,opened_count,replied_count,last_sent_at,created_at,updated_at,metadata_json')
+          .order('created_at', { ascending: false }),
+      'property_buyer_packets',
+      issues,
+      { maxRows: 500 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('property_buyer_packet_sends')
+          .select('id,buyer_packet_id,buyer_id,buyer_match_id,buyer_email,subject,status,send_provider,sent_at,opened_at,replied_at,created_at,updated_at,metadata_json')
+          .order('created_at', { ascending: false }),
+      'property_buyer_packet_sends',
+      issues,
+      { maxRows: 1000 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('deal_pipeline_items')
+          .select('id,property_analysis_run_id,buyer_packet_id,lead_id,property_address,city,state,zip_code,current_stage,stage_label,priority,deal_grade,deal_strength_score,buyer_packet_sent_count,buyer_reply_count,estimated_assignment_fee,expected_profit,next_action,next_action_at,created_at,updated_at,metadata_json')
+          .order('updated_at', { ascending: false }),
+      'deal_pipeline_items',
+      issues,
+      { maxRows: 500 }
+    ),
   ])
 
   return {
@@ -1662,6 +1852,9 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     commandCenterStrategyRuns,
     commandCenterReplyMemory,
     commandCenterSuppressionDecisions,
+    propertyBuyerPackets,
+    propertyBuyerPacketSends,
+    dealPipelineItems,
   }
 }
 
@@ -2102,6 +2295,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const outcomeLearning = buildOutcomeLearningSnapshot({
     commandCenterEvents: t.commandCenterEvents,
     replySignals7d,
+    propertyBuyerPacketSends: t.propertyBuyerPacketSends,
   })
   const outboundGovernance = buildOutboundGovernanceSnapshot({
     sender: outboundReadiness.sender,
@@ -2125,6 +2319,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     investorPipelineRows,
     pendingBuyerMatches,
     pendingLenderMatches,
+  })
+  const dealPipeline = buildDealPipelineSnapshot({
+    dealPipelineItems: t.dealPipelineItems,
+    propertyBuyerPackets: t.propertyBuyerPackets,
+    propertyBuyerPacketSends: t.propertyBuyerPacketSends,
   })
 
   // ── Market heat ────────────────────────────────────────────────────────────
@@ -3305,6 +3504,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     outcomeLearning,
     outboundGovernance,
     buyBoxGraph,
+    dealPipeline,
     autopilot,
     inbox: {
       summary: inboxSummary,
@@ -3315,6 +3515,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     routingQueue: [
       { label: 'Buyer matches open', count: pendingBuyerMatches, href: '/admin/buyer-matches' },
       { label: 'Lender matches open', count: pendingLenderMatches, href: '/admin/lender-matches' },
+      { label: 'Buyer packets ready', count: dealPipeline.totals.packetReady, href: '#property-command' },
+      { label: 'Active deal pipeline', count: dealPipeline.totals.activeDeals, href: '#lane-diagnostics' },
       { label: 'Research checklists open', count: openChecklists, href: '/admin/research-checklists' },
       { label: 'Partner buy boxes to confirm', count: Math.max(0, partnerOutreachReady - partnerBuyBoxesConfirmed), href: '/admin/investor-partnerships' },
       { label: 'Lead follow-ups due', count: followupsDue, href: '/admin/leads?outreachStatus=followup_due' },

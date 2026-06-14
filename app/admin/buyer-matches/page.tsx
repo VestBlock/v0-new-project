@@ -25,11 +25,19 @@ export default async function AdminBuyerMatchesPage() {
   }
 
   const admin = createAdminClient()
-  const { data: matches } = await admin
-    .from('buyer_matches')
-    .select('*, buyers(name, category, contact_email)')
-    .order('created_at', { ascending: false })
-    .limit(200)
+  const [{ data: matches }, { data: packetSends }] = await Promise.all([
+    admin
+      .from('buyer_matches')
+      .select('*, buyers(name, category, contact_email)')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    admin
+      .from('property_buyer_packet_sends')
+      .select('id,buyer_match_id,buyer_packet_id,status,sent_at,send_error')
+      .order('created_at', { ascending: false })
+      .limit(500),
+  ])
+  const packetSendByMatch = new Map((packetSends || []).map((send: any) => [send.buyer_match_id, send]))
 
   return (
     <div className="space-y-6 px-4 py-6 md:px-8">
@@ -56,6 +64,7 @@ export default async function AdminBuyerMatchesPage() {
                   <TableHead>Property</TableHead>
                   <TableHead>Asset / Route</TableHead>
                   <TableHead>Fit status</TableHead>
+                  <TableHead>Packet</TableHead>
                   <TableHead>DealVault recommendation</TableHead>
                   <TableHead>Summary</TableHead>
                 </TableRow>
@@ -63,7 +72,7 @@ export default async function AdminBuyerMatchesPage() {
               <TableBody>
                 {(matches || []).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-slate-400">
+                    <TableCell colSpan={7} className="py-10 text-center text-slate-400">
                       No property-buyer matches have been stored yet.
                     </TableCell>
                   </TableRow>
@@ -77,6 +86,7 @@ export default async function AdminBuyerMatchesPage() {
                       hasBuyerOrLenderRouting: true,
                       relationshipStage: match.status,
                     })
+                    const packetSend = packetSendByMatch.get(match.id)
 
                     return (
                       <TableRow key={match.id} className="border-slate-800">
@@ -91,6 +101,20 @@ export default async function AdminBuyerMatchesPage() {
                         </TableCell>
                         <TableCell className="text-slate-300">{match.asset_type || match.deal_type || '-'}</TableCell>
                         <TableCell><Badge variant="secondary">{fitStatus(match.confidence_score)}</Badge></TableCell>
+                        <TableCell>
+                          {packetSend ? (
+                            <div>
+                              <Badge variant={packetSend.status === 'sent' ? 'default' : packetSend.status === 'failed' ? 'destructive' : 'outline'}>
+                                {String(packetSend.status).replaceAll('_', ' ')}
+                              </Badge>
+                              <div className="mt-1 text-xs text-slate-400">
+                                {packetSend.sent_at ? new Date(packetSend.sent_at).toLocaleDateString() : packetSend.send_error || 'queued'}
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="outline">not sent</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={dealVault.shouldPitchDealVault ? 'default' : 'outline'}>
                             {dealVault.shouldPitchDealVault ? 'Recommended' : 'Watch'}

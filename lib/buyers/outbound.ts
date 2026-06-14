@@ -5,6 +5,20 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 type SendBuyerEmailInput = {
   buyer: BuyerRecord
   message: BuyerOutreachMessageRecord
+  attachments?: BuyerEmailAttachment[]
+}
+
+type SendBuyerPacketEmailInput = {
+  buyer: BuyerRecord
+  subject: string
+  body: string
+  attachments: BuyerEmailAttachment[]
+}
+
+type BuyerEmailAttachment = {
+  filename: string
+  content: Buffer
+  contentType: string
 }
 
 type SendBuyerEmailResult = {
@@ -12,6 +26,13 @@ type SendBuyerEmailResult = {
   provider: 'gmail' | 'resend' | 'none'
   providerMessageId?: string | null
   error?: string
+}
+
+type BuyerEmailEnvelope = {
+  buyer: BuyerRecord
+  subject: string
+  body: string
+  attachments?: BuyerEmailAttachment[]
 }
 
 const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
@@ -69,22 +90,52 @@ function encodeBase64Url(value: string) {
     .replace(/=+$/g, '')
 }
 
-async function sendWithGmail(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
+function buildGmailMime(input: BuyerEmailEnvelope) {
+  const recipient = input.buyer.contact_email?.trim() || ''
+  const headers = [
+    `From: VestBlock <${getSender()}>`,
+    `To: ${recipient}`,
+    `Subject: ${input.subject}`,
+    'MIME-Version: 1.0',
+  ]
+
+  if (!input.attachments?.length) {
+    return [...headers, 'Content-Type: text/plain; charset=UTF-8', '', input.body].join('\r\n')
+  }
+
+  const boundary = `vestblock_${Date.now().toString(36)}`
+  const parts = [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    input.body,
+  ]
+
+  for (const attachment of input.attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      '',
+      attachment.content.toString('base64').replace(/.{1,76}/g, '$&\r\n').trim()
+    )
+  }
+
+  parts.push(`--${boundary}--`)
+  return parts.join('\r\n')
+}
+
+async function sendWithGmail(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
   const accessToken = await getGoogleAccessToken()
   const recipient = input.buyer.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
     return { ok: false, provider: 'gmail', error: 'Buyer does not have a usable contact email.' }
   }
-
-  const mime = [
-    `From: VestBlock <${getSender()}>`,
-    `To: ${recipient}`,
-    `Subject: ${input.message.subject || 'VestBlock partnership note'}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    input.message.body,
-  ].join('\r\n')
 
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
@@ -92,7 +143,7 @@ async function sendWithGmail(input: SendBuyerEmailInput): Promise<SendBuyerEmail
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ raw: encodeBase64Url(mime) }),
+    body: JSON.stringify({ raw: encodeBase64Url(buildGmailMime(input)) }),
   })
 
   const data = await response.json().catch(() => ({}))
@@ -107,7 +158,7 @@ async function sendWithGmail(input: SendBuyerEmailInput): Promise<SendBuyerEmail
   return { ok: true, provider: 'gmail', providerMessageId: data.id || null }
 }
 
-async function sendWithResend(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
+async function sendWithResend(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
   const recipient = input.buyer.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
     return { ok: false, provider: 'resend', error: 'Buyer does not have a usable contact email.' }
@@ -117,8 +168,13 @@ async function sendWithResend(input: SendBuyerEmailInput): Promise<SendBuyerEmai
   const { data, error } = await resend.emails.send({
     from: getResendSender(),
     to: recipient,
-    subject: input.message.subject || 'VestBlock partnership note',
-    text: input.message.body,
+    subject: input.subject,
+    text: input.body,
+    attachments: input.attachments?.map((attachment) => ({
+      filename: attachment.filename,
+      content: attachment.content,
+      contentType: attachment.contentType,
+    })),
   })
 
   if (error) {
@@ -128,7 +184,7 @@ async function sendWithResend(input: SendBuyerEmailInput): Promise<SendBuyerEmai
   return { ok: true, provider: 'resend', providerMessageId: data?.id || null }
 }
 
-export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
+async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
   if (!isUsableContactEmail(input.buyer.contact_email)) {
     return { ok: false, provider: 'none', error: 'Buyer does not have a usable contact email.' }
   }
@@ -156,4 +212,22 @@ export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promis
     provider: 'none',
     error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
   }
+}
+
+export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
+  return sendBuyerEnvelope({
+    buyer: input.buyer,
+    subject: input.message.subject || 'VestBlock partnership note',
+    body: input.message.body,
+    attachments: input.attachments,
+  })
+}
+
+export async function sendBuyerPacketEmail(input: SendBuyerPacketEmailInput): Promise<SendBuyerEmailResult> {
+  return sendBuyerEnvelope({
+    buyer: input.buyer,
+    subject: input.subject,
+    body: input.body,
+    attachments: input.attachments,
+  })
 }

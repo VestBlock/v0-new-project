@@ -265,6 +265,88 @@ export type BuyerMatchRecord = {
   updated_at: string
 }
 
+export type BuyerPacketRecord = {
+  id: string
+  property_analysis_run_id: string | null
+  property_address: string
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  packet_type: 'buyer_disposition' | 'builder_disposition' | 'lender_review'
+  status: 'draft' | 'ready' | 'sending' | 'sent' | 'partial' | 'failed' | 'archived'
+  title: string
+  summary: string | null
+  file_name: string | null
+  selected_buyer_count: number
+  sent_count: number
+  opened_count: number
+  replied_count: number
+  last_sent_at: string | null
+  created_by_user_id: string | null
+  input_json: Record<string, unknown>
+  estimate_json: Record<string, unknown>
+  opportunity_json: Record<string, unknown>
+  metadata_json: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type BuyerPacketSendRecord = {
+  id: string
+  buyer_packet_id: string
+  buyer_id: string | null
+  buyer_match_id: string | null
+  buyer_email: string | null
+  subject: string | null
+  status: 'queued' | 'sent' | 'opened' | 'replied' | 'interested' | 'rejected' | 'failed'
+  send_provider: string | null
+  provider_message_id: string | null
+  sent_at: string | null
+  opened_at: string | null
+  replied_at: string | null
+  send_error: string | null
+  metadata_json: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type DealPipelineItemRecord = {
+  id: string
+  property_analysis_run_id: string | null
+  buyer_packet_id: string | null
+  lead_id: string | null
+  property_address: string
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  current_stage:
+    | 'new_lead'
+    | 'contacted'
+    | 'replied'
+    | 'analyzed'
+    | 'offer_sent'
+    | 'under_contract'
+    | 'buyer_packet_sent'
+    | 'buyer_interested'
+    | 'assignment_drafted'
+    | 'closed_won'
+    | 'closed_lost'
+    | 'archived'
+  stage_label: string
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  deal_grade: string | null
+  deal_strength_score: number | null
+  buyer_packet_sent_count: number
+  buyer_reply_count: number
+  estimated_assignment_fee: number | null
+  expected_profit: number | null
+  next_action: string | null
+  next_action_at: string | null
+  metadata_json: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 export type PropertyBuyerMatchInput = {
   leadId?: string | null
   serviceType?: string | null

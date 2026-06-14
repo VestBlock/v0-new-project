@@ -816,6 +816,8 @@ export function CommandCenterClient({
   const visibleActivity = data.activity.slice(0, 8)
   const buyerMatchesOpen = queueByLabel.get("Buyer matches open") ?? 0
   const lenderMatchesOpen = queueByLabel.get("Lender matches open") ?? 0
+  const buyerPacketsReady = data.dealPipeline.totals.packetReady
+  const activeDealPipeline = data.dealPipeline.totals.activeDeals
   const leadFollowUpsDue = queueByLabel.get("Lead follow-ups due") ?? 0
   const partnerFollowUpsDue = queueByLabel.get("Partner follow-ups due") ?? 0
   const researchChecklistsOpen = queueByLabel.get("Research checklists open") ?? 0
@@ -1507,8 +1509,8 @@ export function CommandCenterClient({
           objective: "Turn raw addresses into fast cash, creative, novation, builder, and capital decisions without leaving the cockpit.",
           metrics: [
             { label: "Buyer matches", value: buyerMatchesOpen, helper: "open routing decisions" },
+            { label: "Packets ready", value: buyerPacketsReady, helper: "buyer packet sends" },
             { label: "Lender matches", value: lenderMatchesOpen, helper: "capital packaging" },
-            { label: "Confirmed criteria", value: data.summary.partnerBuyBoxesConfirmed, helper: "partner boxes ready" },
           ],
           actions: [
             { label: "Jump to analyzer", href: "#property-command" },
@@ -1521,8 +1523,8 @@ export function CommandCenterClient({
           objective: "Match live properties with the right buyers, lenders, and builders before opportunities cool off.",
           metrics: [
             { label: "Buyer matches", value: buyerMatchesOpen, helper: "open buyer routes" },
+            { label: "Active deals", value: activeDealPipeline, helper: "pipeline items" },
             { label: "Lender matches", value: lenderMatchesOpen, helper: "capital routes" },
-            { label: "DM aligned", value: data.summary.dealMachineAlignedPartners, helper: "partner overlap" },
           ],
           actions: [
             { label: "Buyer matches", href: "/admin/buyer-matches" },
@@ -1576,8 +1578,10 @@ export function CommandCenterClient({
     }
   }, [
     activeMode,
+    activeDealPipeline,
     authorityTasks,
     buyerMatchesOpen,
+    buyerPacketsReady,
     data.priorities.length,
     data.summary.builderPartners,
     data.summary.dealMachineAlignedPartners,
@@ -2269,6 +2273,69 @@ export function CommandCenterClient({
                     <AgentPanel key={agent.key} agent={agent} focused={focusedAgent === agent.key} onFocus={setFocusedAgent} />
                   ))}
                 </motion.div>
+              </div>
+
+              <div>
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Deal pipeline</h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{data.dealPipeline.summary}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      "vb-mono rounded-full border px-3 py-1 text-[0.58rem] uppercase tracking-[0.14em]",
+                      data.dealPipeline.status === "green"
+                        ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-100"
+                        : data.dealPipeline.status === "red"
+                          ? "border-rose-400/25 bg-rose-400/[0.08] text-rose-100"
+                          : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+                    )}
+                  >
+                    {data.dealPipeline.nextMove}
+                  </span>
+                </div>
+                <div className="grid gap-3 xl:grid-cols-7">
+                  {data.dealPipeline.stages.map((stage) => (
+                    <div key={stage.key} className="min-h-[172px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-white">{stage.label}</p>
+                        <span className="vb-mono rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[0.58rem] text-cyan-100">
+                          {stage.count}
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {stage.items.length ? (
+                          stage.items.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-white/[0.06] bg-slate-950/45 px-2.5 py-2">
+                              <p className="truncate text-[0.72rem] font-medium text-slate-100">{item.propertyAddress}</p>
+                              <p className="mt-0.5 text-[0.62rem] text-slate-500">{item.market}</p>
+                              <p className="mt-1 line-clamp-2 text-[0.64rem] leading-4 text-slate-400">{item.nextAction}</p>
+                              <div className="mt-2 flex items-center justify-between gap-2 text-[0.58rem] text-slate-500">
+                                <span>{item.priority}</span>
+                                <span>{item.sentCount} sent · {item.replyCount} replies</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="pt-8 text-center text-[0.68rem] leading-5 text-slate-600">No deals here yet</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  {[
+                    { label: "Active deals", value: data.dealPipeline.totals.activeDeals },
+                    { label: "Packets ready", value: data.dealPipeline.totals.packetReady },
+                    { label: "Packets sent", value: data.dealPipeline.totals.packetSent },
+                    { label: "Buyer replies", value: data.dealPipeline.totals.buyerReplies },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <p className="vb-mono text-[0.56rem] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums text-white">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {supportAgents.length ? (

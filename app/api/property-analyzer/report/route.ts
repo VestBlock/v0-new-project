@@ -7,6 +7,7 @@ import {
   buildAnalyzerReportHtml,
   type AnalyzerReportType,
 } from '@/lib/property/reportGenerator'
+import { buildBuyerPacketFileName, buildPremiumBuyerPacketPdf } from '@/lib/property/buyerPacketPdf'
 
 const reportSchema = z.object({
   reportType: z.enum(['investor', 'buyer', 'lender', 'builder', 'assignment_contract']),
@@ -36,6 +37,16 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = parsed.data
+    if (payload.reportType === 'buyer') {
+      const pdf = await buildPremiumBuyerPacketPdf(payload)
+      return new NextResponse(pdf, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${buildBuyerPacketFileName(payload.address)}"`,
+        },
+      })
+    }
+
     const html = buildAnalyzerReportHtml(payload)
     const baseName = `${fileStem(payload.reportType)}-${payload.address
       .toLowerCase()

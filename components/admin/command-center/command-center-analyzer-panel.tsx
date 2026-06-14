@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowRight, Download, FileText, Home, Loader2, Radar, ShieldCheck, TrendingUp } from "lucide-react"
+import { ArrowRight, CheckCircle2, Download, FileText, Home, Loader2, Radar, Send, ShieldCheck, TrendingUp, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -89,6 +89,8 @@ type CommandCenterAnalyzerResult = {
   }
   opportunity: {
     metrics: {
+      arv: number | null
+      repairBudget: number | null
       mao70: number | null
       conservativeCashReview: number | null
       balancedCashReview: number | null
@@ -168,6 +170,34 @@ type CommandCenterAnalyzerResult = {
     dbWritten: boolean
     eventWritten: boolean
     warning?: string
+  } | null
+}
+
+type BuyerPacketRecord = {
+  id: string
+  property_address: string
+  status: "draft" | "ready" | "sending" | "sent" | "partial" | "failed" | "archived"
+  selected_buyer_count: number
+  sent_count: number
+  replied_count: number
+  file_name: string | null
+}
+
+type BuyerPacketMatch = {
+  id: string
+  buyer_id: string
+  confidence_score: number
+  fit_summary: string | null
+  fit_explanation: string | null
+  next_info_needed: string[]
+  status: string
+  buyers?: {
+    id: string
+    name: string
+    category: string
+    contact_email: string | null
+    relationship_stage: string
+    confidence_score: number
   } | null
 }
 
@@ -256,6 +286,11 @@ function money(value: number | null | undefined) {
   }).format(Number(value))
 }
 
+function parseNumber(value: string) {
+  const parsed = Number(String(value || "").replace(/[$,\s]/g, ""))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function metricTone(value: number | null | undefined, goodThreshold: number, watchThreshold = 0) {
   if (!Number.isFinite(value)) return "text-slate-400"
   if (Number(value) >= goodThreshold) return "text-emerald-300"
@@ -275,6 +310,12 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isDownloading, setIsDownloading] = useState<"builder" | "lender" | "buyer" | "assignment_contract" | null>(null)
+  const [isMatchingBuyers, setIsMatchingBuyers] = useState(false)
+  const [isSendingPacket, setIsSendingPacket] = useState(false)
+  const [buyerPacket, setBuyerPacket] = useState<BuyerPacketRecord | null>(null)
+  const [buyerMatches, setBuyerMatches] = useState<BuyerPacketMatch[]>([])
+  const [selectedBuyerIds, setSelectedBuyerIds] = useState<string[]>([])
+  const [packetNotice, setPacketNotice] = useState("")
 
   const applyPropertyCommand = useCallback((detail: PropertyCommandEventDetail) => {
     if (!detail.propertyAddress?.trim()) return
@@ -282,6 +323,10 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
     setForm((current) => applyPropertyDetailToForm(current, detail))
     setResult(null)
     setError("")
+    setBuyerPacket(null)
+    setBuyerMatches([])
+    setSelectedBuyerIds([])
+    setPacketNotice("")
   }, [])
 
   useEffect(() => {
@@ -334,6 +379,10 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
       const payload = (await response.json()) as CommandCenterAnalyzerResult & { error?: string }
       if (!response.ok) throw new Error(payload.error || "Unable to analyze this property.")
       setResult(payload)
+      setBuyerPacket(null)
+      setBuyerMatches([])
+      setSelectedBuyerIds([])
+      setPacketNotice("")
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to analyze this property.")
     } finally {
@@ -381,6 +430,107 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
       setError(caught instanceof Error ? caught.message : "Unable to generate the packet.")
     } finally {
       setIsDownloading(null)
+    }
+  }
+
+  const handleCreateBuyerPacket = async () => {
+    if (!result) return
+
+    setIsMatchingBuyers(true)
+    setError("")
+    setPacketNotice("")
+    try {
+      const response = await fetch("/api/admin/buyer-packets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyAnalysisRunId: result.memory?.id || null,
+          address: result.address,
+          city: form.city || undefined,
+          state: form.state || undefined,
+          zipCode: form.zipCode || undefined,
+          form,
+          estimate: result.estimate,
+          opportunity: result.opportunity,
+          matchInput: {
+            propertyAddress: result.address,
+            city: form.city || undefined,
+            state: form.state || undefined,
+            zipCode: form.zipCode || undefined,
+            assetType: form.propertyType,
+            occupancy: form.propertyCondition,
+            askingPrice: parseNumber(form.askingPrice) ?? undefined,
+            estimatedValue: result.opportunity.metrics.arv ?? result.estimate.estimateValue ?? undefined,
+            rehabLevel: parseNumber(form.repairBudget) ? Math.min(10, Math.max(1, Math.round((parseNumber(form.repairBudget) || 0) / 15000))) : undefined,
+            creativeFinanceOpen: /creative|seller_finance/i.test(`${form.preferredSalePath} ${form.exitStrategy}`),
+            marketTag: form.city || undefined,
+          },
+        }),
+      })
+      const payload = (await response.json().catch(() => ({}))) as {
+        packet?: BuyerPacketRecord
+        matches?: BuyerPacketMatch[]
+        error?: string
+      }
+      if (!response.ok || !payload.packet) throw new Error(payload.error || "Unable to create buyer packet.")
+
+      const matches = payload.matches || []
+      setBuyerPacket(payload.packet)
+      setBuyerMatches(matches)
+      setSelectedBuyerIds(
+        matches
+          .filter((match) => match.buyers?.contact_email)
+          .slice(0, 8)
+          .map((match) => match.buyer_id)
+      )
+      setPacketNotice(
+        matches.length
+          ? `Matched ${matches.length} buyer${matches.length === 1 ? "" : "s"}. Select who should receive the packet.`
+          : "Buyer packet created, but no matched buyers were found. Add buyer buy boxes or run buyer discovery."
+      )
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create buyer packet.")
+    } finally {
+      setIsMatchingBuyers(false)
+    }
+  }
+
+  const toggleBuyer = (buyerId: string) => {
+    setSelectedBuyerIds((current) =>
+      current.includes(buyerId) ? current.filter((id) => id !== buyerId) : [...current, buyerId]
+    )
+  }
+
+  const handleSendBuyerPacket = async () => {
+    if (!buyerPacket || selectedBuyerIds.length === 0) return
+
+    setIsSendingPacket(true)
+    setError("")
+    setPacketNotice("")
+    try {
+      const response = await fetch(`/api/admin/buyer-packets/${buyerPacket.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buyerIds: selectedBuyerIds }),
+      })
+      const payload = (await response.json().catch(() => ({}))) as {
+        packet?: BuyerPacketRecord
+        sentCount?: number
+        failedCount?: number
+        error?: string
+      }
+      if (!response.ok || !payload.packet) throw new Error(payload.error || "Unable to send buyer packet.")
+
+      setBuyerPacket(payload.packet)
+      setPacketNotice(
+        `Sent ${payload.sentCount || 0} buyer packet${payload.sentCount === 1 ? "" : "s"}${
+          payload.failedCount ? `; ${payload.failedCount} failed and needs cleanup` : ""
+        }.`
+      )
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to send buyer packet.")
+    } finally {
+      setIsSendingPacket(false)
     }
   }
 
@@ -677,6 +827,10 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                 setForm(createInitialForm())
                 setResult(null)
                 setError("")
+                setBuyerPacket(null)
+                setBuyerMatches([])
+                setSelectedBuyerIds([])
+                setPacketNotice("")
               }}
               className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]"
             >
@@ -911,6 +1065,98 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                                 : "Assignment draft"}
                         </Button>
                       ))}
+                    </div>
+                    <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] px-3 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-cyan-200" />
+                            <p className="text-xs font-semibold text-white">Buyer packet routing</p>
+                          </div>
+                          <p className="mt-1 text-[0.7rem] leading-5 text-slate-400">
+                            Match this analysis to saved buy boxes, generate the premium PDF, and send it to selected buyers.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isMatchingBuyers}
+                            onClick={() => void handleCreateBuyerPacket()}
+                            className="border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100 hover:bg-cyan-300/[0.12]"
+                          >
+                            {isMatchingBuyers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                            Match buyers
+                          </Button>
+                          <Button
+                            type="button"
+                            disabled={!buyerPacket || selectedBuyerIds.length === 0 || isSendingPacket}
+                            onClick={() => void handleSendBuyerPacket()}
+                            className="bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                          >
+                            {isSendingPacket ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Send packet
+                          </Button>
+                        </div>
+                      </div>
+                      {packetNotice ? (
+                        <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-2 text-[0.7rem] text-emerald-100">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {packetNotice}
+                        </div>
+                      ) : null}
+                      {buyerPacket ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                          {[
+                            { label: "Packet", value: buyerPacket.status.replaceAll("_", " ") },
+                            { label: "Selected", value: selectedBuyerIds.length },
+                            { label: "Sent", value: buyerPacket.sent_count },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-lg border border-white/[0.06] bg-slate-950/40 px-3 py-2">
+                              <p className="vb-mono text-[0.56rem] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+                              <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {buyerMatches.length ? (
+                        <div className="mt-3 space-y-2">
+                          {buyerMatches.slice(0, 8).map((match) => {
+                            const buyer = match.buyers
+                            const disabled = !buyer?.contact_email
+                            const checked = selectedBuyerIds.includes(match.buyer_id)
+                            return (
+                              <label
+                                key={match.id}
+                                className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                                  checked
+                                    ? "border-cyan-300/30 bg-cyan-300/[0.07]"
+                                    : "border-white/[0.06] bg-slate-950/40 hover:border-white/15"
+                                } ${disabled ? "cursor-not-allowed opacity-55" : ""}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={disabled}
+                                  onChange={() => toggleBuyer(match.buyer_id)}
+                                  className="mt-1 h-4 w-4 accent-cyan-300"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-semibold text-white">{buyer?.name || "Buyer"}</span>
+                                    <span className="vb-mono rounded bg-white/[0.06] px-1.5 py-0.5 text-[0.56rem] uppercase tracking-[0.12em] text-cyan-100">
+                                      {match.confidence_score}/100
+                                    </span>
+                                  </span>
+                                  <span className="mt-1 block text-[0.68rem] leading-5 text-slate-400">
+                                    {buyer?.contact_email || "No usable email"} · {match.fit_summary || "Buyer fit needs review"}
+                                  </span>
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="mt-3 space-y-2">
                       {(result.opportunity.builderDisposition.nextSteps.length
