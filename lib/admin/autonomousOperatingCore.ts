@@ -89,6 +89,9 @@ export type StrategyBatchPlan = {
   strategyKey: string
   strategyName: string
   sourceProvider: 'dealmachine' | 'homeharvest' | 'public_records' | 'manual_csv'
+  feeThesis: string
+  targetBuyerLane: string
+  qualificationGate: string
   status: CommandStatus
   markets: string[]
   targetEmailCount: number
@@ -160,6 +163,9 @@ const STRATEGY_DEFINITIONS: Array<Omit<StrategyBatchPlan, 'status' | 'markets' |
     strategyKey: 'tax-code-stack',
     strategyName: 'Tax delinquent + code violation',
     sourceProvider: 'dealmachine',
+    feeThesis: '$12k-$25k when the stack creates real urgency and the buyer packet is clean.',
+    targetBuyerLane: 'Local cash buyers, landlords, and heavy-rehab operators',
+    qualificationGate: 'Tax delinquent signal + code/condition signal + suppression-safe owner match',
     copyGuardrail:
       'Reference property updates and a simple cash/terms review without shaming the owner, threatening tax consequences, or implying government affiliation.',
   },
@@ -167,20 +173,79 @@ const STRATEGY_DEFINITIONS: Array<Omit<StrategyBatchPlan, 'status' | 'markets' |
     strategyKey: 'senior-out-of-state-landlord',
     strategyName: 'Senior / out-of-state landlord portfolio',
     sourceProvider: 'dealmachine',
+    feeThesis: '$15k-$40k+ when one seller controls multiple doors or wants a clean portfolio exit.',
+    targetBuyerLane: 'Portfolio landlords, DSCR buyers, and small multifamily operators',
+    qualificationGate: 'Absentee/out-of-state or senior signal + portfolio/landlord pattern',
     copyGuardrail:
       'Keep copy low-pressure: ask whether simplifying one or more rentals is useful, and offer cash or flexible terms depending on condition.',
+  },
+  {
+    strategyKey: 'builder-infill-teardown',
+    strategyName: 'Builder infill / teardown lane',
+    sourceProvider: 'dealmachine',
+    feeThesis: '$20k-$75k+ when the land, teardown, or infill value is worth more to a builder than to a normal flipper.',
+    targetBuyerLane: 'Infill builders, developers, construction companies, and land buyers',
+    qualificationGate: 'Vacant/code/teardown/lot signal + builder-fit market + zoning/access review before offer',
+    copyGuardrail:
+      'Ask for condition and timing details without overpromising; disclose that builder pricing depends on access, title, zoning, and scope.',
+  },
+  {
+    strategyKey: 'small-multifamily-portfolio',
+    strategyName: 'Small multifamily / portfolio breakup',
+    sourceProvider: 'dealmachine',
+    feeThesis: '$25k-$100k when the opportunity is two to twenty doors or a tired-landlord package.',
+    targetBuyerLane: 'Multifamily operators, 1031 buyers, rental aggregators, and DSCR-ready landlords',
+    qualificationGate: 'Duplex/multifamily/portfolio signal + rent/occupancy unknowns captured before underwriting',
+    copyGuardrail:
+      'Keep the ask around simplifying management or reviewing multiple properties; do not imply tenants, age, or distance are a problem unless the owner says so.',
+  },
+  {
+    strategyKey: 'institutional-btr-buybox',
+    strategyName: 'Institutional / BTR buy-box lane',
+    sourceProvider: 'dealmachine',
+    feeThesis: '$20k-$60k+ when several SFR, lot, or build-ready opportunities match a verified institutional buy box.',
+    targetBuyerLane: 'Build-to-rent groups, SFR aggregators, and institutional rental buyers',
+    qualificationGate: 'Market + price band + property type match against a confirmed buyer buy box before seller pressure',
+    copyGuardrail:
+      'Never name-drop institutional buyers as guaranteed demand; say we are reviewing whether the property fits active buyer criteria.',
   },
   {
     strategyKey: 'on-market-lowball-agent-sweep',
     strategyName: 'On-market agent cash review',
     sourceProvider: 'dealmachine',
+    feeThesis: '$8k-$20k when the agent has stale/condition-heavy inventory and the spread survives dispo.',
+    targetBuyerLane: 'Cash buyers, rehabbers, and agent-friendly investors',
+    qualificationGate: 'Active/pending/on-market signal + condition discount + agent-safe communication path',
     copyGuardrail:
       'Position the low cash range as condition-dependent review room, never as a final take-it-or-leave-it insult.',
+  },
+  {
+    strategyKey: 'novation-retail-spread',
+    strategyName: 'Novation / retail-spread lane',
+    sourceProvider: 'homeharvest',
+    feeThesis: '$20k-$80k+ net spread when retail demand exists but a cash MAO is too low.',
+    targetBuyerLane: 'Retail buyers, agent partners, and novation-friendly operators',
+    qualificationGate: 'Seller consent + attorney/contract review + clear disclosure of resale path before marketing',
+    copyGuardrail:
+      'Use only disclosed market-assisted language; do not hide resale price, fee structure, agency status, or buyer/seller obligations.',
+  },
+  {
+    strategyKey: 'commercial-small-bay-distress',
+    strategyName: 'Commercial / small-bay distress',
+    sourceProvider: 'dealmachine',
+    feeThesis: '$30k-$150k+ when a commercial, mixed-use, storage, or small-bay asset has a specialized operator buyer.',
+    targetBuyerLane: 'Small-bay industrial buyers, storage operators, mixed-use investors, and local developers',
+    qualificationGate: 'Commercial/mixed-use signal + title/use/zoning facts collected before quoting any number',
+    copyGuardrail:
+      'Keep the message exploratory and fact-finding; commercial pricing must stay conditional on use, leases, environmental, zoning, and access.',
   },
   {
     strategyKey: 'stale-listing-creative-finance',
     strategyName: 'Stale listing creative terms',
     sourceProvider: 'homeharvest',
+    feeThesis: '$15k-$50k when seller terms unlock a deal cash buyers cannot make work.',
+    targetBuyerLane: 'Creative finance buyers, rental buyers, and seller-finance operators',
+    qualificationGate: 'Stale listing + seller flexibility signal + lien/payment facts before terms are drafted',
     copyGuardrail:
       'Ask the agent if the seller would consider a clean creative structure only after confirming cash is not the right fit.',
   },
@@ -284,20 +349,50 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
   if (strategyKey === 'tax-code-stack') {
     return normalizeMarketList([...refresh, 'Cleveland, OH', 'Columbus, OH', 'Indianapolis, IN', 'Louisville, KY'])
   }
+  if (strategyKey === 'builder-infill-teardown') {
+    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Detroit, MI'])
+  }
+  if (strategyKey === 'small-multifamily-portfolio') {
+    return normalizeMarketList([...heated, 'Cleveland, OH', 'Toledo, OH', 'Milwaukee, WI', 'Cincinnati, OH'])
+  }
+  if (strategyKey === 'institutional-btr-buybox') {
+    return normalizeMarketList(['Indianapolis, IN', 'Columbus, OH', 'Louisville, KY', 'Kansas City, MO', ...heated])
+  }
   if (strategyKey === 'on-market-lowball-agent-sweep') {
     return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cincinnati, OH', 'Detroit, MI'])
+  }
+  if (strategyKey === 'novation-retail-spread') {
+    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cincinnati, OH', 'Pittsburgh, PA'])
+  }
+  if (strategyKey === 'commercial-small-bay-distress') {
+    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Pittsburgh, PA'])
   }
   return normalizeMarketList([...heated, ...refresh, ...DEFAULT_MARKETS])
 }
 
 function strategyCommand(strategyKey: string, markets: string[], target: number) {
-  const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join(',')
+  const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join('|')
   if (strategyKey === 'tax-code-stack') return `pnpm run distress:tax-code-stack:new-markets -- --limit=${target}`
   if (strategyKey === 'senior-out-of-state-landlord') {
-    return `pnpm run sellers:outreach:portfolio-landlords -- --markets=${marketArg} --limit=${target}`
+    return `pnpm run sellers:outreach:portfolio-landlords -- --market="${marketArg}" --limit=${target}`
+  }
+  if (strategyKey === 'builder-infill-teardown') {
+    return `pnpm run sellers:high-fee:builder-infill -- --market="${marketArg}" --limit=${target}`
+  }
+  if (strategyKey === 'small-multifamily-portfolio') {
+    return `pnpm run sellers:high-fee:small-multifamily -- --market="${marketArg}" --limit=${target}`
+  }
+  if (strategyKey === 'institutional-btr-buybox') {
+    return `pnpm run sellers:high-fee:institutional-btr -- --market="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'on-market-lowball-agent-sweep') {
     return `pnpm run sellers:on-market-lowball -- --limit=${target}`
+  }
+  if (strategyKey === 'commercial-small-bay-distress') {
+    return `pnpm run sellers:high-fee:commercial-distress -- --market="${marketArg}" --limit=${target}`
+  }
+  if (strategyKey === 'novation-retail-spread') {
+    return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --offer-mode=novation --limit=${target}`
   }
   return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --limit=${target}`
 }

@@ -1,5 +1,5 @@
 import type { InvestorProfileRecord, InvestorSequenceCode } from '@/lib/investors/types'
-import { builderBuyBoxQuestions, builderOutreachAngle, isBuilderPartnerLike } from '@/lib/investors/builderStrategy'
+import { HIGH_VALUE_BUYER_LANES, builderBuyBoxQuestions, builderOutreachAngle, isBuilderPartnerLike } from '@/lib/investors/builderStrategy'
 
 export const INVESTOR_OUTREACH_SEQUENCES: Record<
   InvestorSequenceCode,
@@ -47,6 +47,9 @@ export function buildInvestorOutreachMessage(investor: InvestorProfileRecord, se
   if (isBuilderPartner) {
     const angle = builderOutreachAngle(investor.markets || [])
     const questions = builderBuyBoxQuestions(investor.markets?.[0] || null)
+    const laneLine = HIGH_VALUE_BUYER_LANES.slice(0, 4)
+      .map((lane) => `${lane.label}: ${lane.buys}`)
+      .join('\n')
 
     return {
       sequenceCode,
@@ -54,6 +57,7 @@ export function buildInvestorOutreachMessage(investor: InvestorProfileRecord, se
       body:
         `${intro}` +
         `I’m reaching out from VestBlock. We are building a builder and construction partner lane so distressed, teardown, infill, and heavy-rehab opportunities can be routed to groups that actually know what they can build or renovate.${marketLine}\n\n` +
+        `We are also separating higher-value buyer lanes so we do not send the wrong kind of deal:\n${laneLine}\n\n` +
         `Rather than send random properties, we want your real criteria first. The most useful things for us to understand are:\n` +
         questions.map((question) => `- ${question}`).join('\n') +
         `\n\nIf your team already has a buy box, build sheet, or neighborhoods list, send it over and we will align to it.\n\nBest,\nVestBlock Partnerships`,

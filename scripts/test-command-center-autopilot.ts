@@ -95,21 +95,31 @@ const baseInput: AutopilotSnapshotInput = {
 }
 
 const batches = buildStrategyBatchPlans(baseInput)
-assert.equal(batches.length, 4, 'Autopilot should keep the four seller strategies separated')
+assert.equal(batches.length, 9, 'Autopilot should keep seller and high-fee strategies separated')
 assert.deepEqual(
   batches.map((batch) => batch.strategyKey),
   [
     'tax-code-stack',
     'senior-out-of-state-landlord',
+    'builder-infill-teardown',
+    'small-multifamily-portfolio',
+    'institutional-btr-buybox',
     'on-market-lowball-agent-sweep',
+    'novation-retail-spread',
+    'commercial-small-bay-distress',
     'stale-listing-creative-finance',
   ],
   'Strategy ordering should stay stable for command-center review'
 )
 assert.ok(batches.every((batch) => batch.targetEmailCount <= 100), 'No strategy should exceed 100 planned emails per batch')
 assert.ok(batches.every((batch) => batch.targetSmsReviewCount === batch.targetEmailCount), 'SMS should mirror email count as review-only tasks')
+assert.ok(batches.every((batch) => batch.feeThesis && batch.targetBuyerLane && batch.qualificationGate), 'Every strategy should explain fee thesis, buyer lane, and gate')
 assert.ok(batches[0]?.markets.includes('Cleveland, OH'), 'Tax/code stack should use refresh markets first')
-assert.ok(batches[2]?.markets.includes('Milwaukee, WI'), 'On-market lane should use hot markets first')
+assert.equal(batches.find((batch) => batch.strategyKey === 'builder-infill-teardown')?.targetBuyerLane.includes('builders'), true)
+assert.ok(
+  batches.find((batch) => batch.strategyKey === 'on-market-lowball-agent-sweep')?.markets.includes('Milwaukee, WI'),
+  'On-market lane should use hot markets first'
+)
 
 const snapshot = buildAutopilotSnapshot(baseInput)
 assert.equal(snapshot.status, 'green')

@@ -336,7 +336,7 @@ export type CommandCenterBuyBoxGraph = {
   summary: string
   nextMove: string
   lanes: {
-    key: 'buyers' | 'lenders' | 'builders' | 'creative'
+    key: 'buyers' | 'lenders' | 'builders' | 'multifamily' | 'btr' | 'commercial' | 'novation' | 'creative'
     label: string
     count: number
     detail: string
@@ -1338,6 +1338,30 @@ export function buildBuyBoxGraphSnapshot(input: {
   const builders = (input.investorPipelineRows || []).filter(
     (item) => item.pipeline?.builderLane || item.pipeline?.buyBoxConfirmed || item.pipeline?.dealMachineAligned
   )
+  const investorText = (item: { investor: AnyRow; pipeline: AnyRow }) =>
+    [
+      item.investor?.display_name,
+      item.investor?.company_name,
+      item.investor?.primary_investor_type,
+      item.investor?.notes,
+      item.investor?.investment_criteria,
+      item.investor?.buy_box_notes,
+      ...(Array.isArray(item.investor?.classification_tags) ? item.investor.classification_tags : []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+  const multifamilyProfiles = (input.investorPipelineRows || []).filter((item) =>
+    /multifamily|multi family|apartment|duplex|triplex|fourplex|portfolio|1031|doors/i.test(investorText(item))
+  )
+  const btrProfiles = (input.investorPipelineRows || []).filter((item) =>
+    /build.?to.?rent|btr|sfr|single.?family rental|rental aggregator|institutional/i.test(investorText(item))
+  )
+  const commercialProfiles = (input.investorPipelineRows || []).filter((item) =>
+    /commercial|industrial|small.?bay|storage|warehouse|mixed.?use|flex|retail|office|redevelopment/i.test(investorText(item))
+  )
+  const novationProfiles = (input.investorPipelineRows || []).filter((item) =>
+    /novation|retail.?spread|market.?assisted|agent partner|list.?to.?sell/i.test(investorText(item))
+  )
   const creativeProfiles = (input.investorPipelineRows || []).filter((item) =>
     /creative|seller.?finance|subject.?to|wrap|lease/i.test(
       [item.investor?.display_name, item.investor?.notes, item.investor?.investment_criteria, item.investor?.buy_box_notes]
@@ -1368,6 +1392,34 @@ export function buildBuyBoxGraphSnapshot(input: {
       status: builders.length > 0 ? 'green' : 'yellow',
     },
     {
+      key: 'multifamily',
+      label: 'Multifamily operators',
+      count: multifamilyProfiles.length,
+      detail: 'Duplex, small apartment, portfolio, 1031, and door-count buyer criteria.',
+      status: multifamilyProfiles.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'btr',
+      label: 'BTR / SFR institutions',
+      count: btrProfiles.length,
+      detail: 'Build-to-rent, SFR aggregator, and institutional rental-buyer criteria.',
+      status: btrProfiles.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'commercial',
+      label: 'Commercial operators',
+      count: commercialProfiles.length,
+      detail: 'Small-bay, storage, mixed-use, flex, retail, and redevelopment appetite.',
+      status: commercialProfiles.length > 0 ? 'green' : 'yellow',
+    },
+    {
+      key: 'novation',
+      label: 'Novation partners',
+      count: novationProfiles.length,
+      detail: 'Disclosed market-assisted and retail-spread operator coverage.',
+      status: novationProfiles.length > 0 ? 'green' : 'yellow',
+    },
+    {
       key: 'creative',
       label: 'Creative finance',
       count: creativeProfiles.length,
@@ -1395,7 +1447,7 @@ export function buildBuyBoxGraphSnapshot(input: {
   const status: CommandStatus =
     recentProperties.length === 0 ? 'yellow' : stockedLaneCount >= 3 ? 'green' : stockedLaneCount >= 1 ? 'yellow' : 'red'
   const summary = recentProperties.length
-    ? `${recentProperties.length} saved deal twin${recentProperties.length === 1 ? '' : 's'} can route across ${stockedLaneCount}/4 partner lanes without ranking.`
+    ? `${recentProperties.length} saved deal twin${recentProperties.length === 1 ? '' : 's'} can route across ${stockedLaneCount}/${lanes.length} partner lanes without ranking.`
     : 'No saved deal twins are ready for buy-box routing yet.'
   const nextMove =
     recentProperties.length === 0

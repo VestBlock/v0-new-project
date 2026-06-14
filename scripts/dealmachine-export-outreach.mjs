@@ -33,12 +33,17 @@ const BCC = getArg("bcc") || ""
 const CONFIG_FILE = getArg("config-file")
 const EXPORT_CSV = getArg("export-csv")
 const QUEUE_CSV = getArg("queue-csv")
-const MARKET_ARG = (getArg("market") || "").trim().toLowerCase()
+const MARKET_ARG = (getArg("market") || getArg("markets") || "").trim()
 const STRATEGY = normalizeMarketSlug(getArg("strategy") || "seller-options")
 const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 7
 const PORTFOLIO_STRATEGIES = new Set(["portfolio-landlord", "senior-landlord", "out-of-state-landlord", "landlord-portfolio"])
 const ON_MARKET_STRATEGIES = new Set(["on-market-lowball", "on-market-cash-sweep", "active-listing-cash-review", "dealmachine-on-market"])
 const TAX_CODE_STRATEGIES = new Set(["tax-code-stack", "tax-delinquent-code-violation", "code-tax-stack"])
+const BUILDER_INFILL_STRATEGIES = new Set(["builder-infill-teardown", "infill-builder-teardown", "builder-teardown", "lot-assembly-builder"])
+const SMALL_MULTIFAMILY_STRATEGIES = new Set(["small-multifamily-portfolio", "multifamily-portfolio", "portfolio-breakup", "2-20-unit-portfolio"])
+const INSTITUTIONAL_BTR_STRATEGIES = new Set(["institutional-btr-buybox", "btr-buybox", "sfr-aggregator-buybox", "institutional-sfr"])
+const COMMERCIAL_DISTRESS_STRATEGIES = new Set(["commercial-small-bay-distress", "small-bay-distress", "commercial-distress", "mixed-use-distress"])
+const NOVATION_RETAIL_STRATEGIES = new Set(["novation-retail-spread", "retail-spread-novation", "novation"])
 const LOWBALL_MIN_PCT = boundedPercent(getArg("cash-min-pct") || "0.50", 0.5)
 const LOWBALL_MAX_PCT = boundedPercent(getArg("cash-max-pct") || "0.60", 0.6)
 const MAX_CASH_REVIEW_ANCHOR = getArg("max-anchor") ? numberish(getArg("max-anchor")) : 750000
@@ -49,6 +54,14 @@ function normalizeMarketSlug(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
+}
+
+function parseMarketArgs(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return []
+  const delimiter = raw.includes("|") ? "|" : raw.includes(";") ? ";" : raw.includes(",") && !/[a-z]+,\s*[a-z]{2}\b/i.test(raw) ? "," : null
+  const markets = delimiter ? raw.split(delimiter) : [raw]
+  return markets.map(normalizeMarketSlug).filter(Boolean)
 }
 
 function boundedPercent(value, fallback) {
@@ -141,23 +154,28 @@ function loadMarketConfigs() {
     throw new Error("Provide --market=<city-state> and --export-csv=<path>, or pass --config-file=<json>.")
   }
 
+  const markets = parseMarketArgs(MARKET_ARG)
+  if (SEND && !EXPORT_CSV && markets.length !== 1) {
+    throw new Error("Live send across multiple markets requires --config-file=<json> so every DealMachine export is explicit.")
+  }
   if (SEND && !EXPORT_CSV) {
     throw new Error("Live send requires --export-csv=<path> so the exact DealMachine export file is explicit.")
   }
 
-  const market = normalizeMarketSlug(MARKET_ARG)
-  const exportCsv = EXPORT_CSV ? path.resolve(EXPORT_CSV) : findLatestExportForMarket(market)
-  if (!exportCsv) {
-    throw new Error(
-      `No DealMachine export CSV found for ${market}. Place a fresh Contacts export in ${DM_EXPORT_DIR} or pass --export-csv=<path>.`
-    )
-  }
+  return markets.map((market) => {
+    const exportCsv = EXPORT_CSV ? path.resolve(EXPORT_CSV) : findLatestExportForMarket(market)
+    if (!exportCsv) {
+      throw new Error(
+        `No DealMachine export CSV found for ${market}. Place a fresh Contacts export in ${DM_EXPORT_DIR} or pass --export-csv=<path>.`
+      )
+    }
 
-  return [{
-    market,
-    queueCsv: QUEUE_CSV ? path.resolve(QUEUE_CSV) : findQueueCsvForMarket(market),
-    exportCsv,
-  }]
+    return {
+      market,
+      queueCsv: QUEUE_CSV ? path.resolve(QUEUE_CSV) : findQueueCsvForMarket(market),
+      exportCsv,
+    }
+  })
 }
 
 function env(name) {
@@ -492,6 +510,177 @@ function buildPortfolioLandlordEmail(contact) {
   return { subject, body }
 }
 
+function buildBuilderInfillEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "your market"
+  const signalLine = contact.property_type || contact.zoning || contact.code_violation
+    ? `The file has a few builder-review signals on it${contact.property_type ? `, including "${contact.property_type}"` : ""}${contact.zoning ? ` and zoning/use noted as "${contact.zoning}"` : ""}${contact.code_violation ? `, plus a condition note marked "${contact.code_violation}"` : ""}.`
+    : "The address landed in a builder/infill review lane, so I wanted to ask about the real condition and timing instead of guessing."
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    signalLine,
+    "",
+    `We work through buyer criteria for builders and rehab operators in ${market}. If the property is a teardown, heavy rehab, vacant lot, or just something you would rather not keep dealing with, I can review it as-is and see whether a builder-fit path is realistic.`,
+    "",
+    "I am not sending a blind number or promising a closing. Builder pricing depends on access, title, zoning, liens, utility status, and the actual scope.",
+    "",
+    `Would you be open to sending a few details or photos for ${line}, or should I close the file out?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, builder, developer, or closing agent. We do not guarantee offers, sale timelines, closing, zoning outcomes, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
+function buildSmallMultifamilyEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "your market"
+  const portfolioLine =
+    Number(contact.portfolio_count || 0) >= 2
+      ? `The owner record appears tied to ${contact.portfolio_count} properties in this export, so I wanted to ask whether you are open to reviewing one property or the group.`
+      : contact.units
+        ? `The file reads like a ${contact.units}-unit or small multifamily opportunity, so I wanted to ask directly before making assumptions.`
+        : "The file reads like a small rental or multifamily-style opportunity, so I wanted to ask directly before making assumptions."
+  const subject = `Question about ${market} rentals`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    portfolioLine,
+    "",
+    "We are matching rental and small multifamily buyers by market, unit count, condition, occupancy, and close speed. If simplifying one rental, several doors, or a harder-to-manage property would help, I can review the numbers and see whether a cash or terms path makes sense.",
+    "",
+    "I am not assuming you want to sell and I am not sending a blind offer. Rent roll, occupancy, access, title, taxes, and repairs all matter before any real number is useful.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close this out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, property manager, or closing agent. We do not guarantee offers, sale timelines, closing, financing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
+function buildInstitutionalBtrEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "your market"
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    `We are reviewing a few ${market} properties against active rental-buyer and build-to-rent style criteria. Your address came across the board as a possible fit, but I would need real condition, title, occupancy, and timing details before knowing whether it belongs in that lane.`,
+    "",
+    "If the data is wrong or the property is not something you would ever consider selling, no problem. If you would consider a simple as-is review, I can keep it clean and only move forward if the criteria actually match.",
+    "",
+    `Would you be open to sending a few details about ${line}, or is this not worth revisiting?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, institutional buyer, or closing agent. We do not guarantee buyer demand, offers, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
+function buildCommercialDistressEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const useLine = contact.property_type || contact.zoning
+    ? `The file shows ${[contact.property_type, contact.zoning].filter(Boolean).join(" / ")} as the use or zoning signal.`
+    : "The property came through a commercial or mixed-use review lane."
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    useLine,
+    "",
+    "We route some commercial, mixed-use, storage, small-bay, and redevelopment opportunities to operators who already know what they are looking for. If this property has repairs, vacancy, title issues, lease complexity, or timing pressure, I can review it as-is and see whether it fits a real buyer lane.",
+    "",
+    "I am not quoting a number from incomplete data. Use, leases, access, environmental items, zoning, liens, and condition all need to be understood first.",
+    "",
+    `Would you be open to a short conversation about ${line}, or should I close this out?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, environmental consultant, or closing agent. We do not guarantee offers, sale timelines, closing, zoning outcomes, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
+function buildNovationRetailSpreadEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    "Sometimes a straight cash offer is not the best fit, especially when the property may be closer to a retail sale after cleanup, photos, access, or a better presentation path. If that is the case here, I can review whether a fully disclosed market-assisted structure is realistic.",
+    "",
+    "That kind of structure only works with clear seller consent, clean paperwork, and the right local contract review. If cash is the better answer, I can look at that too.",
+    "",
+    `Would you be open to sharing a few details and photos for ${line}?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, or closing agent. We do not guarantee offers, sale timelines, closing, buyer demand, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
 function isOnMarketStatus(value) {
   const status = normalizeMarketSlug(value)
   return [
@@ -565,6 +754,11 @@ function buildStrategyEmail(contact) {
   if (ON_MARKET_STRATEGIES.has(STRATEGY)) return buildOnMarketCashReviewEmail(contact)
   if (TAX_CODE_STRATEGIES.has(STRATEGY)) return buildTaxCodeStackEmail(contact)
   if (PORTFOLIO_STRATEGIES.has(STRATEGY)) return buildPortfolioLandlordEmail(contact)
+  if (BUILDER_INFILL_STRATEGIES.has(STRATEGY)) return buildBuilderInfillEmail(contact)
+  if (SMALL_MULTIFAMILY_STRATEGIES.has(STRATEGY)) return buildSmallMultifamilyEmail(contact)
+  if (INSTITUTIONAL_BTR_STRATEGIES.has(STRATEGY)) return buildInstitutionalBtrEmail(contact)
+  if (COMMERCIAL_DISTRESS_STRATEGIES.has(STRATEGY)) return buildCommercialDistressEmail(contact)
+  if (NOVATION_RETAIL_STRATEGIES.has(STRATEGY)) return buildNovationRetailSpreadEmail(contact)
   return buildEmail(contact)
 }
 
@@ -711,6 +905,10 @@ function loadMatches(marketConfigs) {
         date_updated: queue?.date_updated || hit.date_updated || "",
         rent_estimate: queue?.rent_estimate || "",
         estimated_ltv: queue?.estimated_ltv || "",
+        property_type: queue?.property_type || queue?.property_use || hit.property_type || hit.property_use || hit.land_use || "",
+        units: queue?.units || queue?.unit_count || hit.units || hit.unit_count || hit.number_of_units || hit.property_units || "",
+        lot_size: queue?.lot_size || hit.lot_size || hit.lot_size_sqft || hit.acres || "",
+        zoning: queue?.zoning || hit.zoning || hit.property_zoning || "",
         cash_review_low: queue?.cash_review_low || "",
         cash_review_high: queue?.cash_review_high || "",
         suggested_exit_paths: queue?.suggested_exit_paths || "seller_options",
@@ -781,6 +979,91 @@ function annotatePortfolioSignals(contacts) {
   })
 }
 
+function strategyHaystack(contact) {
+  return normalizeText([
+    contact.property_address_full,
+    contact.market_label,
+    contact.owner_name,
+    contact.record_owner_name,
+    contact.property_type,
+    contact.units,
+    contact.lot_size,
+    contact.zoning,
+    contact.code_violation,
+    contact.stack_method,
+    contact.suggested_exit_paths,
+    contact.buyer_packet_summary,
+    contact.strategy_reason,
+    contact.lead_status,
+    contact.market_status,
+  ].filter(Boolean).join(" "))
+}
+
+function hasDistressSignal(contact) {
+  const haystack = strategyHaystack(contact)
+  return (
+    String(contact.code_violation_hit || "").toLowerCase() === "true" ||
+    Boolean(contact.tax_delinquent || contact.past_due_amount) ||
+    Number(contact.distress_score || 0) >= 70 ||
+    /\b(vacant|abandoned|boarded|fire|condemned|demo|demolition|code|violation|tax|delinquent|repair|rehab|distress)\b/.test(haystack)
+  )
+}
+
+function anchorValue(contact) {
+  return numberish(contact.list_price) || numberish(contact.current_listing_price) || numberish(contact.estimated_value)
+}
+
+function withStrategyReason(contact, extraReasons) {
+  return {
+    ...contact,
+    strategy_fit: "true",
+    strategy_reason: [
+      contact.strategy_reason,
+      ...extraReasons,
+    ].filter(Boolean).join(" | "),
+  }
+}
+
+function isBuilderInfillCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const builderSignal = /\b(infill|teardown|tear down|lot|land|vacant|oversized|zoning|demo|demolition|fire|condemned|boarded|shell|heavy rehab|major repair)\b/.test(haystack)
+  return builderSignal || hasDistressSignal(contact)
+}
+
+function isSmallMultifamilyCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const unitCount = numberish(contact.units)
+  return (
+    (unitCount >= 2 && unitCount <= 20) ||
+    Number(contact.portfolio_count || 0) >= 2 ||
+    /\b(duplex|triplex|fourplex|quad|2 unit|3 unit|4 unit|multi family|multifamily|apartment|units)\b/.test(haystack)
+  )
+}
+
+function isInstitutionalBtrCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const value = anchorValue(contact)
+  const inPriceBand = !value || (value >= 60000 && value <= 450000)
+  return inPriceBand && (
+    /\b(single family|sfr|residential|lot|land|vacant|newer|rental|portfolio|build)\b/.test(haystack) ||
+    contact.absentee_owner === "true" ||
+    contact.out_of_state_mailing === "true"
+  )
+}
+
+function isCommercialDistressCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const value = anchorValue(contact)
+  return (
+    /\b(commercial|industrial|warehouse|storage|small bay|mixed use|retail|office|auto|shop|flex|light industrial|zoning)\b/.test(haystack) ||
+    (value >= 350000 && hasDistressSignal(contact))
+  )
+}
+
 function applyStrategyFilter(contacts) {
   const annotated = annotatePortfolioSignals(contacts)
   if (ON_MARKET_STRATEGIES.has(STRATEGY)) {
@@ -822,6 +1105,54 @@ function applyStrategyFilter(contacts) {
           contact.priority_score ? `priority_${contact.priority_score}` : "",
         ].filter(Boolean).join(" | "),
       }))
+  }
+  if (BUILDER_INFILL_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isBuilderInfillCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "high_fee_builder_infill_lane",
+        hasDistressSignal(contact) ? "distress_or_condition_signal" : "",
+        contact.property_type ? `property_type_${normalizeMarketSlug(contact.property_type).slice(0, 36)}` : "",
+        contact.zoning ? `zoning_${normalizeMarketSlug(contact.zoning).slice(0, 24)}` : "",
+      ]))
+  }
+  if (SMALL_MULTIFAMILY_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isSmallMultifamilyCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "high_fee_multifamily_portfolio_lane",
+        Number(contact.portfolio_count || 0) >= 2 ? `portfolio_count_${contact.portfolio_count}` : "",
+        contact.units ? `units_${normalizeMarketSlug(contact.units).slice(0, 16)}` : "",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+      ]))
+  }
+  if (INSTITUTIONAL_BTR_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isInstitutionalBtrCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "high_fee_institutional_btr_buybox_lane",
+        anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+      ]))
+  }
+  if (COMMERCIAL_DISTRESS_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isCommercialDistressCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "high_fee_commercial_distress_lane",
+        contact.property_type ? `property_type_${normalizeMarketSlug(contact.property_type).slice(0, 36)}` : "",
+        hasDistressSignal(contact) ? "distress_or_condition_signal" : "",
+      ]))
+  }
+  if (NOVATION_RETAIL_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => isOnMarketStatus(contact.market_status) || hasDistressSignal(contact))
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .map((contact) => withStrategyReason(contact, [
+        "high_fee_novation_retail_spread_lane",
+        isOnMarketStatus(contact.market_status) ? `market_status_${normalizeMarketSlug(contact.market_status)}` : "",
+        anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
+      ]))
   }
   if (!PORTFOLIO_STRATEGIES.has(STRATEGY)) return annotated
   return annotated.filter((contact) => contact.strategy_fit === "true")
@@ -865,6 +1196,30 @@ function commandCenterExternalId(draft) {
   )
 }
 
+function strategyLeadNiche(strategy) {
+  if (ON_MARKET_STRATEGIES.has(strategy)) return "dealmachine_on_market_cash_review"
+  if (BUILDER_INFILL_STRATEGIES.has(strategy)) return "high_fee_builder_infill"
+  if (SMALL_MULTIFAMILY_STRATEGIES.has(strategy)) return "high_fee_small_multifamily"
+  if (INSTITUTIONAL_BTR_STRATEGIES.has(strategy)) return "high_fee_institutional_btr"
+  if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "high_fee_commercial_distress"
+  if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "high_fee_novation_retail_spread"
+  if (PORTFOLIO_STRATEGIES.has(strategy)) return "dealmachine_portfolio_landlord"
+  if (TAX_CODE_STRATEGIES.has(strategy)) return "dealmachine_tax_code_stack"
+  return "dealmachine_owner_contact"
+}
+
+function strategyOutreachAngle(strategy) {
+  if (ON_MARKET_STRATEGIES.has(strategy)) return "On-market/as-is cash review from DealMachine active/pending status"
+  if (BUILDER_INFILL_STRATEGIES.has(strategy)) return "Builder, infill, teardown, or heavy-rehab seller review"
+  if (SMALL_MULTIFAMILY_STRATEGIES.has(strategy)) return "Small multifamily or portfolio-breakup seller review"
+  if (INSTITUTIONAL_BTR_STRATEGIES.has(strategy)) return "Institutional or build-to-rent buy-box seller review"
+  if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "Commercial, mixed-use, or small-bay distress review"
+  if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "Disclosed novation or retail-spread seller review"
+  if (PORTFOLIO_STRATEGIES.has(strategy)) return "Portfolio landlord simplification review"
+  if (TAX_CODE_STRATEGIES.has(strategy)) return "Tax delinquent and code-violation seller review"
+  return "Seller options review from DealMachine owner-contact export"
+}
+
 async function findExistingCommandCenterLead(admin, draft, externalId) {
   const { data: byExternalId, error: externalError } = await admin
     .from("leads")
@@ -891,7 +1246,8 @@ async function upsertCommandCenterLead(admin, draft, result) {
   const existing = await findExistingCommandCenterLead(admin, draft, externalId)
   const now = new Date().toISOString()
   const sentOk = Boolean(result.ok)
-  const onMarketStrategy = ON_MARKET_STRATEGIES.has(draft.strategy || STRATEGY)
+  const strategy = normalizeMarketSlug(draft.strategy || STRATEGY)
+  const onMarketStrategy = ON_MARKET_STRATEGIES.has(strategy)
   const suggestedPaths = sellerPathList(draft.suggested_exit_paths) || "seller options"
   const payload = {
     lead_type: "sell_house",
@@ -912,7 +1268,7 @@ async function upsertCommandCenterLead(admin, draft, result) {
     urgency_level: "medium",
     contactability_level: "high",
     market_segment: "seller_lead",
-    niche: onMarketStrategy ? "dealmachine_on_market_cash_review" : "dealmachine_owner_contact",
+    niche: strategyLeadNiche(strategy),
     email_valid: true,
     bounce_risk_score: 10,
     status: sentOk ? "contacted" : "outreach_ready",
@@ -924,9 +1280,7 @@ async function upsertCommandCenterLead(admin, draft, result) {
     pain_signal: onMarketStrategy
       ? `DealMachine owner contact marked ${draft.market_status || "on-market/review"} for ${draft.property_address_full}. Conditional as-is cash range: ${draft.cash_review_low || "n/a"}-${draft.cash_review_high || "n/a"}.`
       : `DealMachine owner contact for ${draft.property_address_full}. Suggested paths: ${suggestedPaths}.`,
-    outreach_angle: onMarketStrategy
-      ? "On-market/as-is cash review from DealMachine active/pending status"
-      : "Seller options review from DealMachine owner-contact export",
+    outreach_angle: strategyOutreachAngle(strategy),
     notes: draft.buyer_packet_summary || (onMarketStrategy
       ? "DealMachine active/pending owner-contact export queued for conditional as-is cash-review outreach."
       : "DealMachine owner-contact export queued for seller-options outreach."),
@@ -947,6 +1301,10 @@ async function upsertCommandCenterLead(admin, draft, result) {
       leadStatus: draft.lead_status,
       rentEstimate: draft.rent_estimate,
       estimatedLtv: draft.estimated_ltv,
+      propertyType: draft.property_type,
+      units: draft.units,
+      lotSize: draft.lot_size,
+      zoning: draft.zoning,
       cashReviewLow: draft.cash_review_low,
       cashReviewHigh: draft.cash_review_high,
       cashReviewAnchor: draft.cash_review_anchor,
@@ -963,6 +1321,10 @@ async function upsertCommandCenterLead(admin, draft, result) {
       recordOwnerName: draft.record_owner_name || null,
       portfolioCount: draft.portfolio_count || null,
       strategyReason: draft.strategy_reason || null,
+      propertyType: draft.property_type || null,
+      units: draft.units || null,
+      lotSize: draft.lot_size || null,
+      zoning: draft.zoning || null,
       marketStatus: draft.market_status || null,
       leadStatus: draft.lead_status || null,
       cashReviewAnchor: draft.cash_review_anchor || null,
@@ -1061,6 +1423,10 @@ async function syncCommandCenterSend(admin, draft, result) {
       recordOwnerName: draft.record_owner_name || null,
       portfolioCount: draft.portfolio_count || null,
       strategyReason: draft.strategy_reason || null,
+      propertyType: draft.property_type || null,
+      units: draft.units || null,
+      lotSize: draft.lot_size || null,
+      zoning: draft.zoning || null,
       marketStatus: draft.market_status || null,
       leadStatus: draft.lead_status || null,
       cashReviewLow: draft.cash_review_low || null,
@@ -1145,6 +1511,10 @@ async function main() {
         current_listing_price: contact.current_listing_price || "",
         rent_estimate: contact.rent_estimate,
         estimated_ltv: contact.estimated_ltv,
+        property_type: contact.property_type || "",
+        units: contact.units || "",
+        lot_size: contact.lot_size || "",
+        zoning: contact.zoning || "",
         cash_review_low: contact.cash_review_low || cashReview.low || "",
         cash_review_high: contact.cash_review_high || cashReview.high || "",
         cash_review_anchor: cashReview.anchor || "",
@@ -1220,6 +1590,10 @@ async function main() {
     "current_listing_price",
     "rent_estimate",
     "estimated_ltv",
+    "property_type",
+    "units",
+    "lot_size",
+    "zoning",
     "cash_review_low",
     "cash_review_high",
     "cash_review_anchor",

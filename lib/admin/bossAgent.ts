@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { AgentKey, CommandCenterData } from '@/lib/admin/commandCenter'
+import { HIGH_VALUE_BUYER_LANES } from '@/lib/investors/builderStrategy'
 
 /**
  * Boss Agent — the strategy layer above the seven operating agents.
@@ -402,6 +403,62 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       { label: 'Open lead queue', href: '/admin/leads' },
       { label: 'Open partner follow-ups', href: '/admin/buyers' },
     ],
+  })
+
+  // ── 5. High-fee buyer lanes ──────────────────────────────────────────────
+  plays.push({
+    key: 'high-fee-assignment-lanes',
+    name: 'High-Fee Assignment Lanes',
+    category: 'conversion',
+    thesis:
+      'Bigger assignment fees come from sharper buyer lanes: builders, multifamily operators, BTR/SFR buyers, commercial operators, and disclosed novation partners. The Boss should source sellers only after the matching buyer criteria are real.',
+    whyNow: [
+      `${HIGH_VALUE_BUYER_LANES.length} premium buyer lanes are defined for strategy selection.`,
+      `${builderPartners} builder/developer profile${builderPartners === 1 ? '' : 's'} in the engine; ${partnerBuyBoxesConfirmed} confirmed buy box${partnerBuyBoxesConfirmed === 1 ? '' : 'es'} across all partners.`,
+      topMarkets.length ? `Use ${topMarketNames} first unless fresh exports point elsewhere.` : 'Use fresh DealMachine exports first until market heat is clearer.',
+      `${remainingOutboundCapacity} outbound slot${remainingOutboundCapacity === 1 ? '' : 's'} remain today; keep premium lanes separated from generic seller outreach.`,
+    ],
+    score: clampScore(62 + Math.min(18, builderPartners * 2) + Math.min(12, partnerBuyBoxesConfirmed * 2) + (remainingOutboundCapacity > 0 ? 8 : 0)),
+    effort: 'medium',
+    expectedOutcome: 'Premium seller plays run with a matching buyer lane, a fee thesis, and a qualification gate before any offer language is used.',
+    directives: [
+      {
+        agent: 'outreach',
+        action: 'Recruit high-value buyers by lane',
+        detail:
+          'Run builder/developer, multifamily operator, BTR/SFR, commercial/small-bay, and novation-friendly buyer criteria outreach as separate lanes.',
+        priority: 'high',
+      },
+      {
+        agent: 'acquisition',
+        action: 'Source seller lists that match premium buyer lanes',
+        detail:
+          'Do not mix generic off-market leads into this lane. Use DealMachine tax/code, portfolio, property type, vacancy, lot, and value filters that match the selected buyer lane.',
+        priority: 'high',
+      },
+      {
+        agent: 'underwriting',
+        action: 'Require a premium-lane qualification gate',
+        detail:
+          'Before quoting numbers, confirm the lane-specific facts: zoning/lot rules for builders, rent roll for multifamily, buy-box bands for BTR, use/leases for commercial, and seller consent for novation.',
+        priority: 'high',
+      },
+      {
+        agent: 'operator',
+        action: 'Keep high-fee batches separate in the command center',
+        detail:
+          'Track strategy key, buyer lane, fee thesis, qualification gate, reply rate, appointment rate, and contract/dispo result so the Boss can learn which lane deserves more volume.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      { label: 'Discover builder partners', command: 'npm run investors:builders:discover' },
+      { label: 'Builder infill seller batch', command: 'npm run sellers:high-fee:builder-infill -- --market="milwaukee-wi|toledo-oh" --limit=100' },
+      { label: 'Multifamily seller batch', command: 'npm run sellers:high-fee:small-multifamily -- --market="cleveland-oh|toledo-oh" --limit=100' },
+      { label: 'Commercial seller batch', command: 'npm run sellers:high-fee:commercial-distress -- --market="milwaukee-wi|cleveland-oh" --limit=100' },
+    ],
+    complianceNote:
+      'Premium-lane fees still require clean contracts, disclosure, suppression checks, and state/local compliance review. Novation and assignment language must be especially explicit.',
   })
 
   // ── 5. Buyer depth in hot markets ─────────────────────────────────────────
