@@ -17,9 +17,9 @@ export default async function AdminInvestorPartnershipsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-slate-400">DealVault relationship database</p>
-          <h1 className="text-2xl font-semibold text-white">Investor Outreach & Partnership Engine</h1>
+          <h1 className="text-2xl font-semibold text-white">Investor, Builder & Partner Engine</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-400">
-            Identify active investors, score partnership fit, initiate deal-flow, disposition, financing, and strategic partnership outreach, then route replies into DealVault.
+            Identify active investors, builders, developers, and construction partners, score fit, capture buy boxes, initiate deal-flow and disposition outreach, then route replies into DealVault.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -33,7 +33,7 @@ export default async function AdminInvestorPartnershipsPage() {
             <Link href="/admin/research-checklists">Research Checklist</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

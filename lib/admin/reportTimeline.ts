@@ -166,7 +166,7 @@ export function buildCreditReportTimeline(input: {
       severity: statusSeverity(task.status),
       href:
         task.entity_type === 'credit_report' && task.entity_id
-          ? `/admin-panel/reports/${task.entity_id}`
+          ? `/admin/command-center`
           : null,
     });
   });

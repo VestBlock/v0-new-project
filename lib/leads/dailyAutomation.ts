@@ -578,13 +578,26 @@ async function sendAdminDigest(
     | 'admin_lead_outreach_daily_report'
     | 'admin_lead_send_daily_report'
 ) {
-  if (!process.env.ADMIN_ALERT_EMAIL || items.length === 0) return
+  const recipient = getLeadOpsAlertEmail()
+  if (!recipient || items.length === 0) return
   await sendEmail({
-    to: process.env.ADMIN_ALERT_EMAIL,
+    to: recipient,
     subject,
     html: buildLeadDigestHtml(title, items),
     eventType,
   }).catch(() => null)
+}
+
+function getLeadOpsAlertEmail() {
+  return (
+    process.env.LEAD_OPS_ALERT_EMAIL ||
+    process.env.OUTREACH_ALERT_EMAIL ||
+    process.env.ACQUISITIONS_ALERT_EMAIL ||
+    process.env.FROM_EMAIL ||
+    process.env.ADMIN_ALERT_EMAIL ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    ''
+  ).trim()
 }
 
 function isInvalidGooglePlacesKeyError(error: unknown) {
@@ -593,8 +606,8 @@ function isInvalidGooglePlacesKeyError(error: unknown) {
 }
 
 function resolveDailyMapsProvider() {
-  if (process.env.OUTSCRAPER_API_KEY) return 'outscraper' as const
   if (process.env.GOOGLE_PLACES_API_KEY && !isLegacyGooglePlacesPhaseOutEnabled()) return 'google' as const
+  if (envBool('LEADS_ENABLE_OUTSCRAPER', false) && process.env.OUTSCRAPER_API_KEY) return 'outscraper' as const
   return null
 }
 
@@ -694,8 +707,8 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
       count: 0,
       status: 'skipped',
       detail: isLegacyGooglePlacesPhaseOutEnabled()
-        ? 'Daily maps scraping now requires OUTSCRAPER_API_KEY. Google Places remains stored as a legacy source only.'
-        : 'Add OUTSCRAPER_API_KEY or GOOGLE_PLACES_API_KEY to enable daily maps scraping.',
+        ? 'Daily maps scraping is paused because Google Places is phased out here and Outscraper is disabled until revenue justifies paid scraping.'
+        : 'Add GOOGLE_PLACES_API_KEY to enable free/owned daily maps scraping, or set LEADS_ENABLE_OUTSCRAPER=true when paid Outscraper usage is approved.',
     })
   } else {
     const refillMarketOffset = emailReadyRefillOnly
@@ -1017,6 +1030,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
   if (
     !emailReadyRefillOnly &&
     (weakWebPresenceOnly || envBool('LEADS_ENABLE_WEAK_WEB_PRESENCE_LANE', false)) &&
+    envBool('LEADS_ENABLE_OUTSCRAPER', false) &&
     process.env.OUTSCRAPER_API_KEY
   ) {
     const weakMarketOffset = envNonNegativeInt('LEADS_WEAK_WEB_MARKET_OFFSET', getEmailRefillMarketOffset())
@@ -1149,7 +1163,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
       source: 'weak_web_presence_businesses',
       count: 0,
       status: 'skipped',
-      detail: 'Add OUTSCRAPER_API_KEY to enable the weak/no-website business lane.',
+      detail: 'Weak/no-website business lane is paused because it uses Outscraper. Set LEADS_ENABLE_OUTSCRAPER=true only when paid scraping is approved.',
     })
   }
 
@@ -1203,14 +1217,15 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
     }
   }
 
-  if (process.env.ADMIN_ALERT_EMAIL && !options.dryRun) {
+  const leadOpsAlertEmail = getLeadOpsAlertEmail()
+  if (leadOpsAlertEmail && !options.dryRun) {
     const bestCity = [...marketSummary].sort((a, b) => b.count - a.count)[0]
     const bestNiche = marketSummary
       .flatMap((item) => item.niches.map((niche) => ({ niche, count: item.count })))
       .sort((a, b) => b.count - a.count)[0]
 
     await sendEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
+      to: leadOpsAlertEmail,
       subject: 'VestBlock daily lead run report',
       html: buildLeadDigestHtml('Daily lead run summary', [
         `Cities discovered today: ${marketSummary.length}`,
@@ -1964,19 +1979,6 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 
   const remainingAfterFirstSend = Math.max(0, target - firstSend.sentCount)
 
-  const preDraftEnrichment =
-    !options.dryRun &&
-    remainingAfterFirstSend > 0 &&
-    getRemainingBudgetMs(startedAtMs, budgetMs) > 14000 &&
-    !firstSend.truncated
-      ? await runDailyLeadEmailEnrichment({
-          limit: fallbackEnrichmentLimit,
-          dryRun: options.dryRun,
-          budgetMs,
-          startedAtMs,
-        })
-      : null
-
   const firstOutreach =
     remainingAfterFirstSend > 0 && getRemainingBudgetMs(startedAtMs, budgetMs) > 12000
       ? await runDailyLeadOutreach({
@@ -1998,6 +2000,20 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
       : null
 
   const remainingAfterSecondSend = Math.max(0, target - firstSend.sentCount - (secondSend?.sentCount || 0))
+
+  const preDraftEnrichment =
+    !options.dryRun &&
+    remainingAfterSecondSend > 0 &&
+    getRemainingBudgetMs(startedAtMs, budgetMs) > 14000 &&
+    !firstSend.truncated &&
+    !(secondSend?.truncated)
+      ? await runDailyLeadEmailEnrichment({
+          limit: fallbackEnrichmentLimit,
+          dryRun: options.dryRun,
+          budgetMs,
+          startedAtMs,
+        })
+      : null
 
   let refillScrape: Awaited<ReturnType<typeof runDailyLeadScrape>> | null = null
   let refillOutreach: Awaited<ReturnType<typeof runDailyLeadOutreach>> | null = null

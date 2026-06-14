@@ -124,7 +124,7 @@ export default async function AdminBlockchainPage() {
             <Link href="/admin/dealvault">DealVault Admin</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

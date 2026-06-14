@@ -24,10 +24,10 @@ export default async function ResearchPage() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link href="/admin/improvement">Improvement</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin/experiments">Experiments</Link>
+            <Link href="/admin/reports/daily">Daily reports</Link>
           </Button>
         </div>
       </div>

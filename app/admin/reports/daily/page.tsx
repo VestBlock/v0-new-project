@@ -24,8 +24,8 @@ export default async function DailyReportsPage() {
           <h1 className="text-2xl font-semibold text-white">Daily growth reports</h1>
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="outline"><Link href="/admin/seo-opportunities">SEO opportunities</Link></Button>
-          <Button asChild variant="outline"><Link href="/admin-panel">Admin home</Link></Button>
+          <Button asChild variant="outline"><Link href="/admin/research">Research</Link></Button>
+          <Button asChild variant="outline"><Link href="/admin/command-center">Command center</Link></Button>
         </div>
       </div>
 

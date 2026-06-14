@@ -1,7 +1,6 @@
 import type { LeadRecord, LeadSuppressionRecord } from '@/lib/leads/types'
 import { getLeadRevenueFitIssue, getRevenueCampaignMinAutoScore } from '@/lib/leads/revenueCampaigns'
-import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
-import { isSourceInFamily } from '@/lib/leads/source-keys'
+import { getLeadOutboundPauseReason } from '@/lib/leads/outboundEligibility'
 import { getEmailQualityIssue } from '@/lib/outreach/email-quality'
 
 type LeadEmailAutopilotInput = Partial<Pick<
@@ -138,18 +137,15 @@ export function getLeadEmailAutopilotDecision(
   if (isClosedLeadStatus(lead.status) || lead.outreach_status === 'do_not_contact') {
     return { autoApproveEnabled, autoSendEnabled, minScore, maxBounceRisk, eligible: false, reason: 'do_not_contact' }
   }
-  if (
-    !isOutreachV2Enabled() &&
-    isSourceInFamily(lead.source, 'google_places_businesses') &&
-    isLegacyGooglePlacesPhaseOutEnabled()
-  ) {
+  const outboundPauseReason = getLeadOutboundPauseReason(lead)
+  if (outboundPauseReason) {
     return {
       autoApproveEnabled,
       autoSendEnabled,
       minScore,
       maxBounceRisk,
       eligible: false,
-      reason: 'legacy_google_places_paused',
+      reason: outboundPauseReason,
     }
   }
   if (!lead.email) {

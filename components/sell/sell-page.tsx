@@ -21,7 +21,6 @@ import {
   Shield,
   CheckCircle2,
   Phone,
-  Mail,
   Zap,
   HandshakeIcon,
   TrendingUp,
@@ -902,11 +901,11 @@ export function SellPage({ market }: SellPageProps) {
 
               <div className="flex flex-col sm:flex-row items-center gap-6 text-muted-foreground">
                 <a
-                  href="mailto:contact@vestblock.io"
+                  href="#lead-form"
                   className="flex items-center gap-2 hover:text-cyan-500 transition-colors"
                 >
-                  <Mail className="h-4 w-4" />
-                  contact@vestblock.io
+                  <Home className="h-4 w-4" />
+                  Submit property details
                 </a>
                 <a
                   href="tel:414-687-6923"

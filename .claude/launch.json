@@ -4,8 +4,23 @@
     {
       "name": "vestblock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
       "port": 3012
+    },
+    {
+      "name": "vestblock-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3013"
+      ],
+      "port": 3013
     }
   ]
 }

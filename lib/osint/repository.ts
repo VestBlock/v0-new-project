@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { buildInvestorPipelineMetadata, buildInvestorPipelineSnapshotFromRecord } from '@/lib/investors/pipeline'
 import { inputWithCalculatedScore } from '@/lib/osint/scoring'
 import type {
   NormalizedResearchChecklistInput,
@@ -196,8 +197,16 @@ export async function createResearchChecklistFromInvestor(investorId: string) {
   const admin = createAdminClient()
   const { data: investor, error } = await admin.from('investor_profiles').select('*').eq('id', investorId).single()
   if (error) throw error
+  const pipeline = buildInvestorPipelineSnapshotFromRecord(investor)
+  const recommendedLane = pipeline.builderLane
+    ? investor.classification_tags?.includes('developer_partner')
+      ? 'developer_partner'
+      : 'contractor_partner'
+    : investor.financing_fit
+      ? 'lender_criteria'
+      : 'investor_partnership'
 
-  return upsertResearchChecklist({
+  const checklist = await upsertResearchChecklist({
     entityType: 'investor',
     entityId: investor.id,
     sourceType: 'investor_profiles',
@@ -209,20 +218,58 @@ export async function createResearchChecklistFromInvestor(investorId: string) {
     website: investor.website || null,
     checklist: {
       ownerEntityVerified: Boolean(investor.company_name || investor.llc_name),
-      contactQualityReviewed: Boolean(investor.contact_email || investor.contact_phone),
-      fitCriteriaReviewed: Boolean((investor.markets || []).length || (investor.property_types || []).length),
+      contactQualityReviewed: pipeline.contactQuality !== 'missing',
+      fitCriteriaReviewed: pipeline.buyBoxInferred,
+      serviceAreaReviewed: Boolean((investor.markets || []).length),
+      sourceEvidenceReviewed: pipeline.sourceEvidenceCount > 0,
       nextActionSelected: true,
     },
     opportunityFlags: [
       ...(investor.deal_flow_fit ? [{ label: 'Deal flow partner', severity: 'info' as const }] : []),
       ...(investor.financing_fit ? [{ label: 'Financing opportunity', severity: 'info' as const }] : []),
+      ...(pipeline.builderLane ? [{ label: 'Builder lane partner', severity: 'info' as const }] : []),
+      ...(pipeline.dealMachineAligned ? [{ label: 'DealMachine market aligned', severity: 'info' as const }] : []),
       ...(investor.partnership_fit ? [{ label: 'Strategic partnership fit', severity: 'info' as const }] : []),
     ],
-    recommendedLane: 'investor_partnership',
+    recommendedLane,
     outreachStatus: investor.outreach_status === 'do_not_contact' ? 'do_not_contact' : 'needs_review',
-    researchSummary: investor.notes || `Investor profile imported from partnership engine with ${investor.partnership_score || 0}/100 partnership fit.`,
-    nextAction: 'Review contact quality, criteria, and outreach lane before sending.',
+    researchSummary:
+      investor.notes ||
+      `Investor profile imported from partnership engine with ${investor.partnership_score || 0}/100 partnership fit, ${pipeline.sourceConfidence}/100 source confidence, and ${pipeline.stageLabel} pipeline stage.`,
+    nextAction: pipeline.nextAction,
   })
+
+  if (investor.relationship_stage === 'discovered') {
+    await admin
+      .from('investor_profiles')
+      .update({
+        relationship_stage: 'researched',
+        metadata_json: buildInvestorPipelineMetadata(
+          {
+            relationshipStage: 'researched',
+            outreachStatus: investor.outreach_status,
+            contactEmail: investor.contact_email,
+            contactPhone: investor.contact_phone,
+            website: investor.website,
+            markets: investor.markets,
+            propertyTypes: investor.property_types,
+            classificationTags: investor.classification_tags,
+            estimatedBuyBox: investor.estimated_buy_box,
+            metadata: investor.metadata_json,
+            sourceConfidenceScore: investor.source_confidence_score,
+            sourceNames: investor.source_names,
+            displayName: investor.display_name,
+            primaryInvestorType: investor.primary_investor_type,
+            notes: investor.notes,
+          },
+          { researchChecklistId: checklist.id }
+        ),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', investor.id)
+  }
+
+  return checklist
 }
 
 export async function createResearchChecklistFromProperty(input: {

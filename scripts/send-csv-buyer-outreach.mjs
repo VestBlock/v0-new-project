@@ -25,7 +25,7 @@ const THROTTLE_MS = getArg("throttle") ? parseInt(getArg("throttle"), 10) : 1500
 const BCC = getArg("bcc") || null
 const SKIP_SENT = !args.includes("--no-skip-sent")
 
-const SIGNATURE = "Robert Sanders\nVestBlock\ncontact@vestblock.io\n(414) 687-6923"
+const SIGNATURE = "Robert Sanders\nVestBlock\nacquisitions@vestblock.io\n(414) 687-6923"
 const FOOTER =
   'VestBlock connects sellers, buyers, and lenders around real estate opportunities and is not a lender, broker, or closing agent. ' +
   'We present opportunities based on fit and truthful information and do not promise guaranteed deal volume, funding, or outcomes. ' +
@@ -79,7 +79,7 @@ function buildMessage(seg, c) {
   return t[seg] || t.buyer
 }
 
-function getSender() { return process.env.FROM_EMAIL || "contact@vestblock.io" }
+function getSender() { return process.env.FROM_EMAIL || "acquisitions@vestblock.io" }
 async function sendWithResend(resend, { recipient, subject, body }) {
   const payload = { from: getSender(), to: recipient, subject, text: body }
   if (BCC) payload.bcc = BCC

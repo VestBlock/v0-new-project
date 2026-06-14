@@ -1,7 +1,8 @@
 import { CATEGORY_LABELS } from '@/lib/lenders/constants'
 import type { GeneratedLenderOutreachBundle, LenderRecord } from '@/lib/lenders/types'
 
-const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\ncontact@vestblock.io'
+const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\nacquisitions@vestblock.io'
+export const LENDER_OUTREACH_TEMPLATE_VERSION = 'vestblock-lender-refresh-2026-06-11'
 
 function bulletList(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
@@ -9,7 +10,7 @@ function bulletList(items: string[]) {
 
 function introAngle(lender: LenderRecord) {
   if (lender.lender_type === 'real_estate') {
-    return 'We help organize borrowers and real-estate deals before they reach a lender, so your team sees cleaner files and better-fit submissions.'
+    return 'We help organize operators and real-estate deals before they reach a lender, so your team sees cleaner files and better-fit submissions.'
   }
   if (lender.lender_type === 'personal') {
     return 'We help sort borrowers into better-fit cleanup, consolidation, and credit-ready next steps before introductions are made.'
@@ -22,7 +23,7 @@ function introAngle(lender: LenderRecord) {
 
 function referralAngle(lender: LenderRecord) {
   if (lender.lender_type === 'real_estate') {
-    return 'The borrowers we would route over are typically investors, cash-out refinance cases, BRRRR borrowers, or deal-specific real-estate operators who need a better lender fit.'
+    return 'The opportunities we would route over are typically investors, BRRRR borrowers, rental operators, rehab cases, bridge scenarios, or deal-specific real-estate borrowers who need a better lender fit.'
   }
   if (lender.spanish_support) {
     return 'We also support Spanish-speaking borrowers and can help make introductions cleaner for bilingual or Spanish-first lending conversations.'
@@ -86,15 +87,15 @@ function economicsPrompt(lender: LenderRecord) {
     return 'If you have a formal partner intake process or a non-compensated referral path, we would be glad to follow that structure.'
   }
 
-  return 'If you already have a broker or referral program in states where that is permitted, I’d also love to understand how you handle partner onboarding, disclosures, and compensation.'
+  return 'If you already have a partner intake sheet, broker channel, or referral structure in states where that is permitted, I’d also love to understand how you handle onboarding, disclosures, and compensation.'
 }
 
 function demandEngineAngle(lender: LenderRecord) {
   if (lender.lender_type === 'real_estate') {
-    return 'We also run automated SEO and content systems that bring in inbound real-estate and investor demand, so the pipeline is not just manual outbound or cold list-building.'
+    return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and lending box are clear, so the relationship is supported by more inbound visibility and not just manual outbound.'
   }
 
-  return 'We also run automated SEO and content systems that bring in business owners already searching for funding, credit, and growth help, so the pipeline is not just manual outbound or cold list-building.'
+  return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and fit box are clear, so the relationship is supported by more inbound visibility and not just manual outbound.'
 }
 
 export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOutreachBundle {
@@ -105,8 +106,8 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
   const questions = qualificationQuestions(lender)
   const economics = economicsPrompt(lender)
   const demandEngine = demandEngineAngle(lender)
-  const subject = `VestBlock partnership idea for ${label} borrower referrals`
-  const followupSubject = `Quick follow-up on VestBlock borrower referrals`
+  const subject = `VestBlock deals matched to your ${label} lending criteria`
+  const followupSubject = `Quick follow-up on your VestBlock lending box`
   const complianceNote =
     'VestBlock positions referrals based on fit, readiness, and truthful borrower information. We do not promise approvals or misrepresent borrower files.'
 
@@ -114,7 +115,7 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
     generatedWith: 'template',
     emailIntro: {
       subject,
-      body: `Hi ${lender.contact_name || lender.name} team,\n\nI’m reaching out from VestBlock. ${partnershipAngle}\n\n${borrowerReferralAngle}\n\nWe are building out reliable lender relationships across the U.S. so we can place borrowers more intelligently by state, product, credit profile, and documentation readiness.\n\n${demandEngine}\n\nIf it helps, these are the first things we usually want to understand before we ever send someone over:\n${bulletList(questions)}\n\n${cta}\n\nIf your team already has a one-pager, product sheet, or quick fit box, I’d be happy to organize that on our side and only send matches.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
+      body: `Hi ${lender.contact_name || lender.name} team,\n\nI’m reaching out from VestBlock. ${partnershipAngle}\n\n${borrowerReferralAngle}\n\nWe are building a reliable lender network so we can route deals and borrowers more intelligently by state, product, credit profile, leverage, and documentation readiness.\n\nOn the seller and operator side, we are working opportunities through fast cash, creative, novation, bridge, rehab, DSCR, and long-term hold conversations. On the partner side, we want your real lending box so the right files move quickly.\n\n${demandEngine}\n\nIf it helps, these are the first things we usually want to understand before we ever send someone over:\n${bulletList(questions)}\n\n${cta}\n\nIf your team already has a one-pager, product sheet, or quick fit box, I’d be happy to organize that on our side and only send matches.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
       cta,
       partnershipAngle,
       borrowerReferralAngle,
@@ -124,7 +125,7 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
     },
     emailFollowup: {
       subject: followupSubject,
-      body: `Hi ${lender.contact_name || lender.name} team,\n\nWanted to circle back on my earlier note. We’re actively building out a cleaner lender network for ${label} and would rather understand your real fit box than send mismatched borrowers.\n\nA meaningful part of that pipeline comes from our automated SEO and content systems, which helps us create inbound borrower demand instead of relying only on cold outreach.\n\nEven a short reply with a few of these would help a lot:\n${bulletList(questions.slice(0, 5))}\n\n${economics}\n\nThanks again,\n${OUTREACH_SIGNATURE}`,
+      body: `Hi ${lender.contact_name || lender.name} team,\n\nWanted to circle back on my earlier note. We’re actively building out a cleaner lender network for ${label} and would rather understand your real fit box than send mismatched borrowers.\n\nWe are trying to build this the right way: cleaner seller and operator intake, sharper routing, better lender relationships, and optional AEO/SEO Booster support once a partner’s positioning is clear.\n\nEven a short reply with a few of these would help a lot:\n${bulletList(questions.slice(0, 5))}\n\n${economics}\n\nThanks again,\n${OUTREACH_SIGNATURE}`,
       cta: 'A short reply with your fit box or partner process is enough for us to get started.',
       partnershipAngle,
       borrowerReferralAngle,
@@ -133,7 +134,7 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
       economicsPrompt: economics,
     },
     linkedInDm: {
-      body: `Hi, I’m building out VestBlock’s lender network and came across ${lender.name}. We help route cleaner borrower opportunities by deal type and fit. If your team is open to referral conversations for ${label}, I’d love to compare notes on your preferred fit box, states served, and any hard no-go items.`,
+      body: `Hi, I’m building out VestBlock’s lender network and came across ${lender.name}. We help route cleaner deal and borrower opportunities by fit instead of blasting files across the wrong lenders. If your team is open to partner conversations for ${label}, I’d love to compare notes on your preferred fit box, states served, and hard no-go items.`,
       cta: 'Open to a quick lender-fit conversation?',
       partnershipAngle,
       borrowerReferralAngle,
@@ -142,7 +143,7 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
       economicsPrompt: null,
     },
     phoneScript: {
-      body: `Hi, this is VestBlock. We help organize and pre-qualify borrowers before they reach a lender, and I’m calling to see who handles partnership or referral conversations for ${lender.name}. We’re especially looking for strong ${label} fit and would rather understand your real box than send mismatched files. The main things we’d want to know are states served, preferred borrower or deal types, deal-breakers, and whether there is a formal partner intake process.`,
+      body: `Hi, this is VestBlock. We help organize and pre-qualify borrowers and real-estate deals before they reach a lender, and I’m calling to see who handles partnership or referral conversations for ${lender.name}. We’re especially looking for strong ${label} fit and would rather understand your real box than send mismatched files. The main things we’d want to know are states served, preferred borrower or deal types, deal-breakers, and whether there is a formal partner intake process.`,
       cta: 'Who is the best person for partner/referral conversations?',
       partnershipAngle,
       borrowerReferralAngle,
@@ -151,8 +152,8 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
       economicsPrompt: economics,
     },
     spanishEmail: {
-      subject: `Posible alianza con VestBlock para referidos de ${label}`,
-      body: `Hola ${lender.contact_name || 'equipo'},\n\nLe escribo de VestBlock. Ayudamos a organizar clientes antes de conectarlos con un prestamista para que lleguen mejor preparados y con mejor ajuste.\n\nEstamos creando una red nacional de prestamistas y nos interesa entender qué tipos de clientes, estados y productos prefieren ustedes para ${label}. Así podemos enviar únicamente oportunidades que tengan sentido.\n\nTambién operamos sistemas automatizados de SEO y contenido que generan demanda entrante de dueños de negocio y casos de financiamiento, para no depender solo de listas frías o prospección manual.\n\nNormalmente queremos entender cosas como:\n${bulletList([
+      subject: `VestBlock y su criterio de colocación para ${label}`,
+      body: `Hola ${lender.contact_name || 'equipo'},\n\nLe escribo de VestBlock. Ayudamos a organizar clientes y oportunidades inmobiliarias antes de conectarlos con un prestamista para que lleguen mejor preparados y con mejor ajuste.\n\nEstamos creando una red nacional de prestamistas y nos interesa entender qué tipos de clientes, estados y productos prefieren ustedes para ${label}. Así podemos enviar únicamente oportunidades que realmente tengan sentido.\n\nTambién podemos apoyar a socios serios con un AEO/SEO Booster cuando su posicionamiento y criterios ya estén claros.\n\nNormalmente queremos entender cosas como:\n${bulletList([
         'Estados donde prestan activamente',
         'Tipos de clientes o transacciones que prefieren',
         'Requisitos mínimos o casos que no aceptan',

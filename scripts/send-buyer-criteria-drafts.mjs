@@ -126,19 +126,24 @@ function getOutreachMailingAddress() {
 }
 
 function getSender() {
-  return getEnv('GOOGLE_WORKSPACE_SENDER') || getEnv('FROM_EMAIL') || 'contact@vestblock.io'
+  return (
+    getEnv('OUTREACH_FROM_EMAIL') ||
+    getEnv('FROM_EMAIL') ||
+    getEnv('RESEND_EMAIL') ||
+    getEnv('GOOGLE_WORKSPACE_SENDER') ||
+    'acquisitions@vestblock.io'
+  )
 }
 
 function getResendSender() {
-  return getEnv('FROM_EMAIL') || 'contact@vestblock.io'
+  return getEnv('OUTREACH_FROM_EMAIL') || getEnv('FROM_EMAIL') || getEnv('RESEND_EMAIL') || 'acquisitions@vestblock.io'
 }
 
 function hasGmailConfig() {
   return Boolean(
     getEnv('GOOGLE_CLIENT_ID') &&
       getEnv('GOOGLE_CLIENT_SECRET') &&
-      getEnv('GOOGLE_REFRESH_TOKEN') &&
-      getEnv('GOOGLE_WORKSPACE_SENDER')
+      getEnv('GOOGLE_REFRESH_TOKEN')
   )
 }
 

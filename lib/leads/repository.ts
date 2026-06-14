@@ -1,7 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
+import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { getLeadRevenueFitIssue, getRevenueCampaignPriority } from '@/lib/leads/revenueCampaigns'
-import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
 import type {
   LeadSuppressionRecord,
@@ -748,8 +747,7 @@ export async function listLeadsNeedingOutreach(limit = 100) {
   if (error) throw error
   const filtered = ((data || []) as LeadRecord[]).filter(
     (lead) =>
-      (isOutreachV2Enabled() ||
-        !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(lead.source, 'google_places_businesses'))) &&
+      isCurrentVestblockOutboundLead(lead) &&
       shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
   )
   return sortLeadsForOutreach(filtered).slice(0, limit)
@@ -788,11 +786,10 @@ export async function listEmailOutreachForSendQueue(limit = 75) {
 
   if (error) throw error
   const filtered = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter(
-      (row) =>
+    (row) =>
       row.leads?.delivery_status !== 'sent' &&
       row.leads?.outreach_status !== 'sent' &&
-      (isOutreachV2Enabled() ||
-        !(isLegacyGooglePlacesPhaseOutEnabled() && isSourceInFamily(row.leads?.source, 'google_places_businesses'))) &&
+      isCurrentVestblockOutboundLead(row.leads) &&
       shouldIncludeInRevenueOutreach(row.leads, allowSecondaryCampaigns)
   )
   return sortMessagesForSendQueue(filtered).slice(0, limit)

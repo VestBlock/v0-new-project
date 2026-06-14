@@ -17,7 +17,7 @@ export default async function AdminLeadsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-slate-400">Admin workspace</p>
-          <h1 className="text-2xl font-semibold text-white">Lead Intelligence Engine</h1>
+          <h1 className="text-2xl font-semibold text-white">Seller & Opportunity Pipeline</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
@@ -30,7 +30,7 @@ export default async function AdminLeadsPage() {
             <Link href="/admin/scrape-runs">Scrape Runs</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

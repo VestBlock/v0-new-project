@@ -1,7 +1,9 @@
 export const phaseOneMarkets = [
   'Toledo, OH',
   'Cleveland, OH',
+  'Columbus, OH',
   'Milwaukee, WI',
+  'Memphis, TN',
   'Racine, WI',
   'Kenosha, WI',
 ] as const
@@ -209,6 +211,11 @@ export type InvestorDashboardSummary = {
   partnershipOpportunities: number
   revenueOpportunities: number
   outreachReady: number
+  researchReady: number
+  buyBoxInferred: number
+  buyBoxConfirmed: number
+  builderPartners: number
+  dealMachineAligned: number
   replies: number
   callsBooked: number
   fundingClosed: number

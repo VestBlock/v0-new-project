@@ -30,7 +30,7 @@ export default async function AdminResearchChecklistsPage() {
             <Link href="/admin/leads">Lead Management</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

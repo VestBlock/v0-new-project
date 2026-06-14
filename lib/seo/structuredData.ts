@@ -49,7 +49,6 @@ export function organizationJsonLd() {
     contactPoint: {
       '@type': 'ContactPoint',
       telephone: '+1-414-687-6923',
-      email: 'contact@vestblock.io',
       contactType: 'customer support',
       areaServed: 'US',
     },

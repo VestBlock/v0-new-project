@@ -1,7 +1,8 @@
 import { CATEGORY_LABELS } from '@/lib/buyers/constants'
 import type { BuyerRecord, GeneratedBuyerOutreachBundle } from '@/lib/buyers/types'
 
-const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\ncontact@vestblock.io'
+const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\nacquisitions@vestblock.io'
+export const BUYER_OUTREACH_TEMPLATE_VERSION = 'vestblock-buyer-refresh-2026-06-11'
 
 function bulletList(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
@@ -9,12 +10,12 @@ function bulletList(items: string[]) {
 
 function introAngle(buyer: BuyerRecord) {
   if (buyer.buyer_type === 'institutional') {
-    return 'We help organize off-market seller and distressed-property opportunities before they ever reach an acquisitions desk, so your team sees cleaner submissions and better market fit.'
+    return 'We organize seller opportunities before they ever reach an acquisitions desk, so institutional teams see cleaner submissions, clearer context, and tighter market fit.'
   }
   if (buyer.category === 'wholesaler_buyer' || buyer.category === 'creative_finance_buyer') {
-    return 'We are building a buyer network for off-market and creative real-estate opportunities, and we want to route deals to operators who can actually move on them.'
+    return 'We are building an active operator bench for off-market and creative real-estate opportunities, and we want to route deals to buyers who can actually move on them.'
   }
-  return 'We help organize seller, distressed-property, tired-landlord, and code-violation opportunities before they reach a buyer, so your team sees cleaner, better-fit deals.'
+  return 'We help organize seller, code-violation, tired-landlord, and distressed-property opportunities before they reach a buyer, so your team sees cleaner, better-fit deals.'
 }
 
 function propertyReferralAngle(buyer: BuyerRecord) {
@@ -24,7 +25,7 @@ function propertyReferralAngle(buyer: BuyerRecord) {
   if (buyer.category === 'build_to_rent_buyer') {
     return 'We also see land and infill opportunities that may fit build-to-rent acquisition conversations.'
   }
-  return 'Our goal is to route cleaner seller opportunities, code-violation properties, and distressed inventory to the right buyer instead of spraying deals to the wrong list.'
+  return 'Our goal is to route seller opportunities into the right lane — fast cash, creative, novation, or investor resale — instead of spraying deals to the wrong list.'
 }
 
 function qualificationQuestions(buyer: BuyerRecord) {
@@ -56,15 +57,15 @@ function economicsPrompt(buyer: BuyerRecord) {
   if (buyer.buyer_type === 'institutional') {
     return 'If your team has a formal acquisitions intake, NDA, or approved referral path, we are glad to work inside that structure.'
   }
-  return 'If you already have a dispo or referral structure where that is permitted, I’d also love to understand how you handle submissions, partner expectations, and compensation.'
+  return 'If you already have a preferred referral structure, intake sheet, or dispositions process, we are happy to work inside it and keep submissions clean.'
 }
 
 function demandEngineAngle(buyer: BuyerRecord) {
   if (buyer.buyer_type === 'institutional') {
-    return 'We also run automated SEO and content systems that help surface inbound seller and distressed-property demand before it gets widely shopped, so the pipeline is not just manual outreach or list-building.'
+    return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and criteria are clear, so the relationship is supported by more inbound visibility and not just manual outreach.'
   }
 
-  return 'We also run automated SEO and content systems that help surface motivated seller and distressed-property demand before it gets widely shopped, so the pipeline is not just manual outreach or list-building.'
+  return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and criteria are clear, so the relationship is supported by more inbound visibility and not just manual outreach.'
 }
 
 export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreachBundle {
@@ -80,9 +81,9 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
   return {
     generatedWith: 'template',
     emailIntro: {
-      subject: `VestBlock buyer-network partnership for ${label} opportunities`,
-      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nI’m reaching out from VestBlock. ${partnershipAngle}\n\n${propertyAngle}\n\nWe are building out a buyer network across the U.S. so we can route seller leads and distressed-property opportunities more intelligently by market, asset type, and acquisition criteria.\n\n${demandEngine}\n\nIf it helps, these are the first things we usually want to understand before we ever send a property over:\n${bulletList(questions)}\n\nIf your team already has a buy box, acquisitions one-pager, or a preferred intake format, I’d be happy to organize that on our side and only send cleaner matches.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
-      cta: 'Open to a quick conversation about your buy box and acquisition criteria?',
+      subject: `VestBlock deal flow aligned to your ${label} buy box`,
+      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nI’m reaching out from VestBlock. ${partnershipAngle}\n\n${propertyAngle}\n\nWe are building a serious buyer network so we can route seller leads by market, asset type, distress level, close speed, and real acquisition criteria instead of blasting inventory to the wrong list.\n\nOn the seller side, we are working opportunities through fast cash, creative, and novation paths. On the partner side, we want clean buy-box guidance so the right deals move quickly.\n\n${demandEngine}\n\nIf it helps, these are the first things we usually want to understand before we ever send a property over:\n${bulletList(questions)}\n\nIf your team already has a buy box, acquisitions one-pager, or preferred intake format, I’d be happy to organize that on our side and only send cleaner matches.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
+      cta: 'Open to a quick conversation about your buy box, acquisition criteria, and preferred submissions process?',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,
       complianceNote,
@@ -90,8 +91,8 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
       economicsPrompt: null,
     },
     emailFollowup: {
-      subject: 'Quick follow-up on VestBlock seller and distressed-property referrals',
-      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nWanted to circle back on my earlier note. We’re actively building a cleaner buyer network for ${label} and would rather understand your real acquisition box than send mismatched deals.\n\nA meaningful part of that pipeline comes from our automated SEO and content systems, which helps us create inbound seller and distressed-property demand instead of relying only on cold outreach.\n\nEven a short reply with a few of these would help a lot:\n${bulletList(questions.slice(0, 5))}\n\n${economics}\n\nThanks again,\n${OUTREACH_SIGNATURE}`,
+      subject: 'Quick follow-up on your VestBlock buy box and partner fit',
+      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nWanted to circle back on my earlier note. We’re actively building a cleaner buyer network for ${label} and would rather understand your real acquisition box than send mismatched deals.\n\nWe are trying to build this the right way: clear seller paths, cleaner routing, stronger buyer partnerships, and optional AEO/SEO Booster support once a partner’s positioning is clear.\n\nEven a short reply with a few of these would help a lot:\n${bulletList(questions.slice(0, 5))}\n\n${economics}\n\nThanks again,\n${OUTREACH_SIGNATURE}`,
       cta: 'A short reply with your buy box or acquisitions process is enough for us to get started.',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,
@@ -100,7 +101,7 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
       economicsPrompt: economics,
     },
     linkedInDm: {
-      body: `Hi, I’m building out VestBlock’s buyer network and came across ${buyer.name}. We help route cleaner seller and distressed-property opportunities by market and fit. If your team is open to acquisitions or referral conversations for ${label}, I’d love to compare notes on your buy box, target markets, and any hard no-go items.`,
+      body: `Hi, I’m building out VestBlock’s buyer network and came across ${buyer.name}. We help route seller opportunities by market, fit, and buyer criteria instead of blasting deals to a list. If your team is open to acquisitions or partner conversations for ${label}, I’d love to compare notes on your buy box, target markets, and hard no-go items.`,
       cta: 'Open to a quick buy-box conversation?',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,
@@ -109,7 +110,7 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
       economicsPrompt: null,
     },
     phoneScript: {
-      body: `Hi, this is VestBlock. We help organize seller, distressed-property, and code-violation opportunities before they reach a buyer, and I’m calling to see who handles acquisitions or referral conversations for ${buyer.name}. We’d rather understand your real buy box than send mismatched deals. The main things we’d want to know are markets served, property types, distress tolerance, and whether there is a formal submissions process.`,
+      body: `Hi, this is VestBlock. We help organize seller, code-violation, and distressed-property opportunities before they reach a buyer, and I’m calling to see who handles acquisitions or partner conversations for ${buyer.name}. We’d rather understand your real buy box than send mismatched deals. The main things we’d want to know are markets served, property types, distress tolerance, close speed, and whether there is a formal submissions process.`,
       cta: 'Who is the right person for acquisitions or partner submissions?',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,
@@ -118,8 +119,8 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
       economicsPrompt: economics,
     },
     spanishEmail: {
-      subject: `Posible alianza con VestBlock para oportunidades de ${label}`,
-      body: `Hola ${buyer.contact_name || 'equipo'},\n\nLe escribo de VestBlock. Ayudamos a organizar oportunidades de vendedores, propiedades en dificultad y propiedades con violaciones antes de conectarlas con un comprador.\n\nEstamos creando una red nacional de compradores y nos interesa entender qué mercados, tipos de propiedad y nivel de dificultad prefieren ustedes para ${label}. Así podemos enviar únicamente oportunidades que tengan sentido.\n\nTambién operamos sistemas automatizados de SEO y contenido que ayudan a generar demanda entrante de vendedores y propiedades con dificultad antes de que se ofrezcan ampliamente.\n\nNormalmente queremos entender cosas como:\n${bulletList([
+      subject: `VestBlock y su criterio de compra para ${label}`,
+      body: `Hola ${buyer.contact_name || 'equipo'},\n\nLe escribo de VestBlock. Ayudamos a organizar oportunidades de vendedores, propiedades con violaciones y propiedades en dificultad antes de conectarlas con un comprador.\n\nEstamos creando una red nacional de compradores y nos interesa entender qué mercados, tipos de propiedad y nivel de dificultad prefieren ustedes para ${label}. Así podemos enviar únicamente oportunidades que realmente tengan sentido.\n\nTambién podemos apoyar a socios serios con un AEO/SEO Booster cuando su posicionamiento y criterios ya estén claros.\n\nNormalmente queremos entender cosas como:\n${bulletList([
         'Ciudades, estados o zonas donde compran activamente',
         'Tipos de propiedades que prefieren',
         'Requisitos mínimos o casos que no aceptan',

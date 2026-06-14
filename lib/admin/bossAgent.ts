@@ -34,6 +34,7 @@ export type BossPlay = {
   thesis: string
   whyNow: string[]
   score: number
+  appliedWeight?: number
   effort: 'low' | 'medium' | 'high'
   expectedOutcome: string
   directives: BossDirective[]
@@ -41,24 +42,40 @@ export type BossPlay = {
   complianceNote?: string
 }
 
+export type BossLessonSummary = {
+  playKey: string
+  playName: string
+  summary: string
+  adjustment: number
+  completedAt: string
+}
+
 export type BossBriefing = {
   generatedAt: string
   headline: string
   focusKey: string
   plays: BossPlay[]
+  lessons: BossLessonSummary[]
 }
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)))
 }
 
-export function buildBossBriefing(data: CommandCenterData): BossBriefing {
+export type BossLearningInput = {
+  weights: Record<string, number>
+  lessons: BossLessonSummary[]
+}
+
+export function buildBossBriefing(data: CommandCenterData, learning?: BossLearningInput): BossBriefing {
   const plays: BossPlay[] = []
   const s = data.summary
   const queueByLabel = new Map(data.routingQueue.map((item) => [item.label, item.count]))
-  const followupsDue = queueByLabel.get('Follow-ups due') ?? 0
+  const leadFollowupsDue = queueByLabel.get('Lead follow-ups due') ?? 0
+  const partnerFollowupsDue = queueByLabel.get('Partner follow-ups due') ?? 0
+  const followupsDue = leadFollowupsDue + partnerFollowupsDue
   const openMatches = (queueByLabel.get('Buyer matches open') ?? 0) + (queueByLabel.get('Lender matches open') ?? 0)
-  const openFunding = queueByLabel.get('Funding requests open') ?? 0
+  const openFunding = queueByLabel.get('Lender matches open') ?? 0
   const openChecklists = queueByLabel.get('Research checklists open') ?? 0
   const topMarkets = data.marketHeat.slice(0, 3)
   const topMarketNames = topMarkets.map((m) => m.market).join(', ') || 'active markets'
@@ -66,6 +83,74 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
   const freshExports = data.localSignals.dmExports.filter((e) => e.ageDays <= 7)
   const authorityAgent = data.agents.find((a) => a.key === 'authority')
   const published7d = Number(authorityAgent?.kpis.find((k) => k.label === 'Published 7d')?.value ?? 0)
+  const builderPartners = data.summary.builderPartners
+  const dmAlignedPartners = data.summary.dealMachineAlignedPartners
+  const partnerResearchReady = data.summary.partnerResearchReady
+  const partnerOutreachReady = data.summary.partnerOutreachReady
+  const partnerBuyBoxesConfirmed = data.summary.partnerBuyBoxesConfirmed
+  const outreachGap = Math.max(0, s.outreachTarget - s.outreach24h)
+  const remainingOutboundCapacity = Math.max(0, data.outboundControl.remainingToday)
+  const sendReady = data.outboundControl.emailReady
+  const needsReview = data.outboundControl.needsReview
+
+  // ── 0. Daily autonomous strategy lab ──────────────────────────────────────
+  plays.push({
+    key: 'daily-autonomous-strategy-lab',
+    name: 'Daily Autonomous Strategy Lab',
+    category: 'acquisition',
+    thesis:
+      'VestBlock should not wait for an operator to rediscover the next move. Every morning the Boss chooses one focus strategy and one challenger strategy, pushes safe outreach toward the configured cap, and records what the market taught us.',
+    whyNow: [
+      `${s.outreach24h}/${s.outreachTarget} outreach touches in 24h leaves ${outreachGap} touches of target gap.`,
+      `${remainingOutboundCapacity} configured outbound slot${remainingOutboundCapacity === 1 ? '' : 's'} remain today; ${sendReady} email-ready lead${sendReady === 1 ? '' : 's'} and ${needsReview} draft${needsReview === 1 ? '' : 's'} need review.`,
+      topMarkets.length
+        ? `Current market board points to ${topMarketNames}; use one as focus and one as challenger.`
+        : 'No dominant heat market yet — use fresh DealMachine exports and reply data as the first selector.',
+      `${s.replySignals7d} reply signal${s.replySignals7d === 1 ? '' : 's'} in 7 days; winner selection should optimize for real replies, not send volume alone.`,
+    ],
+    score: clampScore(74 + (outreachGap > 0 ? 10 : 0) + (remainingOutboundCapacity > 0 ? 6 : 0) + (s.replySignals7d < 5 ? 6 : 0)),
+    effort: 'low',
+    expectedOutcome:
+      'A daily closed-loop growth run: one primary acquisition/outreach play, one challenger play, sends or queued tasks inside guardrails, and a lesson that changes tomorrow’s ranking.',
+    directives: [
+      {
+        agent: 'operator',
+        action: 'Choose today’s focus and challenger strategy',
+        detail:
+          'Compare yesterday’s replies, fresh exports, market heat, suppressions, and overdue follow-ups. Pick one lead source/market/offer angle as the focus and one challenger to test next.',
+        priority: 'urgent',
+      },
+      {
+        agent: 'acquisition',
+        action: 'Refresh the lead source before increasing send volume',
+        detail:
+          'Prefer fresh DealMachine contact exports, portfolio/out-of-state landlord filters, stale-listing creative terms, builder buy-box sourcing, or public-record distress stacks. Do not scrape stale websites just to create activity.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Push safe seller outreach toward the configured daily cap',
+        detail:
+          'Use acquisitions@vestblock.io, enforce dedupe and opt-out suppressions, send only email-ready records, and keep SMS in review-only mode until the SMS lane is approved.',
+        priority: 'high',
+      },
+      {
+        agent: 'qa',
+        action: 'Record the before/after KPI lesson',
+        detail:
+          'Snapshot sends, replies, new leads, partner criteria, and revenue movement. Boost strategies that create replies or real routing opportunities; decay ones that only create volume.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      { label: 'Preview seller cap run', command: 'npm run sellers:outreach:to-cap' },
+      { label: 'Send to safe configured cap', command: 'npm run sellers:outreach:to-cap -- --send' },
+      { label: 'Run portfolio landlord strategy', command: 'npm run sellers:outreach:portfolio-landlords -- --send' },
+      { label: 'Open command center', href: '/admin/command-center' },
+    ],
+    complianceNote:
+      'The daily lab may execute configured email sends, but it cannot ignore opt-outs, send SMS, send contracts, spend money, or make guaranteed offer/funding claims without explicit human approval.',
+  })
 
   // ── 1. Stale-listing creative finance (the realtor play) ──────────────────
   plays.push({
@@ -86,7 +171,7 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
       {
         agent: 'acquisition',
         action: 'Harvest 90+ DOM listings in the top heat markets',
-        detail: `Run the stale-listing finder for ${topMarketNames}. Outscraper Zillow source, or --input-csv for a manual export.`,
+        detail: `Run the stale-listing finder for ${topMarketNames} from the HomeHarvest/public listing source first. Keep paid scraping disabled until revenue justifies it.`,
         priority: 'high',
       },
       {
@@ -109,12 +194,78 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
       },
     ],
     steps: [
-      { label: 'Dry-run the finder', command: 'npm run boss:stale-listings -- --market="Milwaukee, WI" --min-dom=90 --limit=25' },
+      { label: 'Dry-run public listings', command: 'npm run boss:stale-listings -- --source=homeharvest --market="Milwaukee, WI" --min-dom=90 --limit=25' },
       { label: 'Review drafts in tmp/outreach/', href: '/admin/leads' },
-      { label: 'Send after review', command: 'npm run boss:stale-listings -- --market="Milwaukee, WI" --min-dom=90 --limit=25 --send' },
+      { label: 'Send after review', command: 'npm run boss:stale-listings -- --source=homeharvest --market="Milwaukee, WI" --min-dom=90 --limit=25 --send' },
     ],
     complianceNote:
       'Outreach targets listing agents (business contacts), not owners. Offers are presented as structures to review, never guaranteed purchases.',
+  })
+
+  // ── 1B. On-market as-is cash sweep ────────────────────────────────────────
+  plays.push({
+    key: 'on-market-lowball-agent-sweep',
+    name: 'Fresh On-Market Agent Cash Review',
+    category: 'acquisition',
+    thesis:
+      'Some public on-market listings are sitting because condition, price, or seller constraints do not fit retail buyers. Source fresh listing inventory, contact the listing agent, and position a 50-60% cash-review range as conditional on photos, access, title, representation, and real condition.',
+    whyNow: [
+      `Milwaukee, Toledo, and nearby value markets can be pulled from fresh on-market listing inventory without using the off-market DealMachine seller queue.`,
+      `${remainingOutboundCapacity} configured outbound slot${remainingOutboundCapacity === 1 ? '' : 's'} remain today; this lane should only send agent-facing emails with opt-out and non-binding language.`,
+      s.replySignals7d < 5
+        ? `Only ${s.replySignals7d} reply signal${s.replySignals7d === 1 ? '' : 's'} this week — agent-facing low-cash reviews are a sharper challenger than more generic seller copy.`
+        : `${s.replySignals7d} reply signals this week give the Boss enough feedback to test a more direct agent offer angle.`,
+    ],
+    score: clampScore(58 + (remainingOutboundCapacity >= 100 ? 12 : remainingOutboundCapacity > 0 ? 6 : 0) + (s.replySignals7d < 5 ? 8 : 0)),
+    effort: 'medium',
+    expectedOutcome:
+      'One hundred agent-facing as-is cash-review emails across Milwaukee and Toledo when a listing source with agent emails is available; replies identify condition-heavy listings where a fast cash number is welcome.',
+    directives: [
+      {
+        agent: 'acquisition',
+        action: 'Source fresh on-market distressed listings',
+        detail:
+          'Use HomeHarvest/Realtor-style active listing inventory, not the off-market DealMachine owner queue. Required fields: address, list price, DOM, listing URL, agent name, and agent email or phone.',
+        priority: 'high',
+      },
+      {
+        agent: 'underwriting',
+        action: 'Attach a condition-dependent cash range to each listing',
+        detail:
+          'Use 50-60% of list price as the initial as-is review band, then let photos, access, title, liens, tenancy, and condition decide whether the number can move up or should be passed.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Send agent-facing cash-review emails from acquisitions@vestblock.io',
+        detail:
+          'Language must say non-binding, condition-dependent, representation-respecting, and open to improving the range if photos/access/condition support it.',
+        priority: 'high',
+      },
+      {
+        agent: 'qa',
+        action: 'Verify the batch before live send',
+        detail:
+          'Confirm no opt-outs, no protected-class targeting, no guaranteed closings, no contract language, and no duplicate blast to the same listing without a property-specific reason.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      {
+        label: 'Dry-run Milwaukee + Toledo',
+        command: 'npm run sellers:on-market-lowball',
+      },
+      {
+        label: 'Review generated drafts',
+        href: '/admin/leads?source=on_market_listing_import',
+      },
+      {
+        label: 'Send 100 after source + drafts are ready',
+        command: 'npm run sellers:on-market-lowball:send',
+      },
+    ],
+    complianceNote:
+      'This is agent-facing outreach from fresh public listing inventory. Treat 50-60% as a conditional indication only, not a binding purchase offer. Include opt-out language, protect the agent relationship, and never imply VestBlock is a brokerage, lender, title company, or guaranteed buyer.',
   })
 
   // ── 2. Fresh-city DealMachine expansion ────────────────────────────────────
@@ -154,7 +305,71 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
-  // ── 3. Reply resurrection ──────────────────────────────────────────────────
+  // ── 3. Tax delinquent + code violation stack ───────────────────────────────
+  plays.push({
+    key: 'tax-delinquent-code-violation-stack',
+    name: 'Tax Delinquent + Code Violation Stack',
+    category: 'acquisition',
+    thesis:
+      'The sharpest off-market seller list is not generic distress. Start with DealMachine tax-delinquent owners, then stack county/city code violations so outreach focuses on owners with both a financial problem and a property-condition problem.',
+    whyNow: [
+      'New test markets: Cleveland, Columbus, Indianapolis, and Louisville.',
+      data.localSignals.distressStackRows != null
+        ? `${data.localSignals.distressStackRows.toLocaleString()} public-record distress rows are already available for markets with adapters.`
+        : 'The public-record stack is not visible in this environment.',
+      freshExports.length
+        ? `${freshExports.length} fresh DealMachine export${freshExports.length === 1 ? '' : 's'} can be overlaid with public code rows.`
+        : 'Fresh DealMachine tax-delinquent exports are the current bottleneck.',
+      'This gives Boss a different source/intent profile than on-market agents or portfolio landlords.',
+    ],
+    score: clampScore(66 + (dmBlocked ? 8 : 0) + (s.replySignals7d < 5 ? 8 : 0) + (remainingOutboundCapacity > 0 ? 4 : 0)),
+    effort: 'medium',
+    expectedOutcome:
+      'A fresh ranked owner list for four new markets where tax delinquency and code/condition pressure overlap, ready for review before outreach.',
+    directives: [
+      {
+        agent: 'acquisition',
+        action: 'Harvest DealMachine tax-delinquent owner rows in four new markets',
+        detail:
+          'Run Cleveland, Columbus, Indianapolis, and Louisville through the DealMachine API harvest with contactable + stacked filters. Keep this separate from on-market listing-agent data.',
+        priority: 'high',
+      },
+      {
+        agent: 'acquisition',
+        action: 'Overlay county/city code-violation rows',
+        detail:
+          'Use MASTER-distress-stack.csv where an adapter exists, or drop a market CSV into data/code-violations/ with address, city, state, violation, and violation_date columns.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Preview seller-options outreach for the double-stack only',
+        detail:
+          'Use the tax-code-stack strategy so copy references public-record pressure carefully, avoids threats, honors suppressions, and never sends SMS automatically.',
+        priority: 'normal',
+      },
+      {
+        agent: 'qa',
+        action: 'Spot-check public-record match quality before sending',
+        detail:
+          'Verify 10 addresses manually for address joins, current tax/code status, owner identity, and no duplicate outreach before live email.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      { label: 'Harvest new markets', command: 'npm run distress:tax-code-stack:harvest-new-markets' },
+      { label: 'Build tax + code list', command: 'npm run distress:tax-code-stack:new-markets' },
+      {
+        label: 'Preview outreach from stack',
+        command:
+          'npm run distress:dealmachine:export-outreach -- --strategy=tax-code-stack --market=cleveland-oh --queue-csv=data/distress-leads/dealmachine-tax-code-stack-<stamp>.csv --export-csv=data/dm-exports/cleveland-oh-<date>.csv --limit=100',
+      },
+    ],
+    complianceNote:
+      'Use public-record language carefully. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
+  })
+
+  // ── 4. Reply resurrection ──────────────────────────────────────────────────
   plays.push({
     key: 'reply-resurrection',
     name: 'Reply & Follow-Up Resurrection',
@@ -189,7 +404,7 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
-  // ── 4. Buyer depth in hot markets ─────────────────────────────────────────
+  // ── 5. Buyer depth in hot markets ─────────────────────────────────────────
   plays.push({
     key: 'buyer-depth-hot-markets',
     name: 'Buyer Depth in Hot Markets',
@@ -232,41 +447,99 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
-  // ── 5. Capital desk activation ────────────────────────────────────────────
+  // ── 5. Builder buy-box lane ──────────────────────────────────────────────
+  plays.push({
+    key: 'builder-buybox-disposition-lane',
+    name: 'Builder Buy-Box Disposition Lane',
+    category: 'conversion',
+    thesis:
+      'Builders, developers, and construction groups can move deals that normal cash-buyer lists ignore. Collect their real build criteria first, then route teardown, infill, and heavy-rehab opportunities with an MAO-backed assignment plan.',
+    whyNow: [
+      topMarkets.length ? `Best first markets: ${topMarketNames}.` : 'Start in the best current lead markets.',
+      freshExports.length
+        ? `${freshExports.length} fresh DealMachine export(s) can feed builder-fit seller outreach once buy boxes are clear.`
+        : 'Builder recruiting should start before the next DealMachine export lands.',
+      builderPartners > 0
+        ? `${builderPartners} builder/developer profile${builderPartners === 1 ? '' : 's'} in the engine · ${partnerOutreachReady} outreach ready · ${partnerBuyBoxesConfirmed} confirmed.`
+        : 'No builder criteria confirmed yet — this lane still needs partner-side sourcing.',
+      dmAlignedPartners > 0
+        ? `${dmAlignedPartners} partner profile${dmAlignedPartners === 1 ? '' : 's'} already overlap active DealMachine markets.`
+        : 'DealMachine market overlap still needs more partner coverage.',
+      `${openMatches} open matches and ${openChecklists} open checklists mean there is already deal-routing work to sharpen.`,
+    ],
+    score: clampScore(34 + (freshExports.length > 0 ? 16 : 6) + (openMatches > 4 ? 10 : 0) + Math.min(16, builderPartners * 2) + Math.min(8, partnerResearchReady)),
+    effort: 'medium',
+    expectedOutcome: 'A real builder lane with verified criteria, builder packets, and assignment drafts ready when a seller file fits.',
+    directives: [
+      {
+        agent: 'acquisition',
+        action: 'Discover builder and construction partners in active VestBlock markets',
+        detail: 'Use the builder-specific investor discovery pass so developers, builders, and construction groups enter the partner engine with builder-lane tags and DealMachine market alignment.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Collect builder buy boxes before sending deals',
+        detail: 'Ask for neighborhoods, lot rules, teardown vs rehab preference, max all-in basis, close speed, and hard no-go items before anything reaches outreach-ready.',
+        priority: 'high',
+      },
+      {
+        agent: 'underwriting',
+        action: 'Run builder packet math on every likely rehab or infill file',
+        detail: 'Use the analyzer builder lane to size MAO, seller-offer target, assignment fee, and contract defaults before outreach.',
+        priority: 'normal',
+      },
+      {
+        agent: 'routing',
+        action: 'Move seller files into builder-fit assignment packets',
+        detail: 'Once a builder says yes, prep the assignment draft immediately and confirm earnest money, close window, and assignee entity.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      { label: 'Discover builder partners', command: 'npm run investors:builders:discover' },
+      { label: 'Open partner engine', href: '/admin/investor-partnerships' },
+      { label: 'Open property analyzer', href: '/property-analyzer' },
+    ],
+    complianceNote:
+      'Treat all builder math as planning-grade until title, access, zoning, scope, and local contract review are confirmed.',
+  })
+
+  // ── 6. Capital desk activation ────────────────────────────────────────────
   plays.push({
     key: 'capital-desk-activation',
     name: 'Capital Desk Activation',
     category: 'capital',
     thesis:
-      'Open funding requests and lender matches are the shortest path to fee revenue. Every analyzer run that shows a funding gap should become a lender conversation.',
+      'Open lender matches are the shortest path to fee revenue. Every analyzer run that shows a funding gap should become a lender conversation with a clear next step.',
     whyNow: [
-      `${openFunding} funding requests open; ${s.paidFundingRequests} already paid.`,
+      `${openFunding} lender matches open; ${s.partnerBuyBoxesConfirmed} partner criteria confirmed.`,
       `Revenue gap to target: $${Math.max(0, s.revenueTarget - s.revenue30d).toLocaleString()}.`,
     ],
     score: clampScore(28 + openFunding * 6 + (s.revenue30d === 0 ? 12 : 0)),
     effort: 'medium',
-    expectedOutcome: 'Funding requests move to strategy-ready; lender matches turn into program fits.',
+    expectedOutcome: 'Funding-gap deals move into lender conversations and clearer underwriting paths.',
     directives: [
       {
         agent: 'underwriting',
-        action: 'Advance every open funding request one stage',
-        detail: 'Missing docs requested, readiness scored, or strategy delivered — no request sits untouched.',
+        action: 'Advance every lender-fit deal one stage',
+        detail: 'Request missing docs, sharpen assumptions, and turn each viable file into a lender-ready packet.',
         priority: 'high',
       },
       {
         agent: 'routing',
-        action: 'Match funding-gapped deals to lender programs',
-        detail: 'Use the lender-programs fit boxes; log every match attempt.',
+        action: 'Match funding-gapped deals to confirmed lenders',
+        detail: 'Use the confirmed criteria in the lender network and log every route attempt.',
         priority: 'normal',
       },
     ],
     steps: [
-      { label: 'Open funding pipeline', href: '/admin/funding' },
-      { label: 'Open lender programs', href: '/admin/lender-programs' },
+      { label: 'Open lender matches', href: '/admin/lender-matches' },
+      { label: 'Open lender network', href: '/admin/lenders' },
     ],
   })
 
-  // ── 6. Authority city push ────────────────────────────────────────────────
+  // ── 7. Authority city push ────────────────────────────────────────────────
   plays.push({
     key: 'authority-city-push',
     name: 'Authority Push for Heat Markets',
@@ -296,11 +569,11 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
     steps: [
       { label: 'AEO scorecard', command: 'npm run visibility:aeo-scorecard' },
-      { label: 'Open SEO opportunities', href: '/admin/seo-opportunities' },
+      { label: 'Open research queue', href: '/admin/research' },
     ],
   })
 
-  // ── 7. Ad creative sprint ─────────────────────────────────────────────────
+  // ── 8. Ad creative sprint ─────────────────────────────────────────────────
   plays.push({
     key: 'ad-creative-sprint',
     name: 'Ad Creative Sprint',
@@ -334,7 +607,7 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
-  // ── 8. Distress stack refresh ─────────────────────────────────────────────
+  // ── 9. Distress stack refresh ─────────────────────────────────────────────
   plays.push({
     key: 'distress-stack-refresh',
     name: 'Distress Stack Refresh',
@@ -370,7 +643,7 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
-  // ── 9. Partner follow-up sweep ────────────────────────────────────────────
+  // ── 10. Partner follow-up sweep ───────────────────────────────────────────
   const partnerDue = followupsDue
   plays.push({
     key: 'partner-follow-up-sweep',
@@ -405,6 +678,47 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
     ],
   })
 
+  // ── 11. Renovation spread check (rehab budgets → real MAO spreads) ───────
+  plays.push({
+    key: 'renovation-spread-check',
+    name: 'Repair Budget Check',
+    category: 'capital',
+    thesis:
+      'Stale and distressed inventory usually needs work — the spread is only real after a rehab budget. Run a repair-budget pass on every analyzed property so offers, buyer packets, and lender asks carry a defensible range instead of a guess.',
+    whyNow: [
+      `${openFunding} lender matches and ${openMatches} open matches could carry rehab-backed numbers.`,
+      'The analyzer can attach rough repair ranges and MAO math before a packet goes out.',
+    ],
+    score: clampScore(24 + openMatches * 2 + (openFunding > 0 ? 8 : 0)),
+    effort: 'low',
+    expectedOutcome: 'Every routed deal ships with a budget range, trade checklist, and MAO spread — fewer renegotiations.',
+    directives: [
+      {
+        agent: 'underwriting',
+        action: 'Run repair-budget estimates on all active deals',
+        detail: 'Use the analyzer with sqft, scope, state, and condition notes so each packet carries a repair range and MAO.',
+        priority: 'normal',
+      },
+      {
+        agent: 'routing',
+        action: 'Attach rehab budgets to buyer packets before routing',
+        detail: 'Buyers move faster on deals with a credible repair range and trade checklist.',
+        priority: 'normal',
+      },
+    ],
+    steps: [{ label: 'Open the command center analyzer', href: '/admin/command-center' }],
+  })
+
+  // Apply learned weights from completed-play retrospectives
+  const weights = learning?.weights || {}
+  for (const play of plays) {
+    const weight = Math.round(weights[play.key] || 0)
+    if (weight !== 0) {
+      play.appliedWeight = weight
+      play.score = clampScore(play.score + weight)
+    }
+  }
+
   plays.sort((a, b) => b.score - a.score)
   const focus = plays[0]
 
@@ -415,5 +729,6 @@ export function buildBossBriefing(data: CommandCenterData): BossBriefing {
       : 'No strategy signals available yet.',
     focusKey: focus?.key || '',
     plays,
+    lessons: learning?.lessons || [],
   }
 }

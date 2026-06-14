@@ -27,7 +27,7 @@ export default async function AdminBuyersPage() {
             <Link href="/admin/buyer-matches">Property Matches</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

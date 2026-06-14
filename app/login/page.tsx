@@ -1,151 +1,20 @@
-'use client';
+import { Suspense } from "react"
+import { Loader2 } from "lucide-react"
 
-import type React from 'react';
-import { Suspense, useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { LoginPageClient } from "@/components/auth/login-page-client"
 
-function LoginPageContent() {
-  const defaultRedirectTarget = '/dashboard/services';
-  const searchParams = useSearchParams();
-  const prefilledEmail = searchParams.get('email') || '';
-  const [email, setEmail] = useState(prefilledEmail);
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signIn, isLoading, authError, isAuthenticated } = useAuth();
-  const router = useRouter();
-  const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
-
-  useEffect(() => {
-    if (prefilledEmail) {
-      setEmail((current) => current || prefilledEmail);
-    }
-  }, [prefilledEmail]);
-
-  useEffect(() => {
-    // Redirect if the user is already authenticated
-    if (isAuthenticated) {
-      router.replace(redirectTarget);
-    }
-  }, [isAuthenticated, redirectTarget, router]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const didSignIn = await signIn(email, password);
-      if (didSignIn) {
-        window.location.assign(redirectTarget);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign in to VestBlock</CardTitle>
-          <CardDescription>
-            Open your network workspace, saved requests, funding tools, and DealVault records.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" passHref>
-                  <Button
-                    variant="link"
-                    className="ml-auto inline-block text-sm"
-                  >
-                    Forgot your password?
-                  </Button>
-                </Link>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
-            {authError && (
-              <p className="text-sm font-medium text-destructive">
-                {authError}
-              </p>
-            )}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isSubmitting || (!email && !password && isLoading)}
-            >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                'Login'
-              )}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
-            <Link
-              href={
-                redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
-                  : `/register?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ''}`
-              }
-              passHref
-            >
-              <Button variant="link" className="p-0">
-                Sign up
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+export const dynamic = "force-dynamic"
 
 export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex min-h-screen items-center justify-center bg-background">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       }
     >
-      <LoginPageContent />
+      <LoginPageClient />
     </Suspense>
-  );
+  )
 }

@@ -75,7 +75,6 @@ const OUTREACH_OPTIONS: Array<{ value: LeadOutreachStatus | 'all'; label: string
 
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All sources' },
-  { value: 'apify_yelp_businesses', label: 'Apify Yelp' },
   { value: 'csv_import', label: 'CSV Imports' },
   { value: 'zillow_stale_listing_import', label: 'Zillow Stale Listings' },
   { value: 'failed_listing_import', label: 'Failed Listings' },
@@ -86,12 +85,9 @@ const SOURCE_OPTIONS = [
   { value: 'probate_inherited_import', label: 'Probate / Inherited' },
   { value: 'vacant_distress_import', label: 'Vacant / Distress' },
   { value: 'preforeclosure_import', label: 'Preforeclosure' },
-  { value: 'wisconsin_dfi_new_businesses', label: 'Wisconsin DFI' },
   { value: 'cincinnati_code_enforcement', label: 'Cincinnati Code Enforcement' },
   { value: 'milwaukee_accela_enforcement', label: 'Milwaukee Accela' },
   { value: 'google_places_businesses', label: 'Google Places' },
-  { value: 'outscraper_google_maps_businesses', label: 'Outscraper Maps' },
-  { value: 'sam_contract_opportunities', label: 'SAM.gov Matches' },
 ]
 
 const DELIVERY_OPTIONS = [

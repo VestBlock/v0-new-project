@@ -19,8 +19,7 @@ import {
   Send,
   Loader2,
   Home,
-  Hammer,
-  Mail
+  Hammer
 } from "lucide-react"
 
 const nlcProgramHighlights = [
@@ -259,12 +258,12 @@ export function RealEstateFundingPage() {
             </Button>
           </div>
           <a
-            href="mailto:contact@vestblock.io?subject=Real%20Estate%20Funding%20Question"
+            href="#loan-type-selection"
             onClick={handleEmailClick}
             className="inline-flex items-center gap-2 text-cyan-500 hover:text-cyan-400 transition-colors"
           >
-            <Mail className="h-5 w-5" />
-            <span className="font-medium">Prefer to ask a question? Email VestBlock</span>
+            <Send className="h-5 w-5" />
+            <span className="font-medium">Prefer to add deal context? Use the secure review form</span>
           </a>
         </div>
       </section>

@@ -1,11 +1,10 @@
 import { enrichLeadEmailFromWebsite } from '@/lib/leads/email-enrichment'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
-import { getLeadEmailAutopilotDecision, isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
+import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
+import { getLeadOutboundPauseReason, isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
-import { isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
-import { isSourceInFamily } from '@/lib/leads/source-keys'
 import { generateLeadOutreach } from '@/lib/leads/outreach'
 import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
@@ -97,13 +96,8 @@ function estimateBounceRiskFromInput(
   return Math.max(0, Math.min(100, score))
 }
 
-function shouldPhaseOutGooglePlacesSource(source: string | null | undefined) {
-  if (isOutreachV2Enabled()) return false
-  return isSourceInFamily(source, 'google_places_businesses') && isLegacyGooglePlacesPhaseOutEnabled()
-}
-
 function shouldAutoGenerateOutreachForLead(sourceKey: string, lead: LeadRecord) {
-  if (shouldPhaseOutGooglePlacesSource(sourceKey) || shouldPhaseOutGooglePlacesSource(lead.source)) return false
+  if (getLeadOutboundPauseReason({ ...lead, source: sourceKey }) || !isCurrentVestblockOutboundLead(lead)) return false
   if (!lead.email || !isUsableContactEmail(lead.email)) return false
   if (lead.outreach_status && !['not_started', 'failed'].includes(String(lead.outreach_status))) return false
   if (lead.status && ['contacted', 'closed', 'closed_won', 'closed_lost', 'disqualified', 'do_not_contact'].includes(String(lead.status))) return false
@@ -567,7 +561,7 @@ export async function generateAndStoreOutreachForLead(
         },
       })
 
-      if (allowImmediateAutoSend && decision.autoSendEnabled && !shouldPhaseOutGooglePlacesSource(lead.source)) {
+      if (allowImmediateAutoSend && decision.autoSendEnabled && isCurrentVestblockOutboundLead(lead)) {
         await autoSendApprovedLeadEmail(lead, {
           ...approvedMessage,
           subject: approvedMessage.subject || emailMessage.subject || null,

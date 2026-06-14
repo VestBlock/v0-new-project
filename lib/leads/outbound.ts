@@ -15,6 +15,18 @@ type SendLeadEmailResult = {
   error?: string
 }
 
+const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
+
+function getPreferredOutboundSender() {
+  return (
+    process.env.OUTREACH_FROM_EMAIL ||
+    process.env.FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
+    process.env.GOOGLE_WORKSPACE_SENDER ||
+    DEFAULT_OUTREACH_SENDER
+  )
+}
+
 function buildEmailBodyWithComplianceNote(message: OutreachMessageRecord) {
   const body = String(message.body || '').trim()
   const complianceNote = buildLeadOutreachComplianceBlock(message)
@@ -47,23 +59,23 @@ function buildLeadOutreachComplianceBlock(message: OutreachMessageRecord) {
 }
 
 function getWorkspaceSender() {
-  return (
-    process.env.GOOGLE_WORKSPACE_SENDER ||
-    process.env.FROM_EMAIL ||
-    'contact@vestblock.io'
-  )
+  return getPreferredOutboundSender()
 }
 
 function getResendSender() {
-  return process.env.FROM_EMAIL || 'contact@vestblock.io'
+  return (
+    process.env.OUTREACH_FROM_EMAIL ||
+    process.env.FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
+    DEFAULT_OUTREACH_SENDER
+  )
 }
 
 function hasGmailConfig() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID &&
       process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN &&
-      process.env.GOOGLE_WORKSPACE_SENDER
+      process.env.GOOGLE_REFRESH_TOKEN
   )
 }
 
@@ -76,7 +88,7 @@ export function getOutboundProviderReadiness() {
     gmail: hasGmailConfig(),
     resend: hasResendConfig(),
     defaultProvider: hasGmailConfig() ? 'gmail' : hasResendConfig() ? 'resend' : 'none',
-    sender: getWorkspaceSender(),
+    sender: getPreferredOutboundSender(),
     mailingAddressConfigured: Boolean(getOutreachMailingAddress()),
   }
 }
@@ -208,7 +220,8 @@ export async function sendLeadOutreachEmail(
 
   if (hasGmailConfig()) {
     try {
-      return await sendWithGmail(input)
+      const gmailResult = await sendWithGmail(input)
+      if (gmailResult.ok || !hasResendConfig()) return gmailResult
     } catch (error) {
       if (!hasResendConfig()) {
         return {

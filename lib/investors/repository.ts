@@ -1,5 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildInvestorOutreachMessage, inferFollowUpTasks } from '@/lib/investors/outreach'
+import {
+  buildInvestorPipelineMetadata,
+  buildInvestorPipelineSnapshot,
+  buildInvestorPipelineSnapshotFromRecord,
+} from '@/lib/investors/pipeline'
 import { calculateInvestorScore } from '@/lib/investors/scoring'
 import type {
   InvestorDashboardSummary,
@@ -24,6 +29,69 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
   const admin = createAdminClient()
   const score = calculateInvestorScore(input)
   const sourceIdentity = sourceIdentityFor(input)
+  let existing: InvestorProfileRecord | null = null
+
+  if (sourceIdentity) {
+    const { data } = await admin
+      .from('investor_profiles')
+      .select('*')
+      .eq('metadata_json->>sourceIdentity', sourceIdentity)
+      .maybeSingle()
+    existing = (data as InvestorProfileRecord | null) || null
+  }
+
+  const sourceConfidenceScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        (input.evidence || []).reduce((sum, row) => sum + (row.confidenceScore || 50), 0) /
+          Math.max(1, input.evidence?.length || 1)
+      )
+    )
+  )
+  const pipeline = buildInvestorPipelineSnapshot({
+    relationshipStage: existing?.relationship_stage,
+    outreachStatus: existing?.outreach_status,
+    contactEmail: input.contactEmail || existing?.contact_email,
+    contactPhone: input.contactPhone || existing?.contact_phone,
+    website: input.website || existing?.website,
+    markets: input.markets || existing?.markets,
+    propertyTypes: input.propertyTypes || existing?.property_types,
+    classificationTags: input.classificationTags || existing?.classification_tags,
+    estimatedBuyBox: input.estimatedBuyBox || existing?.estimated_buy_box,
+    metadata: {
+      ...((existing?.metadata_json || {}) as Record<string, unknown>),
+      ...(input.metadata || {}),
+      ...(sourceIdentity ? { sourceIdentity } : {}),
+    },
+    sourceConfidenceScore: sourceConfidenceScore || existing?.source_confidence_score,
+    sourceNames: input.sourceNames || existing?.source_names,
+    sourceEvidenceCount: input.evidence?.length,
+    displayName: input.displayName || existing?.display_name,
+    primaryInvestorType: input.primaryInvestorType || existing?.primary_investor_type,
+    notes: input.notes || existing?.notes,
+  })
+  const preserveRelationshipStage =
+    existing?.relationship_stage &&
+    ['contacted', 'followup_due', 'responded', 'qualified', 'active_buyer', 'active_borrower', 'active_seller', 'active_partner', 'revenue_opportunity', 'paused', 'not_a_fit'].includes(
+      existing.relationship_stage
+    )
+      ? existing.relationship_stage
+      : null
+  const preserveOutreachStatus =
+    existing?.outreach_status &&
+    ['queued', 'sent', 'responded', 'followup_due', 'failed', 'do_not_contact'].includes(existing.outreach_status)
+      ? existing.outreach_status
+      : null
+  const relationshipStage =
+    preserveRelationshipStage ||
+    (pipeline.stage === 'discovered'
+      ? 'discovered'
+      : pipeline.stage === 'outreach_ready'
+        ? 'outreach_ready'
+        : 'researched')
+  const outreachStatus = preserveOutreachStatus || (pipeline.outreachReady ? 'draft_ready' : 'not_started')
   const payload = {
     display_name: input.displayName,
     person_name: input.personName || null,
@@ -41,7 +109,7 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
     estimated_buy_box: input.estimatedBuyBox || {},
     financing_indicators: cleanArray(input.financingIndicators),
     source_names: cleanArray(input.sourceNames),
-    source_confidence_score: Math.max(0, Math.min(100, Math.round((input.evidence || []).reduce((sum, row) => sum + (row.confidenceScore || 50), 0) / Math.max(1, input.evidence?.length || 1)))),
+    source_confidence_score: sourceConfidenceScore,
     recent_activity_score: score.recentActivity,
     transaction_volume_score: score.transactionVolume,
     geographic_fit_score: score.geographicFit,
@@ -54,25 +122,50 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
     financing_fit: score.financingFit,
     partnership_fit: score.partnershipFit,
     assigned_sequence: score.assignedSequence,
-    outreach_status: 'draft_ready',
-    relationship_stage: 'researched',
-    notes: input.notes || score.fitSummary,
+    outreach_status: outreachStatus,
+    relationship_stage: relationshipStage,
+    notes: input.notes || existing?.notes || score.fitSummary,
     last_scored_at: new Date().toISOString(),
-    metadata_json: {
-      ...(input.metadata || {}),
-      ...(sourceIdentity ? { sourceIdentity } : {}),
-      scoreSummary: score.fitSummary,
+    metadata_json: buildInvestorPipelineMetadata(
+      {
+        relationshipStage,
+        outreachStatus,
+        contactEmail: input.contactEmail || existing?.contact_email,
+        contactPhone: input.contactPhone || existing?.contact_phone,
+        website: input.website || existing?.website,
+        markets: input.markets || existing?.markets,
+        propertyTypes: input.propertyTypes || existing?.property_types,
+        classificationTags: input.classificationTags || existing?.classification_tags,
+        estimatedBuyBox: input.estimatedBuyBox || existing?.estimated_buy_box,
+        metadata: {
+          ...((existing?.metadata_json || {}) as Record<string, unknown>),
+          ...(input.metadata || {}),
+        },
+        sourceConfidenceScore,
+        sourceNames: input.sourceNames || existing?.source_names,
+        sourceEvidenceCount: input.evidence?.length,
+        displayName: input.displayName || existing?.display_name,
+        primaryInvestorType: input.primaryInvestorType || existing?.primary_investor_type,
+        notes: input.notes || existing?.notes,
+      },
+      {
+        ...(sourceIdentity ? { sourceIdentity } : {}),
+        scoreSummary: score.fitSummary,
+      }
+    ),
+    automation_flags_json: {
+      ...((existing?.automation_flags_json || {}) as Record<string, unknown>),
+      researchGate: {
+        ready: pipeline.researchReady,
+        outreachReady: pipeline.outreachReady,
+        blockedReasons: pipeline.blockedReasons,
+        nextAction: pipeline.nextAction,
+      },
     },
   }
 
   let investor: InvestorProfileRecord
-  if (sourceIdentity) {
-    const { data: existing } = await admin
-      .from('investor_profiles')
-      .select('id')
-      .eq('metadata_json->>sourceIdentity', sourceIdentity)
-      .maybeSingle()
-
+  if (existing?.id) {
     const { data, error } = existing?.id
       ? await admin
           .from('investor_profiles')
@@ -81,7 +174,6 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
           .select('*')
           .single()
       : await admin.from('investor_profiles').insert(payload).select('*').single()
-
     if (error) throw error
     investor = data as InvestorProfileRecord
   } else {
@@ -171,6 +263,7 @@ export async function listInvestorProfiles(filters: {
   relationshipStage?: string | null
   outreachStatus?: string | null
   sequence?: string | null
+  lane?: string | null
   page?: number
   limit?: number
 }) {
@@ -185,6 +278,9 @@ export async function listInvestorProfiles(filters: {
   if (filters.relationshipStage && filters.relationshipStage !== 'all') query = query.eq('relationship_stage', filters.relationshipStage)
   if (filters.outreachStatus && filters.outreachStatus !== 'all') query = query.eq('outreach_status', filters.outreachStatus)
   if (filters.sequence && filters.sequence !== 'all') query = query.eq('assigned_sequence', filters.sequence)
+  if (filters.lane === 'builder') {
+    query = query.overlaps('classification_tags', ['builder_partner', 'developer_partner', 'construction_company'])
+  }
   if (filters.search) {
     const cleaned = filters.search.replace(/[,%()]/g, ' ').trim()
     if (cleaned) {
@@ -221,7 +317,12 @@ export async function listInvestorProfiles(filters: {
 export async function getInvestorDashboardSummary(): Promise<InvestorDashboardSummary> {
   const admin = createAdminClient()
   const [{ data: investors }, { data: opportunities }, { data: events }] = await Promise.all([
-    admin.from('investor_profiles').select('partnership_score,relationship_stage,outreach_status,markets,classification_tags').limit(2000),
+    admin
+      .from('investor_profiles')
+      .select(
+        'partnership_score,relationship_stage,outreach_status,markets,classification_tags,source_confidence_score,estimated_buy_box,metadata_json,contact_email,contact_phone,website,property_types,display_name,primary_investor_type,notes'
+      )
+      .limit(2000),
     admin.from('investor_opportunities').select('opportunity_type,status').neq('status', 'archived').limit(2000),
     admin.from('investor_engagement_events').select('event_type').limit(2000),
   ])
@@ -229,6 +330,25 @@ export async function getInvestorDashboardSummary(): Promise<InvestorDashboardSu
   const rows = investors || []
   const opportunityRows = opportunities || []
   const eventRows = events || []
+  const pipelineRows = rows.map((row) => ({
+    row,
+    pipeline: buildInvestorPipelineSnapshot({
+      relationshipStage: row.relationship_stage,
+      outreachStatus: row.outreach_status,
+      contactEmail: row.contact_email,
+      contactPhone: row.contact_phone,
+      website: row.website,
+      markets: row.markets,
+      propertyTypes: row.property_types,
+      classificationTags: row.classification_tags,
+      estimatedBuyBox: row.estimated_buy_box,
+      metadata: row.metadata_json,
+      sourceConfidenceScore: row.source_confidence_score,
+      displayName: row.display_name,
+      primaryInvestorType: row.primary_investor_type,
+      notes: row.notes,
+    }),
+  }))
   const countBy = (items: string[]) =>
     Object.entries(
       items.reduce<Record<string, number>>((acc, item) => {
@@ -249,7 +369,12 @@ export async function getInvestorDashboardSummary(): Promise<InvestorDashboardSu
     lendingOpportunities: opportunityRows.filter((row) => row.opportunity_type === 'lending_opportunity' || row.opportunity_type === 'funding_request').length,
     partnershipOpportunities: opportunityRows.filter((row) => row.opportunity_type === 'partnership_opportunity').length,
     revenueOpportunities: opportunityRows.filter((row) => row.opportunity_type === 'revenue_opportunity').length,
-    outreachReady: rows.filter((row) => ['draft_ready', 'needs_review', 'approved'].includes(String(row.outreach_status))).length,
+    outreachReady: pipelineRows.filter((item) => item.pipeline.outreachReady).length,
+    researchReady: pipelineRows.filter((item) => item.pipeline.researchReady).length,
+    buyBoxInferred: pipelineRows.filter((item) => item.pipeline.buyBoxInferred).length,
+    buyBoxConfirmed: pipelineRows.filter((item) => item.pipeline.buyBoxConfirmed).length,
+    builderPartners: pipelineRows.filter((item) => item.pipeline.builderLane).length,
+    dealMachineAligned: pipelineRows.filter((item) => item.pipeline.dealMachineAligned).length,
     replies: eventRows.filter((row) => row.event_type === 'reply').length,
     callsBooked: eventRows.filter((row) => row.event_type === 'call_booked').length,
     fundingClosed: eventRows.filter((row) => row.event_type === 'funding_closed').length,
@@ -262,8 +387,15 @@ export async function generateInvestorOutreach(investorId: string, status: 'need
   const admin = createAdminClient()
   const { data: investor, error } = await admin.from('investor_profiles').select('*').eq('id', investorId).single()
   if (error) throw error
+  const investorRecord = investor as InvestorProfileRecord
+  const pipeline = buildInvestorPipelineSnapshotFromRecord(investorRecord)
+  if (!pipeline.outreachReady) {
+    throw new Error(
+      `Partner is not ready for outreach yet: ${pipeline.blockedReasons.join(', ') || 'finish research and confirm criteria first'}.`
+    )
+  }
 
-  const message = buildInvestorOutreachMessage(investor as InvestorProfileRecord)
+  const message = buildInvestorOutreachMessage(investorRecord)
   const { data, error: messageError } = await admin
     .from('investor_outreach_messages')
     .upsert(
@@ -290,8 +422,30 @@ export async function generateInvestorOutreach(investorId: string, status: 'need
     .from('investor_profiles')
     .update({
       outreach_status: status,
-      relationship_stage: 'outreach_ready',
+      relationship_stage: ['contacted', 'responded', 'followup_due'].includes(investorRecord.relationship_stage)
+        ? investorRecord.relationship_stage
+        : 'outreach_ready',
       last_outreach_generated_at: new Date().toISOString(),
+      metadata_json: buildInvestorPipelineMetadata(
+        {
+          relationshipStage: 'outreach_ready',
+          outreachStatus: status,
+          contactEmail: investorRecord.contact_email,
+          contactPhone: investorRecord.contact_phone,
+          website: investorRecord.website,
+          markets: investorRecord.markets,
+          propertyTypes: investorRecord.property_types,
+          classificationTags: investorRecord.classification_tags,
+          estimatedBuyBox: investorRecord.estimated_buy_box,
+          metadata: investorRecord.metadata_json,
+          sourceConfidenceScore: investorRecord.source_confidence_score,
+          sourceNames: investorRecord.source_names,
+          displayName: investorRecord.display_name,
+          primaryInvestorType: investorRecord.primary_investor_type,
+          notes: investorRecord.notes,
+        },
+        { lastOutreachGeneratedAt: new Date().toISOString() }
+      ),
     })
     .eq('id', investorId)
 
@@ -319,6 +473,9 @@ export async function bulkUpdateInvestors(input: {
 
   const updates: Record<string, unknown> = {}
   const now = new Date().toISOString()
+  if (input.action === 'mark_researched') updates.relationship_stage = 'researched'
+  if (input.action === 'mark_buy_box_inferred') updates.relationship_stage = 'researched'
+  if (input.action === 'confirm_buy_box') updates.relationship_stage = 'qualified'
   if (input.action === 'queue_outreach') updates.outreach_status = 'queued'
   if (input.action === 'mark_sent') {
     updates.outreach_status = 'sent'
@@ -414,10 +571,16 @@ export async function listInvestorsNeedingOutreach(limit = 50) {
     .not('outreach_status', 'eq', 'do_not_contact')
     .order('partnership_score', { ascending: false })
     .order('updated_at', { ascending: false })
-    .limit(limit)
+    .limit(Math.max(limit * 4, 100))
 
   if (error) throw error
-  return (data || []) as InvestorProfileRecord[]
+  return ((data || []) as InvestorProfileRecord[])
+    .filter((investor) => {
+      if (['paused', 'not_a_fit'].includes(investor.relationship_stage)) return false
+      const pipeline = buildInvestorPipelineSnapshotFromRecord(investor)
+      return pipeline.outreachReady
+    })
+    .slice(0, limit)
 }
 
 export async function listInvestorsNeedingFollowup(limit = 30) {
@@ -537,6 +700,12 @@ export async function runInvestorFollowUpAgent(input: {
 }) {
   const admin = createAdminClient()
   const tasks = inferFollowUpTasks(input.inboundMessage)
+  const { data: currentInvestor, error: investorError } = await admin
+    .from('investor_profiles')
+    .select('*')
+    .eq('id', input.investorId)
+    .single()
+  if (investorError) throw investorError
   const summary = `AI follow-up routed ${tasks.map((task) => task.assignedTeam).join(', ')} tasking from reply: ${input.inboundMessage.slice(0, 240)}`
 
   const { error: eventError } = await admin.from('investor_engagement_events').insert({
@@ -565,6 +734,10 @@ export async function runInvestorFollowUpAgent(input: {
         ? 'lending_opportunity'
         : task.taskType === 'collect_disposition_requirements'
           ? 'disposition_request'
+          : task.taskType === 'assignment_contract_prep'
+            ? 'revenue_opportunity'
+            : task.taskType === 'collect_builder_buy_box'
+              ? 'active_buyer'
           : task.taskType === 'collect_buy_box'
             ? 'active_buyer'
             : 'partnership_opportunity'
@@ -590,6 +763,31 @@ export async function runInvestorFollowUpAgent(input: {
       relationship_stage: 'followup_due',
       ai_follow_up_summary: summary,
       next_follow_up_at: new Date(Date.now() + 86400000).toISOString(),
+      metadata_json: buildInvestorPipelineMetadata(
+        {
+          relationshipStage: 'followup_due',
+          outreachStatus: 'responded',
+          contactEmail: currentInvestor.contact_email,
+          contactPhone: currentInvestor.contact_phone,
+          website: currentInvestor.website,
+          markets: currentInvestor.markets,
+          propertyTypes: currentInvestor.property_types,
+          classificationTags: currentInvestor.classification_tags,
+          estimatedBuyBox: currentInvestor.estimated_buy_box,
+          metadata: {
+            ...(currentInvestor.metadata_json || {}),
+            ...(tasks.some((task) => ['collect_buy_box', 'collect_builder_buy_box'].includes(task.taskType))
+              ? { lastCriteriaReplyAt: new Date().toISOString() }
+              : {}),
+          },
+          sourceConfidenceScore: currentInvestor.source_confidence_score,
+          sourceNames: currentInvestor.source_names,
+          displayName: currentInvestor.display_name,
+          primaryInvestorType: currentInvestor.primary_investor_type,
+          notes: currentInvestor.notes,
+        },
+        { lastReplyAt: new Date().toISOString() }
+      ),
     })
     .eq('id', input.investorId)
     .select('*')

@@ -20,7 +20,6 @@ const OPERATOR_COMMANDS = [
   { label: 'Prepare skip-trace upload', command: 'npm run distress:skiptrace-prep' },
   { label: 'Run distress stack (daily)', command: 'npm run distress:stack:daily' },
   { label: 'Outreach scorecard', command: 'npm run outreach:scorecard' },
-  { label: 'Revenue command scorecard', command: 'npm run revenue:command' },
   { label: 'AEO visibility scorecard', command: 'npm run visibility:aeo-scorecard' },
 ]
 

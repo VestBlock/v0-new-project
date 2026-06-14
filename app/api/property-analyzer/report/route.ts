@@ -9,9 +9,9 @@ import {
 } from '@/lib/property/reportGenerator'
 
 const reportSchema = z.object({
-  reportType: z.enum(['investor', 'buyer', 'lender']),
+  reportType: z.enum(['investor', 'buyer', 'lender', 'builder', 'assignment_contract']),
   address: z.string().trim().min(3).max(260),
-  form: z.record(z.string(), z.string()).default({}),
+  form: z.record(z.string(), z.unknown()).default({}),
   estimate: z.unknown(),
   opportunity: z.unknown(),
 })
@@ -19,6 +19,8 @@ const reportSchema = z.object({
 function fileStem(reportType: AnalyzerReportType) {
   if (reportType === 'buyer') return 'vestblock-buyer-packet'
   if (reportType === 'lender') return 'vestblock-lender-packet'
+  if (reportType === 'builder') return 'vestblock-builder-packet'
+  if (reportType === 'assignment_contract') return 'vestblock-assignment-draft'
   return 'vestblock-investor-report'
 }
 

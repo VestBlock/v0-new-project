@@ -93,7 +93,7 @@ export async function POST(
         uploadDate: report.uploaded_at || report.created_at,
         userId: report.user_id,
         reportId,
-        dashboardPath: `/admin-panel/reports/${reportId}`,
+        dashboardPath: `/admin/command-center`,
       }),
       sendUserCreditReportReceivedEmail({
         userEmail,

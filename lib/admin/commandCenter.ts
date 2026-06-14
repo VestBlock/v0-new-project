@@ -4,6 +4,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { buildInvestorPipelineSnapshotFromRecord } from '@/lib/investors/pipeline'
+import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
+import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
+import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
+import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
 
 export type CommandStatus = 'green' | 'yellow' | 'red'
 export type AgentStatus = 'active' | 'attention' | 'idle'
@@ -27,11 +32,248 @@ export type AgentFeedItem = {
   label: string
   detail: string
   at: string | null
+  href?: string
 }
 
 export type AgentAction = {
   label: string
   href: string
+}
+
+export type CommandActionTone = 'default' | 'primary' | 'success' | 'warning'
+
+export type CommandCenterInlineAction =
+  | {
+      id: string
+      type: 'navigate'
+      label: string
+      href: string
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lead_bulk'
+      label: string
+      leadIds: string[]
+      action: 'approve_outreach' | 'generate_outreach'
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'buyer_bulk'
+      label: string
+      buyerIds: string[]
+      action: 'approve_outreach' | 'generate_outreach'
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lender_bulk'
+      label: string
+      lenderIds: string[]
+      action: 'approve_outreach' | 'generate_outreach'
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'investor_bulk'
+      label: string
+      investorIds: string[]
+      action:
+        | 'generate_outreach'
+        | 'approve_outreach'
+        | 'queue_outreach'
+        | 'mark_researched'
+        | 'mark_buy_box_inferred'
+        | 'confirm_buy_box'
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lead_status'
+      label: string
+      leadId: string
+      status: 'contacted' | 'replied' | 'interested' | 'qualified'
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lead_outreach'
+      label: string
+      leadId: string
+      messageId: string
+      status?: 'approved' | 'archived'
+      sendNow?: boolean
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lead_send_batch'
+      label: string
+      messages: { leadId: string; messageId: string }[]
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lead_throughput_sprint'
+      label: string
+      target: number
+      dryRun?: boolean
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'boss_daily_loop'
+      label: string
+      dryRun?: boolean
+      dispatch?: boolean
+      send?: boolean
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'buyer_send_batch'
+      label: string
+      messages: { buyerId: string; messageId: string }[]
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lender_send_batch'
+      label: string
+      messages: { lenderId: string; messageId: string }[]
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'buyer_outreach'
+      label: string
+      buyerId: string
+      messageId: string
+      status?: 'approved' | 'archived'
+      sendNow?: boolean
+      tone?: CommandActionTone
+    }
+  | {
+      id: string
+      type: 'lender_outreach'
+      label: string
+      lenderId: string
+      messageId: string
+      status?: 'approved' | 'archived'
+      sendNow?: boolean
+      tone?: CommandActionTone
+    }
+
+export type CommandCenterStreamItem = {
+  id: string
+  lane: 'seller' | 'buyer' | 'lender' | 'partner' | 'system'
+  title: string
+  detail: string
+  hint?: string
+  at: string | null
+  statusLabel?: string
+  priority: 'critical' | 'warning' | 'info'
+  href: string
+  actions: CommandCenterInlineAction[]
+}
+
+export type CommandCenterInboxSection = {
+  key: 'hot_replies' | 'partner_replies' | 'stale_threads' | 'automation_alerts'
+  title: string
+  hint: string
+  items: CommandCenterStreamItem[]
+}
+
+export type CommandCenterQueueCard = {
+  key: 'seller' | 'buyer' | 'lender' | 'builder'
+  title: string
+  detail: string
+  href: string
+  kpis: AgentKpi[]
+  items: CommandCenterStreamItem[]
+  actions: CommandCenterInlineAction[]
+}
+
+export type CommandCenterOutboundControl = {
+  dailyLimit: number
+  sent24h: number
+  remainingToday: number
+  recommendedSprintTarget: number
+  maxSprintTarget: number
+  sender: string
+  provider: string
+  mailingAddressConfigured: boolean
+  autoSendEnabled: boolean
+  emailReady: number
+  needsReview: number
+  followupsDue: number
+  smsMode: 'review_only'
+  smsReason: string
+}
+
+export type CommandCenterOnMarketSweep = {
+  latestRunAt: string | null
+  latestDraftAt: string | null
+  sent: number
+  failed: number
+  draftCount: number
+  uniqueEmails: number
+  markets: { market: string; count: number }[]
+  latestResultFile: string | null
+  latestDraftFile: string | null
+  summary: string
+}
+
+export type CommandCenterTaxCodeStack = {
+  latestRunAt: string | null
+  writtenRows: number
+  totalOutputRows: number
+  markets: { market: string; stackedRows: number; taxDelinquentRows: number; codeViolationRows: number }[]
+  sourceNeededCount: number
+  latestSummaryFile: string | null
+  summary: string
+}
+
+export type CommandCenterStrategyLab = {
+  status: CommandStatus
+  focus: string
+  challenger: string
+  nextMove: string
+  sentToday: number
+  remainingToday: number
+  emailReady: number
+  needsReview: number
+  replySignals7d: number
+  activeDirectiveCount: number
+  lastDirectiveAt: string | null
+  onMarketSweep: CommandCenterOnMarketSweep
+  guardrails: AgentKpi[]
+  actions: CommandCenterInlineAction[]
+}
+
+export type CommandCenterSuppressionCenter = {
+  activeCount: number
+  dbCount: number
+  localCount: number
+  missingDb: boolean
+  recent: {
+    email: string
+    reason: string
+    source: string
+    propertyAddress?: string
+    createdAt: string | null
+  }[]
+}
+
+export type CommandCenterDealMachineFreshness = {
+  freshCount: number
+  staleCount: number
+  oldestAgeDays: number | null
+  newestAgeDays: number | null
+  nextRefreshMarkets: string[]
+  topStale: { file: string; ageDays: number; market: string }[]
+  summary: string
 }
 
 export type AgentPanelData = {
@@ -58,18 +300,37 @@ export type MarketHeatRow = {
   recent7d: number
   replied: number
   heat: number
+  href?: string
 }
 
 export type ActivityItem = {
   at: string
   source: string
   message: string
+  href?: string
+}
+
+export type OverdueTaskItem = {
+  id: string
+  title: string
+  detail: string
+  dueAt: string | null
+  priority: string
+  status: string
+  href: string
+  relatedHref?: string
 }
 
 export type MissionNode = {
   key: AgentKey
   label: string
   intensity: number
+  status: AgentStatus
+  headline: string
+  detail: string
+  signals: AgentKpi[]
+  watchItems: string[]
+  actions: AgentAction[]
 }
 
 export type CommandCenterData = {
@@ -86,18 +347,48 @@ export type CommandCenterData = {
     openTasks: number
     urgentTasks: number
     activePartners: number
-    paidFundingRequests: number
+    builderPartners: number
+    dealMachineAlignedPartners: number
+    partnerResearchReady: number
+    partnerOutreachReady: number
+    partnerBuyBoxesConfirmed: number
+    partnerDiscoveryRuns7d: number
+    cooldownSaves7d: number
+    failedPartnerRuns7d: number
+    archivedLegacyRuntimeRows: number
+    hiddenLegacyDrafts: number
   }
   missionNodes: MissionNode[]
   priorities: string[]
   alerts: CommandAlert[]
   agents: AgentPanelData[]
+  outboundControl: CommandCenterOutboundControl
+  strategyLab: CommandCenterStrategyLab
+  operatingLoops: OperatingLoopTelemetry
+  operatingArchitecture: CommandCenterOperatingArchitecture
+  suppressionCenter: CommandCenterSuppressionCenter
+  dealMachineFreshness: CommandCenterDealMachineFreshness
+  inbox: {
+    summary: AgentKpi[]
+    sections: CommandCenterInboxSection[]
+  }
+  outreachQueues: CommandCenterQueueCard[]
   marketHeat: MarketHeatRow[]
   routingQueue: { label: string; count: number; href: string }[]
+  overdueTasks: OverdueTaskItem[]
   activity: ActivityItem[]
   localSignals: {
     dmExports: { file: string; ageDays: number }[]
+    onMarketSweep: CommandCenterOnMarketSweep
+    taxCodeStack: CommandCenterTaxCodeStack
     distressStackRows: number | null
+    suppressionRecords: {
+      email: string
+      reason: string
+      source: string
+      propertyAddress?: string
+      createdAt: string | null
+    }[]
   }
 }
 
@@ -141,6 +432,12 @@ function envInt(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function envBool(name: string, fallback = false) {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
+}
+
 function hoursSince(value?: string | null) {
   if (!value) return Number.POSITIVE_INFINITY
   const ts = Date.parse(value)
@@ -161,9 +458,429 @@ function timestampOf(row: AnyRow): string | null {
   return row.created_at || row.updated_at || row.sent_at || row.published_at || null
 }
 
+function titleCase(value: string | null | undefined) {
+  const normalized = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+  if (!normalized) return ''
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function marketLabel(row: AnyRow | null | undefined) {
+  return [row?.city, row?.state].filter(Boolean).join(', ')
+}
+
+function leadLabel(lead: AnyRow | null | undefined) {
+  return (
+    String(lead?.property_address || '').trim() ||
+    String(lead?.business_name || '').trim() ||
+    String(lead?.name || '').trim() ||
+    'Seller lead'
+  )
+}
+
+function partnerLabel(row: AnyRow | null | undefined, fallback: string) {
+  return (
+    String(row?.company_name || '').trim() ||
+    String(row?.display_name || '').trim() ||
+    String(row?.name || '').trim() ||
+    fallback
+  )
+}
+
+function navigateAction(id: string, label: string, href: string, tone?: CommandActionTone): CommandCenterInlineAction {
+  return { id, type: 'navigate', label, href, tone }
+}
+
+function leadStatusAction(
+  id: string,
+  label: string,
+  leadId: string,
+  status: 'contacted' | 'replied' | 'interested' | 'qualified',
+  tone?: CommandActionTone
+): CommandCenterInlineAction {
+  return { id, type: 'lead_status', label, leadId, status, tone }
+}
+
+function leadOutreachAction(
+  id: string,
+  label: string,
+  leadId: string,
+  messageId: string,
+  options: { status?: 'approved' | 'archived'; sendNow?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'lead_outreach', label, leadId, messageId, ...options }
+}
+
+function buyerOutreachAction(
+  id: string,
+  label: string,
+  buyerId: string,
+  messageId: string,
+  options: { status?: 'approved' | 'archived'; sendNow?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'buyer_outreach', label, buyerId, messageId, ...options }
+}
+
+function lenderOutreachAction(
+  id: string,
+  label: string,
+  lenderId: string,
+  messageId: string,
+  options: { status?: 'approved' | 'archived'; sendNow?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'lender_outreach', label, lenderId, messageId, ...options }
+}
+
+const LEGACY_OUTREACH_SUBJECT_PATTERNS = [
+  /business setup/i,
+  /business operations/i,
+  /compliance/i,
+  /startup/i,
+  /visibility/i,
+]
+
+const LEGACY_TASK_ENTITY_TYPES = new Set([
+  'credit_report',
+  'dispute_letter',
+  'funding_strategy_request',
+])
+
+const LEGACY_TASK_TEXT_PATTERNS = [
+  /credit report/i,
+  /credit analysis/i,
+  /dispute letter/i,
+  /funding strategy/i,
+  /business funding/i,
+  /\bsam\b/i,
+  /\bgrant\b/i,
+  /government/i,
+]
+
+function isCooldownNote(value: string | null | undefined) {
+  const normalized = String(value || '').toLowerCase()
+  return normalized.includes('cooldown') || normalized.includes('skipped duplicate')
+}
+
+function isCurrentVestblockLead(lead: AnyRow) {
+  return isCurrentVestblockOutboundLead(lead)
+}
+
+function isLegacyLeadOutreachMessage(message: AnyRow, leadById: Map<string, AnyRow>) {
+  const subject = String(message.subject || '').trim()
+  const lead = message.lead_id ? leadById.get(message.lead_id) : null
+
+  if (lead && !isCurrentVestblockLead(lead)) return true
+  if (subject && LEGACY_OUTREACH_SUBJECT_PATTERNS.some((pattern) => pattern.test(subject))) return true
+
+  return false
+}
+
+function isCurrentVestblockTask(task: AnyRow) {
+  const entityType = lower(task.entity_type)
+  if (LEGACY_TASK_ENTITY_TYPES.has(entityType)) return false
+
+  const haystack = [task.title, task.description, task.task_type, task.entity_type].map((value) => String(value || '')).join(' · ')
+  return !LEGACY_TASK_TEXT_PATTERNS.some((pattern) => pattern.test(haystack))
+}
+
+function leadHref(lead: AnyRow | null | undefined) {
+  return lead?.id ? `/admin/leads/${lead.id}` : '/admin/leads'
+}
+
+function buyerHref(buyer: AnyRow | null | undefined) {
+  return buyer?.id ? `/admin/buyers/${buyer.id}` : '/admin/buyers'
+}
+
+function lenderHref(lender: AnyRow | null | undefined) {
+  return lender?.id ? `/admin/lenders/${lender.id}` : '/admin/lenders'
+}
+
+function taskRelatedHref(task: AnyRow) {
+  if (task.entity_type === 'lead' && task.entity_id) return `/admin/leads/${task.entity_id}`
+  if (task.entity_type === 'buyer' && task.entity_id) return `/admin/buyers/${task.entity_id}`
+  if (task.entity_type === 'lender' && task.entity_id) return `/admin/lenders/${task.entity_id}`
+  if (task.entity_type === 'investor_profile' && task.entity_id) return '/admin/investor-partnerships'
+  if (task.entity_type === 'research_checklist' && task.entity_id) return '/admin/research-checklists'
+  return '/admin/command-center'
+}
+
+function priorityWeight(priority: string | null | undefined) {
+  switch (lower(priority)) {
+    case 'urgent':
+      return 4
+    case 'high':
+      return 3
+    case 'normal':
+      return 2
+    case 'low':
+      return 1
+    default:
+      return 0
+  }
+}
+
+function leadBulkAction(
+  id: string,
+  label: string,
+  leadIds: string[],
+  action: 'approve_outreach' | 'generate_outreach',
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'lead_bulk', label, leadIds, action, tone }
+}
+
+function buyerBulkAction(
+  id: string,
+  label: string,
+  buyerIds: string[],
+  action: 'approve_outreach' | 'generate_outreach',
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'buyer_bulk', label, buyerIds, action, tone }
+}
+
+function lenderBulkAction(
+  id: string,
+  label: string,
+  lenderIds: string[],
+  action: 'approve_outreach' | 'generate_outreach',
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'lender_bulk', label, lenderIds, action, tone }
+}
+
+function investorBulkAction(
+  id: string,
+  label: string,
+  investorIds: string[],
+  action:
+    | 'generate_outreach'
+    | 'approve_outreach'
+    | 'queue_outreach'
+    | 'mark_researched'
+    | 'mark_buy_box_inferred'
+    | 'confirm_buy_box',
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'investor_bulk', label, investorIds, action, tone }
+}
+
+function leadSendBatchAction(
+  id: string,
+  label: string,
+  messages: { leadId: string; messageId: string }[],
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'lead_send_batch', label, messages, tone }
+}
+
+function leadThroughputSprintAction(
+  id: string,
+  label: string,
+  target: number,
+  options: { dryRun?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'lead_throughput_sprint', label, target, ...options }
+}
+
+function bossDailyLoopAction(
+  id: string,
+  label: string,
+  options: { dryRun?: boolean; dispatch?: boolean; send?: boolean; tone?: CommandActionTone } = {}
+): CommandCenterInlineAction {
+  return { id, type: 'boss_daily_loop', label, ...options }
+}
+
+function buyerSendBatchAction(
+  id: string,
+  label: string,
+  messages: { buyerId: string; messageId: string }[],
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'buyer_send_batch', label, messages, tone }
+}
+
+function lenderSendBatchAction(
+  id: string,
+  label: string,
+  messages: { lenderId: string; messageId: string }[],
+  tone: CommandActionTone = 'default'
+): CommandCenterInlineAction {
+  return { id, type: 'lender_send_batch', label, messages, tone }
+}
+
+function marketFromDmExportFile(file: string) {
+  const base = file
+    .replace(/\.csv$/i, '')
+    .replace(/^(dealmachine|dm|contacts|export)[-_]*/i, '')
+    .replace(/[-_]?20\d{2}[-_]\d{1,2}[-_]\d{1,2}.*$/i, '')
+    .replace(/[-_]?contacts?$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+
+  return titleCase(base || file.replace(/\.csv$/i, ''))
+}
+
+function newestLocalFile(dir: string, prefix: string, suffix = '.json') {
+  if (!fs.existsSync(dir)) return null
+
+  const matches = fs
+    .readdirSync(dir)
+    .filter((name) => name.startsWith(prefix) && name.endsWith(suffix))
+    .map((name) => {
+      const file = path.join(dir, name)
+      const stat = fs.statSync(file)
+      return { name, file, mtimeMs: stat.mtimeMs }
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+
+  return matches[0] || null
+}
+
+function readJsonArray(file: string | null | undefined): AnyRow[] {
+  if (!file) return []
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return Array.isArray(parsed) ? (parsed as AnyRow[]) : []
+  } catch {
+    return []
+  }
+}
+
+function loadOnMarketSweep(): CommandCenterOnMarketSweep {
+  const dir = path.join(process.cwd(), 'tmp', 'outreach')
+  try {
+    const latestResult = newestLocalFile(dir, 'stale-listing-results-')
+    const latestDraft = newestLocalFile(dir, 'stale-listing-drafts-')
+    const resultRows = readJsonArray(latestResult?.file)
+    const draftRows = readJsonArray(latestDraft?.file)
+    const sent = resultRows.filter((row) => row.ok === true).length
+    const failed = resultRows.filter((row) => row.ok === false || row.error).length
+    const emailSet = new Set<string>()
+
+    for (const row of resultRows.length ? resultRows : draftRows) {
+      const email = String(row.email || row.agent_email || row.office_email || '').trim().toLowerCase()
+      if (email) emailSet.add(email)
+    }
+
+    const marketCounts = new Map<string, number>()
+    for (const row of draftRows) {
+      const market = String(row.market || [row.city, row.state].filter(Boolean).join(', ')).trim()
+      if (!market) continue
+      marketCounts.set(market, (marketCounts.get(market) || 0) + 1)
+    }
+
+    const markets = [...marketCounts.entries()]
+      .map(([market, count]) => ({ market, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+    const latestRunAt = latestResult ? new Date(latestResult.mtimeMs).toISOString() : null
+    const latestDraftAt = latestDraft ? new Date(latestDraft.mtimeMs).toISOString() : null
+    const totalResults = sent + failed
+    const summary = latestResult
+      ? `Latest public listing sweep sent ${sent}/${totalResults || sent} agent email${sent === 1 ? '' : 's'}${failed ? ` with ${failed} failed` : ' with no failures'}.`
+      : latestDraft
+        ? `Latest public listing sweep has ${draftRows.length} agent draft${draftRows.length === 1 ? '' : 's'} staged for review.`
+        : 'No public on-market listing sweep has been generated yet.'
+
+    return {
+      latestRunAt,
+      latestDraftAt,
+      sent,
+      failed,
+      draftCount: draftRows.length,
+      uniqueEmails: emailSet.size,
+      markets,
+      latestResultFile: latestResult?.name || null,
+      latestDraftFile: latestDraft?.name || null,
+      summary,
+    }
+  } catch {
+    return {
+      latestRunAt: null,
+      latestDraftAt: null,
+      sent: 0,
+      failed: 0,
+      draftCount: 0,
+      uniqueEmails: 0,
+      markets: [],
+      latestResultFile: null,
+      latestDraftFile: null,
+      summary: 'Public on-market sweep telemetry is unavailable in this environment.',
+    }
+  }
+}
+
+function loadTaxCodeStack(): CommandCenterTaxCodeStack {
+  const dir = path.join(process.cwd(), 'data', 'distress-leads')
+  try {
+    const latestSummary = newestLocalFile(dir, 'dealmachine-tax-code-stack-summary-')
+    if (!latestSummary) {
+      return {
+        latestRunAt: null,
+        writtenRows: 0,
+        totalOutputRows: 0,
+        markets: [],
+        sourceNeededCount: 0,
+        latestSummaryFile: null,
+        summary: 'No tax-delinquent + code-violation stack has been built yet.',
+      }
+    }
+
+    const parsed = JSON.parse(fs.readFileSync(latestSummary.file, 'utf8')) as Record<string, any>
+    const marketSummaries = Array.isArray(parsed.marketSummaries) ? parsed.marketSummaries : []
+    const markets = marketSummaries
+      .map((row: Record<string, any>) => ({
+        market: String(row.market || ''),
+        stackedRows: Number(row.stackedRows || 0),
+        taxDelinquentRows: Number(row.taxDelinquentRows || 0),
+        codeViolationRows: Number(row.codeViolationRows || 0),
+      }))
+      .filter((row) => row.market)
+      .slice(0, 6)
+    const writtenRows = Number(parsed.writtenRows || 0)
+    const totalOutputRows = Number(parsed.totalOutputRows || 0)
+    const sourceNeededCount = Array.isArray(parsed.sourceNeeded) ? parsed.sourceNeeded.length : 0
+
+    return {
+      latestRunAt: new Date(latestSummary.mtimeMs).toISOString(),
+      writtenRows,
+      totalOutputRows,
+      markets,
+      sourceNeededCount,
+      latestSummaryFile: latestSummary.name,
+      summary: writtenRows
+        ? `Latest tax/code stack wrote ${writtenRows} row${writtenRows === 1 ? '' : 's'} across ${markets.length} market${markets.length === 1 ? '' : 's'}.`
+        : sourceNeededCount
+          ? `Tax/code stack is waiting on ${sourceNeededCount} source input${sourceNeededCount === 1 ? '' : 's'}.`
+          : 'Latest tax/code stack did not find matched rows.',
+    }
+  } catch {
+    return {
+      latestRunAt: null,
+      writtenRows: 0,
+      totalOutputRows: 0,
+      markets: [],
+      sourceNeededCount: 0,
+      latestSummaryFile: null,
+      summary: 'Tax/code stack telemetry is unavailable in this environment.',
+    }
+  }
+}
+
 function loadLocalSignals() {
   const dmExports: { file: string; ageDays: number }[] = []
+  const suppressionRecords: {
+    email: string
+    reason: string
+    source: string
+    propertyAddress?: string
+    createdAt: string | null
+  }[] = []
   let distressStackRows: number | null = null
+  const onMarketSweep = loadOnMarketSweep()
+  const taxCodeStack = loadTaxCodeStack()
 
   try {
     const dir = path.join(process.cwd(), 'data', 'dm-exports')
@@ -191,7 +908,31 @@ function loadLocalSignals() {
     distressStackRows = null
   }
 
-  return { dmExports, distressStackRows }
+  try {
+    const file = path.join(process.cwd(), 'data', 'outreach-suppressions.json')
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (Array.isArray(parsed)) {
+        for (const row of parsed) {
+          const email = String(row?.email || '').trim().toLowerCase()
+          if (!email) continue
+          suppressionRecords.push({
+            email,
+            reason: String(row?.reason || 'local_suppression'),
+            source: String(row?.source || 'local_file'),
+            propertyAddress: row?.property_address ? String(row.property_address) : undefined,
+            createdAt: row?.created_at || row?.received_at || null,
+          })
+        }
+      }
+    }
+  } catch {
+    // local suppression file is optional
+  }
+
+  suppressionRecords.sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
+
+  return { dmExports, onMarketSweep, taxCodeStack, distressStackRows, suppressionRecords }
 }
 
 async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSourceIssue[]) {
@@ -207,7 +948,6 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     lenderMatches,
     investors,
     investorFollowUps,
-    fundingRequests,
     payments,
     fundingPayments,
     contentAssets,
@@ -215,7 +955,11 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     prTargets,
     prPitches,
     scrapeRuns,
+    buyerDiscoveryRuns,
+    lenderDiscoveryRuns,
+    investorAutomationRuns,
     adminTasks,
+    leadSuppressions,
     dailyReports,
     researchChecklists,
     targetMarkets,
@@ -225,7 +969,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
         admin
           .from('leads')
           .select(
-            'id,email,email_valid,status,outreach_status,source,city,state,lead_score,lead_type,delivery_status,bounce_risk_score,created_at,updated_at,last_contacted_at'
+            'id,name,business_name,property_address,email,email_valid,status,outreach_status,source,city,state,lead_score,lead_type,delivery_status,bounce_risk_score,created_at,updated_at,last_contacted_at,next_follow_up_at'
           )
           .order('created_at', { ascending: false }),
       'leads',
@@ -236,7 +980,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('outreach_messages')
-          .select('id,status,channel,approved_at,sent_at,created_at,updated_at')
+          .select('id,lead_id,status,channel,subject,approved_at,sent_at,created_at,updated_at')
           .order('updated_at', { ascending: false }),
       'outreach_messages',
       issues,
@@ -246,7 +990,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('outreach_send_events')
-          .select('id,channel,status,created_at')
+          .select('id,lead_id,outreach_message_id,channel,status,subject,created_at')
           .order('created_at', { ascending: false }),
       'outreach_send_events',
       issues,
@@ -256,7 +1000,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('buyers')
-          .select('id,company_name,relationship_stage,outreach_status,state,next_follow_up_at,last_contacted_at,created_at,updated_at'),
+          .select('id,company_name,contact_email,relationship_stage,outreach_status,state,next_follow_up_at,last_contacted_at,created_at,updated_at'),
       'buyers',
       issues,
       { maxRows: 2000 }
@@ -265,7 +1009,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('buyer_outreach_messages')
-          .select('id,status,channel,sent_at,created_at,updated_at'),
+          .select('id,buyer_id,status,channel,subject,approved_at,sent_at,created_at,updated_at'),
       'buyer_outreach_messages',
       issues,
       { maxRows: 2000 }
@@ -275,7 +1019,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('lenders')
-          .select('id,company_name,relationship_stage,outreach_status,state,next_follow_up_at,last_contacted_at,created_at,updated_at'),
+          .select('id,company_name,contact_email,relationship_stage,outreach_status,state,next_follow_up_at,last_contacted_at,created_at,updated_at'),
       'lenders',
       issues,
       { maxRows: 2000 }
@@ -284,7 +1028,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('lender_outreach_messages')
-          .select('id,status,channel,sent_at,created_at,updated_at'),
+          .select('id,lender_id,status,channel,subject,approved_at,sent_at,created_at,updated_at'),
       'lender_outreach_messages',
       issues,
       { maxRows: 2000 }
@@ -294,15 +1038,6 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     safeRows(() => admin.from('investor_follow_up_tasks').select('*'), 'investor_follow_up_tasks', issues, {
       maxRows: 500,
     }),
-    safeRows(
-      () =>
-        admin
-          .from('funding_strategy_requests')
-          .select('id,status,payment_status,readiness_score,created_at,updated_at'),
-      'funding_strategy_requests',
-      issues,
-      { maxRows: 1000 }
-    ),
     safeRows(() => admin.from('payments').select('amount,status,created_at,updated_at'), 'payments', issues, {
       maxRows: 2000,
     }),
@@ -340,12 +1075,55 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     safeRows(
       () =>
         admin
+          .from('buyer_outreach_runs')
+          .select('id,source_key,run_type,status,result_count,request_params,error_message,started_at,completed_at')
+          .in('run_type', ['daily_discovery', 'discovery'])
+          .order('started_at', { ascending: false }),
+      'buyer_outreach_runs',
+      issues,
+      { maxRows: 300 }
+    ),
+    safeRows(
+      () =>
+        admin
+          .from('lender_outreach_runs')
+          .select('id,source_key,run_type,status,result_count,request_params,error_message,started_at,completed_at')
+          .in('run_type', ['daily_discovery', 'discovery'])
+          .order('started_at', { ascending: false }),
+      'lender_outreach_runs',
+      issues,
+      { maxRows: 300 }
+    ),
+    safeRows(
+      () =>
+        admin
+          .from('investor_automation_runs')
+          .select('id,source_key,run_type,status,result_count,request_params,error_message,started_at,finished_at')
+          .in('run_type', ['daily_discovery', 'discovery'])
+          .order('started_at', { ascending: false }),
+      'investor_automation_runs',
+      issues,
+      { maxRows: 300 }
+    ),
+    safeRows(
+      () =>
+        admin
           .from('admin_tasks')
-          .select('id,title,status,priority,due_at,created_at')
+          .select('id,title,description,task_type,status,priority,due_at,created_at,updated_at,entity_type,entity_id,user_email,metadata_json')
           .order('created_at', { ascending: false }),
       'admin_tasks',
       issues,
       { maxRows: 500 }
+    ),
+    safeRows(
+      () =>
+        admin
+          .from('lead_suppressions')
+          .select('id,email,phone,website,business_name,city,state,reason,status,created_at,updated_at')
+          .order('created_at', { ascending: false }),
+      'lead_suppressions',
+      issues,
+      { maxRows: 1000 }
     ),
     safeRows(
       () =>
@@ -375,7 +1153,6 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     lenderMatches,
     investors,
     investorFollowUps,
-    fundingRequests,
     payments,
     fundingPayments,
     contentAssets,
@@ -383,7 +1160,11 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     prTargets,
     prPitches,
     scrapeRuns,
+    buyerDiscoveryRuns,
+    lenderDiscoveryRuns,
+    investorAutomationRuns,
     adminTasks,
+    leadSuppressions,
     dailyReports,
     researchChecklists,
     targetMarkets,
@@ -401,37 +1182,88 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 100)
   const revenueTarget = envInt('VESTBLOCK_MONTHLY_REVENUE_TARGET', 100000)
 
-  const newLeads24h = t.leads.filter((lead) => withinHours(lead.created_at, 24)).length
-  const newLeads7d = t.leads.filter((lead) => withinDays(lead.created_at, 7)).length
-  const contactableLeads = t.leads.filter((lead) => String(lead.email || '').trim()).length
+  const leadById = new Map(t.leads.map((lead) => [lead.id, lead]))
+  const buyerById = new Map(t.buyers.map((buyer) => [buyer.id, buyer]))
+  const lenderById = new Map(t.lenders.map((lender) => [lender.id, lender]))
+  const currentLeads = t.leads.filter(isCurrentVestblockLead)
+  const currentLeadIds = new Set(currentLeads.map((lead) => lead.id))
+  const currentOutreachMessages = t.outreachMessages.filter((message) => !isLegacyLeadOutreachMessage(message, leadById))
+  const currentOutreachSendEvents = t.outreachSendEvents.filter(
+    (event) => !event.lead_id || currentLeadIds.has(event.lead_id)
+  )
+  const activeBuyerOutreach = t.buyerOutreach.filter((message) => lower(message.status) !== 'archived')
+  const activeLenderOutreach = t.lenderOutreach.filter((message) => lower(message.status) !== 'archived')
+  const legacyLeadOutreachCount = t.outreachMessages.length - currentOutreachMessages.length
+  const investorPipelineRows = t.investors.map((investor) => ({
+    investor,
+    pipeline: buildInvestorPipelineSnapshotFromRecord(investor as any),
+  }))
+  const builderPartners = investorPipelineRows.filter((item) => item.pipeline.builderLane).length
+  const dealMachineAlignedPartners = investorPipelineRows.filter((item) => item.pipeline.dealMachineAligned).length
+  const partnerResearchReady = investorPipelineRows.filter((item) => item.pipeline.researchReady).length
+  const partnerOutreachReady = investorPipelineRows.filter((item) => item.pipeline.outreachReady).length
+  const partnerBuyBoxesConfirmed = investorPipelineRows.filter((item) => item.pipeline.buyBoxConfirmed).length
+  const partnerResearchBlocked = investorPipelineRows.filter(
+    (item) => !item.pipeline.outreachReady && ['discovered', 'researched', 'buy_box_inferred'].includes(item.pipeline.stage)
+  ).length
 
-  const leadSends24h = t.outreachSendEvents.filter(
+  const newLeads24h = currentLeads.filter((lead) => withinHours(lead.created_at, 24)).length
+  const newLeads7d = currentLeads.filter((lead) => withinDays(lead.created_at, 7)).length
+
+  const allLeadSends24h = t.outreachSendEvents.filter(
     (event) => lower(event.status) === 'sent' && lower(event.channel) === 'email' && withinHours(event.created_at, 24)
   ).length
   const partnerSends24h =
-    t.lenderOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length +
-    t.buyerOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length
-  const outreach24h = leadSends24h + partnerSends24h
+    activeLenderOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length +
+    activeBuyerOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length
+  const outreach24h = allLeadSends24h + partnerSends24h
   const sends7d =
-    t.outreachSendEvents.filter((event) => lower(event.status) === 'sent' && withinDays(event.created_at, 7)).length +
-    t.lenderOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length +
-    t.buyerOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length
+    currentOutreachSendEvents.filter((event) => lower(event.status) === 'sent' && withinDays(event.created_at, 7)).length +
+    activeLenderOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length +
+    activeBuyerOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length
 
-  const sendReady = t.outreachMessages.filter(
+  const sendReady = currentOutreachMessages.filter(
     (m) => lower(m.channel) === 'email' && ['approved', 'queued'].includes(lower(m.status))
   ).length
-  const needsReview = t.outreachMessages.filter(
+  const needsReview = currentOutreachMessages.filter(
     (m) => lower(m.channel) === 'email' && lower(m.status) === 'needs_review'
   ).length
+  const buyerApproved = activeBuyerOutreach.filter((message) => lower(message.status) === 'approved').length
+  const buyerNeedsReview = activeBuyerOutreach.filter((message) => lower(message.status) === 'needs_review').length
+  const lenderApproved = activeLenderOutreach.filter((message) => lower(message.status) === 'approved').length
+  const lenderNeedsReview = activeLenderOutreach.filter((message) => lower(message.status) === 'needs_review').length
+  const remainingToday = Math.max(0, outreachTarget - outreach24h)
+  const outboundReadiness = getOutboundProviderReadiness()
+  const autoSendEnabled = envBool('AUTO_SEND_ENABLED', envBool('LEADS_AUTO_SEND_APPROVED', false))
+  const maxSprintTarget = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(outreachTarget, 100))
+  const recommendedSprintTarget = Math.max(0, Math.min(remainingToday, maxSprintTarget))
 
-  const replySignals7d = t.leads.filter(
+  const replySignals7d = currentLeads.filter(
     (lead) =>
       ['replied', 'interested', 'qualified', 'closed_won'].includes(lower(lead.status)) &&
       withinDays(lead.updated_at || lead.last_contacted_at || lead.created_at, 7)
   ).length
+  const propertyLeadCount = currentLeads.filter((lead) => String(lead.property_address || '').trim()).length
+  const analyzerOutcomeCount = 0
 
-  const followupsDue = t.leads.filter((lead) => lower(lead.outreach_status) === 'followup_due').length
-  const bounceRiskLeads = t.leads.filter(
+  const followupsDue = currentLeads.filter((lead) => lower(lead.outreach_status) === 'followup_due').length
+  const outboundControl: CommandCenterOutboundControl = {
+    dailyLimit: outreachTarget,
+    sent24h: outreach24h,
+    remainingToday,
+    recommendedSprintTarget,
+    maxSprintTarget,
+    sender: outboundReadiness.sender,
+    provider: outboundReadiness.defaultProvider,
+    mailingAddressConfigured: outboundReadiness.mailingAddressConfigured,
+    autoSendEnabled,
+    emailReady: sendReady,
+    needsReview,
+    followupsDue,
+    smsMode: 'review_only',
+    smsReason: 'SMS requires consent/opt-out review before live sending.',
+  }
+  const bounceRiskLeads = currentLeads.filter(
     (lead) => Number(lead.bounce_risk_score || 0) >= 70 || lower(lead.delivery_status) === 'bounced'
   ).length
 
@@ -444,16 +1276,6 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     paidFunding
       .filter((p) => withinDays(p.created_at || p.updated_at, 30))
       .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
-
-  const hotFunding = t.fundingRequests.filter(
-    (r) =>
-      ['submitted', 'paid', 'in_review', 'strategy_ready'].includes(lower(r.status)) &&
-      Number(r.readiness_score || 0) >= 70
-  ).length
-  const paidFundingRequests = t.fundingRequests.filter((r) => lower(r.payment_status) === 'paid').length
-  const openFundingRequests = t.fundingRequests.filter(
-    (r) => !['closed', 'rejected', 'complete', 'completed'].includes(lower(r.status))
-  ).length
 
   const activeBuyers = t.buyers.filter((b) =>
     ['contacted', 'responded', 'reviewing', 'active_buyer'].includes(lower(b.relationship_stage))
@@ -492,16 +1314,287 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const recentScrapeRuns = t.scrapeRuns.filter((run) => withinHours(run.created_at || run.started_at, 24))
   const failedScrapes24h = recentScrapeRuns.filter((run) => lower(run.status) === 'failed').length
   const okScrapes24h = recentScrapeRuns.filter((run) => ['completed', 'partial'].includes(lower(run.status))).length
+  const partnerDiscoveryRuns = [
+    ...t.buyerDiscoveryRuns.map((run) => ({
+      lane: 'buyers',
+      sourceKey: run.source_key as string | null,
+      status: String(run.status || ''),
+      resultCount: Number(run.result_count || 0),
+      startedAt: (run.started_at as string | null) || null,
+      completedAt: (run.completed_at as string | null) || (run.started_at as string | null) || null,
+      note: (run.error_message as string | null) || null,
+    })),
+    ...t.lenderDiscoveryRuns.map((run) => ({
+      lane: 'lenders',
+      sourceKey: run.source_key as string | null,
+      status: String(run.status || ''),
+      resultCount: Number(run.result_count || 0),
+      startedAt: (run.started_at as string | null) || null,
+      completedAt: (run.completed_at as string | null) || (run.started_at as string | null) || null,
+      note: (run.error_message as string | null) || null,
+    })),
+    ...t.investorAutomationRuns.map((run) => ({
+      lane: 'investors',
+      sourceKey: run.source_key as string | null,
+      status: String(run.status || ''),
+      resultCount: Number(run.result_count || 0),
+      startedAt: (run.started_at as string | null) || null,
+      completedAt: (run.finished_at as string | null) || (run.started_at as string | null) || null,
+      note: (run.error_message as string | null) || null,
+    })),
+  ].sort((a, b) => Date.parse(b.startedAt || b.completedAt || '') - Date.parse(a.startedAt || a.completedAt || ''))
+  const recentPartnerRuns7d = partnerDiscoveryRuns.filter((run) => withinDays(run.startedAt || run.completedAt, 7))
+  const activePartnerDiscoveryRuns7d = recentPartnerRuns7d.filter(
+    (run) => !isCooldownNote(run.note) && lower(run.status) !== 'failed'
+  ).length
+  const cooldownSaves7d = recentPartnerRuns7d.filter((run) => isCooldownNote(run.note)).length
+  const failedPartnerRuns7d = recentPartnerRuns7d.filter((run) => lower(run.status) === 'failed').length
+  const archivedLegacyRuntimeRows = t.scrapeRuns.length
+  const staleExports = local.dmExports.filter((e) => e.ageDays > 7).length
 
-  const openTasks = t.adminTasks.filter((task) => !['done', 'completed', 'closed'].includes(lower(task.status)))
+  const openTasks = t.adminTasks.filter(
+    (task) => !['done', 'completed', 'closed'].includes(lower(task.status)) && isCurrentVestblockTask(task)
+  )
   const urgentTasks = openTasks.filter((task) => ['urgent', 'high'].includes(lower(task.priority)))
   const overdueTasks = openTasks.filter((task) => task.due_at && Date.parse(task.due_at) < Date.now())
 
   const latestReport = t.dailyReports[0] || null
+  const missingSuppressionDb = issues.some((issue) => issue.source === 'lead_suppressions')
+  const activeDbSuppressions = t.leadSuppressions.filter((row) => lower(row.status) !== 'released')
+  const localSuppressionEmails = new Set(local.suppressionRecords.map((row) => row.email))
+  const dbSuppressionEmails = new Set(
+    activeDbSuppressions.map((row) => String(row.email || '').trim().toLowerCase()).filter(Boolean)
+  )
+  const activeSuppressionCount = new Set([...localSuppressionEmails, ...dbSuppressionEmails]).size
+  const recentSuppressions = [
+    ...activeDbSuppressions
+      .map((row) => {
+        const email = String(row.email || '').trim().toLowerCase()
+        if (!email) return null
+        return {
+          email,
+          reason: String(row.reason || 'suppression'),
+          source: 'database',
+          createdAt: (row.created_at as string | null) || null,
+        }
+      })
+      .filter(Boolean),
+    ...local.suppressionRecords.map((row) => ({
+      email: row.email,
+      reason: row.reason,
+      source: row.source,
+      propertyAddress: row.propertyAddress,
+      createdAt: row.createdAt,
+    })),
+  ]
+    .sort((a, b) => Date.parse(b?.createdAt || '') - Date.parse(a?.createdAt || ''))
+    .slice(0, 5) as CommandCenterSuppressionCenter['recent']
+
+  const freshDmExports = local.dmExports.filter((file) => file.ageDays <= 7)
+  const staleDmExports = local.dmExports.filter((file) => file.ageDays > 7)
+  const nextRefreshMarkets = [
+    ...new Set(
+      (staleDmExports.length ? staleDmExports : local.dmExports)
+        .map((file) => marketFromDmExportFile(file.file))
+        .filter(Boolean)
+    ),
+  ].slice(0, 4)
+  const dmAges = local.dmExports.map((file) => file.ageDays)
+  const dealMachineFreshness: CommandCenterDealMachineFreshness = {
+    freshCount: freshDmExports.length,
+    staleCount: staleDmExports.length,
+    oldestAgeDays: dmAges.length ? Math.max(...dmAges) : null,
+    newestAgeDays: dmAges.length ? Math.min(...dmAges) : null,
+    nextRefreshMarkets,
+    topStale: staleDmExports.slice(0, 4).map((file) => ({
+      file: file.file,
+      ageDays: file.ageDays,
+      market: marketFromDmExportFile(file.file),
+    })),
+    summary: local.dmExports.length
+      ? `${freshDmExports.length} fresh export${freshDmExports.length === 1 ? '' : 's'} and ${staleDmExports.length} stale export${staleDmExports.length === 1 ? '' : 's'} on disk.`
+      : 'No DealMachine contact exports are on disk yet.',
+  }
+
+  const strategyLabDirectives = openTasks
+    .filter((task) => lower(task.task_type) === 'boss_directive')
+    .filter((task) => {
+      const meta = (task.metadata_json || {}) as Record<string, unknown>
+      return meta.play_key === 'daily-autonomous-strategy-lab'
+    })
+  const lastStrategyDirectiveAt = strategyLabDirectives
+    .map((task) => task.created_at || task.updated_at)
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(String(b)) - Date.parse(String(a)))[0] as string | undefined
+  const onMarketSweepRecent = withinDays(local.onMarketSweep.latestRunAt || local.onMarketSweep.latestDraftAt, 1)
+  const strategyFocus =
+    replySignals7d > 0
+      ? 'Reply-first seller conversion'
+      : onMarketSweepRecent && local.onMarketSweep.sent > 0
+        ? 'Follow up fresh on-market cash reviews'
+        : recommendedSprintTarget > 0 && sendReady > 0
+        ? 'Push safe seller cap sprint'
+        : dealMachineFreshness.freshCount > 0
+          ? 'Mine fresh DealMachine exports'
+          : 'Refresh portfolio landlord exports'
+  const leadMarketFallback = marketLabel(currentLeads.find((lead) => lead.city || lead.state))
+  const strategyChallenger =
+    (onMarketSweepRecent && local.onMarketSweep.markets[0]?.market
+      ? `On-market agents in ${local.onMarketSweep.markets[0].market}`
+      : '') ||
+    nextRefreshMarkets[0] ||
+    leadMarketFallback ||
+    (builderPartners > 0 ? 'Builder buy-box matching' : 'Portfolio landlords in four markets')
+  const strategyNextMove =
+    replySignals7d > 0
+      ? `Advance ${replySignals7d} seller repl${replySignals7d === 1 ? 'y' : 'ies'} before new sends.`
+      : onMarketSweepRecent && local.onMarketSweep.sent > 0
+        ? `Monitor replies from the ${local.onMarketSweep.sent} public listing-agent cash review email${local.onMarketSweep.sent === 1 ? '' : 's'} sent in the latest sweep, then let Boss decide whether to repeat or pivot.`
+        : recommendedSprintTarget > 0 && sendReady > 0
+        ? `Preview or push ${recommendedSprintTarget} acquisition email${recommendedSprintTarget === 1 ? '' : 's'} toward today’s cap.`
+        : staleDmExports.length > 0
+          ? `Refresh ${nextRefreshMarkets.slice(0, 2).join(' and ') || 'the stale DealMachine markets'} before sending more volume.`
+          : 'Source the next DealMachine export, then let the lab pick the strongest segment.'
+  const strategyLab: CommandCenterStrategyLab = {
+    status:
+      missingSuppressionDb || !outboundReadiness.mailingAddressConfigured
+        ? 'red'
+        : recommendedSprintTarget > 0 || replySignals7d > 0
+          ? 'green'
+          : 'yellow',
+    focus: strategyFocus,
+    challenger: strategyChallenger,
+    nextMove: strategyNextMove,
+    sentToday: outreach24h,
+    remainingToday,
+    emailReady: sendReady,
+    needsReview,
+    replySignals7d,
+    activeDirectiveCount: strategyLabDirectives.length,
+    lastDirectiveAt: lastStrategyDirectiveAt || null,
+    onMarketSweep: local.onMarketSweep,
+    guardrails: [
+      {
+        label: 'Sender',
+        value: outboundReadiness.sender,
+        helper: outboundReadiness.sender.includes('acquisitions@vestblock.io') ? 'seller-safe lane' : 'review sender',
+        status: outboundReadiness.sender.includes('acquisitions@vestblock.io') ? 'green' : 'yellow',
+      },
+      {
+        label: 'Suppressions',
+        value: activeSuppressionCount,
+        helper: missingSuppressionDb ? 'database check failed' : `${local.suppressionRecords.length} local`,
+        status: missingSuppressionDb ? 'red' : 'green',
+      },
+      {
+        label: 'DealMachine',
+        value: freshDmExports.length,
+        helper: freshDmExports.length ? 'fresh exports' : staleDmExports.length ? 'exports stale' : 'needs export',
+        status: freshDmExports.length ? 'green' : staleDmExports.length ? 'yellow' : 'red',
+      },
+      {
+        label: 'SMS',
+        value: 'review only',
+        helper: 'no live SMS auto-send',
+        status: 'yellow',
+      },
+    ],
+    actions: [
+      bossDailyLoopAction('strategy-lab-run-preview', 'Run loop preview', {
+        dryRun: true,
+        tone: 'primary',
+      }),
+      bossDailyLoopAction('strategy-lab-dispatch-focus', 'Dispatch focus loop', {
+        dryRun: false,
+        dispatch: true,
+        tone: 'success',
+      }),
+      ...(recommendedSprintTarget > 0
+        ? [
+            leadThroughputSprintAction('strategy-lab-live-sprint', `Push ${recommendedSprintTarget}`, recommendedSprintTarget, {
+              tone: 'success',
+            }),
+          ]
+        : []),
+      leadThroughputSprintAction(
+        'strategy-lab-preview-sprint',
+        'Preview cap sprint',
+        Math.max(1, recommendedSprintTarget || Math.min(outreachTarget, maxSprintTarget)),
+        { dryRun: true, tone: 'primary' }
+      ),
+      navigateAction('strategy-lab-sources', 'Open lead sources', '/admin/lead-sources'),
+    ],
+  }
+
+  const operatingLoops = loadOperatingLoopTelemetry({
+    sentToday: strategyLab.sentToday,
+    sent7d: sends7d,
+    remainingToday: strategyLab.remainingToday,
+    replySignals7d: strategyLab.replySignals7d,
+    emailReady: strategyLab.emailReady,
+    needsReview: strategyLab.needsReview,
+    focusStrategyKey: strategyLab.focus,
+    challengerStrategyKey: strategyLab.challenger,
+    followupsDue,
+    partnerFollowupsDue,
+    activeSuppressionCount,
+    missingSuppressionDb,
+    bounceRiskLeads,
+    buyerDemandSignals: activeBuyers + activeLenders + builderPartners,
+    pendingMatches: pendingBuyerMatches + pendingLenderMatches,
+    partnerBuyBoxesConfirmed,
+    partnerResearchReady,
+    partnerOutreachReady,
+    partnerDiscoveryRuns7d: activePartnerDiscoveryRuns7d,
+    failedPartnerRuns7d,
+    failedScrapes24h,
+    sourceFreshCount: dealMachineFreshness.freshCount,
+    sourceStaleCount: dealMachineFreshness.staleCount,
+    staleExportCount: staleExports,
+    staleExportTotal: local.dmExports.length,
+    activeDirectiveCount: strategyLabDirectives.length,
+    overdueTaskCount: overdueTasks.length,
+    urgentTaskCount: urgentTasks.length,
+    openTaskCount: openTasks.length,
+    legacyDraftCount: legacyLeadOutreachCount,
+    archivedLegacyRuntimeRows,
+    openResearchChecklistCount: openChecklists,
+    analyzerOutcomeCount,
+  })
+
+  const operatingArchitecture = buildOperatingArchitecture({
+    ledgerEventCount: operatingLoops.ledgerEventCount,
+    operatingLoopCount: operatingLoops.loops.length,
+    replySignals7d,
+    sent7d: sends7d,
+    sellerLeads: currentLeads.length,
+    propertyLeadCount,
+    pendingBuyerMatches,
+    pendingLenderMatches,
+    followupsDue,
+    partnerFollowupsDue,
+    partnerBuyBoxesConfirmed,
+    partnerResearchReady,
+    partnerOutreachReady,
+    activeSuppressionCount,
+    freshSourceCount: dealMachineFreshness.freshCount,
+    staleSourceCount: dealMachineFreshness.staleCount,
+    openTaskCount: openTasks.length,
+    overdueTaskCount: overdueTasks.length,
+    analyzerOutcomeCount,
+  })
+
+  const suppressionCenter: CommandCenterSuppressionCenter = {
+    activeCount: activeSuppressionCount,
+    dbCount: activeDbSuppressions.length,
+    localCount: local.suppressionRecords.length,
+    missingDb: missingSuppressionDb,
+    recent: recentSuppressions,
+  }
 
   // ── Market heat ────────────────────────────────────────────────────────────
   const marketMap = new Map<string, MarketHeatRow>()
-  for (const lead of t.leads) {
+  for (const lead of currentLeads) {
     if (!lead.city) continue
     const market = `${lead.city}${lead.state ? `, ${lead.state}` : ''}`
     const row = marketMap.get(market) || { market, leads: 0, contactable: 0, recent7d: 0, replied: 0, heat: 0 }
@@ -509,6 +1602,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     if (String(lead.email || '').trim()) row.contactable++
     if (withinDays(lead.created_at, 7)) row.recent7d++
     if (['replied', 'interested', 'qualified', 'closed_won'].includes(lower(lead.status))) row.replied++
+    row.href = `/admin/leads?city=${encodeURIComponent(String(lead.city))}${lead.state ? `&state=${encodeURIComponent(String(lead.state))}` : ''}`
     marketMap.set(market, row)
   }
   const marketHeat = [...marketMap.values()]
@@ -521,47 +1615,399 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     .sort((a, b) => b.heat - a.heat || b.leads - a.leads)
     .slice(0, 8)
 
+  // ── Inbox / outreach command surfaces ─────────────────────────────────────
+  const hotLeadReplies: CommandCenterStreamItem[] = currentLeads
+    .filter((lead) => ['replied', 'interested', 'qualified'].includes(lower(lead.status)))
+    .sort((a, b) => Date.parse(timestampOf(b) || '') - Date.parse(timestampOf(a) || ''))
+    .slice(0, 4)
+    .map((lead) => {
+      const status = lower(lead.status)
+      return {
+        id: `seller-reply-${lead.id}`,
+        lane: 'seller',
+        title: leadLabel(lead),
+        detail: `${marketLabel(lead) || lead.source || 'Seller lead'} · ${titleCase(status)}`,
+        hint: String(lead.email || '').trim() || String(lead.source || '').trim() || 'Open seller thread',
+        at: lead.updated_at || lead.last_contacted_at || lead.created_at || null,
+        statusLabel: titleCase(status),
+        priority: status === 'qualified' ? ('critical' as const) : status === 'interested' ? ('warning' as const) : ('info' as const),
+        href: leadHref(lead),
+        actions: [
+          navigateAction(`lead-open-${lead.id}`, 'Open', leadHref(lead)),
+          status === 'replied'
+            ? leadStatusAction(`lead-interest-${lead.id}`, 'Mark interested', lead.id, 'interested', 'warning')
+            : leadStatusAction(`lead-qualify-${lead.id}`, 'Mark qualified', lead.id, 'qualified', 'success'),
+        ],
+      }
+    })
+
+  const partnerReplyItems: CommandCenterStreamItem[] = [
+    ...t.buyers
+      .filter((buyer) => ['responded', 'reviewing', 'active_buyer'].includes(lower(buyer.relationship_stage)))
+      .map((buyer) => ({
+        id: `buyer-reply-${buyer.id}`,
+        lane: 'buyer' as const,
+        title: partnerLabel(buyer, 'Buyer reply'),
+        detail: `Buyer lane · ${titleCase(lower(buyer.relationship_stage) || 'responded')}`,
+        hint: String(buyer.contact_email || '').trim() || 'Open buyer thread',
+        at: buyer.updated_at || buyer.last_contacted_at || buyer.created_at || null,
+        statusLabel: titleCase(lower(buyer.relationship_stage) || 'responded'),
+        priority: lower(buyer.relationship_stage) === 'active_buyer' ? ('warning' as const) : ('info' as const),
+        href: buyerHref(buyer),
+        actions: [navigateAction(`buyer-open-${buyer.id}`, 'Open', buyerHref(buyer))],
+      })),
+    ...t.lenders
+      .filter((lender) => ['responded', 'reviewing', 'active_partner'].includes(lower(lender.relationship_stage)))
+      .map((lender) => ({
+        id: `lender-reply-${lender.id}`,
+        lane: 'lender' as const,
+        title: partnerLabel(lender, 'Lender reply'),
+        detail: `Capital lane · ${titleCase(lower(lender.relationship_stage) || 'responded')}`,
+        hint: String(lender.contact_email || '').trim() || 'Open lender thread',
+        at: lender.updated_at || lender.last_contacted_at || lender.created_at || null,
+        statusLabel: titleCase(lower(lender.relationship_stage) || 'responded'),
+        priority: lower(lender.relationship_stage) === 'active_partner' ? ('warning' as const) : ('info' as const),
+        href: lenderHref(lender),
+        actions: [navigateAction(`lender-open-${lender.id}`, 'Open', lenderHref(lender))],
+      })),
+  ]
+    .sort((a, b) => Date.parse(b.at || '') - Date.parse(a.at || ''))
+    .slice(0, 4)
+
+  const staleThreadItems: CommandCenterStreamItem[] = [
+    ...currentLeads
+      .filter((lead) => lower(lead.outreach_status) === 'followup_due')
+      .sort((a, b) => Date.parse((a.next_follow_up_at || a.updated_at || a.created_at || '')) - Date.parse((b.next_follow_up_at || b.updated_at || b.created_at || '')))
+      .slice(0, 2)
+      .map((lead) => ({
+        id: `lead-followup-${lead.id}`,
+        lane: 'seller' as const,
+        title: leadLabel(lead),
+        detail: `${marketLabel(lead) || 'Seller lane'} · follow-up due`,
+        hint: String(lead.email || '').trim() || String(lead.source || '').trim() || 'Needs next touch',
+        at: lead.next_follow_up_at || lead.updated_at || lead.created_at || null,
+        statusLabel: 'Follow-up due',
+        priority: 'warning' as const,
+        href: leadHref(lead),
+        actions: [
+          navigateAction(`lead-followup-open-${lead.id}`, 'Open', leadHref(lead)),
+          leadStatusAction(`lead-followup-contacted-${lead.id}`, 'Mark contacted', lead.id, 'contacted', 'success'),
+        ],
+      })),
+    ...t.buyers
+      .filter((buyer) => buyer.next_follow_up_at && Date.parse(buyer.next_follow_up_at) < Date.now())
+      .sort((a, b) => Date.parse(a.next_follow_up_at || '') - Date.parse(b.next_follow_up_at || ''))
+      .slice(0, 1)
+      .map((buyer) => ({
+        id: `buyer-followup-${buyer.id}`,
+        lane: 'buyer' as const,
+        title: partnerLabel(buyer, 'Buyer follow-up'),
+        detail: 'Buyer lane · follow-up due',
+        hint: String(buyer.contact_email || '').trim() || 'Relationship thread waiting',
+        at: buyer.next_follow_up_at || buyer.updated_at || buyer.created_at || null,
+        statusLabel: 'Follow-up due',
+        priority: 'warning' as const,
+        href: buyerHref(buyer),
+        actions: [navigateAction(`buyer-followup-open-${buyer.id}`, 'Open', buyerHref(buyer))],
+      })),
+    ...t.lenders
+      .filter((lender) => lender.next_follow_up_at && Date.parse(lender.next_follow_up_at) < Date.now())
+      .sort((a, b) => Date.parse(a.next_follow_up_at || '') - Date.parse(b.next_follow_up_at || ''))
+      .slice(0, 1)
+      .map((lender) => ({
+        id: `lender-followup-${lender.id}`,
+        lane: 'lender' as const,
+        title: partnerLabel(lender, 'Lender follow-up'),
+        detail: 'Capital lane · follow-up due',
+        hint: String(lender.contact_email || '').trim() || 'Relationship thread waiting',
+        at: lender.next_follow_up_at || lender.updated_at || lender.created_at || null,
+        statusLabel: 'Follow-up due',
+        priority: 'warning' as const,
+        href: lenderHref(lender),
+        actions: [navigateAction(`lender-followup-open-${lender.id}`, 'Open', lenderHref(lender))],
+      })),
+  ]
+
+  const automationAlertItems: CommandCenterStreamItem[] = [
+    ...(failedScrapes24h > 0
+      ? [
+          {
+            id: 'alert-failed-scrapes',
+            lane: 'system' as const,
+            title: 'Source failures need review',
+            detail: `${failedScrapes24h} scrape run${failedScrapes24h === 1 ? '' : 's'} failed in the last 24 hours.`,
+            hint: 'Lead inflow quality is at risk until this clears.',
+            at: recentScrapeRuns[0]?.started_at || recentScrapeRuns[0]?.created_at || null,
+            statusLabel: 'Source failure',
+            priority: 'critical' as const,
+            href: '/admin/scrape-runs',
+            actions: [navigateAction('alert-failed-scrapes-open', 'Open runs', '/admin/scrape-runs', 'warning')],
+          },
+        ]
+      : []),
+    ...(sendReady === 0
+      ? [
+          {
+            id: 'alert-empty-send-ready',
+            lane: 'system' as const,
+            title: 'Seller queue is dry',
+            detail: 'No send-ready seller drafts are available right now.',
+            hint: 'Generate or approve drafts before the next push.',
+            at: null,
+            statusLabel: 'Queue dry',
+            priority: 'warning' as const,
+            href: '/admin/leads',
+            actions: [navigateAction('alert-empty-send-ready-open', 'Open seller queue', '/admin/leads')],
+          },
+        ]
+      : []),
+    ...(staleExports === local.dmExports.length && local.dmExports.length > 0
+      ? [
+          {
+            id: 'alert-stale-exports',
+            lane: 'system' as const,
+            title: 'DealMachine exports are stale',
+            detail: `All ${local.dmExports.length} saved exports are older than 7 days.`,
+            hint: 'Pull a fresh export before another seller run.',
+            at: null,
+            statusLabel: 'Refresh needed',
+            priority: 'warning' as const,
+            href: '/admin/lead-sources',
+            actions: [navigateAction('alert-stale-exports-open', 'Open sources', '/admin/lead-sources')],
+          },
+        ]
+      : []),
+  ].slice(0, 3)
+
+  const sellerQueueItems: CommandCenterStreamItem[] = currentOutreachMessages
+    .filter((message) => lower(message.channel) === 'email' && ['approved', 'queued', 'needs_review'].includes(lower(message.status)))
+    .sort((a, b) => Date.parse((b.approved_at || b.updated_at || b.created_at || '')) - Date.parse((a.approved_at || a.updated_at || a.created_at || '')))
+    .slice(0, 3)
+    .map((message) => {
+      const lead = leadById.get(message.lead_id)
+      const status = lower(message.status)
+      return {
+        id: `seller-send-${message.id}`,
+        lane: 'seller',
+        title: leadLabel(lead),
+        detail: `${marketLabel(lead) || 'Seller lane'} · ${message.subject || 'Outreach draft'}`,
+        hint: String(lead?.email || '').trim() || 'Ready to send',
+        at: message.approved_at || message.updated_at || message.created_at || null,
+        statusLabel: titleCase(status),
+        priority: status === 'needs_review' ? 'warning' as const : 'info' as const,
+        href: leadHref(lead),
+        actions: [
+          navigateAction(`seller-open-${message.id}`, 'Open', leadHref(lead)),
+          status === 'needs_review'
+            ? leadOutreachAction(`seller-approve-${message.id}`, 'Approve', message.lead_id, message.id, {
+                status: 'approved',
+                tone: 'primary',
+              })
+            : leadOutreachAction(`seller-send-now-${message.id}`, 'Send now', message.lead_id, message.id, {
+                sendNow: true,
+                tone: 'success',
+              }),
+        ],
+      }
+    })
+
+  const sellerNeedsReviewActions = sellerQueueItems
+    .filter((item) => item.statusLabel?.toLowerCase() === 'needs review')
+    .map((item) => {
+      const approveAction = item.actions.find((action) => action.type === 'lead_outreach' && action.status === 'approved')
+      return approveAction?.type === 'lead_outreach' ? approveAction.leadId : null
+    })
+    .filter((value): value is string => Boolean(value))
+  const sellerSendBatchMessages = sellerQueueItems
+    .map((item) => item.actions.find((action) => action.type === 'lead_outreach' && action.sendNow))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'lead_outreach' }> =>
+        Boolean(action && action.type === 'lead_outreach')
+    )
+    .map((action) => ({ leadId: action.leadId, messageId: action.messageId }))
+
+  const buyerQueueItems: CommandCenterStreamItem[] = activeBuyerOutreach
+    .filter((message) => ['needs_review', 'approved'].includes(lower(message.status)))
+    .sort((a, b) => Date.parse((b.approved_at || b.updated_at || b.created_at || '')) - Date.parse((a.approved_at || a.updated_at || a.created_at || '')))
+    .slice(0, 3)
+    .map((message) => {
+      const buyer = buyerById.get(message.buyer_id)
+      const status = lower(message.status)
+      return {
+        id: `buyer-send-${message.id}`,
+        lane: 'buyer',
+        title: partnerLabel(buyer, 'Buyer outreach'),
+        detail: `${marketLabel(buyer) || 'Buyer lane'}${message.subject ? ` · ${message.subject}` : ''}`,
+        hint: String(buyer?.contact_email || '').trim() || 'Open buyer record',
+        at: message.approved_at || message.updated_at || message.created_at || null,
+        statusLabel: titleCase(status),
+        priority: status === 'approved' ? ('info' as const) : ('warning' as const),
+        href: buyerHref(buyer),
+        actions: [
+          navigateAction(`buyer-open-queue-${message.id}`, 'Open', buyerHref(buyer)),
+          status === 'approved'
+            ? buyerOutreachAction(`buyer-send-now-${message.id}`, 'Send now', message.buyer_id, message.id, {
+                sendNow: true,
+                tone: 'success',
+              })
+            : buyerOutreachAction(`buyer-approve-${message.id}`, 'Approve', message.buyer_id, message.id, {
+                status: 'approved',
+                tone: 'primary',
+              }),
+        ],
+      }
+    })
+
+  const buyerNeedsReviewActions = buyerQueueItems
+    .filter((item) => item.statusLabel?.toLowerCase() === 'needs review')
+    .map((item) => item.actions.find((action) => action.type === 'buyer_outreach' && action.status === 'approved'))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'buyer_outreach' }> =>
+        Boolean(action && action.type === 'buyer_outreach')
+    )
+    .map((action) => action.buyerId)
+  const buyerSendBatchMessages = buyerQueueItems
+    .map((item) => item.actions.find((action) => action.type === 'buyer_outreach' && action.sendNow))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'buyer_outreach' }> =>
+        Boolean(action && action.type === 'buyer_outreach')
+    )
+    .map((action) => ({ buyerId: action.buyerId, messageId: action.messageId }))
+
+  const lenderQueueItems: CommandCenterStreamItem[] = activeLenderOutreach
+    .filter((message) => ['needs_review', 'approved'].includes(lower(message.status)))
+    .sort((a, b) => Date.parse((b.approved_at || b.updated_at || b.created_at || '')) - Date.parse((a.approved_at || a.updated_at || a.created_at || '')))
+    .slice(0, 3)
+    .map((message) => {
+      const lender = lenderById.get(message.lender_id)
+      const status = lower(message.status)
+      return {
+        id: `lender-send-${message.id}`,
+        lane: 'lender',
+        title: partnerLabel(lender, 'Lender outreach'),
+        detail: `${marketLabel(lender) || 'Capital lane'}${message.subject ? ` · ${message.subject}` : ''}`,
+        hint: String(lender?.contact_email || '').trim() || 'Open lender record',
+        at: message.approved_at || message.updated_at || message.created_at || null,
+        statusLabel: titleCase(status),
+        priority: status === 'approved' ? ('info' as const) : ('warning' as const),
+        href: lenderHref(lender),
+        actions: [
+          navigateAction(`lender-open-queue-${message.id}`, 'Open', lenderHref(lender)),
+          status === 'approved'
+            ? lenderOutreachAction(`lender-send-now-${message.id}`, 'Send now', message.lender_id, message.id, {
+                sendNow: true,
+                tone: 'success',
+              })
+            : lenderOutreachAction(`lender-approve-${message.id}`, 'Approve', message.lender_id, message.id, {
+                status: 'approved',
+                tone: 'primary',
+              }),
+        ],
+      }
+    })
+
+  const lenderNeedsReviewActions = lenderQueueItems
+    .filter((item) => item.statusLabel?.toLowerCase() === 'needs review')
+    .map((item) => item.actions.find((action) => action.type === 'lender_outreach' && action.status === 'approved'))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'lender_outreach' }> =>
+        Boolean(action && action.type === 'lender_outreach')
+    )
+    .map((action) => action.lenderId)
+  const lenderSendBatchMessages = lenderQueueItems
+    .map((item) => item.actions.find((action) => action.type === 'lender_outreach' && action.sendNow))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'lender_outreach' }> =>
+        Boolean(action && action.type === 'lender_outreach')
+    )
+    .map((action) => ({ lenderId: action.lenderId, messageId: action.messageId }))
+
+  const builderQueueItems: CommandCenterStreamItem[] = investorPipelineRows
+    .filter((item) => item.pipeline.outreachReady || item.pipeline.researchReady || item.pipeline.buyBoxConfirmed)
+    .sort(
+      (a, b) =>
+        Date.parse(timestampOf(b.investor) || '') - Date.parse(timestampOf(a.investor) || '')
+    )
+    .slice(0, 3)
+    .map((item) => ({
+      id: `builder-queue-${item.investor.id}`,
+      lane: 'partner' as const,
+      title: partnerLabel(item.investor, 'Builder / developer'),
+      detail: `${item.pipeline.stageLabel}${item.pipeline.dealMachineAligned ? ' · DealMachine aligned' : ''}`,
+      hint: item.pipeline.buyBoxConfirmed ? 'Criteria confirmed' : item.pipeline.nextAction,
+      at: item.investor.updated_at || item.investor.created_at || null,
+      statusLabel: item.pipeline.stageLabel,
+      priority: item.pipeline.outreachReady ? ('info' as const) : ('warning' as const),
+      href: '/admin/investor-partnerships?lane=builder',
+      actions: [
+        navigateAction(`builder-open-${item.investor.id}`, 'Open', '/admin/investor-partnerships?lane=builder'),
+        ...(item.pipeline.outreachReady
+          ? [investorBulkAction(`builder-approve-${item.investor.id}`, 'Approve outreach', [item.investor.id], 'approve_outreach', 'primary')]
+          : item.pipeline.researchReady
+            ? [investorBulkAction(`builder-research-${item.investor.id}`, 'Mark researched', [item.investor.id], 'mark_researched', 'warning')]
+            : []),
+      ],
+    }))
+
+  const builderOutreachReadyIds = builderQueueItems
+    .map((item) => item.actions.find((action) => action.type === 'investor_bulk' && action.action === 'approve_outreach'))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'investor_bulk' }> =>
+        Boolean(action && action.type === 'investor_bulk')
+    )
+    .flatMap((action) => action.investorIds)
+  const builderResearchReadyIds = builderQueueItems
+    .map((item) => item.actions.find((action) => action.type === 'investor_bulk' && action.action === 'mark_researched'))
+    .filter(
+      (action): action is Extract<CommandCenterInlineAction, { type: 'investor_bulk' }> =>
+        Boolean(action && action.type === 'investor_bulk')
+    )
+    .flatMap((action) => action.investorIds)
+
   // ── Activity feed ──────────────────────────────────────────────────────────
   const activity: ActivityItem[] = []
-  for (const event of t.outreachSendEvents.slice(0, 30)) {
+  for (const event of currentOutreachSendEvents.slice(0, 30)) {
     if (!event.created_at) continue
     activity.push({
       at: event.created_at,
       source: 'Outreach',
-      message: `Email ${lower(event.status) || 'event'} via ${event.channel || 'email'}`,
+      message: `${event.subject || `Email ${lower(event.status) || 'event'}`} via ${event.channel || 'email'}`,
+      href: event.lead_id ? leadHref(leadById.get(event.lead_id)) : '/admin/leads',
     })
   }
-  for (const lead of t.leads.slice(0, 25)) {
+  for (const lead of currentLeads.slice(0, 25)) {
     if (!lead.created_at) continue
     activity.push({
       at: lead.created_at,
       source: 'Leads',
       message: `New ${lead.lead_type || 'lead'}${lead.city ? ` in ${lead.city}` : ''}${lead.source ? ` from ${lead.source}` : ''}`,
+      href: leadHref(lead),
     })
   }
-  for (const run of t.scrapeRuns.slice(0, 15)) {
-    const at = run.completed_at || run.created_at
+  for (const run of partnerDiscoveryRuns.slice(0, 18)) {
+    const at = run.completedAt || run.startedAt
     if (!at) continue
     activity.push({
       at,
       source: 'Sources',
-      message: `${run.source_key || 'source'} run ${lower(run.status) || 'logged'}${
-        run.result_count ? ` · ${run.result_count} results` : ''
+      message: `${run.lane} · ${run.sourceKey || 'runtime'} ${lower(run.status) || 'logged'}${
+        run.resultCount ? ` · ${run.resultCount} results` : ''
       }`,
+      href: '/admin/scrape-runs',
     })
   }
   for (const asset of publishedContent.slice(0, 10)) {
     const at = asset.published_at || asset.updated_at
     if (!at) continue
-    activity.push({ at, source: 'Authority', message: `Published ${asset.content_type || 'asset'}` })
+    activity.push({ at, source: 'Authority', message: `Published ${asset.content_type || 'asset'}`, href: '/admin/research' })
   }
-  for (const message of t.buyerOutreach.slice(0, 10)) {
+  for (const message of activeBuyerOutreach.slice(0, 10)) {
     if (lower(message.status) !== 'sent' || !(message.sent_at || message.updated_at)) continue
-    activity.push({ at: message.sent_at || message.updated_at!, source: 'Buyers', message: 'Buyer outreach sent' })
+    activity.push({ at: message.sent_at || message.updated_at!, source: 'Buyers', message: 'Buyer outreach sent', href: '/admin/buyer-outreach' })
   }
-  for (const message of t.lenderOutreach.slice(0, 10)) {
+  for (const message of activeLenderOutreach.slice(0, 10)) {
     if (lower(message.status) !== 'sent' || !(message.sent_at || message.updated_at)) continue
-    activity.push({ at: message.sent_at || message.updated_at!, source: 'Lenders', message: 'Lender outreach sent' })
+    activity.push({ at: message.sent_at || message.updated_at!, source: 'Lenders', message: 'Lender outreach sent', href: '/admin/lender-outreach' })
   }
   activity.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
   const activityFeed = activity.slice(0, 40)
@@ -581,6 +2027,13 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       href: '/admin/scrape-runs',
     })
   }
+  if (failedPartnerRuns7d > 0) {
+    alerts.push({
+      severity: 'critical',
+      message: `${failedPartnerRuns7d} partner discovery run${failedPartnerRuns7d === 1 ? '' : 's'} failed in the last 7d.`,
+      href: '/admin/scrape-runs',
+    })
+  }
   if (sendReady === 0 && liveDataReachable) {
     alerts.push({
       severity: 'warning',
@@ -592,7 +2045,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     alerts.push({
       severity: 'warning',
       message: `${overdueTasks.length} admin task${overdueTasks.length === 1 ? '' : 's'} overdue.`,
-      href: '/admin-panel?tab=tasks',
+      href: '/admin/command-center',
     })
   }
   if (partnerFollowupsDue > 0) {
@@ -602,6 +2055,13 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       href: '/admin/buyers',
     })
   }
+  if (builderPartners > 0 && partnerOutreachReady === 0) {
+    alerts.push({
+      severity: 'warning',
+      message: `${builderPartners} builder/developer profile${builderPartners === 1 ? '' : 's'} are in the engine but none are cleared for outreach yet.`,
+      href: '/admin/investor-partnerships?lane=builder',
+    })
+  }
   if (bounceRiskLeads > 0) {
     alerts.push({
       severity: 'info',
@@ -609,11 +2069,38 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       href: '/admin/leads',
     })
   }
-  const staleExports = local.dmExports.filter((e) => e.ageDays > 7).length
+  if (legacyLeadOutreachCount > 0) {
+    alerts.push({
+      severity: 'info',
+      message: `${legacyLeadOutreachCount} legacy lead outreach draft${legacyLeadOutreachCount === 1 ? '' : 's'} hidden from today’s queue.`,
+      href: '/admin/leads',
+    })
+  }
+  if (cooldownSaves7d > 0) {
+    alerts.push({
+      severity: 'info',
+      message: `${cooldownSaves7d} duplicate partner discovery run${cooldownSaves7d === 1 ? '' : 's'} skipped in the last 7d to protect usage.`,
+      href: '/admin/scrape-runs',
+    })
+  }
   if (local.dmExports.length > 0 && local.dmExports.every((e) => e.ageDays > 7)) {
     alerts.push({
       severity: 'warning',
       message: `All ${staleExports} DealMachine contact exports on disk are older than 7 days. Export fresh contacts before the next send.`,
+    })
+  }
+  if (missingSuppressionDb) {
+    alerts.push({
+      severity: 'critical',
+      message: 'Lead suppression records could not be read. Keep live outreach paused until opt-out checks are visible.',
+      href: '/admin/leads',
+    })
+  }
+  if (activeSuppressionCount > 0) {
+    alerts.push({
+      severity: 'info',
+      message: `${activeSuppressionCount} active opt-out suppression${activeSuppressionCount === 1 ? '' : 's'} are being honored by seller outreach.`,
+      href: '/admin/leads',
     })
   }
 
@@ -621,18 +2108,22 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const priorities = (
     liveDataReachable
       ? [
-          hotFunding > 0
-            ? `Work the ${hotFunding} high-readiness funding request${hotFunding === 1 ? '' : 's'} — closest thing to revenue today.`
-            : null,
           replySignals7d > 0
             ? `Answer and advance ${replySignals7d} live repl${replySignals7d === 1 ? 'y' : 'ies'} before sending anything new.`
             : null,
           sendReady === 0
             ? 'Refill the outreach queue: source, score, and draft before volume.'
             : `Approve and send from the ${sendReady}-message ready queue (target ${outreachTarget}/day).`,
+          strategyLab.nextMove,
+          activePartnerDiscoveryRuns7d === 0 && cooldownSaves7d === 0
+            ? 'Launch a fresh buyer, lender, or builder discovery market — no partner discovery runs landed in the last 7 days.'
+            : null,
           followupsDue > 0 ? `Clear ${followupsDue} lead follow-up${followupsDue === 1 ? '' : 's'} marked due.` : null,
           pendingBuyerMatches + pendingLenderMatches > 0
             ? `Route ${pendingBuyerMatches + pendingLenderMatches} open match${pendingBuyerMatches + pendingLenderMatches === 1 ? '' : 'es'} to buyers/lenders.`
+            : null,
+          partnerResearchBlocked > 0
+            ? `Advance ${partnerResearchBlocked} partner profile${partnerResearchBlocked === 1 ? '' : 's'} from research into confirmed buy boxes or outreach-ready criteria.`
             : null,
           openChecklists > 0
             ? `Finish ${openChecklists} research checklist${openChecklists === 1 ? '' : 's'} blocking outreach.`
@@ -649,10 +2140,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const agentStatus = (active: boolean, attention: boolean): AgentStatus =>
     attention ? 'attention' : active ? 'active' : 'idle'
 
-  const recentLeadFeed: AgentFeedItem[] = t.leads.slice(0, 5).map((lead) => ({
+  const recentLeadFeed: AgentFeedItem[] = currentLeads.slice(0, 5).map((lead) => ({
     label: lead.city ? `${lead.city}${lead.state ? `, ${lead.state}` : ''}` : lead.source || 'Lead',
     detail: `${lead.lead_type || 'lead'} · ${lead.status || 'new'}`,
     at: lead.created_at || null,
+    href: leadHref(lead),
   }))
 
   const agents: AgentPanelData[] = [
@@ -660,26 +2152,28 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       key: 'acquisition',
       name: 'Lead Acquisition',
       role: 'Sellers, distress stacks, DealMachine lanes, partner signups',
-      status: agentStatus(newLeads7d > 0, failedScrapes24h > 0 || (local.dmExports.length > 0 && staleExports === local.dmExports.length)),
+      status: agentStatus(
+        newLeads7d > 0 || activePartnerDiscoveryRuns7d > 0,
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0 || (local.dmExports.length > 0 && staleExports === local.dmExports.length)
+      ),
       statusReason:
-        failedScrapes24h > 0
-          ? `${failedScrapes24h} failed source runs need review`
-          : newLeads7d > 0
-            ? `${newLeads7d} new leads this week`
-            : 'No new inflow this week',
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0
+          ? `${failedScrapes24h + failedPartnerRuns7d} runtime/discovery issue${failedScrapes24h + failedPartnerRuns7d === 1 ? '' : 's'} need review`
+          : builderPartners > 0
+            ? `${builderPartners} partner-side profiles discovered · ${activePartnerDiscoveryRuns7d} current discovery runs this week`
+            : newLeads7d > 0
+              ? `${newLeads7d} new leads this week`
+              : 'No new inflow this week',
       kpis: [
         { label: 'New 24h', value: newLeads24h, status: newLeads24h > 0 ? 'green' : 'yellow' },
         { label: 'New 7d', value: newLeads7d },
-        { label: 'Contactable', value: contactableLeads, helper: 'leads with an email on file' },
-        {
-          label: 'Distress stack',
-          value: local.distressStackRows ?? '—',
-          helper: local.distressStackRows != null ? 'rows in local master file' : 'local file not present here',
-        },
+        { label: 'Discovery 7d', value: activePartnerDiscoveryRuns7d, helper: `${cooldownSaves7d} duplicate runs skipped` },
+        { label: 'Partner research', value: partnerResearchReady, helper: 'builder / lender / buyer records ready for internal review' },
       ],
       feed: recentLeadFeed,
       actions: [
         { label: 'Open leads', href: '/admin/leads' },
+        { label: 'Investor partnerships', href: '/admin/investor-partnerships' },
         { label: 'Lead sources', href: '/admin/lead-sources' },
         { label: 'Market expansion', href: '/admin/market-expansion' },
         { label: 'Scrape runs', href: '/admin/scrape-runs' },
@@ -705,10 +2199,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
         { label: 'Needs review', value: needsReview },
         { label: 'Follow-ups due', value: followupsDue, status: followupsDue > 10 ? 'yellow' : undefined },
       ],
-      feed: t.outreachSendEvents.slice(0, 5).map((event) => ({
-        label: `Email ${lower(event.status) || 'event'}`,
+      feed: currentOutreachSendEvents.slice(0, 5).map((event) => ({
+        label: event.subject || `Email ${lower(event.status) || 'event'}`,
         detail: event.channel || 'email',
         at: event.created_at || null,
+        href: event.lead_id ? leadHref(leadById.get(event.lead_id)) : '/admin/leads',
       })),
       actions: [
         { label: 'Buyer outreach', href: '/admin/buyer-outreach' },
@@ -721,39 +2216,60 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       name: 'Deal Routing',
       role: 'Fit decisions: cash, creative, novation, buy boxes, lending boxes',
       status: agentStatus(pendingBuyerMatches + pendingLenderMatches > 0, pendingBuyerMatches + pendingLenderMatches > 20),
-      statusReason: `${pendingBuyerMatches + pendingLenderMatches} open matches awaiting routing`,
+      statusReason:
+        builderPartners > 0
+          ? `${pendingBuyerMatches + pendingLenderMatches} open matches · ${dealMachineAlignedPartners} DealMachine-aligned partner profiles`
+          : `${pendingBuyerMatches + pendingLenderMatches} open matches awaiting routing`,
       kpis: [
         { label: 'Buyer matches', value: pendingBuyerMatches },
         { label: 'Lender matches', value: pendingLenderMatches },
-        { label: 'Active buyers', value: activeBuyers },
-        { label: 'Active lenders', value: activeLenders },
+        { label: 'Builder lane', value: builderPartners, helper: 'partner-side builder / developer records' },
+        { label: 'DM aligned', value: dealMachineAlignedPartners, helper: 'partners in active DealMachine markets' },
       ],
-      feed: [],
+      feed: investorPipelineRows
+        .filter((item) => item.pipeline.builderLane || item.pipeline.dealMachineAligned)
+        .slice(0, 4)
+        .map((item) => ({
+          label: item.investor.display_name,
+          detail: `${item.pipeline.stageLabel}${item.pipeline.dealMachineAligned ? ' · DM aligned' : ''}`,
+          at: item.investor.updated_at || item.investor.created_at || null,
+          href: '/admin/investor-partnerships',
+        })),
       actions: [
         { label: 'Buyer matches', href: '/admin/buyer-matches' },
         { label: 'Lender matches', href: '/admin/lender-matches' },
-        { label: 'DealFlow command', href: '/admin/dealflow' },
+        { label: 'Partner engine', href: '/admin/investor-partnerships?lane=builder' },
       ],
     },
     {
       key: 'underwriting',
-      name: 'Underwriting & Capital',
-      role: 'Analyzer output, packets, funding readiness, capital gaps',
-      status: agentStatus(openFundingRequests > 0, hotFunding > 0),
+      name: 'Underwriting & Packets',
+      role: 'Analyzer output, assignment math, builder packets, lender fit',
+      status: agentStatus(pendingLenderMatches > 0 || partnerOutreachReady > 0, pendingLenderMatches > 12),
       statusReason:
-        hotFunding > 0
-          ? `${hotFunding} high-readiness funding request${hotFunding === 1 ? '' : 's'} waiting`
-          : `${openFundingRequests} open funding requests`,
+        pendingLenderMatches > 0
+          ? `${pendingLenderMatches} lender match${pendingLenderMatches === 1 ? '' : 'es'} waiting on underwriting context`
+          : `${partnerBuyBoxesConfirmed} confirmed criteria and ${partnerOutreachReady} outreach-ready partner profiles`,
       kpis: [
-        { label: 'Open requests', value: openFundingRequests },
-        { label: 'High readiness', value: hotFunding, status: hotFunding > 0 ? 'yellow' : undefined },
-        { label: 'Paid', value: paidFundingRequests, status: paidFundingRequests > 0 ? 'green' : undefined },
-        { label: 'Revenue 30d', value: `$${Math.round(revenue30d).toLocaleString()}` },
+        { label: 'Lender matches', value: pendingLenderMatches, status: pendingLenderMatches > 0 ? 'yellow' : 'green' },
+        { label: 'Buy boxes confirmed', value: partnerBuyBoxesConfirmed, status: partnerBuyBoxesConfirmed > 0 ? 'green' : 'yellow' },
+        { label: 'Outreach ready', value: partnerOutreachReady },
+        { label: 'Builder lane', value: builderPartners },
       ],
-      feed: [],
+      feed: investorPipelineRows
+        .filter((item) => item.pipeline.outreachReady || item.pipeline.buyBoxConfirmed)
+        .slice(0, 4)
+        .map((item) => ({
+          label: item.investor.display_name,
+          detail: `${item.pipeline.stageLabel}${item.pipeline.buyBoxConfirmed ? ' · confirmed' : ''}`,
+          at: item.investor.updated_at || item.investor.created_at || null,
+          href: '/admin/investor-partnerships',
+        })),
       actions: [
-        { label: 'Funding pipeline', href: '/admin/funding' },
-        { label: 'Lender programs', href: '/admin/lender-programs' },
+        { label: 'Lender network', href: '/admin/lenders' },
+        { label: 'Lender matches', href: '/admin/lender-matches' },
+        { label: 'Partner engine', href: '/admin/investor-partnerships' },
+        { label: 'Property analyzer', href: '/property-analyzer' },
       ],
     },
     {
@@ -761,11 +2277,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       name: 'Authority Engine',
       role: 'AEO, SEO, PR, content, indexing — runs behind the scenes',
       status: agentStatus(publishedContent7d > 0, publishedContent7d === 0 && openSeoOpportunities > 0),
-      statusReason: `${publishedContent7d} published this week · ${openSeoOpportunities} SEO opportunities open`,
+      statusReason: `${publishedContent7d} published this week · ${openSeoOpportunities} authority tasks open`,
       kpis: [
         { label: 'Published 7d', value: publishedContent7d, helper: 'target 5/week', status: publishedContent7d >= 5 ? 'green' : 'yellow' },
         { label: 'Total published', value: publishedContent.length },
-        { label: 'SEO opportunities', value: openSeoOpportunities },
+        { label: 'Authority tasks', value: openSeoOpportunities },
         { label: 'PR drafts', value: draftPitches },
       ],
       feed: publishedContent.slice(0, 4).map((asset) => ({
@@ -774,8 +2290,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
         at: asset.published_at || asset.updated_at || null,
       })),
       actions: [
-        { label: 'SEO opportunities', href: '/admin/seo-opportunities' },
-        { label: 'PR engine', href: '/admin/pr-engine' },
+        { label: 'Research', href: '/admin/research' },
         { label: 'Daily reports', href: '/admin/reports/daily' },
       ],
     },
@@ -783,26 +2298,29 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       key: 'qa',
       name: 'QA / Funnel Health',
       role: 'Intake, signup, analyzer, delivery, broken-state detection',
-      status: agentStatus(true, failedScrapes24h > 0 || bounceRiskLeads > 25),
+      status: agentStatus(true, failedScrapes24h > 0 || failedPartnerRuns7d > 0 || bounceRiskLeads > 25),
       statusReason:
-        failedScrapes24h > 0
-          ? `${failedScrapes24h} failed runs · ${bounceRiskLeads} delivery-risk leads`
-          : `${bounceRiskLeads} delivery-risk leads tracked`,
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0
+          ? `${failedScrapes24h + failedPartnerRuns7d} runtime/discovery issue${failedScrapes24h + failedPartnerRuns7d === 1 ? '' : 's'} · ${bounceRiskLeads} delivery-risk leads`
+          : partnerResearchBlocked > 0
+            ? `${partnerResearchBlocked} partner profile${partnerResearchBlocked === 1 ? '' : 's'} still blocked before outreach`
+            : `${bounceRiskLeads} delivery-risk leads tracked`,
       kpis: [
-        { label: 'Source runs ok 24h', value: okScrapes24h, status: failedScrapes24h === 0 ? 'green' : 'yellow' },
-        { label: 'Failed 24h', value: failedScrapes24h, status: failedScrapes24h > 0 ? 'red' : 'green' },
-        { label: 'Bounce-risk leads', value: bounceRiskLeads },
-        { label: 'Research open', value: openChecklists },
+        { label: 'Discovery 7d', value: activePartnerDiscoveryRuns7d, status: activePartnerDiscoveryRuns7d > 0 ? 'green' : 'yellow' },
+        { label: 'Cooldown saves', value: cooldownSaves7d, helper: 'duplicate markets skipped' },
+        { label: 'Failed runs', value: failedPartnerRuns7d + failedScrapes24h, status: failedPartnerRuns7d + failedScrapes24h > 0 ? 'red' : 'green' },
+        { label: 'Research open', value: openChecklists + investorFollowupsOpen + partnerResearchBlocked },
       ],
-      feed: t.scrapeRuns.slice(0, 4).map((run) => ({
-        label: run.source_key || 'source',
-        detail: `${lower(run.status) || 'run'}${run.result_count ? ` · ${run.result_count}` : ''}`,
-        at: run.completed_at || run.created_at || null,
+      feed: partnerDiscoveryRuns.slice(0, 4).map((run) => ({
+        label: `${run.lane} · ${run.sourceKey || 'runtime'}`,
+        detail: `${lower(run.status) || 'run'}${run.resultCount ? ` · ${run.resultCount}` : ''}${isCooldownNote(run.note) ? ' · cooled down' : ''}`,
+        at: run.completedAt || run.startedAt || null,
+        href: '/admin/scrape-runs',
       })),
       actions: [
         { label: 'Scrape runs', href: '/admin/scrape-runs' },
         { label: 'Research checklists', href: '/admin/research-checklists' },
-        { label: 'Diagnostics', href: '/admin-panel?tab=diagnostics' },
+        { label: 'Lead sources', href: '/admin/lead-sources' },
       ],
     },
     {
@@ -815,31 +2333,366 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
         { label: 'Open tasks', value: openTasks.length },
         { label: 'Urgent', value: urgentTasks.length, status: urgentTasks.length > 0 ? 'yellow' : 'green' },
         { label: 'Overdue', value: overdueTasks.length, status: overdueTasks.length > 0 ? 'red' : 'green' },
-        { label: 'Investor follow-ups', value: investorFollowupsOpen },
+        { label: 'Partner follow-ups', value: investorFollowupsOpen },
       ],
       feed: openTasks.slice(0, 5).map((task) => ({
         label: task.title || 'Task',
         detail: `${lower(task.priority) || 'normal'}${task.due_at ? ` · due ${new Date(task.due_at).toLocaleDateString()}` : ''}`,
-        at: task.created_at || null,
+        at: task.updated_at || task.created_at || null,
+        href: taskRelatedHref(task),
       })),
       actions: [
-        { label: 'Task board', href: '/admin-panel?tab=tasks' },
+        { label: 'Lead queue', href: '/admin/leads' },
         { label: 'Investor partnerships', href: '/admin/investor-partnerships' },
-        { label: 'Revenue command', href: '/admin/revenue-command' },
-        { label: 'Improvement', href: '/admin/improvement' },
+        { label: 'Buyer outreach', href: '/admin/buyer-outreach' },
+        { label: 'Lender outreach', href: '/admin/lender-outreach' },
       ],
     },
   ]
 
+  const overdueTaskItems: OverdueTaskItem[] = overdueTasks
+    .sort((a, b) => {
+      const priorityDelta = priorityWeight(b.priority) - priorityWeight(a.priority)
+      if (priorityDelta !== 0) return priorityDelta
+      const aDue = a.due_at ? Date.parse(a.due_at) : Number.POSITIVE_INFINITY
+      const bDue = b.due_at ? Date.parse(b.due_at) : Number.POSITIVE_INFINITY
+      return aDue - bDue
+    })
+    .slice(0, 6)
+    .map((task) => ({
+      id: task.id,
+      title: task.title || 'Task',
+      detail:
+        task.description ||
+        `${task.task_type || 'operator'}${task.user_email ? ` · ${task.user_email}` : ''}${task.entity_type ? ` · ${task.entity_type}` : ''}`,
+      dueAt: task.due_at || null,
+      priority: task.priority || 'normal',
+      status: task.status || 'open',
+      href: '/admin/command-center',
+      relatedHref: taskRelatedHref(task),
+    }))
+
   // ── Mission nodes (intensity drives the visualization) ─────────────────────
   const missionNodes: MissionNode[] = [
-    { key: 'acquisition', label: 'Acquire', intensity: clamp01(newLeads7d / 50) },
-    { key: 'outreach', label: 'Outreach', intensity: clamp01(sends7d / (outreachTarget * 3)) },
-    { key: 'routing', label: 'Route', intensity: clamp01((pendingBuyerMatches + pendingLenderMatches) / 20) },
-    { key: 'underwriting', label: 'Capital', intensity: clamp01((hotFunding + paidFundingRequests) / 6) },
-    { key: 'authority', label: 'Authority', intensity: clamp01(publishedContent7d / 5) },
-    { key: 'qa', label: 'QA', intensity: failedScrapes24h > 0 ? 0.9 : clamp01(okScrapes24h / 10) },
-    { key: 'operator', label: 'Operator', intensity: clamp01(openTasks.length / 20) },
+    {
+      key: 'acquisition',
+      label: 'Acquire',
+      intensity: clamp01(newLeads7d / 50),
+      status: agentStatus(
+        newLeads7d > 0 || activePartnerDiscoveryRuns7d > 0,
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0
+      ),
+      headline: `${newLeads24h} fresh lead${newLeads24h === 1 ? '' : 's'} today · ${activePartnerDiscoveryRuns7d} partner run${activePartnerDiscoveryRuns7d === 1 ? '' : 's'} this week`,
+      detail: 'Lead inflow is the front door. This lane should tell us whether fresh seller inventory and partner discovery are actually feeding the machine.',
+      signals: [
+        { label: 'New 24h', value: newLeads24h, status: newLeads24h > 0 ? 'green' : 'yellow' },
+        { label: 'Discovery 7d', value: activePartnerDiscoveryRuns7d, helper: `${cooldownSaves7d} duplicate runs skipped` },
+        { label: 'DM exports', value: local.dmExports.length, helper: staleExports === local.dmExports.length && local.dmExports.length > 0 ? 'all stale' : 'saved on disk' },
+      ],
+      watchItems: [
+        staleExports === local.dmExports.length && local.dmExports.length > 0
+          ? 'Refresh DealMachine exports before another seller push.'
+          : 'Fresh contact exports are available for the next seller run.',
+        partnerResearchReady > 0
+          ? `${partnerResearchReady} partner profiles are ready for internal review.`
+          : 'No partner profiles are staged for review yet.',
+      ],
+      actions: [
+        { label: 'Open leads', href: '/admin/leads' },
+        { label: 'Lead sources', href: '/admin/lead-sources' },
+        { label: 'Partner engine', href: '/admin/investor-partnerships' },
+      ],
+    },
+    {
+      key: 'outreach',
+      label: 'Outreach',
+      intensity: clamp01(sends7d / (outreachTarget * 3)),
+      status: agentStatus(outreach24h > 0, sendReady === 0 || followupsDue > 10),
+      headline: `${outreach24h}/${outreachTarget} sent today · ${sendReady} seller draft${sendReady === 1 ? '' : 's'} ready now`,
+      detail: 'This is the live contact desk: hot seller replies, approved sends, due follow-ups, and the lanes that can turn into conversations today.',
+      signals: [
+        { label: 'Sent 24h', value: outreach24h, helper: `target ${outreachTarget}`, status: outreach24h >= outreachTarget ? 'green' : outreach24h > 0 ? 'yellow' : 'red' },
+        { label: 'Seller ready', value: sendReady, status: sendReady > 0 ? 'green' : 'red' },
+        { label: 'Partner ready', value: buyerApproved + lenderApproved, helper: `${buyerNeedsReview + lenderNeedsReview} still need approval` },
+      ],
+      watchItems: [
+        replySignals7d > 0
+          ? `${replySignals7d} live seller repl${replySignals7d === 1 ? 'y is' : 'ies are'} waiting on operator movement.`
+          : 'No fresh seller reply signal is showing right now.',
+        followupsDue + partnerFollowupsDue > 0
+          ? `${followupsDue + partnerFollowupsDue} follow-up${followupsDue + partnerFollowupsDue === 1 ? '' : 's'} are due across seller and partner lanes.`
+          : 'No follow-up backlog is pressuring the queue.',
+      ],
+      actions: [
+        { label: 'Lead queue', href: '/admin/leads' },
+        { label: 'Buyer outreach', href: '/admin/buyer-outreach' },
+        { label: 'Lender outreach', href: '/admin/lender-outreach' },
+      ],
+    },
+    {
+      key: 'routing',
+      label: 'Route',
+      intensity: clamp01((pendingBuyerMatches + pendingLenderMatches) / 20),
+      status: agentStatus(pendingBuyerMatches + pendingLenderMatches > 0, pendingBuyerMatches + pendingLenderMatches > 20),
+      headline: `${pendingBuyerMatches + pendingLenderMatches} open routing decision${pendingBuyerMatches + pendingLenderMatches === 1 ? '' : 's'} across buyers and lenders`,
+      detail: 'Routing should feel like a live graph: where this property goes next, who fits it, what is missing, and what is cooling off.',
+      signals: [
+        { label: 'Buyer matches', value: pendingBuyerMatches },
+        { label: 'Lender matches', value: pendingLenderMatches },
+        { label: 'DM aligned', value: dealMachineAlignedPartners, helper: 'partner overlap with active markets' },
+      ],
+      watchItems: [
+        builderPartners > 0
+          ? `${builderPartners} builder/developer profiles can be used for heavier rehab or infill routing.`
+          : 'Builder lane is not stocked yet.',
+        pendingBuyerMatches + pendingLenderMatches > 0
+          ? 'Open matches need disposition decisions before they go stale.'
+          : 'No routing queue pressure right now.',
+      ],
+      actions: [
+        { label: 'Buyer matches', href: '/admin/buyer-matches' },
+        { label: 'Lender matches', href: '/admin/lender-matches' },
+        { label: 'Builder lane', href: '/admin/investor-partnerships?lane=builder' },
+      ],
+    },
+    {
+      key: 'underwriting',
+      label: 'Underwrite',
+      intensity: clamp01((pendingLenderMatches + partnerBuyBoxesConfirmed) / 10),
+      status: agentStatus(pendingLenderMatches > 0 || partnerOutreachReady > 0, pendingLenderMatches > 12),
+      headline: `${partnerBuyBoxesConfirmed} confirmed criteria · ${pendingLenderMatches} capital route${pendingLenderMatches === 1 ? '' : 's'} waiting on clean packaging`,
+      detail: 'Underwriting is where raw opportunity becomes a confident seller path, lender path, and packet-ready offer conversation.',
+      signals: [
+        { label: 'Confirmed boxes', value: partnerBuyBoxesConfirmed, status: partnerBuyBoxesConfirmed > 0 ? 'green' : 'yellow' },
+        { label: 'Outreach ready', value: partnerOutreachReady },
+        { label: 'Builder lane', value: builderPartners },
+      ],
+      watchItems: [
+        partnerResearchBlocked > 0
+          ? `${partnerResearchBlocked} partner profile${partnerResearchBlocked === 1 ? '' : 's'} still need research or box confirmation.`
+          : 'Partner research is not blocking current underwriting.',
+        'Use Property Command to keep cash, creative, novation, and packet logic on one surface.',
+      ],
+      actions: [
+        { label: 'Property command', href: '#property-command' },
+        { label: 'Lender matches', href: '/admin/lender-matches' },
+        { label: 'Partner engine', href: '/admin/investor-partnerships' },
+      ],
+    },
+    {
+      key: 'authority',
+      label: 'Authority',
+      intensity: clamp01(publishedContent7d / 5),
+      status: agentStatus(publishedContent7d > 0, publishedContent7d === 0 && openSeoOpportunities > 0),
+      headline: `${publishedContent7d} published this week · ${openSeoOpportunities} authority task${openSeoOpportunities === 1 ? '' : 's'} open`,
+      detail: 'Authority is the quiet force multiplier. It should support better inbound, warmer outreach, and stronger partner confidence without becoming dashboard clutter.',
+      signals: [
+        { label: 'Published 7d', value: publishedContent7d, helper: 'target 5/week', status: publishedContent7d >= 5 ? 'green' : 'yellow' },
+        { label: 'Open tasks', value: openSeoOpportunities },
+        { label: 'PR drafts', value: draftPitches },
+      ],
+      watchItems: [
+        latestReport?.recommended_actions?.length
+          ? 'Daily report is pushing fresh authority and growth actions.'
+          : 'No fresh authority report recommendations are loaded yet.',
+        publishedContent7d < 5 ? 'Publishing cadence is below target right now.' : 'Authority cadence is on track.',
+      ],
+      actions: [
+        { label: 'Research', href: '/admin/research' },
+        { label: 'Daily reports', href: '/admin/reports/daily' },
+      ],
+    },
+    {
+      key: 'qa',
+      label: 'QA',
+      intensity:
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0
+          ? 0.9
+          : clamp01((okScrapes24h + activePartnerDiscoveryRuns7d) / 10),
+      status: agentStatus(true, failedScrapes24h > 0 || failedPartnerRuns7d > 0 || bounceRiskLeads > 25),
+      headline: `${failedPartnerRuns7d + failedScrapes24h} failed run${failedPartnerRuns7d + failedScrapes24h === 1 ? '' : 's'} · ${bounceRiskLeads} delivery-risk lead${bounceRiskLeads === 1 ? '' : 's'}`,
+      detail: 'QA is less about pretty charts and more about knowing what is quietly breaking the operator workflow before it costs us responses.',
+      signals: [
+        { label: 'Cooldown saves', value: cooldownSaves7d, helper: 'duplicate runs skipped' },
+        { label: 'Failed runs', value: failedPartnerRuns7d + failedScrapes24h, status: failedPartnerRuns7d + failedScrapes24h > 0 ? 'red' : 'green' },
+        { label: 'Bounce risk', value: bounceRiskLeads },
+      ],
+      watchItems: [
+        failedPartnerRuns7d > 0 || failedScrapes24h > 0
+          ? 'Source and discovery failures need clearing before more volume.'
+          : 'No acute source failures are showing right now.',
+        bounceRiskLeads > 0
+          ? 'Delivery risk is building inside the seller queue.'
+          : 'Delivery quality looks stable.',
+      ],
+      actions: [
+        { label: 'Scrape runs', href: '/admin/scrape-runs' },
+        { label: 'Research checklists', href: '/admin/research-checklists' },
+      ],
+    },
+    {
+      key: 'operator',
+      label: 'Operator',
+      intensity: clamp01(openTasks.length / 20),
+      status: agentStatus(true, urgentTasks.length > 0 || overdueTasks.length > 0),
+      headline: `${urgentTasks.length} urgent · ${overdueTasks.length} overdue · ${openTasks.length} open task${openTasks.length === 1 ? '' : 's'}`,
+      detail: 'The operator lane should tell you what actually needs your judgment now, not just what exists in the database.',
+      signals: [
+        { label: 'Open tasks', value: openTasks.length },
+        { label: 'Urgent', value: urgentTasks.length, status: urgentTasks.length > 0 ? 'yellow' : 'green' },
+        { label: 'Overdue', value: overdueTasks.length, status: overdueTasks.length > 0 ? 'red' : 'green' },
+      ],
+      watchItems: [
+        priorities[0] || 'No priority stack is loaded yet.',
+        openTasks.length > 0 ? 'Clear the overdue board before opening new loops.' : 'Operator board is clear right now.',
+      ],
+      actions: [
+        { label: 'Lead queue', href: '/admin/leads' },
+        { label: 'Strategy engine', href: '#strategy-engine' },
+        { label: 'Partner engine', href: '/admin/investor-partnerships' },
+      ],
+    },
+  ]
+
+  const inboxSummary: AgentKpi[] = [
+    { label: 'Hot seller replies', value: hotLeadReplies.length, status: hotLeadReplies.length > 0 ? 'yellow' : 'green' },
+    { label: 'Partner replies', value: partnerReplyItems.length },
+    { label: 'Follow-ups due', value: followupsDue + partnerFollowupsDue, status: followupsDue + partnerFollowupsDue > 0 ? 'yellow' : 'green' },
+    { label: 'Ready to send', value: sendReady + buyerApproved + lenderApproved, status: sendReady + buyerApproved + lenderApproved > 0 ? 'green' : 'yellow' },
+  ]
+
+  const inboxSections: CommandCenterInboxSection[] = [
+    {
+      key: 'hot_replies',
+      title: 'Hot seller replies',
+      hint: 'watch this first',
+      items: hotLeadReplies,
+    },
+    {
+      key: 'partner_replies',
+      title: 'Partner replies',
+      hint: 'buyers and lenders',
+      items: partnerReplyItems,
+    },
+    {
+      key: 'stale_threads',
+      title: 'Follow-ups and stale threads',
+      hint: 'keep momentum',
+      items: staleThreadItems.slice(0, 4),
+    },
+    {
+      key: 'automation_alerts',
+      title: 'Automation and queue alerts',
+      hint: 'watch the machine',
+      items: automationAlertItems,
+    },
+  ]
+
+  const outreachQueues: CommandCenterQueueCard[] = [
+    {
+      key: 'seller',
+      title: 'Seller outreach',
+      detail: 'Live seller drafts and follow-up pressure. Use this lane to send, reply, and keep DealMachine-fed inventory moving.',
+      href: '/admin/leads',
+      kpis: [
+        { label: 'Send ready', value: sendReady, status: sendReady > 0 ? 'green' : 'red' },
+        { label: 'Needs review', value: needsReview },
+        { label: 'Follow-ups', value: followupsDue, status: followupsDue > 0 ? 'yellow' : 'green' },
+      ],
+      items: sellerQueueItems,
+      actions: [
+        navigateAction('seller-queue-open', 'Open seller queue', '/admin/leads', 'primary'),
+        ...(recommendedSprintTarget > 0
+          ? [
+              leadThroughputSprintAction(
+                'seller-throughput-live',
+                `Push ${recommendedSprintTarget} toward cap`,
+                recommendedSprintTarget,
+                { tone: 'success' }
+              ),
+            ]
+          : []),
+        leadThroughputSprintAction(
+          'seller-throughput-preview',
+          recommendedSprintTarget > 0 ? 'Preview cap sprint' : 'Preview next sprint',
+          Math.max(1, recommendedSprintTarget || Math.min(outreachTarget, maxSprintTarget)),
+          { dryRun: true }
+        ),
+        ...(sellerNeedsReviewActions.length
+          ? [leadBulkAction('seller-queue-approve', 'Approve top drafts', [...new Set(sellerNeedsReviewActions)], 'approve_outreach', 'primary')]
+          : []),
+        ...(sellerSendBatchMessages.length
+          ? [leadSendBatchAction('seller-queue-send', 'Send top ready', sellerSendBatchMessages, 'success')]
+          : []),
+        navigateAction('seller-queue-sources', 'Open lead sources', '/admin/lead-sources'),
+      ],
+    },
+    {
+      key: 'buyer',
+      title: 'Buyer outreach',
+      detail: 'Approved buyer recruiting, criteria follow-up, and stale partner threads that can be pushed from the cockpit.',
+      href: '/admin/buyer-outreach',
+      kpis: [
+        { label: 'Approved', value: buyerApproved, status: buyerApproved > 0 ? 'green' : 'yellow' },
+        { label: 'Needs review', value: buyerNeedsReview },
+        { label: 'Follow-ups', value: t.buyers.filter((buyer) => buyer.next_follow_up_at && Date.parse(buyer.next_follow_up_at) < Date.now()).length },
+      ],
+      items: buyerQueueItems,
+      actions: [
+        navigateAction('buyer-queue-open', 'Open buyer outreach', '/admin/buyer-outreach', 'primary'),
+        ...(buyerNeedsReviewActions.length
+          ? [buyerBulkAction('buyer-queue-approve', 'Approve top drafts', [...new Set(buyerNeedsReviewActions)], 'approve_outreach', 'primary')]
+          : []),
+        ...(buyerSendBatchMessages.length
+          ? [buyerSendBatchAction('buyer-queue-send', 'Send approved', buyerSendBatchMessages, 'success')]
+          : []),
+        navigateAction('buyer-network-open', 'Open buyers', '/admin/buyers'),
+      ],
+    },
+    {
+      key: 'lender',
+      title: 'Lender outreach',
+      detail: 'Capital recruiting and lender relationship follow-up that can move directly from command without digging through separate pages.',
+      href: '/admin/lender-outreach',
+      kpis: [
+        { label: 'Approved', value: lenderApproved, status: lenderApproved > 0 ? 'green' : 'yellow' },
+        { label: 'Needs review', value: lenderNeedsReview },
+        { label: 'Follow-ups', value: t.lenders.filter((lender) => lender.next_follow_up_at && Date.parse(lender.next_follow_up_at) < Date.now()).length },
+      ],
+      items: lenderQueueItems,
+      actions: [
+        navigateAction('lender-queue-open', 'Open lender outreach', '/admin/lender-outreach', 'primary'),
+        ...(lenderNeedsReviewActions.length
+          ? [lenderBulkAction('lender-queue-approve', 'Approve top drafts', [...new Set(lenderNeedsReviewActions)], 'approve_outreach', 'primary')]
+          : []),
+        ...(lenderSendBatchMessages.length
+          ? [lenderSendBatchAction('lender-queue-send', 'Send approved', lenderSendBatchMessages, 'success')]
+          : []),
+        navigateAction('lender-network-open', 'Open lenders', '/admin/lenders'),
+      ],
+    },
+    {
+      key: 'builder',
+      title: 'Builder / partner lane',
+      detail: 'Builder and developer profiles that are close to useful. This is where partner research becomes routing leverage instead of dead data.',
+      href: '/admin/investor-partnerships?lane=builder',
+      kpis: [
+        { label: 'Builder lane', value: builderPartners },
+        { label: 'Outreach ready', value: partnerOutreachReady, status: partnerOutreachReady > 0 ? 'green' : 'yellow' },
+        { label: 'Confirmed boxes', value: partnerBuyBoxesConfirmed },
+      ],
+      items: builderQueueItems,
+      actions: [
+        navigateAction('builder-lane-open', 'Open builder lane', '/admin/investor-partnerships?lane=builder', 'primary'),
+        ...(builderOutreachReadyIds.length
+          ? [investorBulkAction('builder-lane-approve', 'Approve outreach', [...new Set(builderOutreachReadyIds)], 'approve_outreach', 'primary')]
+          : []),
+        ...(builderResearchReadyIds.length
+          ? [investorBulkAction('builder-lane-research', 'Stage research', [...new Set(builderResearchReadyIds)], 'mark_researched', 'warning')]
+          : []),
+        navigateAction('partner-engine-open', 'Open partner engine', '/admin/investor-partnerships'),
+      ],
+    },
   ]
 
   return {
@@ -856,24 +2709,49 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       openTasks: openTasks.length,
       urgentTasks: urgentTasks.length,
       activePartners: activeBuyers + activeLenders,
-      paidFundingRequests,
+      builderPartners,
+      dealMachineAlignedPartners,
+      partnerResearchReady,
+      partnerOutreachReady,
+      partnerBuyBoxesConfirmed,
+      partnerDiscoveryRuns7d: activePartnerDiscoveryRuns7d,
+      cooldownSaves7d,
+      failedPartnerRuns7d,
+      archivedLegacyRuntimeRows,
+      hiddenLegacyDrafts: legacyLeadOutreachCount,
     },
     missionNodes,
     priorities: priorities.slice(0, 7),
     alerts: alerts.slice(0, 8),
     agents,
+    outboundControl,
+    strategyLab,
+    operatingLoops,
+    operatingArchitecture,
+    suppressionCenter,
+    dealMachineFreshness,
+    inbox: {
+      summary: inboxSummary,
+      sections: inboxSections,
+    },
+    outreachQueues,
     marketHeat,
     routingQueue: [
       { label: 'Buyer matches open', count: pendingBuyerMatches, href: '/admin/buyer-matches' },
       { label: 'Lender matches open', count: pendingLenderMatches, href: '/admin/lender-matches' },
       { label: 'Research checklists open', count: openChecklists, href: '/admin/research-checklists' },
-      { label: 'Follow-ups due', count: followupsDue + partnerFollowupsDue, href: '/admin/leads' },
-      { label: 'Funding requests open', count: openFundingRequests, href: '/admin/funding' },
+      { label: 'Partner buy boxes to confirm', count: Math.max(0, partnerOutreachReady - partnerBuyBoxesConfirmed), href: '/admin/investor-partnerships' },
+      { label: 'Lead follow-ups due', count: followupsDue, href: '/admin/leads?outreachStatus=followup_due' },
+      { label: 'Partner follow-ups due', count: partnerFollowupsDue, href: '/admin/buyers' },
     ],
+    overdueTasks: overdueTaskItems,
     activity: activityFeed,
     localSignals: {
       dmExports: local.dmExports.slice(0, 6),
+      onMarketSweep: local.onMarketSweep,
+      taxCodeStack: local.taxCodeStack,
       distressStackRows: local.distressStackRows,
+      suppressionRecords: local.suppressionRecords.slice(0, 6),
     },
   }
 }

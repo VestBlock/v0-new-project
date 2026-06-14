@@ -1,4 +1,5 @@
 import type { InvestorProfileRecord, InvestorSequenceCode } from '@/lib/investors/types'
+import { builderBuyBoxQuestions, builderOutreachAngle, isBuilderPartnerLike } from '@/lib/investors/builderStrategy'
 
 export const INVESTOR_OUTREACH_SEQUENCES: Record<
   InvestorSequenceCode,
@@ -31,10 +32,34 @@ export const INVESTOR_OUTREACH_SEQUENCES: Record<
 }
 
 export function buildInvestorOutreachMessage(investor: InvestorProfileRecord, sequenceCode = investor.assigned_sequence) {
+  const isBuilderPartner = isBuilderPartnerLike({
+    displayName: investor.display_name,
+    primaryInvestorType: investor.primary_investor_type,
+    classificationTags: investor.classification_tags,
+    notes: investor.notes,
+    metadata: investor.metadata_json,
+  })
   const sequence = INVESTOR_OUTREACH_SEQUENCES[sequenceCode]
   const name = investor.person_name || investor.company_name || investor.llc_name || investor.display_name
   const marketLine = investor.markets?.length ? ` I noticed activity tied to ${investor.markets.slice(0, 3).join(', ')}.` : ''
   const intro = name ? `Hi ${name.split(' ')[0]},\n\n` : 'Hi,\n\n'
+
+  if (isBuilderPartner) {
+    const angle = builderOutreachAngle(investor.markets || [])
+    const questions = builderBuyBoxQuestions(investor.markets?.[0] || null)
+
+    return {
+      sequenceCode,
+      subject: angle.subject,
+      body:
+        `${intro}` +
+        `I’m reaching out from VestBlock. We are building a builder and construction partner lane so distressed, teardown, infill, and heavy-rehab opportunities can be routed to groups that actually know what they can build or renovate.${marketLine}\n\n` +
+        `Rather than send random properties, we want your real criteria first. The most useful things for us to understand are:\n` +
+        questions.map((question) => `- ${question}`).join('\n') +
+        `\n\nIf your team already has a buy box, build sheet, or neighborhoods list, send it over and we will align to it.\n\nBest,\nVestBlock Partnerships`,
+      cta: angle.cta,
+    }
+  }
 
   return {
     sequenceCode,
@@ -69,6 +94,24 @@ export function inferFollowUpTasks(message: string) {
       taskType: 'collect_disposition_requirements',
       assignedTeam: 'dispositions',
       prompt: 'Collect property address, asking price, assignment terms, access details, photos, condition, deadline, and desired buyer profile.',
+    })
+  }
+
+  if (/builder|build|construction|developer|development|infill|teardown|lot|spec home|ground up|rehab budget/.test(normalized)) {
+    tasks.push({
+      taskType: 'collect_builder_buy_box',
+      assignedTeam: 'acquisitions',
+      prompt:
+        'Collect builder neighborhoods, project type, lot or square-foot minimums, rehab tolerance, build budget range, close speed, and hard no-go items.',
+    })
+  }
+
+  if (/yes|interested|send deal|send property|send contract|assignment|paper it|move forward|next step/.test(normalized)) {
+    tasks.push({
+      taskType: 'assignment_contract_prep',
+      assignedTeam: 'dispositions',
+      prompt:
+        'Prepare the assignment packet: confirm purchase price, assignment fee, assignee entity, earnest money, close window, inspection terms, and supporting property packet.',
     })
   }
 

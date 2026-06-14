@@ -37,8 +37,29 @@ type SendEmailInput = {
   userEmail?: string | null;
 };
 
+const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
+  'admin_lead_followup',
+  'admin_lead_email_sent',
+  'admin_lead_run_daily_report',
+  'admin_lead_scoring_daily_report',
+  'admin_lead_outreach_daily_report',
+  'admin_lead_send_daily_report',
+]);
+
 function getFromEmail() {
-  return process.env.FROM_EMAIL || process.env.RESEND_EMAIL || 'contact@vestblock.io';
+  return process.env.FROM_EMAIL || process.env.RESEND_EMAIL || 'acquisitions@vestblock.io';
+}
+
+function getLeadOpsAlertEmail() {
+  return (
+    process.env.LEAD_OPS_ALERT_EMAIL ||
+    process.env.OUTREACH_ALERT_EMAIL ||
+    process.env.ACQUISITIONS_ALERT_EMAIL ||
+    process.env.FROM_EMAIL ||
+    process.env.ADMIN_ALERT_EMAIL ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    ''
+  ).trim();
 }
 
 function getSiteUrl() {
@@ -62,6 +83,15 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function isContactMailboxRoutineNotice(input: SendEmailInput) {
+  if (process.env.ALLOW_CONTACT_ADMIN_ALERTS === 'true') return false;
+  const recipients = String(input.to || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  return recipients.includes('contact@vestblock.io') && ROUTINE_ADMIN_NOTICE_EVENTS.has(input.eventType);
 }
 
 function shell(title: string, body: string) {
@@ -222,6 +252,15 @@ export async function sendEmail(input: SendEmailInput) {
     return { ok: false, skipped: true, error: 'Missing recipient email.' };
   }
 
+  if (isContactMailboxRoutineNotice(input)) {
+    await recordEmailEvent(input, 'skipped', null, 'Routine admin automation notices are blocked for contact@vestblock.io.');
+    return {
+      ok: false,
+      skipped: true,
+      error: 'Routine admin automation notices are blocked for contact@vestblock.io.',
+    };
+  }
+
   if (!process.env.RESEND_API_KEY) {
     await recordEmailEvent(input, 'skipped', null, 'RESEND_API_KEY is not configured.');
     return {
@@ -286,7 +325,7 @@ export async function sendAdminAlertEmail(details: {
   userId?: string | null;
   reportId?: string | null;
 }) {
-  const dashboardUrl = `${getSiteUrl()}${details.dashboardPath || '/admin-panel'}`;
+  const dashboardUrl = `${getSiteUrl()}${details.dashboardPath || '/admin/command-center'}`;
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
     subject: 'New VestBlock Credit Report Uploaded',
@@ -461,7 +500,7 @@ export async function sendAdminAbandonedCheckoutEmail(details: {
   userId?: string | null;
   ageHours?: number | null;
 }) {
-  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const adminUrl = `${getSiteUrl()}/admin/command-center`;
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
     subject: 'VestBlock Checkout Needs Follow-Up',
@@ -493,7 +532,7 @@ export async function sendNewLeadAlertEmail(details: {
   sourcePath?: string | null;
   summary?: string | null;
 }) {
-  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const adminUrl = `${getSiteUrl()}/admin/command-center`;
   const locationLine =
     details.propertyAddress || [details.city, details.state].filter(Boolean).join(', ') || null;
   const detailRows = [
@@ -548,7 +587,7 @@ export async function sendLeadOutreachSentAlertEmail(details: {
     : `${getSiteUrl()}/admin/leads`;
 
   return sendEmail({
-    to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+    to: getLeadOpsAlertEmail(),
     subject: 'VestBlock Outreach Email Sent',
     eventType: 'admin_lead_email_sent',
     userEmail: details.email,
@@ -663,7 +702,7 @@ export async function sendAdminLeadFollowupEmail(details: {
   email?: string | null;
   ageHours?: number | null;
 }) {
-  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const adminUrl = `${getSiteUrl()}/admin/command-center`;
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,
     subject: 'VestBlock Lead Needs Follow-Up',
@@ -858,7 +897,7 @@ export async function sendAdminDisputeLetterFollowupEmail(details: {
   letterType?: string | null;
   reason?: string | null;
 }) {
-  const adminUrl = `${getSiteUrl()}/admin-panel`;
+  const adminUrl = `${getSiteUrl()}/admin/command-center`;
   const guide = getDisputeMethodGuidance(details.letterType);
   return sendEmail({
     to: process.env.ADMIN_ALERT_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL,

@@ -2,13 +2,13 @@ import type { BuyerCategory, BuyerType, PropertyBuyerMatchInput } from '@/lib/bu
 
 export const DEFAULT_BUYER_DISCOVERY_MARKETS = [
   { city: 'Milwaukee', state: 'WI', metroArea: 'Milwaukee' },
+  { city: 'Toledo', state: 'OH', metroArea: 'Toledo' },
+  { city: 'Columbus', state: 'OH', metroArea: 'Columbus' },
+  { city: 'Cleveland', state: 'OH', metroArea: 'Cleveland' },
+  { city: 'Memphis', state: 'TN', metroArea: 'Memphis' },
+  { city: 'Nashville', state: 'TN', metroArea: 'Nashville' },
   { city: 'Chicago', state: 'IL', metroArea: 'Chicago' },
   { city: 'Detroit', state: 'MI', metroArea: 'Detroit' },
-  { city: 'Columbus', state: 'OH', metroArea: 'Columbus' },
-  { city: 'Atlanta', state: 'GA', metroArea: 'Atlanta' },
-  { city: 'Houston', state: 'TX', metroArea: 'Houston' },
-  { city: 'Phoenix', state: 'AZ', metroArea: 'Phoenix' },
-  { city: 'Las Vegas', state: 'NV', metroArea: 'Las Vegas' },
 ] as const
 
 export const DEFAULT_BUYER_DISCOVERY_NICHES = [

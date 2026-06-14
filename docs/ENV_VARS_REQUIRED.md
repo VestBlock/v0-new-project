@@ -45,14 +45,7 @@
 
 ## Property intelligence
 
-- `RENTCAST_API_KEY`
-  Optional. Enables live AVM and rent estimates during seller intake. Without it, VestBlock still stores seller-supplied and DealMachine-derived rough estimates.
-- `RENTCAST_API_BASE_URL`
-  Optional. Defaults to `https://api.rentcast.io/v1`.
-- `RENTCAST_VALUE_PATH`
-  Optional. Defaults to `/avm/value`.
-- `RENTCAST_RENT_PATH`
-  Optional. Defaults to `/avm/rent/long-term`.
+No external property-valuation API is required for the current VestBlock analyzer path. The baseline estimate engine uses local math plus operator inputs and should be tightened with real comps before pricing or routing.
 
 ## Analytics
 

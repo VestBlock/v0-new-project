@@ -1,4 +1,5 @@
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
+import { getLeadOutboundPauseReason } from '@/lib/leads/outboundEligibility'
 import { getEmailQualityIssue } from '@/lib/outreach/email-quality'
 
 export type OutreachV2SegmentKey =
@@ -582,6 +583,8 @@ export function evaluateOutreachV2Lead(lead: OutreachV2LeadInput, subject = ''):
   if (BAD_STATUSES.has(String(lead?.status || '').toLowerCase()) || lead?.outreach_status === 'do_not_contact') reasons.push('do_not_contact')
   if (BAD_DELIVERY_STATUSES.has(String(lead?.delivery_status || '').toLowerCase())) reasons.push('bad_delivery_history')
   if (String(lead?.suppression_reason || '').trim()) reasons.push('suppressed')
+  const outboundPauseReason = getLeadOutboundPauseReason(lead)
+  if (outboundPauseReason) reasons.push(outboundPauseReason)
   if (isBadTargetFit(lead)) reasons.push('poor_target_fit')
 
   const emailTrustIssue = getEmailTrustIssue(lead)
@@ -604,7 +607,13 @@ export function evaluateOutreachV2Lead(lead: OutreachV2LeadInput, subject = ''):
   const nextAction =
     reason === 'missing_email' || reason === 'manual_webmail_verification_required' || reason === 'mismatched_domain'
       ? 'enrich'
-      : reason === 'poor_target_fit' || reason === 'do_not_contact' || reason === 'bad_delivery_history' || reason === 'suppressed'
+      : reason === 'poor_target_fit' ||
+          reason === 'do_not_contact' ||
+          reason === 'bad_delivery_history' ||
+          reason === 'suppressed' ||
+          reason === 'legacy_google_places_paused' ||
+          reason === 'legacy_small_business_source_paused' ||
+          reason === 'legacy_small_business_lane_paused'
         ? 'suppress'
         : reason
           ? 'manual_review'
@@ -643,7 +652,7 @@ export function buildOutreachV2EmailDraft(lead: OutreachV2LeadInput): OutreachV2
     const cta = 'Reply if you want the short DealVault example.'
     return {
       subject: `${name}: cleaner agreement and milestone records`,
-      body: `Hi ${name},\n\n${opener} VestBlock helps teams keep cleaner records around agreements, referrals, approvals, and milestone updates without asking customers to connect a wallet.\n\nFor businesses that manage partners, vendors, contractors, or deal referrals, DealVault gives everyone a clearer proof trail: what was agreed to, what changed, what was approved, and what still needs attention.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\ncontact@vestblock.io`,
+      body: `Hi ${name},\n\n${opener} VestBlock helps teams keep cleaner records around agreements, referrals, approvals, and milestone updates without asking customers to connect a wallet.\n\nFor businesses that manage partners, vendors, contractors, or deal referrals, DealVault gives everyone a clearer proof trail: what was agreed to, what changed, what was approved, and what still needs attention.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`,
       complianceNote,
       cta,
     }
@@ -653,7 +662,7 @@ export function buildOutreachV2EmailDraft(lead: OutreachV2LeadInput): OutreachV2
     const cta = 'Reply if you want the quick funding-prep checklist.'
     return {
       subject: `${name}: cleaner prep before funding conversations`,
-      body: `Hi ${name},\n\n${opener} VestBlock helps business owners organize the basics lenders and funding partners usually want to see before a serious funding conversation.\n\nThe goal is simple: clean up the business profile, clarify the next-step plan, and avoid walking into funding conversations with scattered or incomplete information.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\ncontact@vestblock.io`,
+      body: `Hi ${name},\n\n${opener} VestBlock helps business owners organize the basics lenders and funding partners usually want to see before a serious funding conversation.\n\nThe goal is simple: clean up the business profile, clarify the next-step plan, and avoid walking into funding conversations with scattered or incomplete information.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`,
       complianceNote,
       cta,
     }
@@ -663,7 +672,7 @@ export function buildOutreachV2EmailDraft(lead: OutreachV2LeadInput): OutreachV2
     const cta = 'Reply if you want a quick visibility review.'
     return {
       subject: `${name}: a clearer website lead path`,
-      body: `Hi ${name},\n\n${opener} VestBlock helps local businesses make their website easier to find, easier to understand, and easier to contact from.\n\nA strong page should quickly explain what you do, why someone should trust you, and how to take the next step. When that path is unclear, good prospects can leave without calling or filling out a form.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\ncontact@vestblock.io`,
+      body: `Hi ${name},\n\n${opener} VestBlock helps local businesses make their website easier to find, easier to understand, and easier to contact from.\n\nA strong page should quickly explain what you do, why someone should trust you, and how to take the next step. When that path is unclear, good prospects can leave without calling or filling out a form.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`,
       complianceNote,
       cta,
     }
@@ -672,7 +681,7 @@ export function buildOutreachV2EmailDraft(lead: OutreachV2LeadInput): OutreachV2
   const cta = 'Reply if you want a short example of the setup.'
   return {
     subject: `${name}: missed-call and booking support`,
-    body: `Hi ${name},\n\n${opener} VestBlock helps service businesses respond faster to calls, website forms, and appointment requests when the team is busy.\n\nWe can help set up an AI receptionist and simple follow-up path so more inquiries get answered quickly instead of slipping through the cracks.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\ncontact@vestblock.io`,
+    body: `Hi ${name},\n\n${opener} VestBlock helps service businesses respond faster to calls, website forms, and appointment requests when the team is busy.\n\nWe can help set up an AI receptionist and simple follow-up path so more inquiries get answered quickly instead of slipping through the cracks.\n\n${cta}\n\nBest,\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`,
     complianceNote,
     cta,
   }

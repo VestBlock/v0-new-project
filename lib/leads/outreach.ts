@@ -11,7 +11,7 @@ import type {
 } from '@/lib/leads/types'
 import { truncate } from '@/lib/leads/utils'
 
-const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\ncontact@vestblock.io'
+const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\nacquisitions@vestblock.io'
 
 function leadLanguage(lead: LeadRecord): 'en' | 'es' {
   return lead.language_segment === 'spanish' ||

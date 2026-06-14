@@ -5,6 +5,11 @@ import type { LenderCategory, LenderDiscoveryInput, NormalizedLenderInput } from
 function classifyCategoryFromNiche(niche: string, detected: LenderCategory[]): LenderCategory {
   const lower = niche.toLowerCase()
   if (detected.length) return detected[0]
+  if (/private money|private lender/.test(lower)) return 'private_lender'
+  if (/portfolio/.test(lower)) return 'portfolio_bank'
+  if (/bridge/.test(lower)) return 'bridge'
+  if (/construction/.test(lower)) return 'construction'
+  if (/creative finance|seller finance|subject to/.test(lower)) return 'creative_finance_partner'
   if (/credit union/.test(lower)) return 'credit_union_business'
   if (/community bank/.test(lower)) return 'community_bank'
   if (/mortgage/.test(lower)) return 'conventional_mortgage'

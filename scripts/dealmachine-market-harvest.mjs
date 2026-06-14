@@ -27,6 +27,7 @@ const getArg = (name) => {
 const DEFAULT_MARKETS = "Milwaukee,WI|Toledo,OH|Cincinnati,OH|Detroit,MI|Macon,GA"
 const MAX_PAGES = getArg("pages") ? Number.parseInt(getArg("pages"), 10) : 50
 const PAGE_SIZE = getArg("page-size") ? Number.parseInt(getArg("page-size"), 10) : 100
+const REQUEST_TIMEOUT_MS = getArg("timeout-ms") ? Number.parseInt(getArg("timeout-ms"), 10) : 15000
 const CONTACTABLE_ONLY = args.includes("--contactable-only")
 const STACKED = args.includes("--stacked") || args.includes("--stacks")
 const TOP_MARKETS = getArg("top-markets") ? Number.parseInt(getArg("top-markets"), 10) : 0
@@ -413,13 +414,26 @@ function buildRow(lead, market) {
 async function dmRequest(endpoint) {
   const apiKey = env("DEALMACHINE_API_KEY")
   if (!apiKey) throw new Error("Missing DEALMACHINE_API_KEY.")
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "User-Agent": "VestBlockDealMachineHarvest/1.0 (+https://vestblock.io)",
-    },
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": "VestBlockDealMachineHarvest/1.0 (+https://vestblock.io)",
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`DealMachine request timed out after ${REQUEST_TIMEOUT_MS}ms: ${endpoint}`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
   const text = await response.text()
   let data = null
   try {

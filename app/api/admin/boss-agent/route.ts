@@ -6,6 +6,7 @@ import { checkAdminAccess } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
 import { buildBossBriefing } from '@/lib/admin/bossAgent'
+import { captureKpiSnapshot, loadBossLearning, runBossRetrospective } from '@/lib/admin/selfImprovement'
 
 const AGENT_LABELS: Record<string, string> = {
   acquisition: 'Lead Acquisition',
@@ -24,8 +25,8 @@ export async function GET() {
   }
 
   try {
-    const data = await getCommandCenterData()
-    const briefing = buildBossBriefing(data)
+    const [data, learning] = await Promise.all([getCommandCenterData(), loadBossLearning()])
+    const briefing = buildBossBriefing(data, learning)
     return NextResponse.json(briefing)
   } catch (error) {
     return NextResponse.json(
@@ -42,6 +43,21 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null)
+
+  // Self-improvement: review completed plays and adjust future rankings
+  if (body?.action === 'retrospective') {
+    try {
+      const data = await getCommandCenterData()
+      const result = await runBossRetrospective(data)
+      return NextResponse.json(result)
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Retrospective failed.' },
+        { status: 500 }
+      )
+    }
+  }
+
   const playKey = String(body?.playKey || '').trim()
   if (!playKey) {
     return NextResponse.json({ error: 'playKey is required.' }, { status: 400 })
@@ -77,6 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString()
+    const kpiBefore = captureKpiSnapshot(data)
     const rows = play.directives.map((directive) => ({
       title: `[${AGENT_LABELS[directive.agent] || directive.agent}] ${directive.action}`,
       description: `${directive.detail}\n\nBoss play: ${play.name}\nThesis: ${play.thesis}`,
@@ -88,6 +105,7 @@ export async function POST(request: NextRequest) {
         play_name: play.name,
         agent: directive.agent,
         dispatched_at: now,
+        kpi_before: kpiBefore,
         steps: play.steps,
       },
       created_by: adminCheck.user?.id || null,

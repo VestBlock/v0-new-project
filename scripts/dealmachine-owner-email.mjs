@@ -52,7 +52,7 @@ function env(name) {
 }
 
 function sender() {
-  return env("FROM_EMAIL") || "contact@vestblock.io"
+  return env("FROM_EMAIL") || "acquisitions@vestblock.io"
 }
 
 function mailingAddress() {
@@ -510,7 +510,7 @@ function buildEmail(contact) {
     "Best,",
     "Robert Sanders",
     "VestBlock",
-    "contact@vestblock.io",
+    "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
     "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",

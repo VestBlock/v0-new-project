@@ -21,6 +21,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { getSupabaseClient } from '@/lib/supabase/client'
+import { buildInvestorPipelineSnapshotFromRecord } from '@/lib/investors/pipeline'
 import {
   investorOutreachStatuses,
   investorRelationshipStages,
@@ -43,6 +44,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 
 type SequenceFilter = 'all' | 'A' | 'B' | 'C' | 'D'
+type PartnerLaneFilter = 'all' | 'builder'
 
 type ApiResult = {
   investors: InvestorProfileRecord[]
@@ -72,6 +74,11 @@ const SEQUENCE_OPTIONS: Array<{ value: SequenceFilter; label: string }> = [
   { value: 'D', label: 'D Strategic' },
 ]
 
+const PARTNER_LANE_OPTIONS: Array<{ value: PartnerLaneFilter; label: string; detail: string }> = [
+  { value: 'all', label: 'All lanes', detail: 'Investors, buyers, lenders, builders, and strategic partners.' },
+  { value: 'builder', label: 'Builder lane', detail: 'Builders, developers, and construction groups with buy-box potential.' },
+]
+
 const discoverySources = [
   'Recent flip transactions',
   'County deed records',
@@ -89,6 +96,21 @@ function sequenceLabel(code: string) {
   if (code === 'B') return 'Disposition'
   if (code === 'C') return 'Financing'
   return 'Strategic'
+}
+
+function builderTagLabel(investor: InvestorProfileRecord) {
+  if (investor.classification_tags.includes('developer_partner')) return 'Developer'
+  if (investor.classification_tags.includes('construction_company')) return 'Construction'
+  if (investor.classification_tags.includes('builder_partner')) return 'Builder'
+  return null
+}
+
+function pipelineTone(stage: string) {
+  if (stage === 'buy_box_confirmed') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+  if (stage === 'replied' || stage === 'contacted') return 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100'
+  if (stage === 'outreach_ready') return 'border-violet-400/30 bg-violet-400/10 text-violet-100'
+  if (stage === 'buy_box_inferred') return 'border-amber-400/30 bg-amber-400/10 text-amber-100'
+  return 'border-slate-700 bg-slate-800 text-slate-200'
 }
 
 function scoreTone(score: number) {
@@ -114,6 +136,7 @@ export function InvestorPartnershipEngineDashboard() {
 
   const [search, setSearch] = useState('')
   const [market, setMarket] = useState<string>('all')
+  const [partnerLane, setPartnerLane] = useState<PartnerLaneFilter>('all')
   const [investorType, setInvestorType] = useState<InvestorType | 'all'>('all')
   const [relationshipStage, setRelationshipStage] = useState<InvestorRelationshipStage | 'all'>('all')
   const [outreachStatus, setOutreachStatus] = useState<InvestorOutreachStatus | 'all'>('all')
@@ -137,6 +160,7 @@ export function InvestorPartnershipEngineDashboard() {
       if (search) params.set('search', search)
       if (market !== 'all') params.set('market', market)
       if (investorType !== 'all') params.set('investor_type', investorType)
+      if (partnerLane !== 'all') params.set('lane', partnerLane)
       if (relationshipStage !== 'all') params.set('relationship_stage', relationshipStage)
       if (outreachStatus !== 'all') params.set('outreach_status', outreachStatus)
       if (sequence !== 'all') params.set('sequence', sequence)
@@ -160,7 +184,7 @@ export function InvestorPartnershipEngineDashboard() {
     } finally {
       setIsLoading(false)
     }
-  }, [agentInvestorId, investorType, market, outreachStatus, relationshipStage, router, search, sequence, supabase, toast])
+  }, [agentInvestorId, investorType, market, outreachStatus, partnerLane, relationshipStage, router, search, sequence, supabase, toast])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -303,9 +327,11 @@ export function InvestorPartnershipEngineDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Target} label="Investor Profiles" value={summary?.total || 0} detail={`${summary?.averageScore || 0}/100 avg score`} />
-        <MetricCard icon={Building2} label="Active Buyers" value={summary?.activeBuyers || 0} detail={`${summary?.outreachReady || 0} outreach ready`} />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MetricCard icon={Target} label="Partner Profiles" value={summary?.total || 0} detail={`${summary?.averageScore || 0}/100 avg score`} />
+        <MetricCard icon={Building2} label="Research Ready" value={summary?.researchReady || 0} detail={`${summary?.outreachReady || 0} outreach ready`} />
+        <MetricCard icon={Handshake} label="Buy Box Inferred" value={summary?.buyBoxInferred || 0} detail={`${summary?.buyBoxConfirmed || 0} confirmed`} />
+        <MetricCard icon={BriefcaseBusiness} label="Builder Lane" value={summary?.builderPartners || 0} detail={`${summary?.dealMachineAligned || 0} DM aligned`} />
         <MetricCard icon={Banknote} label="Active Borrowers" value={summary?.activeBorrowers || 0} detail={`${summary?.lendingOpportunities || 0} lending opps`} />
         <MetricCard icon={Handshake} label="Revenue Opportunities" value={summary?.revenueOpportunities || 0} detail={`${summary?.partnershipOpportunities || 0} partnerships`} />
       </div>
@@ -315,8 +341,8 @@ export function InvestorPartnershipEngineDashboard() {
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle className="text-lg">Market Discovery Console</CardTitle>
-                <p className="mt-1 text-sm text-slate-400">Phase-one markets, source coverage, scoring, and outreach readiness.</p>
+                <CardTitle className="text-lg">Partner Discovery Console</CardTitle>
+                <p className="mt-1 text-sm text-slate-400">Investor, builder, developer, and construction-partner discovery with buy-box capture and outreach readiness.</p>
               </div>
               <Button variant="outline" onClick={() => fetchInvestors()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -336,6 +362,24 @@ export function InvestorPartnershipEngineDashboard() {
                   }`}
                 >
                   {item}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              {PARTNER_LANE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setPartnerLane(option.value)}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                    partnerLane === option.value
+                      ? 'border-violet-400/50 bg-violet-400/10 text-white'
+                      : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{option.label}</div>
+                  <div className="mt-1 text-xs text-slate-500">{option.detail}</div>
                 </button>
               ))}
             </div>
@@ -396,9 +440,15 @@ export function InvestorPartnershipEngineDashboard() {
               <Button onClick={() => fetchInvestors()} variant="secondary">
                 Apply Filters
               </Button>
+              <Button onClick={() => runBulkAction('mark_researched')} disabled={bulkLoading !== null} variant="outline">
+                Mark Researched
+              </Button>
+              <Button onClick={() => runBulkAction('confirm_buy_box')} disabled={bulkLoading !== null} variant="outline">
+                Confirm Buy Box
+              </Button>
               <Button onClick={() => runBulkAction('generate_outreach')} disabled={bulkLoading !== null}>
                 {bulkLoading === 'generate_outreach' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                Draft Outreach
+                {partnerLane === 'builder' ? 'Draft Builder Outreach' : 'Draft Outreach'}
               </Button>
               <Button onClick={() => runBulkAction('approve_outreach')} disabled={bulkLoading !== null} variant="outline">
                 <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -428,14 +478,17 @@ export function InvestorPartnershipEngineDashboard() {
                     <TableHead>Investor</TableHead>
                     <TableHead>Markets</TableHead>
                     <TableHead>Classification</TableHead>
+                    <TableHead>Pipeline</TableHead>
                     <TableHead>Sequence</TableHead>
                     <TableHead>Score</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Signals</TableHead>
                     <TableHead>Research</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {investors.map((investor) => (
+                  {investors.map((investor) => {
+                    const pipeline = buildInvestorPipelineSnapshotFromRecord(investor)
+                    return (
                     <TableRow key={investor.id} className="border-slate-800 hover:bg-slate-900/80">
                       <TableCell>
                         <Checkbox
@@ -457,7 +510,22 @@ export function InvestorPartnershipEngineDashboard() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="capitalize text-slate-300">{investor.primary_investor_type.replaceAll('_', ' ')}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="capitalize text-slate-300">{investor.primary_investor_type.replaceAll('_', ' ')}</div>
+                          {builderTagLabel(investor) ? (
+                            <Badge className="border-violet-400/30 bg-violet-400/10 text-violet-100">
+                              {builderTagLabel(investor)}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1 text-xs">
+                          <Badge className={pipelineTone(pipeline.stage)}>{pipeline.stageLabel}</Badge>
+                          <div className="text-slate-500">{pipeline.nextAction}</div>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge className="border-cyan-400/30 bg-cyan-400/10 text-cyan-100">{investor.assigned_sequence} {sequenceLabel(investor.assigned_sequence)}</Badge>
                       </TableCell>
@@ -466,8 +534,17 @@ export function InvestorPartnershipEngineDashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 text-xs">
-                          <div className="text-slate-200">{investor.relationship_stage.replaceAll('_', ' ')}</div>
-                          <div className="text-slate-500">{investor.outreach_status.replaceAll('_', ' ')}</div>
+                          <div className="text-slate-200">
+                            {pipeline.researchReady ? 'research ready' : 'research blocked'} · {pipeline.contactQuality} contact
+                          </div>
+                          <div className="text-slate-500">
+                            {pipeline.outreachReady ? 'outreach ready' : pipeline.blockedReasons.join(', ') || investor.outreach_status.replaceAll('_', ' ')}
+                          </div>
+                          <div className="text-slate-500">
+                            confidence {pipeline.sourceConfidence}/100
+                            {pipeline.dealMachineAligned ? ' · DM aligned' : ''}
+                            {pipeline.buyBoxConfirmed ? ' · confirmed' : pipeline.buyBoxInferred ? ' · inferred' : ''}
+                          </div>
                           <div className="text-slate-500">
                             {investor.updated_at ? formatDistanceToNow(new Date(investor.updated_at), { addSuffix: true }) : ''}
                           </div>
@@ -485,10 +562,10 @@ export function InvestorPartnershipEngineDashboard() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                   {!investors.length ? (
                     <TableRow className="border-slate-800">
-                      <TableCell colSpan={8} className="py-8 text-center text-slate-400">
+                      <TableCell colSpan={9} className="py-8 text-center text-slate-400">
                         No investor profiles match the current filters.
                       </TableCell>
                     </TableRow>
@@ -520,14 +597,14 @@ export function InvestorPartnershipEngineDashboard() {
               <Textarea
                 value={agentMessage}
                 onChange={(event) => setAgentMessage(event.target.value)}
-                placeholder="Paste investor reply here"
+                placeholder="Paste partner reply here"
                 className="min-h-32 border-slate-700 bg-slate-950"
               />
               <Button onClick={routeFollowUp} disabled={agentLoading} className="w-full">
                 {agentLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareReply className="mr-2 h-4 w-4" />}
                 Route Reply
               </Button>
-              <p className="text-xs text-slate-500">Creates DealVault tasks for buy box, lending, disposition, deal routing, or call booking.</p>
+              <p className="text-xs text-slate-500">Creates follow-up tasks for buy box, builder criteria, lending, disposition, assignment prep, or call booking.</p>
             </CardContent>
           </Card>
 
@@ -542,6 +619,9 @@ export function InvestorPartnershipEngineDashboard() {
                   {source}
                 </div>
               ))}
+              <div className="rounded-lg border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-sm text-violet-100">
+                DealMachine stays on the seller side. This partner engine handles builders, developers, lenders, and buyer criteria, then routes them back into DealMachine-market inventory and analyzer packets.
+              </div>
             </CardContent>
           </Card>
 

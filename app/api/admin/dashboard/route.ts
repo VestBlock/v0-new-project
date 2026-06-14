@@ -1172,115 +1172,116 @@ export async function GET() {
       dataSources: dataSourceHealth,
       crons: [
         {
-          label: 'Credit repair stalled report monitor',
-          path: '/api/cron/credit-repair-monitor',
-          schedule: '0 14 * * *',
-          purpose: 'Creates admin tasks for reports stuck in processing statuses.',
-        },
-        {
-          label: 'Lifecycle reminder monitor',
-          path: '/api/cron/lifecycle-monitor',
-          schedule: '0 15 * * *',
+          label: 'Content optimization',
+          path: '/api/cron/optimize-content',
+          schedule: '55 14 * * *',
           purpose:
-            'Creates lifecycle tasks and sends upload reminders, paid onboarding reminders, and lead follow-up alerts.',
+            'Improves live VestBlock content so seller, buyer, lender, and authority pages stay sharper without reviving the old small-business runtime.',
         },
         {
-          label: 'Dispute letter reminder monitor',
-          path: '/api/cron/dispute-letter-monitor',
-          schedule: '0 16 * * *',
+          label: 'Buyer discovery',
+          path: '/api/cron/buyers-discover',
+          schedule: '30 16 * * *',
           purpose:
-            'Sends dispute-letter mailing reminders, secondary bureau reminders, and bureau response-window follow-ups.',
+            'Discovers fresh buyer prospects in priority real-estate markets, now with runtime cooldowns to avoid re-scraping the same market daily.',
         },
         {
-          label: 'Daily content publisher',
-          path: '/api/cron/content-publisher',
+          label: 'Buyer scoring',
+          path: '/api/cron/buyers-score',
+          schedule: '40 16 * * *',
+          purpose:
+            'Scores buyers, buy-box confidence, and routing value after discovery and enrichment.',
+        },
+        {
+          label: 'Buyer follow-up',
+          path: '/api/cron/buyers-followup',
+          schedule: '0 17 * * *',
+          purpose:
+            'Queues buyer relationship follow-ups and keeps unanswered partner conversations moving.',
+        },
+        {
+          label: 'Buyer performance rollup',
+          path: '/api/cron/buyers-performance',
+          schedule: '15 17 * * *',
+          purpose:
+            'Updates buyer network performance signals for routing and priority decisions.',
+        },
+        {
+          label: 'Investor and builder discovery',
+          path: '/api/cron/investors-discover',
+          schedule: '18 17 * * *',
+          purpose:
+            'Discovers investors, builders, and construction partners in active markets while skipping duplicate recent market pulls.',
+        },
+        {
+          label: 'Investor scoring',
+          path: '/api/cron/investors-score',
+          schedule: '22 17 * * *',
+          purpose:
+            'Refreshes investor and builder fit scoring, research readiness, and routing priority.',
+        },
+        {
+          label: 'Investor outreach generation',
+          path: '/api/cron/investors-outreach',
+          schedule: '26 17 * * *',
+          purpose:
+            'Generates current VestBlock outreach for investors, builders, and construction partners that cleared research gates.',
+        },
+        {
+          label: 'Investor outreach send',
+          path: '/api/cron/investors-send',
           schedule: '30 17 * * *',
           purpose:
-            'Publishes a small daily batch of SEO pages, prioritizing existing drafts and then filling service gaps with AEO topic pages.',
+            'Sends approved investor and builder outreach messages from the current partner engine.',
         },
         {
-          label: 'Growth scoreboard monitor',
-          path: '/api/cron/growth-scoreboard-monitor',
-          schedule: '0 */6 * * *',
+          label: 'Investor follow-up',
+          path: '/api/cron/investors-followup',
+          schedule: '34 17 * * *',
           purpose:
-            'Checks the hard scoreboard, identifies missed daily quotas, and creates red-flag admin tasks when growth or revenue cadence falls behind.',
+            'Creates follow-up tasks for investor, builder, and capital conversations that need action.',
         },
         {
-          label: 'PR target discovery',
-          path: '/api/cron/pr-engine-discovery',
-          schedule: '15 18 * * *',
+          label: 'Investor performance rollup',
+          path: '/api/cron/investors-performance',
+          schedule: '38 17 * * *',
           purpose:
-            'Seeds new PR targets across priority cities and business-owner categories such as minority, chamber, and small-business outlets.',
+            'Rolls up investor, builder, and partner engagement performance into the command layer.',
         },
         {
-          label: 'PR city expansion',
-          path: '/api/cron/pr-engine-city-expansion',
-          schedule: '30 18 * * *',
+          label: 'Entity SEO expansion',
+          path: '/api/cron/entity-seo-expansion',
+          schedule: '25 17 * * *',
           purpose:
-            'Pushes the visibility engine into additional cities using market momentum and local category fit.',
+            'Expands VestBlock entity, city, and service visibility behind the scenes for real-estate answer discovery.',
         },
         {
-          label: 'PR pitch generation',
-          path: '/api/cron/pr-engine-pitch-generation',
-          schedule: '45 18 * * *',
+          label: 'AEO visibility publisher',
+          path: '/api/cron/visibility-aeo-publisher',
+          schedule: '28 17 * * *',
           purpose:
-            'Generates fresh PR drafts automatically for the highest-fit queued targets.',
+            'Publishes the AEO / SEO booster content system that supports seller, buyer, lender, and operator visibility.',
         },
         {
-          label: 'PR follow-up monitor',
-          path: '/api/cron/pr-engine-monitor',
-          schedule: '0 18 * * *',
+          label: 'Indexing push',
+          path: '/api/cron/visibility-indexing-push',
+          schedule: '35 17 * * *',
           purpose:
-            'Enforces PR follow-up deadlines and creates admin tasks when strong opportunities are stalling.',
+            'Pushes fresh visibility pages and updates toward indexing and answer-engine pickup.',
         },
         {
-          label: 'PR weekly learning',
-          path: '/api/cron/pr-engine-weekly-learning',
-          schedule: '0 19 * * 0',
+          label: 'Daily ops report',
+          path: '/api/cron/daily-ops-report',
+          schedule: '40 17 * * *',
           purpose:
-            'Summarizes which cities, categories, and pitch angles are actually getting traction so the queue can self-improve.',
+            'Summarizes the current command layer so overdue tasks, routing gaps, and market priorities stay visible.',
         },
         {
-          label: 'SAM opportunity ingest',
-          path: '/api/cron/sam-opportunity-ingest',
-          schedule: '10 11 * * *',
+          label: 'AEO site audit',
+          path: '/api/cron/aeo-site-audit',
+          schedule: '0 9 * * *',
           purpose:
-            'Pulls public contract opportunities from official SAM/GSA APIs and stores normalized opportunity plus document records.',
-        },
-        {
-          label: 'SAM match scoring',
-          path: '/api/cron/sam-match-scoring',
-          schedule: '25 11 * * *',
-          purpose:
-            'Scores active SAM opportunities against watchlists and lead fit, creates admin tasks, and links high-fit opportunities into lead workflows.',
-        },
-        {
-          label: 'SAM exclusion rechecks',
-          path: '/api/cron/sam-exclusion-rechecks',
-          schedule: '35 11 * * *',
-          purpose:
-            'Re-screens tracked entities and watchlists against public SAM exclusions to surface compliance risk quickly.',
-        },
-        {
-          label: 'SAM award monitor',
-          path: '/api/cron/sam-award-monitor',
-          schedule: '50 11 * * *',
-          purpose:
-            'Captures award notices for tracked niches and competitors so operators can watch who is winning and where.',
-        },
-        {
-          label: 'SAM assistance refresh',
-          path: '/api/cron/sam-assistance-refresh',
-          schedule: '55 11 * * *',
-          purpose:
-            'Refreshes federal assistance listing matches related to active government watchlists.',
-        },
-        {
-          label: 'SAM alert delivery',
-          path: '/api/cron/sam-alert-delivery',
-          schedule: '10 18 * * *',
-          purpose:
-            'Sends the government intelligence digest with hot opportunities, exclusion hits, awards, and assistance matches.',
+            'Checks site structure, routing, crawl health, and answer-engine signals on the live VestBlock site.',
         },
       ],
       lifecycleEmails: {

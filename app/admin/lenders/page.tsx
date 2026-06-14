@@ -21,7 +21,7 @@ export default async function AdminLendersPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/admin/lender-programs">Programs</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/admin/lender-outreach">Outreach Queue</Link>
@@ -30,7 +30,7 @@ export default async function AdminLendersPage() {
             <Link href="/admin/lender-matches">Borrower Matches</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/admin-panel">Admin Overview</Link>
+            <Link href="/admin/command-center">Command Center</Link>
           </Button>
         </div>
       </div>

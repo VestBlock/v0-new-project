@@ -1,5 +1,5 @@
 export type RoughPropertyEstimateSource =
-  | 'rentcast'
+  | 'internal_baseline'
   | 'seller_supplied'
   | 'rule_based'
   | 'none'
@@ -22,6 +22,7 @@ export type RoughPropertyEstimateInput = {
   squareFeet?: string | number | null
   sellerEstimatedValue?: string | number | null
   askingPrice?: string | number | null
+  monthlyRentEstimate?: string | number | null
   mortgageBalance?: string | number | null
   liensOrTaxes?: string | number | null
   propertyCondition?: string | null
@@ -59,33 +60,6 @@ export type RoughPropertyEstimate = {
   disclaimer: string
 }
 
-type RentCastValueResponse = {
-  price?: number
-  value?: number
-  estimatedValue?: number
-  priceRangeLow?: number
-  priceRangeHigh?: number
-  comparables?: unknown[]
-  subjectProperty?: Record<string, unknown>
-}
-
-type RentCastRentResponse = {
-  rent?: number
-  price?: number
-  priceRangeLow?: number
-  priceRangeHigh?: number
-}
-
-type RentCastSnapshot = {
-  value: number | null
-  low: number | null
-  high: number | null
-  rent: number | null
-  comparableCount: number
-  subjectProperty: Record<string, unknown> | null
-  warnings: string[]
-}
-
 export function parseCurrencyAmount(value?: string | number | null) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (!value) return null
@@ -99,19 +73,20 @@ function roundToNearest(value: number | null, nearest = 1000) {
   return Math.round(Number(value) / nearest) * nearest
 }
 
-function asNumber(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
 function normalizePropertyType(value?: string | null) {
   const normalized = String(value || '').toLowerCase()
   if (!normalized) return null
-  if (normalized.includes('multi') || normalized.includes('duplex') || normalized.includes('triplex')) return 'Multi-Family'
+  if (normalized.includes('multi') || normalized.includes('duplex') || normalized.includes('triplex') || normalized.includes('fourplex')) {
+    return 'Multi-Family'
+  }
   if (normalized.includes('condo')) return 'Condo'
   if (normalized.includes('town')) return 'Townhouse'
   if (normalized.includes('mobile') || normalized.includes('manufactured')) return 'Manufactured'
   if (normalized.includes('apartment')) return 'Apartment'
   if (normalized.includes('land') || normalized.includes('lot')) return 'Land'
+  if (normalized.includes('commercial') || normalized.includes('retail') || normalized.includes('office') || normalized.includes('industrial')) {
+    return 'Commercial'
+  }
   return 'Single Family'
 }
 
@@ -129,6 +104,63 @@ function conditionCashFactor(condition?: string | null) {
   if (/good|average|livable/.test(normalized)) return 0.76
   if (/excellent|renovated|turnkey/.test(normalized)) return 0.82
   return 0.7
+}
+
+function conditionValueFactor(condition?: string | null) {
+  const normalized = String(condition || '').toLowerCase()
+  if (/fire|mold|gut|major|poor|unsafe/.test(normalized)) return 0.72
+  if (/vacant|distress|code|violation/.test(normalized)) return 0.8
+  if (/fair|repairs|dated|needs work/.test(normalized)) return 0.88
+  if (/good|average|livable/.test(normalized)) return 0.96
+  if (/excellent|renovated|turnkey/.test(normalized)) return 1.04
+  return 0.9
+}
+
+function askingAdjustmentFactor(condition?: string | null) {
+  const normalized = String(condition || '').toLowerCase()
+  if (/fire|mold|gut|major|poor|unsafe/.test(normalized)) return 0.84
+  if (/fair|repairs|dated|needs work|distress|vacant/.test(normalized)) return 0.9
+  return 0.96
+}
+
+function rentMultiple(propertyType?: string | null) {
+  const normalized = normalizePropertyType(propertyType)
+  switch (normalized) {
+    case 'Land':
+      return 0
+    case 'Commercial':
+      return 85
+    case 'Multi-Family':
+      return 60
+    case 'Condo':
+    case 'Townhouse':
+    case 'Apartment':
+      return 88
+    case 'Manufactured':
+      return 72
+    default:
+      return 95
+  }
+}
+
+function pricePerFoot(propertyType?: string | null) {
+  const normalized = normalizePropertyType(propertyType)
+  switch (normalized) {
+    case 'Land':
+      return 4
+    case 'Commercial':
+      return 92
+    case 'Multi-Family':
+      return 68
+    case 'Condo':
+    case 'Townhouse':
+    case 'Apartment':
+      return 108
+    case 'Manufactured':
+      return 58
+    default:
+      return 100
+  }
 }
 
 function isFastTimeline(timeline?: string | null) {
@@ -152,82 +184,58 @@ function formatMoney(value: number | null) {
   }).format(Number(value))
 }
 
-async function fetchJsonWithTimeout(url: URL, apiKey: string) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5500)
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        accept: 'application/json',
-        'X-Api-Key': apiKey,
-      },
-      signal: controller.signal,
-      next: { revalidate: 60 * 60 * 24 },
-    })
-
-    if (!response.ok) {
-      throw new Error(`RentCast ${response.status}: ${await response.text().catch(() => response.statusText)}`)
-    }
-
-    return await response.json()
-  } finally {
-    clearTimeout(timeout)
-  }
+function weightedAverage(entries: Array<{ value: number | null; weight: number }>) {
+  const usable = entries.filter((entry) => Number.isFinite(entry.value) && entry.weight > 0) as Array<{
+    value: number
+    weight: number
+  }>
+  if (!usable.length) return null
+  const totalWeight = usable.reduce((sum, entry) => sum + entry.weight, 0)
+  if (!totalWeight) return null
+  return usable.reduce((sum, entry) => sum + entry.value * entry.weight, 0) / totalWeight
 }
 
-async function fetchRentCastSnapshot(input: RoughPropertyEstimateInput): Promise<RentCastSnapshot | null> {
-  const apiKey = process.env.RENTCAST_API_KEY
-  const address = input.address?.trim()
-  if (!apiKey || !address) return null
+function buildInternalBaselineValue(input: RoughPropertyEstimateInput) {
+  const sellerEstimatedValue = parseCurrencyAmount(input.sellerEstimatedValue)
+  const askingPrice = parseCurrencyAmount(input.askingPrice)
+  const monthlyRentEstimate = parseCurrencyAmount(input.monthlyRentEstimate)
+  const squareFeet = parseCurrencyAmount(input.squareFeet)
+  const valueFactor = conditionValueFactor(input.propertyCondition)
 
-  const baseUrl = process.env.RENTCAST_API_BASE_URL || 'https://api.rentcast.io/v1'
-  const valuePath = process.env.RENTCAST_VALUE_PATH || '/avm/value'
-  const rentPath = process.env.RENTCAST_RENT_PATH || '/avm/rent/long-term'
-  const propertyType = normalizePropertyType(input.propertyType)
-  const warnings: string[] = []
+  const rentBasedValue =
+    monthlyRentEstimate && rentMultiple(input.propertyType) > 0
+      ? monthlyRentEstimate * rentMultiple(input.propertyType)
+      : null
 
-  const buildUrl = (path: string) => {
-    const url = new URL(path.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`)
-    url.searchParams.set('address', address)
-    url.searchParams.set('compCount', '5')
-    if (propertyType) url.searchParams.set('propertyType', propertyType)
-    return url
-  }
+  const sizeBasedValue =
+    squareFeet && pricePerFoot(input.propertyType) > 0
+      ? squareFeet * pricePerFoot(input.propertyType) * valueFactor
+      : null
 
-  const [valueResult, rentResult] = await Promise.allSettled([
-    fetchJsonWithTimeout(buildUrl(valuePath), apiKey),
-    fetchJsonWithTimeout(buildUrl(rentPath), apiKey),
+  const adjustedAsking =
+    askingPrice !== null ? askingPrice * askingAdjustmentFactor(input.propertyCondition) : null
+
+  const baselineValue = weightedAverage([
+    { value: sellerEstimatedValue, weight: 1.15 },
+    { value: adjustedAsking, weight: 0.9 },
+    { value: rentBasedValue, weight: 0.95 },
+    { value: sizeBasedValue, weight: 0.7 },
   ])
 
-  let valuePayload: RentCastValueResponse | null = null
-  let rentPayload: RentCastRentResponse | null = null
-
-  if (valueResult.status === 'fulfilled') {
-    valuePayload = valueResult.value as RentCastValueResponse
-  } else {
-    warnings.push(valueResult.reason instanceof Error ? valueResult.reason.message : 'RentCast value estimate unavailable.')
-  }
-
-  if (rentResult.status === 'fulfilled') {
-    rentPayload = rentResult.value as RentCastRentResponse
-  } else {
-    warnings.push(rentResult.reason instanceof Error ? rentResult.reason.message : 'RentCast rent estimate unavailable.')
-  }
-
-  if (!valuePayload && !rentPayload) return { value: null, low: null, high: null, rent: null, comparableCount: 0, subjectProperty: null, warnings }
-
   return {
-    value:
-      asNumber(valuePayload?.price) ??
-      asNumber(valuePayload?.value) ??
-      asNumber(valuePayload?.estimatedValue),
-    low: asNumber(valuePayload?.priceRangeLow),
-    high: asNumber(valuePayload?.priceRangeHigh),
-    rent: asNumber(rentPayload?.rent) ?? asNumber(rentPayload?.price),
-    comparableCount: Array.isArray(valuePayload?.comparables) ? valuePayload.comparables.length : 0,
-    subjectProperty: valuePayload?.subjectProperty || null,
-    warnings,
+    baselineValue: roundToNearest(baselineValue, 1000),
+    rentBasedValue: roundToNearest(rentBasedValue, 1000),
+    sizeBasedValue: roundToNearest(sizeBasedValue, 1000),
+    signalCount: [sellerEstimatedValue, askingPrice, monthlyRentEstimate, squareFeet].filter((value) => Number.isFinite(value)).length,
+    subjectProperty: {
+      propertyType: normalizePropertyType(input.propertyType),
+      bedrooms: parseCurrencyAmount(input.bedrooms),
+      bathrooms: parseCurrencyAmount(input.bathrooms),
+      squareFeet,
+      condition: input.propertyCondition || null,
+      rentBasedValue: roundToNearest(rentBasedValue, 1000),
+      sizeBasedValue: roundToNearest(sizeBasedValue, 1000),
+    } as Record<string, unknown>,
   }
 }
 
@@ -235,55 +243,74 @@ export async function buildRoughPropertyEstimate(input: RoughPropertyEstimateInp
   const now = new Date().toISOString()
   const sellerEstimatedValue = parseCurrencyAmount(input.sellerEstimatedValue)
   const askingPrice = parseCurrencyAmount(input.askingPrice)
+  const manualRentEstimate = parseCurrencyAmount(input.monthlyRentEstimate)
   const mortgageBalance = parseCurrencyAmount(input.mortgageBalance)
   const liensOrTaxesAmount = parseCurrencyAmount(input.liensOrTaxes)
-  const rentcast = await fetchRentCastSnapshot(input).catch((error) => ({
-    value: null,
-    low: null,
-    high: null,
-    rent: null,
-    comparableCount: 0,
-    subjectProperty: null,
-    warnings: [error instanceof Error ? error.message : 'Property valuation provider unavailable.'],
-  }))
+  const internal = buildInternalBaselineValue(input)
+  const debtLoad = (mortgageBalance || 0) + (liensOrTaxesAmount || 0)
 
-  const providerValue = rentcast?.value ?? null
-  const fallbackValue = sellerEstimatedValue ?? askingPrice ?? null
-  const estimateValue = providerValue ?? fallbackValue
-  const source: RoughPropertyEstimateSource = providerValue
-    ? 'rentcast'
-    : sellerEstimatedValue
-      ? 'seller_supplied'
-      : askingPrice
-        ? 'rule_based'
-        : 'none'
+  const source: RoughPropertyEstimateSource =
+    internal.baselineValue !== null && internal.signalCount >= 2
+      ? 'internal_baseline'
+      : sellerEstimatedValue !== null
+        ? 'seller_supplied'
+        : askingPrice !== null
+          ? 'rule_based'
+          : 'none'
+
+  const estimateValue =
+    source === 'internal_baseline'
+      ? internal.baselineValue
+      : source === 'seller_supplied'
+        ? roundToNearest(sellerEstimatedValue, 1000)
+        : source === 'rule_based'
+          ? roundToNearest(askingPrice, 1000)
+          : null
 
   const confidence =
-    source === 'rentcast'
-      ? rentcast?.comparableCount
-        ? 82
-        : 72
+    source === 'internal_baseline'
+      ? Math.min(68, 28 + internal.signalCount * 10 + (manualRentEstimate && parseCurrencyAmount(input.squareFeet) ? 8 : 0))
       : source === 'seller_supplied'
-        ? 44
+        ? 40
         : source === 'rule_based'
-          ? 28
+          ? 24
           : 0
 
-  const lowEstimate = rentcast?.low ?? (estimateValue ? Math.round(estimateValue * 0.85) : null)
-  const highEstimate = rentcast?.high ?? (estimateValue ? Math.round(estimateValue * 1.15) : null)
-  const debtLoad = (mortgageBalance || 0) + (liensOrTaxesAmount || 0)
+  const spreadFactor =
+    source === 'internal_baseline'
+      ? 0.12
+      : source === 'seller_supplied'
+        ? 0.14
+        : source === 'rule_based'
+          ? 0.16
+          : 0
+
+  const lowEstimate = estimateValue ? roundToNearest(estimateValue * (1 - spreadFactor), 1000) : null
+  const highEstimate = estimateValue ? roundToNearest(estimateValue * (1 + spreadFactor), 1000) : null
   const equityEstimate = estimateValue ? estimateValue - debtLoad : null
   const ltvEstimate = estimateValue && debtLoad > 0 ? Math.round((debtLoad / estimateValue) * 1000) / 10 : null
   const spreadToAsking = estimateValue && askingPrice ? estimateValue - askingPrice : null
   const cashFactor = conditionCashFactor(input.propertyCondition)
   const acquisitionRangeHigh = estimateValue ? roundToNearest(estimateValue * cashFactor, 5000) : null
   const acquisitionRangeLow = estimateValue ? roundToNearest(estimateValue * cashFactor * 0.9, 5000) : null
-  const warnings = [...(rentcast?.warnings || [])]
+  const rentEstimate = manualRentEstimate ?? null
 
-  if (source !== 'rentcast') {
-    warnings.push('No live AVM provider result was available. Review comps before making an offer.')
+  const warnings: string[] = []
+  if (source !== 'none') {
+    warnings.push('VestBlock is using internal baseline math and manual inputs. Verify comps before making an offer.')
   }
-
+  if (manualRentEstimate !== null) {
+    warnings.push('Rent estimate is using a manual input. Verify current leases or market rent before routing.')
+  }
+  if (sellerEstimatedValue !== null && askingPrice !== null) {
+    const variance = Math.abs(sellerEstimatedValue - askingPrice) / Math.max(1, sellerEstimatedValue)
+    if (variance >= 0.15) {
+      warnings.push('Seller estimate and asking price are materially different. Tighten value with comps before sending offers.')
+    }
+  }
+  if (source === 'none') {
+    warnings.push('Not enough pricing signals are present yet. Add asking price, rent, square footage, or a manual value range.')
+  }
   if (!input.address) {
     warnings.push('Missing complete property address.')
   }
@@ -320,7 +347,7 @@ export async function buildRoughPropertyEstimate(input: RoughPropertyEstimateInp
   const lenderPacketSummary = [
     `Address: ${input.address || 'unknown'}`,
     `rough value: ${formatMoney(estimateValue)}`,
-    `rough rent: ${formatMoney(rentcast?.rent ?? null)}`,
+    `rough rent: ${formatMoney(rentEstimate)}`,
     ltvEstimate !== null ? `estimated LTV: ${ltvEstimate}%` : 'estimated LTV: needs debt details',
     `occupancy: ${input.occupancyStatus || 'unknown'}`,
   ].join('; ')
@@ -328,18 +355,17 @@ export async function buildRoughPropertyEstimate(input: RoughPropertyEstimateInp
   return {
     source,
     sourceLabel:
-      source === 'rentcast'
-        ? 'RentCast AVM'
+      source === 'internal_baseline'
+        ? 'VestBlock baseline estimate'
         : source === 'seller_supplied'
           ? 'Seller supplied estimate'
           : source === 'rule_based'
-            ? 'Rule-based placeholder'
+            ? 'Input-backed placeholder'
             : 'Needs review',
-    provider: source === 'rentcast' ? 'RentCast' : undefined,
-    estimateValue: roundToNearest(estimateValue, 1000),
-    lowEstimate: roundToNearest(lowEstimate, 1000),
-    highEstimate: roundToNearest(highEstimate, 1000),
-    rentEstimate: roundToNearest(rentcast?.rent ?? null, 50),
+    estimateValue,
+    lowEstimate,
+    highEstimate,
+    rentEstimate: roundToNearest(rentEstimate, 50),
     confidence,
     confidenceLabel: confidenceLabel(confidence),
     sellerEstimatedValue,
@@ -355,8 +381,8 @@ export async function buildRoughPropertyEstimate(input: RoughPropertyEstimateInp
     buyerPacketSummary,
     lenderPacketSummary,
     warnings,
-    comparableCount: rentcast?.comparableCount || 0,
-    subjectProperty: rentcast?.subjectProperty || null,
+    comparableCount: 0,
+    subjectProperty: internal.subjectProperty,
     generatedAt: now,
     disclaimer: 'Rough internal estimate only. Not an appraisal or a guaranteed offer.',
   }

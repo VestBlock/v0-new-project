@@ -27,7 +27,7 @@ export default async function DailyReportDetailPage({ params }: { params: Promis
           </div>
           <div className="flex gap-2">
             <Button asChild variant="outline"><Link href="/admin/reports/daily">Back to reports</Link></Button>
-            <Button asChild variant="outline"><Link href="/admin/seo-opportunities">SEO opportunities</Link></Button>
+            <Button asChild variant="outline"><Link href="/admin/research">Research</Link></Button>
           </div>
         </div>
 

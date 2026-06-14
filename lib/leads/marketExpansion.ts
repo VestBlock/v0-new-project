@@ -264,9 +264,10 @@ export function pickDiscoveryTermsForMarket(
       market.real_estate_activity_score >= 14 ? 'DSCR lender' : null,
       market.real_estate_activity_score >= 14 ? 'fix and flip lender' : null,
       market.real_estate_activity_score >= 14 ? 'hard money lender' : null,
-      market.funding_need_score >= 13 ? 'small business lender' : null,
-      market.funding_need_score >= 13 ? 'SBA lender' : null,
-      market.spanish_business_score >= 7 ? 'community development financial institution' : null,
+      market.real_estate_activity_score >= 14 ? 'bridge lender' : null,
+      market.real_estate_activity_score >= 14 ? 'construction lender' : null,
+      market.real_estate_activity_score >= 14 ? 'portfolio lender' : null,
+      market.real_estate_activity_score >= 14 ? 'private money lender' : null,
       ...DEFAULT_LENDER_DISCOVERY_NICHES,
     ])
     return rotatedSlice(boosted, seed, count)

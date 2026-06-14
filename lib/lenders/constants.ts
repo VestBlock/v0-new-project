@@ -1,37 +1,31 @@
 import type { BorrowerMatchInput, LenderCategory, LenderType } from '@/lib/lenders/types'
 
-export const DEFAULT_LENDER_DISCOVERY_STATES = ['WI', 'IL', 'IN', 'MI', 'OH', 'GA', 'TX', 'FL', 'TN', 'NC', 'AZ', 'NV', 'MO']
+export const DEFAULT_LENDER_DISCOVERY_STATES = ['WI', 'IL', 'MI', 'OH', 'TN', 'PA', 'MO', 'TX', 'AZ']
 
 export const DEFAULT_LENDER_DISCOVERY_MARKETS = [
   { city: 'Milwaukee', state: 'WI', metroArea: 'Milwaukee' },
-  { city: 'Chicago', state: 'IL', metroArea: 'Chicago' },
-  { city: 'Indianapolis', state: 'IN', metroArea: 'Indianapolis' },
-  { city: 'Detroit', state: 'MI', metroArea: 'Detroit' },
+  { city: 'Toledo', state: 'OH', metroArea: 'Toledo' },
   { city: 'Columbus', state: 'OH', metroArea: 'Columbus' },
-  { city: 'Atlanta', state: 'GA', metroArea: 'Atlanta' },
-  { city: 'Houston', state: 'TX', metroArea: 'Houston' },
-  { city: 'Miami', state: 'FL', metroArea: 'Miami' },
+  { city: 'Cleveland', state: 'OH', metroArea: 'Cleveland' },
+  { city: 'Memphis', state: 'TN', metroArea: 'Memphis' },
   { city: 'Nashville', state: 'TN', metroArea: 'Nashville' },
-  { city: 'Charlotte', state: 'NC', metroArea: 'Charlotte' },
-  { city: 'Phoenix', state: 'AZ', metroArea: 'Phoenix' },
-  { city: 'Las Vegas', state: 'NV', metroArea: 'Las Vegas' },
+  { city: 'Philadelphia', state: 'PA', metroArea: 'Philadelphia' },
   { city: 'Kansas City', state: 'MO', metroArea: 'Kansas City' },
+  { city: 'Chicago', state: 'IL', metroArea: 'Chicago' },
+  { city: 'Detroit', state: 'MI', metroArea: 'Detroit' },
+  { city: 'Houston', state: 'TX', metroArea: 'Houston' },
+  { city: 'Phoenix', state: 'AZ', metroArea: 'Phoenix' },
 ] as const
 
 export const DEFAULT_LENDER_DISCOVERY_NICHES = [
-  'credit union',
-  'community bank',
-  'mortgage lender',
-  'commercial lender',
-  'hard money lender',
-  'fix and flip lender',
   'DSCR lender',
-  'equipment financing service',
-  'small business lender',
-  'SBA lender',
-  'restaurant financing',
-  'contractor financing',
-  'community development financial institution',
+  'fix and flip lender',
+  'hard money lender',
+  'bridge lender',
+  'construction lender',
+  'commercial real estate lender',
+  'portfolio lender',
+  'private money lender',
 ] as const
 
 export const LENDER_CATEGORY_TO_TYPE: Record<LenderCategory, LenderType> = {

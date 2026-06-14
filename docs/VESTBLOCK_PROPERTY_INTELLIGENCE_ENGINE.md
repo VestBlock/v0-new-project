@@ -57,18 +57,18 @@ These fields give VestBlock a cleaner workflow:
 4. Move replies into seller review.
 5. Route reviewed opportunities to buyers and lending partners.
 
-## External Data
+## Estimate Logic
 
-If `RENTCAST_API_KEY` is present, seller intake attempts live AVM and rent estimates.
+The analyzer now uses VestBlock baseline math plus the inputs already on the file:
 
-If not present, the engine still works from seller-supplied values and DealMachine fields. Confidence is lower, and the system keeps warnings on the lead so an operator knows to verify comps.
+- seller-supplied value
+- asking price
+- monthly rent input
+- square footage
+- property type
+- condition
 
-Environment variables:
-
-- `RENTCAST_API_KEY`
-- `RENTCAST_API_BASE_URL`
-- `RENTCAST_VALUE_PATH`
-- `RENTCAST_RENT_PATH`
+This keeps the estimate path deterministic and local to VestBlock. Confidence rises when multiple signals are present, and the system keeps warnings on the lead so an operator knows to verify comps before pricing or routing.
 
 ## Exit Path Logic
 

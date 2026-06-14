@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle, ArrowRight, Mail, Home, ArrowUpRight, Building2 } from "lucide-react"
+import { CheckCircle, ArrowRight, Home, ArrowUpRight, Building2 } from "lucide-react"
 import Link from "next/link"
 import { buildPartnerReferralPath, partnerReferralDefinitions } from "@/lib/partners/referrals"
 
@@ -58,13 +58,13 @@ function RealEstateFundingThanksContent() {
 
             <div className="bg-muted/50 rounded-lg p-4 mb-6">
               <p className="text-sm text-muted-foreground mb-2">Need to add a detail to the deal?</p>
-              <a
-                href="mailto:contact@vestblock.io?subject=Real%20Estate%20Funding%20Application%20Follow-up"
+              <Link
+                href="/real-estate-funding#loan-type-selection"
                 className="inline-flex items-center gap-2 text-cyan-500 hover:text-cyan-400 font-medium"
               >
-                <Mail className="h-4 w-4" />
-                Email VestBlock
-              </a>
+                <ArrowRight className="h-4 w-4" />
+                Update the funding request
+              </Link>
             </div>
 
             <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 mb-6 text-left">

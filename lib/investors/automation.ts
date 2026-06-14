@@ -1,8 +1,10 @@
 import { sendEmail } from '@/lib/email/sendEmail'
 import {
+  DEFAULT_BUILDER_DISCOVERY_NICHES,
   DEFAULT_INVESTOR_DISCOVERY_MARKETS,
   DEFAULT_INVESTOR_DISCOVERY_NICHES,
 } from '@/lib/investors/discovery'
+import { BUILDER_PARTNER_MARKETS } from '@/lib/investors/builderStrategy'
 import {
   discoverAndIngestInvestorsForMarket,
   runDailyInvestorFollowup,
@@ -49,32 +51,53 @@ async function sendAdminDigest(subject: string, title: string, items: string[]) 
   }).catch(() => null)
 }
 
-export async function runDailyInvestorDiscovery(options: { dryRun?: boolean } = {}) {
+export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mode?: 'default' | 'builders' } = {}) {
   const run = await startInvestorAutomationRun({
     runType: 'daily_discovery',
     sourceKey: 'phase_one_investor_markets',
-    requestParams: { dryRun: options.dryRun || false },
+    requestParams: { dryRun: options.dryRun || false, mode: options.mode || 'default' },
   })
 
   try {
-    const marketLimit = envInt('INVESTORS_DAILY_MARKET_COUNT', DEFAULT_INVESTOR_DISCOVERY_MARKETS.length)
-    const nicheLimit = envInt('INVESTORS_DAILY_NICHE_COUNT', 6)
-    const limitPerNiche = envInt('INVESTORS_DAILY_LIMIT_PER_NICHE', 3)
-    const results: Array<{ market: string; count: number }> = []
-    const markets = DEFAULT_INVESTOR_DISCOVERY_MARKETS.slice(0, marketLimit)
-    const niches = DEFAULT_INVESTOR_DISCOVERY_NICHES.slice(0, nicheLimit)
+    const mode = options.mode || 'default'
+    const isBuilderMode = mode === 'builders'
+    const marketLimit = isBuilderMode
+      ? envInt('INVESTORS_DAILY_BUILDER_MARKET_COUNT', 1)
+      : envInt('INVESTORS_DAILY_MARKET_COUNT', DEFAULT_INVESTOR_DISCOVERY_MARKETS.length)
+    const nicheLimit = isBuilderMode
+      ? envInt('INVESTORS_DAILY_BUILDER_NICHE_COUNT', 2)
+      : envInt('INVESTORS_DAILY_NICHE_COUNT', 6)
+    const limitPerNiche = isBuilderMode
+      ? envInt('INVESTORS_DAILY_BUILDER_LIMIT_PER_NICHE', 2)
+      : envInt('INVESTORS_DAILY_LIMIT_PER_NICHE', 3)
+    const results: Array<{ market: string; count: number; error?: string | null }> = []
+    const markets =
+      (mode === 'builders' ? [...BUILDER_PARTNER_MARKETS] : DEFAULT_INVESTOR_DISCOVERY_MARKETS).slice(
+        0,
+        marketLimit
+      )
+    const niches =
+      (mode === 'builders' ? [...DEFAULT_BUILDER_DISCOVERY_NICHES] : DEFAULT_INVESTOR_DISCOVERY_NICHES).slice(
+        0,
+        nicheLimit
+      )
 
     for (const market of markets) {
-      const investors = options.dryRun
-        ? []
-        : await discoverAndIngestInvestorsForMarket({
-            city: market.city,
-            state: market.state,
-            metroArea: market.metroArea,
-            niches,
-            limitPerNiche,
-          })
-      results.push({ market: `${market.city}, ${market.state}`, count: investors.length })
+      try {
+        const investors = options.dryRun
+          ? []
+          : await discoverAndIngestInvestorsForMarket({
+              city: market.city,
+              state: market.state,
+              metroArea: market.metroArea,
+              niches,
+              limitPerNiche,
+            })
+        results.push({ market: `${market.city}, ${market.state}`, count: investors.length })
+      } catch (error) {
+        const message = error instanceof Error ? error.message.slice(0, 240) : 'Discovery failed.'
+        results.push({ market: `${market.city}, ${market.state}`, count: 0, error: message })
+      }
     }
 
     const count = results.reduce((sum, item) => sum + item.count, 0)
@@ -82,13 +105,24 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean } = 
 
     if (!options.dryRun) {
       await sendAdminDigest(
-        'VestBlock investor discovery report',
-        'Investor discovery summary',
-        results.map((item) => `${item.market}: ${item.count} investor prospects`)
+        mode === 'builders' ? 'VestBlock builder discovery report' : 'VestBlock investor discovery report',
+        mode === 'builders' ? 'Builder discovery summary' : 'Investor discovery summary',
+        results.map((item) =>
+          item.error
+            ? `${item.market}: discovery blocked — ${item.error}`
+            : `${item.market}: ${item.count} ${mode === 'builders' ? 'builder / construction prospects' : 'investor prospects'}`
+        )
       )
     }
 
-    return { ok: true, count, results, markets: markets.map((market) => `${market.city}, ${market.state}`), niches }
+    return {
+      ok: true,
+      mode,
+      count,
+      results,
+      markets: markets.map((market) => `${market.city}, ${market.state}`),
+      niches,
+    }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',

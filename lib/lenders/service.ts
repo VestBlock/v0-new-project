@@ -3,7 +3,7 @@ import { queueSeoForLenderRecord } from '@/lib/content/entitySeoExpansion'
 import { enrichContactFromHunter } from '@/lib/email/hunter'
 import { discoverLendersForMarket } from '@/lib/lenders/discovery'
 import { matchBorrowerToLenders } from '@/lib/lenders/matching'
-import { generateLenderOutreach } from '@/lib/lenders/outreach'
+import { generateLenderOutreach, LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
 import {
   addLenderNote,
   finishLenderOutreachRun,
@@ -25,6 +25,12 @@ import { analyzeLenderWebsite } from '@/lib/lenders/site-analysis'
 import type { BorrowerMatchInput, LenderRecord } from '@/lib/lenders/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
+
+function envInt(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] || '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
 
 export async function discoverAndIngestLendersForMarket(input: {
   city: string
@@ -40,6 +46,31 @@ export async function discoverAndIngestLendersForMarket(input: {
   })
 
   try {
+    const cooldownHours = envInt('LENDER_DISCOVERY_COOLDOWN_HOURS', 72)
+    const recentRun = await findRecentDiscoveryRun({
+      table: 'lender_outreach_runs',
+      completedAtColumn: 'completed_at',
+      sourceKey: 'google_places_lenders',
+      city: input.city,
+      state: input.state,
+      cooldownHours,
+    })
+
+    if (recentRun) {
+      await finishLenderOutreachRun(run.id, {
+        status: 'partial',
+        resultCount: 0,
+        errorMessage: buildDiscoveryCooldownMessage({
+          label: 'lender',
+          city: input.city,
+          state: input.state,
+          cooldownHours,
+          completedAt: recentRun.completedAt,
+        }),
+      })
+      return []
+    }
+
     const raw = await discoverLendersForMarket({
       city: input.city,
       state: input.state,
@@ -155,6 +186,7 @@ export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.emailIntro.qualificationQuestions,
         economicsPrompt: bundle.emailIntro.economicsPrompt,
       },
@@ -170,6 +202,7 @@ export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.emailFollowup.qualificationQuestions,
         economicsPrompt: bundle.emailFollowup.economicsPrompt,
       },
@@ -184,6 +217,7 @@ export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.linkedInDm.qualificationQuestions,
         economicsPrompt: bundle.linkedInDm.economicsPrompt,
       },
@@ -198,6 +232,7 @@ export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.phoneScript.qualificationQuestions,
         economicsPrompt: bundle.phoneScript.economicsPrompt,
       },
@@ -213,6 +248,7 @@ export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
       language: 'es',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.spanishEmail.qualificationQuestions,
         economicsPrompt: bundle.spanishEmail.economicsPrompt,
       },

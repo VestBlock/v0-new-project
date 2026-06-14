@@ -19,8 +19,16 @@ export default async function AdminLenderOutreachPage() {
   const { data: messages } = await admin
     .from('lender_outreach_messages')
     .select('*, lenders(name, contact_email, relationship_stage)')
+    .neq('status', 'archived')
     .order('updated_at', { ascending: false })
     .limit(200)
+
+  const queue = messages || []
+  const counts = {
+    needsReview: queue.filter((message: any) => message.status === 'needs_review').length,
+    approved: queue.filter((message: any) => message.status === 'approved').length,
+    sent: queue.filter((message: any) => message.status === 'sent').length,
+  }
 
   return (
     <div className="space-y-6 px-4 py-6 md:px-8">
@@ -39,6 +47,20 @@ export default async function AdminLenderOutreachPage() {
           <CardTitle className="text-white">Drafts, approvals, and sends</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Needs review</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{counts.needsReview}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Approved</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{counts.approved}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sent</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{counts.sent}</p>
+            </div>
+          </div>
           <div className="rounded-lg border border-slate-800">
             <Table>
               <TableHeader>
@@ -46,19 +68,20 @@ export default async function AdminLenderOutreachPage() {
                   <TableHead>Lender</TableHead>
                   <TableHead>Channel</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Subject / angle</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(messages || []).length === 0 ? (
+                {queue.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-slate-400">
+                    <TableCell colSpan={6} className="py-10 text-center text-slate-400">
                       No lender outreach has been generated yet.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (messages || []).map((message: any) => (
+                  queue.map((message: any) => (
                     <TableRow key={message.id} className="border-slate-800">
                       <TableCell>
                         <Link href={`/admin/lenders/${message.lender_id}`} className="font-medium text-white hover:text-cyan-300">
@@ -68,6 +91,10 @@ export default async function AdminLenderOutreachPage() {
                       </TableCell>
                       <TableCell className="text-slate-300">{message.channel.replaceAll('_', ' ')}</TableCell>
                       <TableCell><Badge variant="secondary">{message.status}</Badge></TableCell>
+                      <TableCell className="max-w-[340px] text-slate-300">
+                        <div className="line-clamp-2 text-sm text-white">{message.subject || 'Non-email channel'}</div>
+                        {message.cta ? <div className="mt-1 line-clamp-2 text-xs text-slate-500">{message.cta}</div> : null}
+                      </TableCell>
                       <TableCell className="text-slate-300">{message.lenders?.contact_email || 'No email'}</TableCell>
                       <TableCell className="text-slate-300">
                         {message.updated_at ? new Date(message.updated_at).toLocaleString() : '-'}

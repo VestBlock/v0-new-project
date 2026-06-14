@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { ArrowRight, Building2, Calculator, CheckCircle2, Download, FileText, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp, Users } from "lucide-react"
+import { ArrowRight, Building2, Calculator, CheckCircle2, Download, FileText, Hammer, Home, Loader2, Route, ShieldCheck, SlidersHorizontal, TrendingUp, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -40,12 +40,49 @@ const exitStrategies = [
 const creditScoreRanges = ["740+", "700-739", "660-699", "620-659", "Below 620", "Unknown"]
 const entityStatuses = ["Active LLC / Corp", "Entity forming", "No entity yet", "Personal name only"]
 const experienceLevels = ["New investor", "1-3 deals", "4-10 deals", "Experienced operator"]
+const listingStatuses = [
+  "Off market / private",
+  "New listing",
+  "Active",
+  "Price reduced",
+  "Expired / withdrawn",
+  "Pending",
+]
+
+type AnalyzerComparableForm = {
+  address: string
+  salePrice: string
+  squareFeet: string
+  distanceMiles: string
+  beds: string
+  baths: string
+  notes: string
+}
+
+function createEmptyComparable(): AnalyzerComparableForm {
+  return {
+    address: "",
+    salePrice: "",
+    squareFeet: "",
+    distanceMiles: "",
+    beds: "",
+    baths: "",
+    notes: "",
+  }
+}
 
 type AnalyzerForm = {
   propertyAddress: string
   city: string
   state: string
   zipCode: string
+  selectedComps: AnalyzerComparableForm[]
+  listingSourceUrl: string
+  listingStatus: string
+  daysOnMarket: string
+  priceCutCount: string
+  lastPriceCutAmount: string
+  listingNotes: string
   propertyType: string
   bedrooms: string
   bathrooms: string
@@ -55,8 +92,10 @@ type AnalyzerForm = {
   timelineToSell: string
   estimatedValue: string
   askingPrice: string
+  monthlyRentEstimate: string
   afterRepairValue: string
   repairBudget: string
+  assignmentFee: string
   closingCosts: string
   holdingPeriodMonths: string
   mortgageBalance: string
@@ -140,6 +179,42 @@ type AnalyzerResult = {
       totalCashNeeded: number | null
       fundingGap: number | null
     }
+    dealMath: {
+      arvMode: "BASELINE" | "COMPS_AVG" | "MANUAL"
+      ruleType: "residential" | "land" | "commercial"
+      rulePercent: number
+      assignmentFee: number | null
+      mao: number | null
+      sellerAsk: number | null
+      spread: number | null
+      endBuyerProfit: number | null
+      grade: "RISKY" | "GOOD" | null
+    }
+    comparables: {
+      usedCount: number
+      averageSalePrice: number | null
+      averagePricePerFoot: number | null
+      selected: Array<{
+        address: string | null
+        salePrice: number | null
+        squareFeet: number | null
+        distanceMiles: number | null
+        beds: number | null
+        baths: number | null
+        notes: string | null
+        pricePerFoot: number | null
+      }>
+    }
+    listingContext: {
+      sourceUrl: string | null
+      status: string | null
+      daysOnMarket: number | null
+      priceCutCount: number | null
+      lastPriceCutAmount: number | null
+      pressureLabel: string
+      summary: string
+      signals: string[]
+    }
     dealStrength: {
       score: number
       label: "Strong" | "Promising" | "Watchlist" | "Weak"
@@ -167,7 +242,7 @@ type AnalyzerResult = {
     }
     riskFlags: string[]
     creativeOffers: Array<{
-      key: "seller_finance" | "subject_to"
+      key: "seller_finance" | "subject_to" | "wrap_mortgage"
       label: string
       viability: "Meets target" | "Borderline" | "Below target" | "Needs more inputs"
       summary: string
@@ -196,6 +271,27 @@ type AnalyzerResult = {
       score: number
       summary: string
     }>
+    builderDisposition: {
+      score: number
+      label: string
+      summary: string
+      strategy: string
+      builderMaxPurchase: number | null
+      recommendedSellerOffer: number | null
+      suggestedAssignmentFee: number | null
+      projectedGrossSpread: number | null
+      rehabPlanningLow: number | null
+      rehabPlanningHigh: number | null
+      renovationScope: string
+      sellerOutreachAngle: string
+      buyBoxQuestions: string[]
+      contractTerms: {
+        earnestMoney: number | null
+        inspectionDays: number
+        closeWindowDays: number
+      }
+      nextSteps: string[]
+    }
     buyerInterest: {
       label: string
       score: number
@@ -211,6 +307,13 @@ const initialForm: AnalyzerForm = {
   city: "",
   state: "",
   zipCode: "",
+  selectedComps: [createEmptyComparable(), createEmptyComparable(), createEmptyComparable()],
+  listingSourceUrl: "",
+  listingStatus: "",
+  daysOnMarket: "",
+  priceCutCount: "",
+  lastPriceCutAmount: "",
+  listingNotes: "",
   propertyType: "",
   bedrooms: "",
   bathrooms: "",
@@ -220,8 +323,10 @@ const initialForm: AnalyzerForm = {
   timelineToSell: "",
   estimatedValue: "",
   askingPrice: "",
+  monthlyRentEstimate: "",
   afterRepairValue: "",
   repairBudget: "",
+  assignmentFee: "",
   closingCosts: "",
   holdingPeriodMonths: "",
   mortgageBalance: "",
@@ -301,6 +406,12 @@ function dealStrengthTone(value: AnalyzerResult["opportunity"]["dealStrength"]["
   return "border-rose-400/20 bg-rose-400/10 text-rose-100"
 }
 
+function dealGradeTone(value: AnalyzerResult["opportunity"]["dealMath"]["grade"]) {
+  if (value === "GOOD") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+  if (value === "RISKY") return "border-rose-400/20 bg-rose-400/10 text-rose-100"
+  return "border-white/10 bg-white/[0.04] text-slate-200"
+}
+
 function formatYears(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "Needs details"
   return `${value} yrs`
@@ -335,16 +446,25 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
   const [result, setResult] = useState<AnalyzerResult | null>(null)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [isDownloading, setIsDownloading] = useState<null | "investor" | "buyer" | "lender">(null)
+  const [isDownloading, setIsDownloading] = useState<null | "investor" | "buyer" | "lender" | "builder" | "assignment_contract">(null)
 
   const updateField = (field: keyof AnalyzerForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  const updateComparable = (index: number, field: keyof AnalyzerComparableForm, value: string) => {
+    setForm((current) => ({
+      ...current,
+      selectedComps: current.selectedComps.map((comp, compIndex) =>
+        compIndex === index ? { ...comp, [field]: value } : comp
+      ),
+    }))
+  }
+
   const calculator = useMemo(() => {
     const arv = parseMoney(form.afterRepairValue) ?? result?.opportunity.metrics.arv ?? result?.estimate.estimateValue ?? null
     const repairs = parseMoney(form.repairBudget) ?? result?.opportunity.metrics.repairBudget ?? 0
-    const rent = result?.estimate.rentEstimate ?? null
+    const rent = parseMoney(form.monthlyRentEstimate) ?? result?.estimate.rentEstimate ?? null
     const taxes = parseMoney(form.monthlyTaxes) || 0
     const insurance = parseMoney(form.monthlyInsurance) || 0
     const debt = parseMoney(form.monthlyDebtService) || 0
@@ -400,6 +520,9 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
         afterRepairValue:
           current.afterRepairValue ||
           (payload.opportunity?.metrics?.arv ? String(payload.opportunity.metrics.arv) : ""),
+        monthlyRentEstimate:
+          current.monthlyRentEstimate ||
+          (payload.estimate?.rentEstimate ? String(payload.estimate.rentEstimate) : ""),
         repairBudget:
           current.repairBudget ||
           (payload.opportunity?.metrics?.repairBudget ? String(payload.opportunity.metrics.repairBudget) : ""),
@@ -411,7 +534,7 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
     }
   }
 
-  const handleDownloadReport = async (reportType: "investor" | "buyer" | "lender") => {
+  const handleDownloadReport = async (reportType: "investor" | "buyer" | "lender" | "builder" | "assignment_contract") => {
     if (!result) return
 
     setIsDownloading(reportType)
@@ -673,7 +796,7 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-4">
                   <div className="space-y-2">
                     <Label htmlFor="estimatedValue">Estimated value</Label>
                     <Input id="estimatedValue" value={form.estimatedValue} onChange={(event) => updateField("estimatedValue", event.target.value)} placeholder="$" className="bg-slate-950/70" />
@@ -683,11 +806,212 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     <Input id="askingPrice" value={form.askingPrice} onChange={(event) => updateField("askingPrice", event.target.value)} placeholder="$" className="bg-slate-950/70" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="repairBudget">Repair budget</Label>
-                    <Input id="repairBudget" value={form.repairBudget} onChange={(event) => updateField("repairBudget", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                    <Label htmlFor="monthlyRentEstimate">Monthly rent estimate</Label>
+                    <Input
+                      id="monthlyRentEstimate"
+                      value={form.monthlyRentEstimate}
+                      onChange={(event) => updateField("monthlyRentEstimate", event.target.value)}
+                      placeholder="$"
+                      className="bg-slate-950/70"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="assignmentFee">Assignment fee</Label>
+                    <Input
+                      id="assignmentFee"
+                      value={form.assignmentFee}
+                      onChange={(event) => updateField("assignmentFee", event.target.value)}
+                      placeholder="$10,000"
+                      className="bg-slate-950/70"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[10000, 15000, 20000, 25000].map((fee) => (
+                    <Button
+                      key={fee}
+                      type="button"
+                      variant="outline"
+                      className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]"
+                      onClick={() => updateField("assignmentFee", String(fee))}
+                    >
+                      {formatMoney(fee)}
+                    </Button>
+                  ))}
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">Comparable sales</p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Add sold comps and the analyzer will switch from the baseline value to a comp-backed ARV.
+                      </p>
+                    </div>
+                    <Badge className="border-white/10 bg-white/[0.04] text-slate-200">
+                      {result?.opportunity.comparables.usedCount ?? form.selectedComps.filter((comp) => comp.salePrice.trim()).length} used
+                    </Badge>
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    {form.selectedComps.map((comp, index) => (
+                      <div key={`comp-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
+                        <div className="grid gap-3 md:grid-cols-[1.3fr_0.7fr_0.55fr_0.55fr]">
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-address-${index}`}>Comp {index + 1} address</Label>
+                            <Input
+                              id={`comp-address-${index}`}
+                              value={comp.address}
+                              onChange={(event) => updateComparable(index, "address", event.target.value)}
+                              placeholder="123 Example Ave"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-sale-${index}`}>Sale price</Label>
+                            <Input
+                              id={`comp-sale-${index}`}
+                              value={comp.salePrice}
+                              onChange={(event) => updateComparable(index, "salePrice", event.target.value)}
+                              placeholder="$165000"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-sqft-${index}`}>Sqft</Label>
+                            <Input
+                              id={`comp-sqft-${index}`}
+                              value={comp.squareFeet}
+                              onChange={(event) => updateComparable(index, "squareFeet", event.target.value)}
+                              placeholder="1800"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-distance-${index}`}>Miles</Label>
+                            <Input
+                              id={`comp-distance-${index}`}
+                              value={comp.distanceMiles}
+                              onChange={(event) => updateComparable(index, "distanceMiles", event.target.value)}
+                              placeholder="0.6"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-[0.45fr_0.45fr_1.1fr]">
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-beds-${index}`}>Beds</Label>
+                            <Input
+                              id={`comp-beds-${index}`}
+                              value={comp.beds}
+                              onChange={(event) => updateComparable(index, "beds", event.target.value)}
+                              placeholder="3"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-baths-${index}`}>Baths</Label>
+                            <Input
+                              id={`comp-baths-${index}`}
+                              value={comp.baths}
+                              onChange={(event) => updateComparable(index, "baths", event.target.value)}
+                              placeholder="2"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`comp-notes-${index}`}>Notes</Label>
+                            <Input
+                              id={`comp-notes-${index}`}
+                              value={comp.notes}
+                              onChange={(event) => updateComparable(index, "notes", event.target.value)}
+                              placeholder="Corner lot, updated kitchen, similar unit count"
+                              className="bg-slate-950/70"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-sm font-medium text-white">Public listing context</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Add public-listing pressure so the route engine can better size seller urgency and negotiation room.
+                  </p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="listingSourceUrl">Listing source URL</Label>
+                      <Input
+                        id="listingSourceUrl"
+                        value={form.listingSourceUrl}
+                        onChange={(event) => updateField("listingSourceUrl", event.target.value)}
+                        placeholder="https://..."
+                        className="bg-slate-950/70"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Listing status</Label>
+                      <Select value={form.listingStatus} onValueChange={(value) => updateField("listingStatus", value)}>
+                        <SelectTrigger className="bg-slate-950/70">
+                          <SelectValue placeholder="Select listing status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {listingStatuses.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="daysOnMarket">Days on market</Label>
+                      <Input
+                        id="daysOnMarket"
+                        value={form.daysOnMarket}
+                        onChange={(event) => updateField("daysOnMarket", event.target.value)}
+                        placeholder="74"
+                        className="bg-slate-950/70"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="priceCutCount">Price cut count</Label>
+                      <Input
+                        id="priceCutCount"
+                        value={form.priceCutCount}
+                        onChange={(event) => updateField("priceCutCount", event.target.value)}
+                        placeholder="2"
+                        className="bg-slate-950/70"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastPriceCutAmount">Latest price cut</Label>
+                      <Input
+                        id="lastPriceCutAmount"
+                        value={form.lastPriceCutAmount}
+                        onChange={(event) => updateField("lastPriceCutAmount", event.target.value)}
+                        placeholder="$10000"
+                        className="bg-slate-950/70"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label htmlFor="listingNotes">Listing notes</Label>
+                    <Textarea
+                      id="listingNotes"
+                      value={form.listingNotes}
+                      onChange={(event) => updateField("listingNotes", event.target.value)}
+                      placeholder="Price reduced twice, dated photos, tenant remarks, stale listing copy..."
+                      className="min-h-[84px] bg-slate-950/70"
+                    />
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="repairBudget">Repair budget</Label>
+                    <Input id="repairBudget" value={form.repairBudget} onChange={(event) => updateField("repairBudget", event.target.value)} placeholder="$" className="bg-slate-950/70" />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="afterRepairValue">ARV</Label>
                     <Input id="afterRepairValue" value={form.afterRepairValue} onChange={(event) => updateField("afterRepairValue", event.target.value)} placeholder="$" className="bg-slate-950/70" />
@@ -783,6 +1107,257 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     <ShieldCheck className="mx-auto h-8 w-8 text-cyan-300" />
                     <p className="mt-3 text-sm text-slate-300">
                       Run the analyzer to see rough value, route fit, and deal-calculator outputs.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Calculator className="h-5 w-5 text-cyan-300" />
+                  Assignment math
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Transparent wholesale math based on your ARV, repair budget, assignment fee, and seller ask.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {result ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <div>
+                        <p className="text-sm font-medium text-white">Deal grade</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          Rule: {(result.opportunity.dealMath.rulePercent * 100).toFixed(0)}% {result.opportunity.dealMath.ruleType} · ARV source: {result.opportunity.dealMath.arvMode}
+                        </p>
+                      </div>
+                      <Badge className={dealGradeTone(result.opportunity.dealMath.grade)}>
+                        {result.opportunity.dealMath.grade ?? "Needs details"}
+                      </Badge>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">MAO with fee</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{formatMoney(result.opportunity.dealMath.mao)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Assignment fee</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{formatMoney(result.opportunity.dealMath.assignmentFee)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Seller ask</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{formatMoney(result.opportunity.dealMath.sellerAsk)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">End-buyer profit</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{formatMoney(result.opportunity.dealMath.endBuyerProfit)}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="grid gap-3 md:grid-cols-5">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">ARV</p>
+                          <p className="mt-1 text-sm font-medium text-white">{formatMoney(result.opportunity.metrics.arv)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Rule %</p>
+                          <p className="mt-1 text-sm font-medium text-white">{(result.opportunity.dealMath.rulePercent * 100).toFixed(0)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Repairs</p>
+                          <p className="mt-1 text-sm font-medium text-white">{formatMoney(result.opportunity.metrics.repairBudget)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Assignment</p>
+                          <p className="mt-1 text-sm font-medium text-white">{formatMoney(result.opportunity.dealMath.assignmentFee)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Spread</p>
+                          <p className="mt-1 text-sm font-medium text-white">{formatMoney(result.opportunity.dealMath.spread)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <Calculator className="mx-auto h-8 w-8 text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Run the analyzer to see a transparent MAO, spread, assignment-fee, and end-buyer-profit breakdown.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Home className="h-5 w-5 text-cyan-300" />
+                  Comps and listing context
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  When you add sold comps and public listing pressure, the analyzer stops leaning on the baseline value and gives you a sharper route read.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {result ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">ARV source</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{result.opportunity.dealMath.arvMode}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Comp count</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{result.opportunity.comparables.usedCount}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Average comp sale</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{formatMoney(result.opportunity.comparables.averageSalePrice)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Average $ / sqft</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">
+                          {result.opportunity.comparables.averagePricePerFoot !== null
+                            ? `$${result.opportunity.comparables.averagePricePerFoot}`
+                            : "Needs details"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Listing pressure</p>
+                        <p className="mt-3 text-lg font-semibold text-cyan-100">{result.opportunity.listingContext.pressureLabel}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">{result.opportunity.listingContext.summary}</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3 text-sm text-slate-300">
+                          <div>DOM: {result.opportunity.listingContext.daysOnMarket ?? "—"}</div>
+                          <div>Price cuts: {result.opportunity.listingContext.priceCutCount ?? "—"}</div>
+                          <div>Latest cut: {formatMoney(result.opportunity.listingContext.lastPriceCutAmount)}</div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Comp signals</p>
+                        {result.opportunity.comparables.selected.filter((comp) => comp.salePrice !== null).length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {result.opportunity.comparables.selected
+                              .filter((comp) => comp.salePrice !== null)
+                              .slice(0, 3)
+                              .map((comp, index) => (
+                                <div key={`${comp.address || "comp"}-${index}`} className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                  <p className="text-sm font-medium text-white">{comp.address || `Comparable ${index + 1}`}</p>
+                                  <p className="mt-1 text-sm text-slate-300">
+                                    {formatMoney(comp.salePrice)}
+                                    {comp.squareFeet ? ` • ${comp.squareFeet} sqft` : ""}
+                                    {comp.distanceMiles ? ` • ${comp.distanceMiles} mi` : ""}
+                                    {comp.pricePerFoot ? ` • $${comp.pricePerFoot}/sqft` : ""}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-slate-300">
+                            No sold comps were entered yet, so the analyzer is still leaning on the baseline estimate.
+                          </p>
+                        )}
+                        {result.opportunity.listingContext.signals.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {result.opportunity.listingContext.signals.map((signal) => (
+                              <Badge key={signal} className="border-white/10 bg-white/[0.06] text-slate-100">
+                                {signal}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <Home className="mx-auto h-8 w-8 text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Add sold comps and public listing signals if you want the analyzer to move past a baseline estimate.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Hammer className="h-5 w-5 text-violet-300" />
+                  Builder disposition lane
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                  Use this when the play is to move a deal to builders, developers, or construction groups with a real buy box instead of blasting it widely.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {result ? (
+                  <>
+                    <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-violet-100">{result.opportunity.builderDisposition.label}</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-300">{result.opportunity.builderDisposition.summary}</p>
+                        </div>
+                        <div className="min-w-28">
+                          <p className="mb-2 text-right text-sm font-semibold text-white">{result.opportunity.builderDisposition.score}/100</p>
+                          <Progress value={result.opportunity.builderDisposition.score} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Builder max purchase</p>
+                        <p className="mt-3 text-lg font-semibold text-violet-100">{formatMoney(result.opportunity.builderDisposition.builderMaxPurchase)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Seller offer target</p>
+                        <p className="mt-3 text-lg font-semibold text-violet-100">{formatMoney(result.opportunity.builderDisposition.recommendedSellerOffer)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Assignment fee</p>
+                        <p className="mt-3 text-lg font-semibold text-violet-100">{formatMoney(result.opportunity.builderDisposition.suggestedAssignmentFee)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Rehab planning</p>
+                        <p className="mt-3 text-lg font-semibold text-violet-100">
+                          {formatMoney(result.opportunity.builderDisposition.rehabPlanningLow)} - {formatMoney(result.opportunity.builderDisposition.rehabPlanningHigh)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Builder strategy</p>
+                        <p className="mt-3 text-sm capitalize text-slate-200">{result.opportunity.builderDisposition.strategy.replaceAll("_", " ")}</p>
+                        <p className="mt-3 text-sm leading-6 text-slate-400">{result.opportunity.builderDisposition.sellerOutreachAngle}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-sm font-medium text-white">Contract defaults</p>
+                        <div className="mt-3 space-y-2 text-sm text-slate-300">
+                          <div>Earnest money: {formatMoney(result.opportunity.builderDisposition.contractTerms.earnestMoney)}</div>
+                          <div>Inspection: {result.opportunity.builderDisposition.contractTerms.inspectionDays} days</div>
+                          <div>Close window: {result.opportunity.builderDisposition.contractTerms.closeWindowDays} days</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-sm font-medium text-white">Builder buy-box questions</p>
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-400">
+                        {result.opportunity.builderDisposition.buyBoxQuestions.map((question) => (
+                          <li key={question}>• {question}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
+                    <Hammer className="mx-auto h-8 w-8 text-violet-300" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      Run the analyzer to see whether the deal is clean enough for a builder or construction disposition lane.
                     </p>
                   </div>
                 )}
@@ -1054,6 +1629,16 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                 </div>
                 <div className="mt-5 grid gap-4 md:grid-cols-4">
                   <div className="space-y-2">
+                    <Label htmlFor="calculatorMonthlyRentEstimate">Monthly rent estimate</Label>
+                    <Input
+                      id="calculatorMonthlyRentEstimate"
+                      value={form.monthlyRentEstimate}
+                      onChange={(event) => updateField("monthlyRentEstimate", event.target.value)}
+                      placeholder="$"
+                      className="bg-slate-950/70"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="targetMonthlyCashFlow">Target monthly cash flow</Label>
                     <Input id="targetMonthlyCashFlow" value={form.targetMonthlyCashFlow} onChange={(event) => updateField("targetMonthlyCashFlow", event.target.value)} placeholder="$250" className="bg-slate-950/70" />
                   </div>
@@ -1215,7 +1800,11 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                           </div>
                           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
                             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                              {offer.key === "subject_to" ? "Seller carry payment" : "Note payment"}
+                              {offer.key === "subject_to"
+                                ? "Seller carry payment"
+                                : offer.key === "wrap_mortgage"
+                                  ? "Wrap note payment"
+                                  : "Note payment"}
                             </p>
                             <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.monthlyPayment)}</p>
                           </div>
@@ -1238,7 +1827,7 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                             <p className="mt-1 text-sm font-medium text-white">{formatYears(offer.metrics.balloonYears)}</p>
                           </div>
                         </div>
-                        {offer.key === "subject_to" && (
+                        {(offer.key === "subject_to" || offer.key === "wrap_mortgage") && (
                           <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/60 p-3">
                             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Existing loan stack</p>
                             <p className="mt-2 text-sm text-slate-300">
@@ -1292,6 +1881,26 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                       {isDownloading === "investor" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                       Investor Report
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-white/15 bg-slate-950/25 text-white hover:bg-white/[0.08]"
+                      onClick={() => void handleDownloadReport("builder")}
+                      disabled={isDownloading !== null}
+                    >
+                      {isDownloading === "builder" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Hammer className="mr-2 h-4 w-4" />}
+                      Builder Packet
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-white/15 bg-slate-950/25 text-white hover:bg-white/[0.08]"
+                      onClick={() => void handleDownloadReport("assignment_contract")}
+                      disabled={isDownloading !== null}
+                    >
+                      {isDownloading === "assignment_contract" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                      Assignment Draft
+                    </Button>
                     <Button asChild className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
                       <Link href={sellerHref}>
                         Submit for Routing
@@ -1306,15 +1915,15 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
             {result && (
               <Card className="border-white/10 bg-slate-950/70 backdrop-blur-xl">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-white">
-                    <Download className="h-5 w-5 text-cyan-300" />
-                    Routing packets
-                  </CardTitle>
-                  <p className="text-sm text-slate-400">
-                    Export the current analyzer readout into operator-friendly packets for investors, buyers, and lenders.
-                  </p>
-                </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-3">
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Download className="h-5 w-5 text-cyan-300" />
+                  Routing packets
+                </CardTitle>
+                <p className="text-sm text-slate-400">
+                    Export the current analyzer readout into operator-friendly packets for investors, buyers, lenders, and builder disposition.
+                </p>
+              </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                   <button
                     type="button"
                     onClick={() => void handleDownloadReport("investor")}
@@ -1351,6 +1960,23 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                   </button>
                   <button
                     type="button"
+                    onClick={() => void handleDownloadReport("builder")}
+                    disabled={isDownloading !== null}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Hammer className="h-5 w-5 text-cyan-200" />
+                      <div>
+                        <div className="font-medium text-white">Builder packet</div>
+                        <div className="text-sm text-slate-400">MAO-backed builder lane, buy-box prompts, and assignment angle.</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-sm text-cyan-100">
+                      {isDownloading === "builder" ? "Generating..." : "Download"}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void handleDownloadReport("lender")}
                     disabled={isDownloading !== null}
                     className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
@@ -1364,6 +1990,23 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     </div>
                     <div className="mt-4 text-sm text-cyan-100">
                       {isDownloading === "lender" ? "Generating..." : "Download"}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadReport("assignment_contract")}
+                    disabled={isDownloading !== null}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-cyan-200" />
+                      <div>
+                        <div className="font-medium text-white">Assignment draft</div>
+                        <div className="text-sm text-slate-400">Planning-grade assignment agreement for builder or construction review.</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-sm text-cyan-100">
+                      {isDownloading === "assignment_contract" ? "Generating..." : "Download"}
                     </div>
                   </button>
                 </CardContent>

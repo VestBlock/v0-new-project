@@ -10,6 +10,8 @@ type SearchApifyYelpInput = {
   niches: string[]
   limitPerNiche: number
   proxyCountry?: string
+  maxWaitMs?: number
+  timeoutSecs?: number
 }
 
 const yelpItemSchema = z.object({
@@ -147,7 +149,7 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
   const actorId = process.env.APIFY_YELP_ACTOR_ID || 'tri_angle/yelp-scraper'
   const proxyCountry = input.proxyCountry || process.env.APIFY_PROXY_COUNTRY || 'US'
   const memoryMbytes = envInt('APIFY_YELP_MEMORY_MBYTES', 1024)
-  const timeoutSecs = envInt('APIFY_YELP_TIMEOUT_SECS', 180)
+  const timeoutSecs = input.timeoutSecs || envInt('APIFY_YELP_TIMEOUT_SECS', 180)
   const maxConcurrency = envInt('APIFY_YELP_MAX_CONCURRENCY', 3)
   const normalizedLeads: NormalizedLeadInput[] = []
   const location = `${input.city}${input.state ? `, ${input.state}` : ''}`
@@ -166,7 +168,10 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
     })
   )
 
-  const completed = await waitForRunCompletion(runResult.data.id)
+  const completed = await waitForRunCompletion(
+    runResult.data.id,
+    input.maxWaitMs || envInt('APIFY_YELP_MAX_WAIT_MS', 300000)
+  )
   const datasetId = completed.defaultDatasetId || runResult.data.defaultDatasetId
   if (!datasetId) {
     throw new Error(`Apify actor ${actorId} did not return a dataset id.`)

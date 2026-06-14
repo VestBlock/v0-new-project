@@ -17,7 +17,7 @@ Use legal, public, and business-appropriate sources only:
 - public websites and public business profiles
 - email and phone validation
 - DealMachine data already exported by VestBlock
-- RentCast estimates when environment variables are configured
+- VestBlock baseline property estimates when property inputs are available
 
 ## Prohibited Sources
 
@@ -89,9 +89,9 @@ npm run distress:dealmachine:research-checklists -- \
 
 Then review `/admin/research-checklists` before sending seller outreach.
 
-## RentCast Usage
+## Property estimate usage
 
-If `RENTCAST_API_KEY` and related property estimate settings are present, property estimates can be attached to the checklist context by future enrichment jobs. Missing RentCast configuration should never block checklist creation.
+Research checklists can carry the current VestBlock baseline estimate context when seller inputs or property details are available. Missing estimate signals should never block checklist creation.
 
 ## Daily Operating Process
 

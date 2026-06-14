@@ -6,11 +6,33 @@ import { z } from 'zod'
 import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
 
+const compFieldSchema = z.union([z.string(), z.number()]).optional().transform((value) => {
+  if (value === undefined || value === null) return ''
+  return String(value)
+})
+
+const comparableSchema = z.object({
+  address: z.string().trim().max(260).optional().default(''),
+  salePrice: compFieldSchema,
+  squareFeet: compFieldSchema,
+  distanceMiles: compFieldSchema,
+  beds: compFieldSchema,
+  baths: compFieldSchema,
+  notes: z.string().trim().max(240).optional().default(''),
+})
+
 const analyzerSchema = z.object({
   propertyAddress: z.string().trim().min(3).max(260),
   city: z.string().trim().max(120).optional().default(''),
   state: z.string().trim().max(80).optional().default(''),
   zipCode: z.string().trim().max(20).optional().default(''),
+  selectedComps: z.array(comparableSchema).max(6).optional().default([]),
+  listingSourceUrl: z.string().trim().max(500).optional().default(''),
+  listingStatus: z.string().trim().max(120).optional().default(''),
+  daysOnMarket: z.string().trim().max(40).optional().default(''),
+  priceCutCount: z.string().trim().max(40).optional().default(''),
+  lastPriceCutAmount: z.string().trim().max(80).optional().default(''),
+  listingNotes: z.string().trim().max(500).optional().default(''),
   propertyType: z.string().trim().max(120).optional().default(''),
   bedrooms: z.string().trim().max(20).optional().default(''),
   bathrooms: z.string().trim().max(20).optional().default(''),
@@ -20,8 +42,10 @@ const analyzerSchema = z.object({
   occupancyStatus: z.string().trim().max(120).optional().default(''),
   estimatedValue: z.string().trim().max(80).optional().default(''),
   askingPrice: z.string().trim().max(80).optional().default(''),
+  monthlyRentEstimate: z.string().trim().max(80).optional().default(''),
   afterRepairValue: z.string().trim().max(80).optional().default(''),
   repairBudget: z.string().trim().max(80).optional().default(''),
+  assignmentFee: z.string().trim().max(80).optional().default(''),
   closingCosts: z.string().trim().max(80).optional().default(''),
   holdingPeriodMonths: z.string().trim().max(40).optional().default(''),
   mortgageBalance: z.string().trim().max(80).optional().default(''),
@@ -91,6 +115,7 @@ export async function POST(request: NextRequest) {
       squareFeet: data.squareFeet || null,
       sellerEstimatedValue: data.estimatedValue || null,
       askingPrice: data.askingPrice || null,
+      monthlyRentEstimate: data.monthlyRentEstimate || null,
       mortgageBalance: data.mortgageBalance || null,
       liensOrTaxes: data.liensOrTaxes || null,
       propertyCondition: data.propertyCondition || null,
@@ -103,12 +128,20 @@ export async function POST(request: NextRequest) {
         address,
         city: data.city || null,
         state: data.state || null,
+        selectedComps: data.selectedComps,
+        listingSourceUrl: data.listingSourceUrl || null,
+        listingStatus: data.listingStatus || null,
+        daysOnMarket: data.daysOnMarket || null,
+        priceCutCount: data.priceCutCount || null,
+        lastPriceCutAmount: data.lastPriceCutAmount || null,
+        listingNotes: data.listingNotes || null,
         propertyType: data.propertyType || null,
         bedrooms: data.bedrooms || null,
         bathrooms: data.bathrooms || null,
         squareFeet: data.squareFeet || null,
         sellerEstimatedValue: data.estimatedValue || null,
         askingPrice: data.askingPrice || null,
+        monthlyRentEstimate: data.monthlyRentEstimate || null,
         mortgageBalance: data.mortgageBalance || null,
         liensOrTaxes: data.liensOrTaxes || null,
         propertyCondition: data.propertyCondition || null,
@@ -117,6 +150,7 @@ export async function POST(request: NextRequest) {
         preferredSalePath: data.preferredSalePath || null,
         afterRepairValue: data.afterRepairValue || null,
         repairBudget: data.repairBudget || null,
+        assignmentFee: data.assignmentFee || null,
         closingCosts: data.closingCosts || null,
         holdingPeriodMonths: data.holdingPeriodMonths || null,
         monthlyTaxes: data.monthlyTaxes || null,

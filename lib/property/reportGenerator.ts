@@ -1,9 +1,9 @@
-export type AnalyzerReportType = 'investor' | 'buyer' | 'lender'
+export type AnalyzerReportType = 'investor' | 'buyer' | 'lender' | 'builder' | 'assignment_contract'
 
 export type AnalyzerReportPayload = {
   reportType: AnalyzerReportType
   address: string
-  form: Record<string, string>
+  form: Record<string, unknown>
   estimate: any
   opportunity: any
 }
@@ -94,6 +94,20 @@ function reportHeading(reportType: AnalyzerReportType) {
     }
   }
 
+  if (reportType === 'builder') {
+    return {
+      title: 'VestBlock Builder Packet',
+      subtitle: 'MAO-backed builder lane summary, rehab framing, and assignment strategy notes.',
+    }
+  }
+
+  if (reportType === 'assignment_contract') {
+    return {
+      title: 'VestBlock Assignment Agreement Draft',
+      subtitle: 'Draft internal assignment packet for builder or construction-partner review.',
+    }
+  }
+
   return {
     title: 'VestBlock Investor Deal Report',
     subtitle: 'Deal math, route fit, and risk framing based on the current analyzer inputs.',
@@ -102,6 +116,28 @@ function reportHeading(reportType: AnalyzerReportType) {
 
 function buildTopMetrics(payload: AnalyzerReportPayload) {
   const { estimate, opportunity, reportType } = payload
+
+  if (reportType === 'builder') {
+    return [
+      { label: 'Builder lane score', value: `${opportunity.builderDisposition?.score ?? 'Needs review'}/100` },
+      { label: 'Builder max purchase', value: money(opportunity.builderDisposition?.builderMaxPurchase) },
+      { label: 'Seller offer target', value: money(opportunity.builderDisposition?.recommendedSellerOffer) },
+      { label: 'Assignment fee', value: money(opportunity.builderDisposition?.suggestedAssignmentFee) },
+      { label: 'Rehab planning', value: `${money(opportunity.builderDisposition?.rehabPlanningLow)} - ${money(opportunity.builderDisposition?.rehabPlanningHigh)}` },
+      { label: 'Strategy', value: String(opportunity.builderDisposition?.strategy || 'Needs review').replaceAll('_', ' ') },
+    ]
+  }
+
+  if (reportType === 'assignment_contract') {
+    return [
+      { label: 'Property', value: payload.address },
+      { label: 'Recommended seller offer', value: money(opportunity.builderDisposition?.recommendedSellerOffer) },
+      { label: 'Builder max purchase', value: money(opportunity.builderDisposition?.builderMaxPurchase) },
+      { label: 'Assignment fee', value: money(opportunity.builderDisposition?.suggestedAssignmentFee) },
+      { label: 'Earnest money', value: money(opportunity.builderDisposition?.contractTerms?.earnestMoney) },
+      { label: 'Close window', value: `${opportunity.builderDisposition?.contractTerms?.closeWindowDays ?? 'Needs review'} days` },
+    ]
+  }
 
   if (reportType === 'buyer') {
     return [
@@ -138,6 +174,20 @@ function buildTopMetrics(payload: AnalyzerReportPayload) {
 function buildSummaryCopy(payload: AnalyzerReportPayload) {
   const { opportunity, reportType } = payload
 
+  if (reportType === 'builder') {
+    return `
+      <p class="lead">${escapeHtml(opportunity.builderDisposition?.summary || 'Builder fit still needs review.')}</p>
+      <p class="muted">${escapeHtml(opportunity.builderDisposition?.sellerOutreachAngle || 'Confirm title, access, rehab scope, and buy-box rules before routing this opportunity.')}</p>
+    `
+  }
+
+  if (reportType === 'assignment_contract') {
+    return `
+      <p class="lead">This is a planning-grade assignment draft built from the current analyzer numbers and builder-lane assumptions.</p>
+      <p class="muted">Use it once the builder or construction partner confirms entity name, earnest money, close window, inspection terms, and assignment fee. Local legal review is still required before signature.</p>
+    `
+  }
+
   if (reportType === 'buyer') {
     return `
       <p class="lead">${escapeHtml(opportunity.buyerInterest.summary)}</p>
@@ -160,14 +210,15 @@ function buildSummaryCopy(payload: AnalyzerReportPayload) {
 
 function buildPropertyFacts(payload: AnalyzerReportPayload) {
   const { form, estimate, opportunity } = payload
+  const formValues = form as Record<string, unknown>
 
   return metricGrid([
     { label: 'Address', value: payload.address },
-    { label: 'Property type', value: form.propertyType || 'Needs review' },
-    { label: 'Condition', value: form.propertyCondition || 'Needs review' },
-    { label: 'Occupancy', value: form.occupancyStatus || 'Needs review' },
-    { label: 'Timeline', value: form.timelineToSell || 'Needs review' },
-    { label: 'Exit strategy', value: form.exitStrategy || 'Needs review' },
+    { label: 'Property type', value: String(formValues.propertyType || 'Needs review') },
+    { label: 'Condition', value: String(formValues.propertyCondition || 'Needs review') },
+    { label: 'Occupancy', value: String(formValues.occupancyStatus || 'Needs review') },
+    { label: 'Timeline', value: String(formValues.timelineToSell || 'Needs review') },
+    { label: 'Exit strategy', value: String(formValues.exitStrategy || 'Needs review') },
     { label: 'Estimated value', value: money(estimate.estimateValue) },
     { label: 'Rent estimate', value: money(estimate.rentEstimate) },
     { label: 'ARV', value: money(opportunity.metrics.arv) },
@@ -193,6 +244,60 @@ function buildFinancialOverview(payload: AnalyzerReportPayload) {
     { label: 'Flip ROI', value: percent(opportunity.metrics.flipRoiPercent) },
     { label: 'Cash on cash', value: percent(opportunity.metrics.cashOnCashReturnPercent) },
   ])
+}
+
+function buildComparableContext(payload: AnalyzerReportPayload) {
+  const comps = payload.opportunity.comparables || {}
+  const selected = Array.isArray(comps.selected) ? comps.selected.filter((comp: any) => comp?.salePrice) : []
+
+  return `
+    ${metricGrid([
+      { label: 'ARV mode', value: payload.opportunity.dealMath?.arvMode || 'Needs review' },
+      { label: 'Comp count used', value: String(comps.usedCount ?? selected.length ?? 0) },
+      { label: 'Average comp sale', value: money(comps.averageSalePrice) },
+      { label: 'Average price / sqft', value: comps.averagePricePerFoot ? `$${comps.averagePricePerFoot}` : 'Needs review' },
+    ])}
+    <div class="notes">
+      <h3>Selected comps</h3>
+      ${
+        selected.length
+          ? orderedList(
+              selected.map((comp: any) => {
+                const facts = [
+                  comp.address || 'Comp address not added',
+                  money(comp.salePrice),
+                  comp.squareFeet ? `${comp.squareFeet} sqft` : null,
+                  comp.distanceMiles ? `${comp.distanceMiles} mi` : null,
+                  comp.pricePerFoot ? `$${comp.pricePerFoot}/sqft` : null,
+                ].filter(Boolean)
+                return facts.join(' • ')
+              })
+            )
+          : '<p class="muted">No sold comps were entered for this analysis.</p>'
+      }
+    </div>
+  `
+}
+
+function buildListingContext(payload: AnalyzerReportPayload) {
+  const listing = payload.opportunity.listingContext || {}
+
+  return `
+    ${metricGrid([
+      { label: 'Listing pressure', value: listing.pressureLabel || 'Needs review' },
+      { label: 'Status', value: listing.status || 'Needs review' },
+      { label: 'Days on market', value: listing.daysOnMarket !== null && listing.daysOnMarket !== undefined ? String(listing.daysOnMarket) : 'Needs review' },
+      { label: 'Price cuts', value: listing.priceCutCount !== null && listing.priceCutCount !== undefined ? String(listing.priceCutCount) : 'Needs review' },
+      { label: 'Latest reduction', value: money(listing.lastPriceCutAmount) },
+      { label: 'Source URL', value: listing.sourceUrl || 'Needs review' },
+    ])}
+    <div class="notes">
+      <h3>Screening summary</h3>
+      <p class="muted">${escapeHtml(listing.summary || 'No public listing context was added for this analysis.')}</p>
+      <h3>Listing signals</h3>
+      ${badgeList(listing.signals || [], 'neutral')}
+    </div>
+  `
 }
 
 function buildCapitalStack(payload: AnalyzerReportPayload) {
@@ -286,6 +391,69 @@ function buildBorrowerAndFile(payload: AnalyzerReportPayload) {
   `
 }
 
+function buildBuilderLane(payload: AnalyzerReportPayload) {
+  const lane = payload.opportunity.builderDisposition || {}
+
+  return `
+    ${metricGrid([
+      { label: 'Builder lane score', value: `${lane.score ?? 'Needs review'}/100` },
+      { label: 'Builder max purchase', value: money(lane.builderMaxPurchase) },
+      { label: 'Seller offer target', value: money(lane.recommendedSellerOffer) },
+      { label: 'Suggested assignment fee', value: money(lane.suggestedAssignmentFee) },
+      { label: 'Projected gross spread', value: money(lane.projectedGrossSpread) },
+      { label: 'Renovation scope', value: lane.renovationScope || 'Needs review' },
+    ])}
+    <div class="notes">
+      <h3>Seller angle</h3>
+      <p class="muted">${escapeHtml(lane.sellerOutreachAngle || 'Confirm price, title, and access before route decisions are made.')}</p>
+      <h3>Builder buy-box questions</h3>
+      ${orderedList(lane.buyBoxQuestions || [])}
+      <h3>Next steps</h3>
+      ${orderedList(lane.nextSteps || [])}
+    </div>
+  `
+}
+
+function buildAssignmentContractDraft(payload: AnalyzerReportPayload) {
+  const lane = payload.opportunity.builderDisposition || {}
+  const purchasePrice = lane.recommendedSellerOffer
+  const fee = lane.suggestedAssignmentFee
+  const builderPrice =
+    lane.builderMaxPurchase !== null && lane.builderMaxPurchase !== undefined
+      ? lane.builderMaxPurchase
+      : purchasePrice !== null && fee !== null
+        ? purchasePrice + fee
+        : null
+
+  return `
+    <div class="notes">
+      <h3>Draft parties</h3>
+      <p>Assignor: VestBlock or its assigns</p>
+      <p>Assignee: ________________________________</p>
+      <p>Seller / original contract party: ________________________________</p>
+      <h3>Property</h3>
+      <p>${escapeHtml(payload.address)}</p>
+      <h3>Economic terms</h3>
+      ${metricGrid([
+        { label: 'Original contract price', value: money(purchasePrice) },
+        { label: 'Assignment fee', value: money(fee) },
+        { label: 'Assignee total purchase', value: money(builderPrice) },
+        { label: 'Earnest money', value: money(lane.contractTerms?.earnestMoney) },
+        { label: 'Inspection period', value: `${lane.contractTerms?.inspectionDays ?? 'Needs review'} days` },
+        { label: 'Close window', value: `${lane.contractTerms?.closeWindowDays ?? 'Needs review'} days` },
+      ])}
+      <h3>Suggested draft language</h3>
+      ${orderedList([
+        'Assignor agrees to assign its equitable interest in the underlying purchase agreement for the property listed above to Assignee.',
+        'Assignee agrees to pay the assignment fee at closing in immediately available funds pursuant to the closing statement or escrow instructions.',
+        'Assignee acknowledges responsibility for its own inspections, due diligence, contractor review, title review, financing, and final underwriting.',
+        'Any earnest money, close window, extension rights, and access terms should match the underlying purchase agreement unless amended in writing by the parties.',
+        'This draft is an internal planning document only until local counsel or the closing company confirms the final assignment language.',
+      ])}
+    </div>
+  `
+}
+
 export function buildAnalyzerReportHtml(payload: AnalyzerReportPayload) {
   const heading = reportHeading(payload.reportType)
   const generatedAt = new Date().toLocaleString('en-US', {
@@ -347,13 +515,25 @@ export function buildAnalyzerReportHtml(payload: AnalyzerReportPayload) {
       </div>
 
       ${section('Summary', `${buildSummaryCopy(payload)}${metricGrid(buildTopMetrics(payload))}`)}
-      ${section('Property Snapshot', buildPropertyFacts(payload))}
-      ${section('Financial Overview', buildFinancialOverview(payload))}
-      ${section('Capital Stack', buildCapitalStack(payload))}
-      ${section('Borrower And File Readiness', buildBorrowerAndFile(payload))}
-      ${section('Routing Signals', buildRouteFit(payload))}
-      ${section('Creative Structures', buildCreativeStructures(payload))}
-      ${section('Recommended Next Steps', orderedList(payload.opportunity.nextSteps || []))}
+      ${
+        payload.reportType === 'assignment_contract'
+          ? section('Assignment Draft', buildAssignmentContractDraft(payload))
+          : [
+              section('Property Snapshot', buildPropertyFacts(payload)),
+              section('Comparables And Listing Context', `${buildComparableContext(payload)}${buildListingContext(payload)}`),
+              payload.reportType === 'builder' ? section('Builder Lane', buildBuilderLane(payload)) : section('Financial Overview', buildFinancialOverview(payload)),
+              payload.reportType === 'builder' ? section('Financial Overview', buildFinancialOverview(payload)) : section('Capital Stack', buildCapitalStack(payload)),
+              payload.reportType === 'builder' ? section('Capital Stack', buildCapitalStack(payload)) : section('Borrower And File Readiness', buildBorrowerAndFile(payload)),
+              payload.reportType === 'builder' ? section('Borrower And File Readiness', buildBorrowerAndFile(payload)) : section('Routing Signals', buildRouteFit(payload)),
+              payload.reportType === 'builder' ? section('Routing Signals', buildRouteFit(payload)) : section('Creative Structures', buildCreativeStructures(payload)),
+              payload.reportType === 'builder'
+                ? section('Creative Structures', buildCreativeStructures(payload))
+                : null,
+              section('Recommended Next Steps', orderedList(payload.reportType === 'builder' ? payload.opportunity.builderDisposition?.nextSteps || payload.opportunity.nextSteps || [] : payload.opportunity.nextSteps || [])),
+            ]
+              .filter(Boolean)
+              .join('')
+      }
 
       <div class="footer">
         ${escapeHtml(

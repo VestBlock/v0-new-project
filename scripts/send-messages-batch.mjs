@@ -81,6 +81,12 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
+function buildRunStamp() {
+  const iso = new Date().toISOString().replace(/[:.]/g, "-")
+  const nonce = Math.random().toString(36).slice(2, 8)
+  return `${iso}-${process.pid}-${nonce}`
+}
+
 function listPriorResults() {
   if (!fs.existsSync(RESULTS_DIR)) return []
   return fs
@@ -148,7 +154,7 @@ function main() {
     throw new Error("Missing --queue=/absolute/or/relative/path.csv")
   }
   fs.mkdirSync(RESULTS_DIR, { recursive: true })
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const stamp = buildRunStamp()
   const queue = parseCsv(fs.readFileSync(args.queue, "utf8"))
   const alreadySent = loadAlreadySent()
   const candidates = queue

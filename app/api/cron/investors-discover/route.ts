@@ -13,7 +13,8 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
     const dryRun = ['1', 'true', 'yes'].includes(url.searchParams.get('dryRun')?.toLowerCase() || '')
-    const result = await runDailyInvestorDiscovery({ dryRun })
+    const mode = url.searchParams.get('mode') === 'builders' ? 'builders' : 'default'
+    const result = await runDailyInvestorDiscovery({ dryRun, mode })
     return NextResponse.json({ success: true, dryRun, ...result })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Investor discovery failed.' }, { status: 500 })

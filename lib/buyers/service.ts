@@ -3,7 +3,7 @@ import { queueSeoForBuyerRecord } from '@/lib/content/entitySeoExpansion'
 import { enrichContactFromHunter } from '@/lib/email/hunter'
 import { discoverBuyersForMarket } from '@/lib/buyers/discovery'
 import { matchPropertyToBuyers } from '@/lib/buyers/matching'
-import { generateBuyerOutreach } from '@/lib/buyers/outreach'
+import { BUYER_OUTREACH_TEMPLATE_VERSION, generateBuyerOutreach } from '@/lib/buyers/outreach'
 import {
   addBuyerNote,
   finishBuyerOutreachRun,
@@ -26,6 +26,12 @@ import { analyzeBuyerWebsite } from '@/lib/buyers/site-analysis'
 import type { BuyerBuyBoxRecord, BuyerRecord, PropertyBuyerMatchInput } from '@/lib/buyers/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
+
+function envInt(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] || '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
 
 function buildBuyBoxesFromAnalysis(buyer: BuyerRecord, analysis: Awaited<ReturnType<typeof analyzeBuyerWebsite>>): Array<Partial<BuyerBuyBoxRecord>> {
   const assetTypes: string[] = []
@@ -88,6 +94,31 @@ export async function discoverAndIngestBuyersForMarket(input: {
   })
 
   try {
+    const cooldownHours = envInt('BUYER_DISCOVERY_COOLDOWN_HOURS', 72)
+    const recentRun = await findRecentDiscoveryRun({
+      table: 'buyer_outreach_runs',
+      completedAtColumn: 'completed_at',
+      sourceKey: 'google_places_buyers',
+      city: input.city,
+      state: input.state,
+      cooldownHours,
+    })
+
+    if (recentRun) {
+      await finishBuyerOutreachRun(run.id, {
+        status: 'partial',
+        resultCount: 0,
+        errorMessage: buildDiscoveryCooldownMessage({
+          label: 'buyer',
+          city: input.city,
+          state: input.state,
+          cooldownHours,
+          completedAt: recentRun.completedAt,
+        }),
+      })
+      return []
+    }
+
     const raw = await discoverBuyersForMarket({
       city: input.city,
       state: input.state,
@@ -194,6 +225,7 @@ export async function generateAndStoreBuyerOutreach(buyer: BuyerRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.emailIntro.qualificationQuestions,
         economicsPrompt: bundle.emailIntro.economicsPrompt,
       },
@@ -209,6 +241,7 @@ export async function generateAndStoreBuyerOutreach(buyer: BuyerRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.emailFollowup.qualificationQuestions,
         economicsPrompt: bundle.emailFollowup.economicsPrompt,
       },
@@ -223,6 +256,7 @@ export async function generateAndStoreBuyerOutreach(buyer: BuyerRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.linkedInDm.qualificationQuestions,
         economicsPrompt: bundle.linkedInDm.economicsPrompt,
       },
@@ -237,6 +271,7 @@ export async function generateAndStoreBuyerOutreach(buyer: BuyerRecord) {
       language: 'en',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.phoneScript.qualificationQuestions,
         economicsPrompt: bundle.phoneScript.economicsPrompt,
       },
@@ -252,6 +287,7 @@ export async function generateAndStoreBuyerOutreach(buyer: BuyerRecord) {
       language: 'es',
       generatedWith: bundle.generatedWith,
       metadata: {
+        templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
         qualificationQuestions: bundle.spanishEmail.qualificationQuestions,
         economicsPrompt: bundle.spanishEmail.economicsPrompt,
       },

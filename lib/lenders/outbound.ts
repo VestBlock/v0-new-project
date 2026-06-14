@@ -14,20 +14,27 @@ type SendLenderEmailResult = {
   error?: string
 }
 
+const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
+
 function getSender() {
-  return process.env.GOOGLE_WORKSPACE_SENDER || process.env.FROM_EMAIL || 'contact@vestblock.io'
+  return (
+    process.env.OUTREACH_FROM_EMAIL ||
+    process.env.FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
+    process.env.GOOGLE_WORKSPACE_SENDER ||
+    DEFAULT_OUTREACH_SENDER
+  )
 }
 
 function getResendSender() {
-  return process.env.FROM_EMAIL || 'contact@vestblock.io'
+  return process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || process.env.RESEND_EMAIL || DEFAULT_OUTREACH_SENDER
 }
 
 function hasGmailConfig() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID &&
       process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN &&
-      process.env.GOOGLE_WORKSPACE_SENDER
+      process.env.GOOGLE_REFRESH_TOKEN
   )
 }
 
@@ -127,7 +134,8 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
   }
   if (hasGmailConfig()) {
     try {
-      return await sendWithGmail(input)
+      const gmailResult = await sendWithGmail(input)
+      if (gmailResult.ok || !hasResendConfig()) return gmailResult
     } catch (error) {
       if (!hasResendConfig()) {
         return {

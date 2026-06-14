@@ -145,11 +145,11 @@ function senderPhone() {
 }
 
 function senderEmail() {
-  return process.env.FROM_EMAIL || process.env.GOOGLE_WORKSPACE_SENDER || 'contact@vestblock.io'
+  return process.env.FROM_EMAIL || process.env.GOOGLE_WORKSPACE_SENDER || 'acquisitions@vestblock.io'
 }
 
 function resendSender() {
-  return process.env.FROM_EMAIL || 'contact@vestblock.io'
+  return process.env.FROM_EMAIL || 'acquisitions@vestblock.io'
 }
 
 function outreachMailingAddress() {
@@ -232,6 +232,17 @@ function typeLabel(targetType) {
   return labels[targetType] || 'real estate disposition team'
 }
 
+function isBankOwnedTarget(target) {
+  const targetType = String(target.targetType || '').toLowerCase()
+  return (
+    targetType.includes('bank') ||
+    targetType.includes('reo') ||
+    targetType.includes('oreo') ||
+    targetType.includes('servicer') ||
+    targetType.includes('special_assets')
+  )
+}
+
 function stageFor(target, stateEntry) {
   if (STAGE_OVERRIDE !== 'auto') return STAGE_OVERRIDE
   if (!stateEntry || !stateEntry.lastStageSent) return 'initial'
@@ -254,7 +265,7 @@ function subjectFor(target, stage) {
   if (stage === 'followup_2') {
     return `Last follow-up: VestBlock as a qualified acquisition outlet for ${org}`
   }
-  if (target.targetType.includes('bank') && !target.targetType.includes('land')) {
+  if (isBankOwnedTarget(target)) {
     return `VestBlock relationship idea for ${org}'s bank-owned and special-assets inventory`
   }
   return `VestBlock relationship idea for ${org}'s land bank inventory`

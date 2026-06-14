@@ -51,7 +51,7 @@ export function Navigation() {
   );
 
   // Admin surfaces run their own command shell; the marketing header stays out of the cockpit.
-  if (pathname.startsWith('/admin')) {
+  if (pathname.startsWith('/admin') || pathname.startsWith('/dev/command-center-preview')) {
     return null;
   }
 
@@ -180,7 +180,7 @@ export function Navigation() {
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin-panel" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
+                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
@@ -241,7 +241,7 @@ export function Navigation() {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/admin-panel">
+                      <Link href="/admin/command-center">
                         <LayoutDashboard className="mr-2 h-4 w-4" />
                         Admin Panel
                       </Link>

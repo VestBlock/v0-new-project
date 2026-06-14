@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
       relationshipStage: searchParams.get('relationship_stage'),
       outreachStatus: searchParams.get('outreach_status'),
       sequence: searchParams.get('sequence'),
+      lane: searchParams.get('lane'),
       page: parseInt(searchParams.get('page') || '1', 10),
       limit: parseInt(searchParams.get('limit') || '100', 10),
     })

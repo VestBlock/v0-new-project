@@ -37,10 +37,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
             {!isCollapsed ? (
               <div className="mt-1 space-y-0.5">
                 {links.map((item) => {
-                  const isActive =
-                    item.href === '/admin-panel'
-                      ? pathname === item.href
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
 
                   return (
                     <Link
@@ -85,9 +82,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [])
 
   const activeTitle = useMemo(() => {
-    const exact = adminNavItems.find((item) =>
-      item.href === '/admin-panel' ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)
-    )
+    const exact = adminNavItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     return exact?.title || 'Admin'
   }, [pathname])
 

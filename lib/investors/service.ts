@@ -16,9 +16,15 @@ import {
   upsertInvestorProfile,
 } from '@/lib/investors/repository'
 import type { InvestorProfileRecord } from '@/lib/investors/types'
+import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+
+function envInt(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] || '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
 
 export async function discoverAndIngestInvestorsForMarket(input: {
   city: string
@@ -34,6 +40,31 @@ export async function discoverAndIngestInvestorsForMarket(input: {
   })
 
   try {
+    const cooldownHours = envInt('INVESTOR_DISCOVERY_COOLDOWN_HOURS', 72)
+    const recentRun = await findRecentDiscoveryRun({
+      table: 'investor_automation_runs',
+      completedAtColumn: 'finished_at',
+      sourceKey: 'google_places_investors',
+      city: input.city,
+      state: input.state,
+      cooldownHours,
+    })
+
+    if (recentRun) {
+      await finishInvestorAutomationRun(run.id, {
+        status: 'completed',
+        resultCount: 0,
+        errorMessage: buildDiscoveryCooldownMessage({
+          label: 'investor',
+          city: input.city,
+          state: input.state,
+          cooldownHours,
+          completedAt: recentRun.completedAt,
+        }),
+      })
+      return []
+    }
+
     const discovered = await discoverInvestorsForMarket(input)
     const saved: InvestorProfileRecord[] = []
     for (const investorInput of discovered) {

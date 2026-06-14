@@ -292,7 +292,7 @@ If this is not relevant, reply no and I will not follow up.
 Best,
 Robert Sanders
 VestBlock
-contact@vestblock.io`
+acquisitions@vestblock.io`
 }
 
 function draftMarkdown(row) {

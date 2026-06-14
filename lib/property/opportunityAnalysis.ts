@@ -4,6 +4,19 @@ import {
   parseCurrencyAmount,
 } from '@/lib/property/roughEstimate'
 import {
+  computeArv,
+  computeEndBuyerProfit,
+  computeMao,
+  computeSpread,
+  getDealRulePercent,
+  getDealRuleType,
+  gradeDeal,
+} from '@/lib/property/dealAnalyzerMath'
+import {
+  buildBuilderDispositionPlan,
+  type BuilderDispositionPlan,
+} from '@/lib/property/builderDisposition'
+import {
   calculateAnnualDebtService,
   calculateBreakEvenRent,
   calculateCapRate,
@@ -25,10 +38,27 @@ import {
 } from '@/lib/property/formulas'
 
 export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
+  selectedComps?: Array<{
+    address?: string | null
+    salePrice?: string | number | null
+    squareFeet?: string | number | null
+    distanceMiles?: string | number | null
+    beds?: string | number | null
+    baths?: string | number | null
+    notes?: string | null
+  }>
+  listingSourceUrl?: string | null
+  listingStatus?: string | null
+  daysOnMarket?: string | number | null
+  priceCutCount?: string | number | null
+  lastPriceCutAmount?: string | number | null
+  listingNotes?: string | null
   afterRepairValue?: string | number | null
   repairBudget?: string | number | null
+  assignmentFee?: string | number | null
   closingCosts?: string | number | null
   holdingPeriodMonths?: string | number | null
+  monthlyRentEstimate?: string | number | null
   monthlyTaxes?: string | number | null
   monthlyInsurance?: string | number | null
   monthlyUtilities?: string | number | null
@@ -62,7 +92,7 @@ export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
   existingLoanRemainingTermYears?: string | number | null
 }
 
-export type CreativeOfferKey = 'seller_finance' | 'subject_to'
+export type CreativeOfferKey = 'seller_finance' | 'subject_to' | 'wrap_mortgage'
 
 export type PropertyOpportunityAnalysis = {
   metrics: {
@@ -91,6 +121,48 @@ export type PropertyOpportunityAnalysis = {
     totalProjectCost: number | null
     totalCashNeeded: number | null
     fundingGap: number | null
+  }
+  dealMath: {
+    arvMode: 'BASELINE' | 'COMPS_AVG' | 'MANUAL'
+    ruleType: 'residential' | 'land' | 'commercial'
+    rulePercent: number
+    assignmentFee: number | null
+    mao: number | null
+    sellerAsk: number | null
+    spread: number | null
+    endBuyerProfit: number | null
+    grade: 'RISKY' | 'GOOD' | null
+  }
+  comparables: {
+    usedCount: number
+    averageSalePrice: number | null
+    averagePricePerFoot: number | null
+    selected: Array<{
+      address: string | null
+      salePrice: number | null
+      squareFeet: number | null
+      distanceMiles: number | null
+      beds: number | null
+      baths: number | null
+      notes: string | null
+      pricePerFoot: number | null
+    }>
+  }
+  listingContext: {
+    sourceUrl: string | null
+    status: string | null
+    daysOnMarket: number | null
+    priceCutCount: number | null
+    lastPriceCutAmount: number | null
+    pressureLabel:
+      | 'Needs public listing context'
+      | 'Off-market or private'
+      | 'Fresh listing'
+      | 'Active listing'
+      | 'Stale listing'
+      | 'Discounted listing'
+    summary: string
+    signals: string[]
   }
   dealStrength: {
     score: number
@@ -151,11 +223,12 @@ export type PropertyOpportunityAnalysis = {
     }
   }>
   routeFit: Array<{
-    key: 'fast_cash' | 'creative_structure' | 'novation' | 'lender_review'
+    key: 'fast_cash' | 'creative_structure' | 'novation' | 'lender_review' | 'builder_disposition'
     label: string
     score: number
     summary: string
   }>
+  builderDisposition: BuilderDispositionPlan
   buyerInterest: {
     label: 'Needs more details' | 'Possible buyer fit' | 'Good buyer fit' | 'Strong buyer fit'
     score: number
@@ -285,11 +358,87 @@ function stringIncludesOneOf(value: string | null | undefined, patterns: RegExp[
   return patterns.some((pattern) => pattern.test(normalized))
 }
 
+function averageNullable(values: Array<number | null>) {
+  const usable = values.filter((value): value is number => Number.isFinite(value))
+  if (!usable.length) return null
+  return usable.reduce((sum, value) => sum + value, 0) / usable.length
+}
+
+function cleanOptionalString(value?: string | null) {
+  const normalized = String(value || '').trim()
+  return normalized || null
+}
+
+function normalizeComparableSelections(input: PropertyOpportunityInput['selectedComps']) {
+  return (input || []).map((comp) => {
+    const salePrice = parseCurrencyAmount(comp.salePrice)
+    const squareFeet = parseCurrencyAmount(comp.squareFeet)
+    const pricePerFoot =
+      salePrice !== null && squareFeet !== null && squareFeet > 0
+        ? Math.round((salePrice / squareFeet) * 100) / 100
+        : null
+
+    return {
+      address: cleanOptionalString(comp.address),
+      salePrice,
+      squareFeet,
+      distanceMiles: parseCurrencyAmount(comp.distanceMiles),
+      beds: parseCurrencyAmount(comp.beds),
+      baths: parseCurrencyAmount(comp.baths),
+      notes: cleanOptionalString(comp.notes),
+      pricePerFoot,
+    }
+  })
+}
+
+function listingPressureLabel(
+  hasListingContext: boolean,
+  daysOnMarket: number | null,
+  priceCutCount: number | null
+): PropertyOpportunityAnalysis['listingContext']['pressureLabel'] {
+  if (!hasListingContext) return 'Needs public listing context'
+  if ((priceCutCount ?? 0) >= 2 || (daysOnMarket ?? 0) >= 120) return 'Discounted listing'
+  if ((daysOnMarket ?? 0) >= 60) return 'Stale listing'
+  if ((daysOnMarket ?? 0) >= 15) return 'Active listing'
+  return 'Fresh listing'
+}
+
 function dealStrengthLabel(score: number): PropertyOpportunityAnalysis['dealStrength']['label'] {
   if (score >= 78) return 'Strong'
   if (score >= 62) return 'Promising'
   if (score >= 42) return 'Watchlist'
   return 'Weak'
+}
+
+function dealStrengthScoreWithDealMath(
+  score: number,
+  dealGrade: PropertyOpportunityAnalysis['dealMath']['grade'],
+  assignmentSpread: number | null,
+  endBuyerProfit: number | null
+) {
+  if (dealGrade !== 'RISKY') return bounded(score)
+
+  let maxScore = 58
+  if (assignmentSpread !== null && assignmentSpread < 0) maxScore = Math.min(maxScore, 54)
+  if (assignmentSpread !== null && assignmentSpread <= -25000) maxScore = Math.min(maxScore, 48)
+  if (endBuyerProfit !== null && endBuyerProfit <= 0) maxScore = Math.min(maxScore, 38)
+
+  return bounded(Math.min(score, maxScore))
+}
+
+function dealStrengthSummary(
+  score: number,
+  dealGrade: PropertyOpportunityAnalysis['dealMath']['grade'],
+  assignmentSpread: number | null
+) {
+  if (dealGrade === 'RISKY' && assignmentSpread !== null && assignmentSpread < 0) {
+    return 'Assignment math is not protected at the current seller ask; keep it in review until price, ARV, fee, or terms improve.'
+  }
+
+  if (score >= 78) return 'The numbers support active review across buyers and capital routes.'
+  if (score >= 62) return 'There is enough signal here to keep the deal moving, but the file still needs discipline.'
+  if (score >= 42) return 'This is a watchlist deal until pricing, scope, or borrower details improve.'
+  return 'The current structure is thin and should be tightened before real routing.'
 }
 
 function fundingReadinessLabel(score: number): PropertyOpportunityAnalysis['fundingReadiness']['label'] {
@@ -304,17 +453,83 @@ export function buildPropertyOpportunityAnalysis(
   estimate: RoughPropertyEstimate
 ): PropertyOpportunityAnalysis {
   const exitStrategy = normalizedExitStrategy(input.exitStrategy ?? input.preferredSalePath)
-  const isRentalStyle = ['rental', 'brrrr', 'dscr_refinance', 'hold_long_term'].includes(exitStrategy)
+  const isRentalStyle = ['rental', 'brrrr', 'dscr_refinance', 'hold_long_term', 'seller_finance'].includes(exitStrategy)
   const isFlipStyle = ['flip', 'brrrr', 'wholetail'].includes(exitStrategy)
   const isWholesaleStyle = ['wholesale'].includes(exitStrategy)
 
-  const arv = parseCurrencyAmount(input.afterRepairValue) ?? estimate.estimateValue
+  const selectedComps = normalizeComparableSelections(input.selectedComps)
+  const usableComps = selectedComps.filter((comp) => comp.salePrice !== null)
+  const compAverageSalePrice = averageNullable(usableComps.map((comp) => comp.salePrice))
+  const compAveragePricePerFoot = averageNullable(usableComps.map((comp) => comp.pricePerFoot))
+  const manualArv = parseCurrencyAmount(input.afterRepairValue)
+  const dealArvMode =
+    manualArv !== null
+      ? 'MANUAL'
+      : usableComps.length > 0
+        ? 'COMPS_AVG'
+        : estimate.estimateValue !== null
+          ? 'BASELINE'
+          : 'MANUAL'
+  const arv =
+    computeArv({
+      mode: dealArvMode,
+      manualArv: manualArv ?? estimate.estimateValue,
+      baselineValue: estimate.estimateValue,
+      selectedComps: usableComps,
+    }) ?? estimate.estimateValue
+  const listingSourceUrl = cleanOptionalString(input.listingSourceUrl)
+  const listingStatus = cleanOptionalString(input.listingStatus)
+  const daysOnMarket = parseCurrencyAmount(input.daysOnMarket)
+  const priceCutCount = parseCurrencyAmount(input.priceCutCount)
+  const lastPriceCutAmount = parseCurrencyAmount(input.lastPriceCutAmount)
+  const listingNotes = cleanOptionalString(input.listingNotes)
+  const hasListingContext = Boolean(
+    listingSourceUrl ||
+      listingStatus ||
+      daysOnMarket !== null ||
+      priceCutCount !== null ||
+      lastPriceCutAmount !== null ||
+      listingNotes
+  )
+  const listingSignals = [
+    daysOnMarket !== null && daysOnMarket >= 120 ? `${daysOnMarket} days on market` : null,
+    daysOnMarket !== null && daysOnMarket >= 60 && daysOnMarket < 120 ? `${daysOnMarket} days on market` : null,
+    priceCutCount !== null && priceCutCount > 0 ? `${priceCutCount} price ${priceCutCount === 1 ? 'cut' : 'cuts'}` : null,
+    lastPriceCutAmount !== null && lastPriceCutAmount >= 5000
+      ? `${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(lastPriceCutAmount)} latest reduction`
+      : null,
+    listingStatus ? `Status: ${listingStatus}` : null,
+    listingNotes ? `Notes: ${listingNotes}` : null,
+  ].filter(Boolean) as string[]
+  const listingPressurePoints =
+    (daysOnMarket !== null
+      ? daysOnMarket >= 120
+        ? 18
+        : daysOnMarket >= 60
+          ? 10
+          : daysOnMarket >= 30
+            ? 5
+            : 0
+      : 0) +
+    Math.min(12, Math.max(0, (priceCutCount ?? 0) * 4)) +
+    (lastPriceCutAmount !== null
+      ? lastPriceCutAmount >= 15000
+        ? 8
+        : lastPriceCutAmount >= 5000
+          ? 4
+          : 0
+      : 0)
   const repairBudget = parseCurrencyAmount(input.repairBudget)
+  const manualAssignmentFee = parseCurrencyAmount(input.assignmentFee)
   const askingPrice = estimate.askingPrice ?? parseCurrencyAmount(input.askingPrice)
   const purchasePrice = askingPrice ?? estimate.estimateValue ?? arv
   const closingCostsInput = parseCurrencyAmount(input.closingCosts)
   const holdingPeriodMonths = parseCurrencyAmount(input.holdingPeriodMonths) ?? (isFlipStyle ? 6 : 0)
-  const monthlyRent = estimate.rentEstimate
+  const monthlyRent = parseCurrencyAmount(input.monthlyRentEstimate) ?? estimate.rentEstimate
   const monthlyTaxes = parseCurrencyAmount(input.monthlyTaxes)
   const monthlyInsurance = parseCurrencyAmount(input.monthlyInsurance)
   const monthlyUtilities = parseCurrencyAmount(input.monthlyUtilities) ?? 0
@@ -381,32 +596,32 @@ export function buildPropertyOpportunityAnalysis(
   const estimatedMonthlyCashFlow = calculateCashFlow(monthlyRent, monthlyCarry)
   const netOperatingIncomeAnnual = calculateNetOperatingIncome(monthlyRent, operatingExpenses.total)
   const grossRentYieldPercent =
-    monthlyRent !== null && estimate.estimateValue !== null
-      ? percent(monthlyRent * 12, estimate.estimateValue)
+    monthlyRent !== null && (arv ?? estimate.estimateValue) !== null
+      ? percent(monthlyRent * 12, arv ?? estimate.estimateValue)
       : null
   const dscr = calculateDscr(netOperatingIncomeAnnual, annualDebtService)
-  const capRatePercent = calculateCapRate(netOperatingIncomeAnnual, purchasePrice ?? estimate.estimateValue)
+  const capRatePercent = calculateCapRate(netOperatingIncomeAnnual, purchasePrice ?? arv ?? estimate.estimateValue)
   const debtYieldPercent = calculateDebtYield(netOperatingIncomeAnnual, recommendedLoanAmount)
   const breakEvenRent = calculateBreakEvenRent(monthlyDebtService, operatingExpenses.total)
-  const rentToPriceRatioPercent = calculateRentToPriceRatioPercent(monthlyRent, purchasePrice ?? estimate.estimateValue)
+  const rentToPriceRatioPercent = calculateRentToPriceRatioPercent(monthlyRent, purchasePrice ?? arv ?? estimate.estimateValue)
 
   const mao70 = calculateMaxAllowableOffer(arv, repairBudget)
   const conservativeCashReview =
-    estimate.estimateValue !== null
-      ? roundToNearest(estimate.estimateValue * 0.62 - (repairBudget || 0) * 0.35, 1000)
+    (arv ?? estimate.estimateValue) !== null
+      ? roundToNearest((arv ?? estimate.estimateValue)! * 0.62 - (repairBudget || 0) * 0.35, 1000)
       : null
   const balancedCashReview =
-    estimate.estimateValue !== null
-      ? roundToNearest(estimate.estimateValue * 0.72 - (repairBudget || 0) * 0.25, 1000)
+    (arv ?? estimate.estimateValue) !== null
+      ? roundToNearest((arv ?? estimate.estimateValue)! * 0.72 - (repairBudget || 0) * 0.25, 1000)
       : null
 
   const discountToValuePercent =
-    askingPrice !== null && estimate.estimateValue !== null
-      ? percent(estimate.estimateValue - askingPrice, estimate.estimateValue)
+    askingPrice !== null && (arv ?? estimate.estimateValue) !== null
+      ? percent((arv ?? estimate.estimateValue)! - askingPrice, arv ?? estimate.estimateValue)
       : null
   const equityPercent =
-    estimate.equityEstimate !== null && estimate.estimateValue !== null
-      ? percent(estimate.equityEstimate, estimate.estimateValue)
+    estimate.equityEstimate !== null && (arv ?? estimate.estimateValue) !== null
+      ? percent(estimate.equityEstimate, arv ?? estimate.estimateValue)
       : null
   const creativeBasePrice =
     purchasePrice ?? estimate.estimateValue ?? arv ?? balancedCashReview
@@ -428,6 +643,7 @@ export function buildPropertyOpportunityAnalysis(
     monthlyRent !== null
       ? Math.max(0, monthlyRent - (operatingExpenses.total || 0) - targetMonthlyCashFlow)
       : null
+  const creativeValueAnchor = askingPrice ?? estimate.estimateValue ?? arv
 
   const sellerFinanceMaxPrice =
     paymentCapacityBeforeDebt !== null && creativeDownPayment !== null
@@ -443,10 +659,10 @@ export function buildPropertyOpportunityAnalysis(
       : null
   const sellerFinanceSuggestedPrice =
     sellerFinanceMaxPrice !== null
-      ? askingPrice !== null
-        ? Math.min(askingPrice, sellerFinanceMaxPrice)
+      ? creativeValueAnchor !== null
+        ? Math.min(creativeValueAnchor, sellerFinanceMaxPrice)
         : sellerFinanceMaxPrice
-      : askingPrice
+      : creativeValueAnchor
   const sellerFinanceFinancedBalance =
     sellerFinanceSuggestedPrice !== null && creativeDownPayment !== null
       ? Math.max(0, sellerFinanceSuggestedPrice - creativeDownPayment)
@@ -486,7 +702,7 @@ export function buildPropertyOpportunityAnalysis(
           existingLoanRemainingTermYears
         )
       : null
-  const existingLoanPayment = monthlyDebtService ?? calculatedExistingLoanPayment
+  const existingLoanPayment = monthlyDebtServiceInput ?? calculatedExistingLoanPayment
   const subjectToSellerCarryCapacity =
     paymentCapacityBeforeDebt !== null && existingLoanPayment !== null
       ? Math.max(0, paymentCapacityBeforeDebt - existingLoanPayment)
@@ -510,10 +726,10 @@ export function buildPropertyOpportunityAnalysis(
       : null
   const subjectToSuggestedPrice =
     subjectToMaxPrice !== null
-      ? askingPrice !== null
-        ? Math.min(askingPrice, subjectToMaxPrice)
+      ? creativeValueAnchor !== null
+        ? Math.min(creativeValueAnchor, subjectToMaxPrice)
         : subjectToMaxPrice
-      : askingPrice
+      : creativeValueAnchor
   const subjectToSellerCarryBalance =
     subjectToSuggestedPrice !== null &&
     existingLoanBalance !== null &&
@@ -545,11 +761,60 @@ export function buildPropertyOpportunityAnalysis(
     creativeDownPayment !== null
       ? Math.round((creativeDownPayment + liensOrTaxes + (fixedCreativeClosingBuffer || 0)) * 100) / 100
       : null
+  const wrapNoteInterestRate =
+    existingLoanInterestRate !== null
+      ? Math.round(((existingLoanInterestRate + creativeNoteInterestRate) / 2) * 100) / 100
+      : creativeNoteInterestRate
+  const wrapMaxPrice =
+    paymentCapacityBeforeDebt !== null && creativeDownPayment !== null
+      ? roundToNearest(
+          Number(creativeDownPayment) +
+            (principalFromPaymentCapacity(
+              paymentCapacityBeforeDebt,
+              wrapNoteInterestRate,
+              creativeAmortizationYears
+            ) || 0),
+          500
+        )
+      : null
+  const wrapSuggestedPrice =
+    wrapMaxPrice !== null
+      ? creativeValueAnchor !== null
+        ? Math.min(creativeValueAnchor, wrapMaxPrice)
+        : wrapMaxPrice
+      : creativeValueAnchor
+  const wrapFinancedBalance =
+    wrapSuggestedPrice !== null && creativeDownPayment !== null
+      ? Math.max(0, wrapSuggestedPrice - creativeDownPayment)
+      : null
+  const wrapMonthlyPayment = calculateMonthlyMortgagePayment(
+    wrapFinancedBalance,
+    wrapNoteInterestRate,
+    creativeAmortizationYears
+  )
+  const wrapTotalMonthlyPayment =
+    wrapMonthlyPayment !== null
+      ? Math.round((wrapMonthlyPayment + (operatingExpenses.total || 0)) * 100) / 100
+      : null
+  const wrapMonthlyCashFlow =
+    monthlyRent !== null && wrapTotalMonthlyPayment !== null
+      ? Math.round((monthlyRent - wrapTotalMonthlyPayment) * 100) / 100
+      : null
+  const wrapBalloonBalance = remainingLoanBalance(
+    wrapFinancedBalance,
+    wrapNoteInterestRate,
+    creativeAmortizationYears,
+    Math.round(creativeBalloonYears * 12)
+  )
+  const wrapCashToClose =
+    creativeDownPayment !== null
+      ? Math.round((creativeDownPayment + liensOrTaxes + (fixedCreativeClosingBuffer || 0)) * 100) / 100
+      : null
 
   const distress = conditionScore(input.propertyCondition)
   const urgency = timelineScore(input.timelineToSell)
   const hasEstimate = estimate.estimateValue !== null
-  const hasRent = estimate.rentEstimate !== null
+  const hasRent = monthlyRent !== null
   const isTenant = /tenant|rental|leased/i.test(String(input.occupancyStatus || ''))
   const highDebt =
     estimate.ltvEstimate !== null
@@ -559,26 +824,36 @@ export function buildPropertyOpportunityAnalysis(
         : false
   const creativeOfferCanMeetTarget =
     (sellerFinanceMonthlyCashFlow !== null && sellerFinanceMonthlyCashFlow >= targetMonthlyCashFlow * 0.8) ||
-    (subjectToMonthlyCashFlow !== null && subjectToMonthlyCashFlow >= targetMonthlyCashFlow * 0.8)
+    (subjectToMonthlyCashFlow !== null && subjectToMonthlyCashFlow >= targetMonthlyCashFlow * 0.8) ||
+    (wrapMonthlyCashFlow !== null && wrapMonthlyCashFlow >= targetMonthlyCashFlow * 0.8)
   const creativeOfferNearAsk =
     askingPrice !== null &&
     ((sellerFinanceMaxPrice !== null && sellerFinanceMaxPrice >= askingPrice) ||
-      (subjectToMaxPrice !== null && subjectToMaxPrice >= askingPrice))
+      (subjectToMaxPrice !== null && subjectToMaxPrice >= askingPrice) ||
+      (wrapMaxPrice !== null && wrapMaxPrice >= askingPrice))
 
-  const fastCashScore = bounded(distress * 0.45 + urgency * 0.35 + (hasEstimate ? 14 : 0) + (hasHealthyEquity(estimate) ? 8 : 0))
+  const fastCashScore = bounded(
+    distress * 0.45 +
+      urgency * 0.35 +
+      (hasEstimate ? 14 : 0) +
+      (hasHealthyEquity(estimate) ? 8 : 0) +
+      Math.min(8, listingPressurePoints * 0.2)
+  )
   const creativeScore = bounded(
     (highDebt ? 42 : 16) +
       (urgency < 65 ? 18 : 8) +
       (hasEstimate ? 12 : 0) +
       (isTenant ? 8 : 0) +
       (creativeOfferCanMeetTarget ? 16 : 0) +
-      (creativeOfferNearAsk ? 10 : 0)
+      (creativeOfferNearAsk ? 10 : 0) +
+      Math.min(16, Math.round(listingPressurePoints * 0.7))
   )
   const novationScore = bounded(
     (/good|average|excellent|renovated|livable/i.test(String(input.propertyCondition || '')) ? 34 : 14) +
       (discountToValuePercent !== null && discountToValuePercent >= 8 ? 24 : 10) +
       (urgency <= 70 ? 18 : 8) +
-      (hasEstimate ? 12 : 0)
+      (hasEstimate ? 12 : 0) +
+      Math.min(10, Math.round(listingPressurePoints * 0.35))
   )
 
   const estimatedReserves =
@@ -672,6 +947,7 @@ export function buildPropertyOpportunityAnalysis(
     flipProfit !== null && flipProfit < 15000 && isFlipStyle ? 'Thin profit spread' : null,
     operatorCashNeeded !== null && operatorCashAvailable < operatorCashNeeded * 0.5 ? 'Too much operator cash required' : null,
     missingItems.length > 0 ? 'Missing documents or borrower details' : null,
+    usableComps.length === 0 && manualArv === null ? 'No comparable sales entered' : null,
     exitStrategy === 'not_sure' ? 'No clear exit strategy' : null,
     totalCapitalAvailable !== null && totalCashNeeded !== null && totalCapitalAvailable < totalCashNeeded ? 'Overleveraged capital stack' : null,
   ].filter(Boolean) as string[]
@@ -716,6 +992,46 @@ export function buildPropertyOpportunityAnalysis(
       (dscr !== null && dscr >= 1.1 ? 18 : dscr !== null ? 8 : 4) +
       fundingReadinessScore * 0.34
   )
+  const builderDisposition = buildBuilderDispositionPlan({
+    city: input.city ?? null,
+    state: input.state ?? null,
+    propertyType: input.propertyType ?? null,
+    propertyCondition: input.propertyCondition ?? null,
+    squareFeet: input.squareFeet ?? null,
+    askingPrice: purchasePrice,
+    estimateValue: estimate.estimateValue,
+    arv,
+    repairBudget,
+    mao70,
+    balancedCashReview,
+    conservativeCashReview,
+    flipProfit,
+    discountToValuePercent,
+  })
+  const effectiveAssignmentFee =
+    manualAssignmentFee ??
+    builderDisposition.suggestedAssignmentFee ??
+    (isWholesaleStyle ? 10000 : null)
+  const dealRuleType = getDealRuleType(input.propertyType)
+  const dealRulePercent = getDealRulePercent(input.propertyType)
+  const scorecardArv = arv
+  const maoWithFee = computeMao({
+    arv: scorecardArv,
+    rulePct: dealRulePercent,
+    repairCost: repairBudget,
+    assignmentFee: effectiveAssignmentFee,
+  })
+  const assignmentSpread = computeSpread({
+    mao: maoWithFee,
+    sellerAsk: askingPrice,
+  })
+  const endBuyerProfit = computeEndBuyerProfit({
+    arv: scorecardArv,
+    sellerAsk: askingPrice,
+    assignmentFee: effectiveAssignmentFee,
+    repairCost: repairBudget,
+  })
+  const dealGrade = gradeDeal({ spread: assignmentSpread })
 
   const routeFit = [
     {
@@ -741,6 +1057,17 @@ export function buildPropertyOpportunityAnalysis(
       label: 'Lender review',
       score: lenderScore,
       summary: routeSummary('Lender review', lenderScore),
+    },
+    {
+      key: 'builder_disposition' as const,
+      label: 'Builder / construction lane',
+      score: builderDisposition.score,
+      summary:
+        builderDisposition.score >= 72
+          ? 'Builder-fit opportunity with a workable MAO and assignment lane.'
+          : builderDisposition.score >= 48
+            ? 'Possible builder lane once scope and pricing are tightened.'
+            : 'Not ready for builder routing until the rehab or spread is clearer.',
     },
   ].sort((a, b) => b.score - a.score)
 
@@ -835,13 +1162,58 @@ export function buildPropertyOpportunityAnalysis(
         balloonBalance: subjectToBalloonBalance,
       },
     },
+    {
+      key: 'wrap_mortgage',
+      label: 'Wrap mortgage',
+      viability: creativeViabilityLabel(
+        wrapMonthlyCashFlow,
+        targetMonthlyCashFlow,
+        wrapSuggestedPrice,
+        wrapMaxPrice
+      ),
+      summary: creativeSummary(
+        'Wrap mortgage',
+        creativeViabilityLabel(
+          wrapMonthlyCashFlow,
+          targetMonthlyCashFlow,
+          wrapSuggestedPrice,
+          wrapMaxPrice
+        ),
+        askingPrice,
+        wrapMaxPrice
+      ),
+      caution:
+        existingLoanBalance === null
+          ? 'Add the existing payoff and underlying loan terms to stress-test a true wrap structure.'
+          : askingPrice !== null && wrapMaxPrice !== null && wrapMaxPrice < askingPrice
+            ? 'The wrap note still needs a lower price or softer seller terms to hit the cash-flow target.'
+            : null,
+      metrics: {
+        targetMonthlyCashFlow,
+        maxPriceToHitTargetCashFlow: wrapMaxPrice,
+        suggestedPurchasePrice: wrapSuggestedPrice,
+        cashToSellerNow: creativeDownPayment,
+        cashToClose: wrapCashToClose,
+        financedBalance: wrapFinancedBalance,
+        existingLoanBalance,
+        existingLoanPayment,
+        noteRatePercent: wrapNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: wrapMonthlyPayment,
+        totalMonthlyPayment: wrapTotalMonthlyPayment,
+        estimatedMonthlyCashFlow: wrapMonthlyCashFlow,
+        balloonBalance: wrapBalloonBalance,
+      },
+    },
   ]
 
   const buyerInterestScore = bounded(
     (hasEstimate ? 26 : 8) +
       Math.max(fastCashScore, creativeScore, novationScore) * 0.42 +
       (discountToValuePercent !== null && discountToValuePercent > 10 ? 12 : 4) +
-      (input.city && input.state ? 8 : 0)
+      (input.city && input.state ? 8 : 0) +
+      Math.min(10, usableComps.length * 3)
   )
 
   const buyerInterest = {
@@ -860,7 +1232,7 @@ export function buildPropertyOpportunityAnalysis(
         : 'The property needs more detail before it should be sent to buyers or lenders.',
   } satisfies PropertyOpportunityAnalysis['buyerInterest']
 
-  const dealStrengthScore = bounded(
+  const rawDealStrengthScore = bounded(
     (Math.min(20, Math.max(0, ((discountToValuePercent ?? equityPercent ?? 0) / 20) * 20))) +
       (estimatedMonthlyCashFlow !== null
         ? Math.min(15, Math.max(0, (estimatedMonthlyCashFlow / Math.max(targetMonthlyCashFlow, 1)) * 10 + 5))
@@ -872,7 +1244,14 @@ export function buildPropertyOpportunityAnalysis(
       Math.round(fundingReadinessScore * 0.15) +
       (exitStrategy !== 'not_sure' ? 10 : 4) +
       Math.min(10, Math.round(estimate.confidence / 10)) +
+      Math.min(8, usableComps.length * 2) +
       Math.max(0, 10 - riskFlags.length * 2)
+  )
+  const dealStrengthScore = dealStrengthScoreWithDealMath(
+    rawDealStrengthScore,
+    dealGrade,
+    assignmentSpread,
+    endBuyerProfit
   )
 
   const strengths = [
@@ -882,6 +1261,7 @@ export function buildPropertyOpportunityAnalysis(
     flipProfit !== null && flipProfit >= 25000 ? 'Projected flip spread is healthy' : null,
     fundingReadinessScore >= 70 ? 'File looks ready for capital review' : null,
     hasHealthyEquity(estimate) ? 'Seller equity appears workable' : null,
+    usableComps.length >= 2 ? `${usableComps.length} comparable sales support the ARV` : null,
   ].filter(Boolean) as string[]
 
   const capitalStackNotes = [
@@ -890,13 +1270,19 @@ export function buildPropertyOpportunityAnalysis(
     fundingGap !== null && fundingGap > 0 ? 'There is still an uncovered capital gap at the current assumptions.' : null,
     operatorCashNeeded !== null && operatorCashNeeded <= operatorCashAvailable ? 'Current operator cash looks adequate for the modeled structure.' : null,
     exitStrategy === 'seller_finance' ? 'Creative carry can reduce cash needed if payoff and title are clean.' : null,
+    builderDisposition.score >= 72 ? 'Builder packet and assignment draft are worth preparing if the seller wants speed.' : null,
   ].filter(Boolean) as string[]
 
   const topRoute = routeFit[0]
   const nextSteps = [
     'Verify ownership, payoff, liens, taxes, and property condition before any offer or routing.',
+    usableComps.length === 0 ? 'Add at least two recent sold comps so the ARV stops leaning on the baseline estimate.' : null,
+    hasListingContext ? 'Use the public listing context to confirm photo condition, pricing history, and seller pressure before outreach.' : null,
     topRoute ? `Start with ${topRoute.label.toLowerCase()} and keep the other paths available until the seller goal is clear.` : null,
     `Prepare the file for ${recommendedFundingPath.toLowerCase()} review with the missing items cleared first.`,
+    builderDisposition.score >= 60
+      ? 'Collect a builder buy box before seller outreach so the right neighborhoods, lot rules, and rehab tolerance are already defined.'
+      : null,
     'If the seller wants a real conversation, submit the property so VestBlock can create a routing packet.',
   ].filter(Boolean) as string[]
 
@@ -928,17 +1314,48 @@ export function buildPropertyOpportunityAnalysis(
       totalCashNeeded,
       fundingGap,
     },
+    dealMath: {
+      arvMode: dealArvMode,
+      ruleType: dealRuleType,
+      rulePercent: dealRulePercent,
+      assignmentFee: effectiveAssignmentFee,
+      mao: maoWithFee,
+      sellerAsk: askingPrice,
+      spread: assignmentSpread,
+      endBuyerProfit,
+      grade: dealGrade,
+    },
+    comparables: {
+      usedCount: usableComps.length,
+      averageSalePrice: compAverageSalePrice !== null ? Math.round(compAverageSalePrice) : null,
+      averagePricePerFoot:
+        compAveragePricePerFoot !== null ? Math.round(compAveragePricePerFoot * 100) / 100 : null,
+      selected: selectedComps,
+    },
+    listingContext: {
+      sourceUrl: listingSourceUrl,
+      status: listingStatus,
+      daysOnMarket,
+      priceCutCount,
+      lastPriceCutAmount,
+      pressureLabel: hasListingContext
+        ? listingStatus && /off market|private|unlisted/i.test(listingStatus)
+          ? 'Off-market or private'
+          : listingPressureLabel(hasListingContext, daysOnMarket, priceCutCount)
+        : 'Needs public listing context',
+      summary: !hasListingContext
+        ? 'Add public listing signals like days on market or price cuts to improve screening.'
+        : listingPressurePoints >= 18
+          ? 'The public listing trail shows visible pressure, which can support creative and follow-up strategy.'
+          : listingPressurePoints >= 8
+            ? 'There is enough public listing movement here to sharpen pricing and seller-pressure reads.'
+            : 'Public listing context is present, but it is not yet showing strong distress or pricing pressure.',
+      signals: listingSignals,
+    },
     dealStrength: {
       score: dealStrengthScore,
       label: dealStrengthLabel(dealStrengthScore),
-      summary:
-        dealStrengthScore >= 78
-          ? 'The numbers support active review across buyers and capital routes.'
-          : dealStrengthScore >= 62
-            ? 'There is enough signal here to keep the deal moving, but the file still needs discipline.'
-            : dealStrengthScore >= 42
-              ? 'This is a watchlist deal until pricing, scope, or borrower details improve.'
-              : 'The current structure is thin and should be tightened before real routing.',
+      summary: dealStrengthSummary(dealStrengthScore, dealGrade, assignmentSpread),
       strengths,
     },
     fundingReadiness: {
@@ -978,6 +1395,7 @@ export function buildPropertyOpportunityAnalysis(
     riskFlags,
     creativeOffers,
     routeFit,
+    builderDisposition,
     buyerInterest,
     nextSteps,
     disclaimer:
