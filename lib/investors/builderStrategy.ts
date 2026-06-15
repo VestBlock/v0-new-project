@@ -33,6 +33,18 @@ export const HIGH_VALUE_BUYER_LANES = [
     ],
   },
   {
+    key: 'fire_damage_structural_rehab',
+    label: 'Fire-damage and structural rehab buyers',
+    feeTarget: '$10k-$50k+',
+    buys: 'Fire-damaged houses, burned shells, structural rehabs, insurance-heavy files, and demo-risk properties',
+    questions: [
+      'Do you buy fire-damaged houses, burned shells, structural rehabs, or only light cosmetic projects?',
+      'What minimum spread, max purchase price, and all-in basis make a fire-damage deal worth reviewing?',
+      'Will you buy assignments, or do you require direct purchase, double-close, inspection access, or contractor scope first?',
+      'What proof do you need before saying yes: photos, insurance scope, structural report, utility status, permits, or city violation history?',
+    ],
+  },
+  {
     key: 'small_multifamily_operator',
     label: 'Small multifamily operators',
     feeTarget: '$25k-$100k',

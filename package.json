@@ -68,6 +68,8 @@
     "developers:outreach": "node --env-file=.env.local scripts/developer-partner-outreach.mjs",
     "buyers:kimi-send-preview": "node --env-file=.env.local scripts/send-buyer-criteria-drafts.mjs --limit=25 --daily-cap=50",
     "buyers:kimi-send-approved": "node --env-file=.env.local scripts/send-buyer-criteria-drafts.mjs --limit=25 --daily-cap=50 --send",
+    "buyers:fire-damage-kc": "node --env-file=.env.local scripts/fire-damage-buyer-outreach.mjs",
+    "buyers:fire-damage-kc:send": "node --env-file=.env.local scripts/fire-damage-buyer-outreach.mjs --allow-generic --send",
     "investors:discover": "node --env-file=.env.local -e \"const headers=process.env.CRON_SECRET?{authorization:'Bearer '+process.env.CRON_SECRET}:{};fetch('http://localhost:3001/api/cron/investors-discover',{headers}).then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2)))\"",
     "investors:builders:discover": "node --env-file=.env.local -e \"const headers=process.env.CRON_SECRET?{authorization:'Bearer '+process.env.CRON_SECRET}:{};fetch('http://localhost:3001/api/cron/investors-discover?mode=builders',{headers}).then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2)))\"",
     "investors:pipeline:dry-run": "node --env-file=.env.local -e \"const headers=process.env.CRON_SECRET?{authorization:'Bearer '+process.env.CRON_SECRET}:{};fetch('http://localhost:3001/api/cron/investors-pipeline?dryRun=true',{headers}).then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2)))\"",

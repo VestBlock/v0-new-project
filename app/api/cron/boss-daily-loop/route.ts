@@ -7,6 +7,16 @@ import { NextResponse } from 'next/server'
 import { runDailyOperatingLoop } from '@/lib/admin/dailyOperatingLoop'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
+function paramFlag(url: URL, name: string) {
+  const value = url.searchParams.get(name)
+  if (value === null) return null
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
+}
+
+function envFlag(name: string) {
+  return ['1', 'true', 'yes', 'on'].includes((process.env[name] || '').toLowerCase())
+}
+
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
@@ -14,9 +24,10 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url)
-    const dryRun = !['0', 'false', 'no'].includes(url.searchParams.get('dryRun')?.toLowerCase() || '')
-    const dispatch = ['1', 'true', 'yes'].includes(url.searchParams.get('dispatch')?.toLowerCase() || '')
-    const send = ['1', 'true', 'yes'].includes(url.searchParams.get('send')?.toLowerCase() || '')
+    const dispatch = paramFlag(url, 'dispatch') ?? envFlag('BOSS_DAILY_LOOP_CRON_DISPATCH')
+    const send = paramFlag(url, 'send') ?? envFlag('BOSS_DAILY_LOOP_CRON_SEND')
+    const dryRunParam = paramFlag(url, 'dryRun')
+    const dryRun = dryRunParam ?? !(dispatch || send)
     const result = await runDailyOperatingLoop({ dryRun, dispatch, send })
     return NextResponse.json({ success: true, ...result })
   } catch (error) {

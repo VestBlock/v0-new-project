@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/command-center-autopilot",
       "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/boss-daily-loop",
+      "schedule": "0 14,17,20,23 * * *"
     }
   ]
 }
