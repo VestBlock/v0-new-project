@@ -11,8 +11,11 @@ const eslintConfig = [
   {
     ignores: [
       '.next/**',
+      '.venv-homeharvest/**',
       'node_modules/**',
       'out/**',
+      'tmp/**',
+      'vendor/**',
       'public/**',
       'db/**',
       '.agents/**',

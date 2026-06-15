@@ -285,7 +285,50 @@ export type CommandCenterDealMachineFreshness = {
   newestAgeDays: number | null
   nextRefreshMarkets: string[]
   topStale: { file: string; ageDays: number; market: string }[]
+  latestExportRequest: CommandCenterDealMachineExportRequest | null
   summary: string
+}
+
+export type CommandCenterDealMachineExportRequest = {
+  createdAt: string | null
+  ageMinutes: number | null
+  totalRows: number
+  strategies: string[]
+  markets: string[]
+  csvPath: string | null
+  guidePath: string | null
+  summaryFile: string | null
+  noDealMachineSkipTraceDefault: boolean
+}
+
+export type CommandCenterOsintSourceBoard = {
+  status: CommandStatus
+  summary: string
+  nextMove: string
+  totals: {
+    checklists: number
+    ready: number
+    needsReview: number
+    blocked: number
+    averageConfidence: number | null
+  }
+  sourceCards: {
+    key: string
+    label: string
+    status: CommandStatus
+    cadence: string
+    count: number
+    signalScore: number
+    detail: string
+    nextAction: string
+  }[]
+  marketSignals: {
+    market: string
+    count: number
+    ready: number
+    averageConfidence: number | null
+  }[]
+  actions: CommandCenterInlineAction[]
 }
 
 export type CommandCenterOutcomeLearning = {
@@ -393,6 +436,99 @@ export type CommandCenterDealPipeline = {
   }[]
 }
 
+export type ForeclosureSignalKey =
+  | 'tax_delinquency'
+  | 'code_violation'
+  | 'vacancy'
+  | 'probate'
+  | 'bankruptcy_dismissal'
+  | 'eviction_landlord'
+  | 'expired_listing'
+  | 'multiple_liens'
+  | 'foreclosure_filing'
+  | 'auction_postponed'
+  | 'failed_auction_reo'
+
+export type ForeclosureExitBucketKey =
+  | 'cash_offer'
+  | 'wholesale_assignment'
+  | 'novation'
+  | 'short_sale'
+  | 'subject_to'
+  | 'seller_finance'
+  | 'investor_buyer_match'
+  | 'lender_rescue_referral'
+  | 'attorney_housing_referral'
+  | 'surplus_funds_followup'
+
+export type ForeclosureCountySource = {
+  key: string
+  market: string
+  county: string
+  state: string
+  priority: 'home' | 'core' | 'expansion'
+  cadence: 'daily' | 'weekly'
+  sources: string[]
+  bestFirstSignals: ForeclosureSignalKey[]
+  nextAdapter: string
+}
+
+export type ForeclosureExitBucket = {
+  key: ForeclosureExitBucketKey
+  label: string
+  fit: string
+  guardrail: string
+}
+
+export type ForeclosureLeadSignalInput = {
+  equityPercent?: number | null
+  daysToSale?: number | null
+  ownerOccupied?: boolean | null
+  absenteeOwner?: boolean | null
+  vacant?: boolean | null
+  taxDelinquent?: boolean | null
+  codeViolation?: boolean | null
+  probate?: boolean | null
+  bankruptcyDismissed?: boolean | null
+  evictionLandlord?: boolean | null
+  expiredListing?: boolean | null
+  multipleLiens?: boolean | null
+  foreclosureFiled?: boolean | null
+  auctionPostponed?: boolean | null
+  failedAuctionReo?: boolean | null
+  rentalDemand?: number | null
+  buyerMatchCount?: number | null
+  lenderMatchCount?: number | null
+  arvSpread?: number | null
+}
+
+export type ForeclosureLeadRoute = {
+  score: number
+  urgency: 'watch' | 'active' | 'urgent'
+  signals: ForeclosureSignalKey[]
+  buckets: ForeclosureExitBucketKey[]
+  bestExit: ForeclosureExitBucketKey
+  complianceFlags: string[]
+  nextMove: string
+}
+
+export type CommandCenterForeclosureCommand = {
+  status: CommandStatus
+  summary: string
+  nextMove: string
+  countySources: ForeclosureCountySource[]
+  exitBuckets: ForeclosureExitBucket[]
+  starterPlays: {
+    key: string
+    label: string
+    difficulty: 'easy' | 'medium' | 'hard'
+    testPath: string
+    reason: string
+  }[]
+  sampleRoute: ForeclosureLeadRoute
+  guardrails: string[]
+}
+
 export type AgentPanelData = {
   key: AgentKey
   name: string
@@ -487,10 +623,12 @@ export type CommandCenterData = {
   sourceGovernor: SourceGovernorSnapshot
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
+  osintSourceBoard: CommandCenterOsintSourceBoard
   outcomeLearning: CommandCenterOutcomeLearning
   outboundGovernance: CommandCenterOutboundGovernance
   buyBoxGraph: CommandCenterBuyBoxGraph
   dealPipeline: CommandCenterDealPipeline
+  foreclosureCommand: CommandCenterForeclosureCommand
   autopilot: AutopilotSnapshot
   inbox: {
     summary: AgentKpi[]
@@ -505,6 +643,7 @@ export type CommandCenterData = {
     dmExports: { file: string; ageDays: number }[]
     onMarketSweep: CommandCenterOnMarketSweep
     taxCodeStack: CommandCenterTaxCodeStack
+    dealMachineExportRequest: CommandCenterDealMachineExportRequest | null
     distressStackRows: number | null
     suppressionRecords: {
       email: string
@@ -897,6 +1036,42 @@ function readJsonArray(file: string | null | undefined): AnyRow[] {
   }
 }
 
+function readJsonObject(file: string | null | undefined): Record<string, any> | null {
+  if (!file) return null
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, any>) : null
+  } catch {
+    return null
+  }
+}
+
+function loadDealMachineExportRequest(): CommandCenterDealMachineExportRequest | null {
+  const dir = path.join(process.cwd(), 'data', 'distress-leads')
+  try {
+    const latestSummary = newestLocalFile(dir, 'dealmachine-contact-export-request-summary-')
+    const parsed = readJsonObject(latestSummary?.file)
+    if (!latestSummary || !parsed) return null
+
+    const createdAt = typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date(latestSummary.mtimeMs).toISOString()
+    const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 60000))
+
+    return {
+      createdAt,
+      ageMinutes: Number.isFinite(ageMinutes) ? ageMinutes : null,
+      totalRows: Number(parsed.totalRows || 0),
+      strategies: Array.isArray(parsed.strategies) ? parsed.strategies.map(String).slice(0, 8) : [],
+      markets: Array.isArray(parsed.markets) ? parsed.markets.map(String).slice(0, 8) : [],
+      csvPath: typeof parsed.csvPath === 'string' ? parsed.csvPath : null,
+      guidePath: typeof parsed.guidePath === 'string' ? parsed.guidePath : null,
+      summaryFile: latestSummary.name,
+      noDealMachineSkipTraceDefault: parsed.noDealMachineSkipTraceDefault !== false,
+    }
+  } catch {
+    return null
+  }
+}
+
 function loadOnMarketSweep(): CommandCenterOnMarketSweep {
   const dir = path.join(process.cwd(), 'tmp', 'outreach')
   try {
@@ -1030,6 +1205,7 @@ function loadLocalSignals() {
   let distressStackRows: number | null = null
   const onMarketSweep = loadOnMarketSweep()
   const taxCodeStack = loadTaxCodeStack()
+  const dealMachineExportRequest = loadDealMachineExportRequest()
 
   try {
     const dir = path.join(process.cwd(), 'data', 'dm-exports')
@@ -1081,7 +1257,7 @@ function loadLocalSignals() {
 
   suppressionRecords.sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
 
-  return { dmExports, onMarketSweep, taxCodeStack, distressStackRows, suppressionRecords }
+  return { dmExports, onMarketSweep, taxCodeStack, dealMachineExportRequest, distressStackRows, suppressionRecords }
 }
 
 function eventMetadata(event: AnyRow): Record<string, any> {
@@ -1092,6 +1268,439 @@ function eventMetadata(event: AnyRow): Record<string, any> {
 function outcomeStatus(event: AnyRow) {
   const metadata = eventMetadata(event)
   return lower(metadata.status || metadata.outreachStatus || event.status || event.title || event.summary)
+}
+
+export const FORECLOSURE_COUNTY_SOURCES: ForeclosureCountySource[] = [
+  {
+    key: 'milwaukee-wi',
+    market: 'Milwaukee',
+    county: 'Milwaukee County',
+    state: 'WI',
+    priority: 'home',
+    cadence: 'daily',
+    sources: ['Sheriff sale list', 'Court foreclosure docket', 'Property tax search', 'Code violations', 'Probate filings'],
+    bestFirstSignals: ['tax_delinquency', 'code_violation', 'vacancy', 'foreclosure_filing', 'auction_postponed'],
+    nextAdapter: 'Milwaukee sheriff + tax/code daily sheet',
+  },
+  {
+    key: 'waukesha-wi',
+    market: 'Waukesha',
+    county: 'Waukesha County',
+    state: 'WI',
+    priority: 'core',
+    cadence: 'weekly',
+    sources: ['Sheriff sale list', 'Recorder liens', 'Property tax search', 'Probate filings'],
+    bestFirstSignals: ['tax_delinquency', 'multiple_liens', 'foreclosure_filing', 'probate'],
+    nextAdapter: 'Waukesha sheriff + tax weekly pull',
+  },
+  {
+    key: 'lucas-oh',
+    market: 'Toledo',
+    county: 'Lucas County',
+    state: 'OH',
+    priority: 'core',
+    cadence: 'daily',
+    sources: ['Court foreclosure docket', 'Sheriff sales', 'Tax delinquency', 'Code violations', 'Eviction filings'],
+    bestFirstSignals: ['foreclosure_filing', 'tax_delinquency', 'code_violation', 'eviction_landlord'],
+    nextAdapter: 'Lucas foreclosure + code violation daily pull',
+  },
+  {
+    key: 'cuyahoga-oh',
+    market: 'Cleveland',
+    county: 'Cuyahoga County',
+    state: 'OH',
+    priority: 'core',
+    cadence: 'daily',
+    sources: ['Court foreclosure docket', 'Sheriff sales', 'Treasurer tax delinquency', 'Code violations', 'Vacant registry'],
+    bestFirstSignals: ['foreclosure_filing', 'tax_delinquency', 'code_violation', 'vacancy', 'auction_postponed'],
+    nextAdapter: 'Cuyahoga court + tax/code daily pull',
+  },
+  {
+    key: 'wayne-mi',
+    market: 'Detroit',
+    county: 'Wayne County',
+    state: 'MI',
+    priority: 'core',
+    cadence: 'daily',
+    sources: ['Sheriff sales', 'Treasurer tax delinquency', 'Code violations', 'Vacant registry', 'REO follow-up'],
+    bestFirstSignals: ['tax_delinquency', 'code_violation', 'vacancy', 'failed_auction_reo'],
+    nextAdapter: 'Wayne tax/code + REO follow-up pull',
+  },
+]
+
+export const FORECLOSURE_EXIT_BUCKETS: ForeclosureExitBucket[] = [
+  {
+    key: 'cash_offer',
+    label: 'Fast cash offer',
+    fit: 'High equity, urgent seller, clean title path, or heavy distress where speed matters more than retail price.',
+    guardrail: 'Keep offer non-binding until title, condition, access, and decision-maker authority are verified.',
+  },
+  {
+    key: 'wholesale_assignment',
+    label: 'Wholesale assignment',
+    fit: 'Enough spread after repairs and fee, with a known buyer lane that can close quickly.',
+    guardrail: 'Do not market a deal without assignable contract rights and accurate condition disclosure.',
+  },
+  {
+    key: 'novation',
+    label: 'Novation / retail lift',
+    fit: 'Seller needs more than a cash offer but condition, photos, and access can support an agent or retail exit.',
+    guardrail: 'Use attorney-reviewed documents and make representation, commission, and risk clear.',
+  },
+  {
+    key: 'short_sale',
+    label: 'Short sale path',
+    fit: 'Low or negative equity with lender pressure where the lender may need to approve a reduced payoff.',
+    guardrail: 'No promise of lender approval; require lender, attorney, and seller documentation review.',
+  },
+  {
+    key: 'subject_to',
+    label: 'Subject-to / arrears takeover',
+    fit: 'Existing payment is attractive, arrears are manageable, and the seller understands the loan remains in their name.',
+    guardrail: 'Owner-occupant and foreclosure situations need attorney review before any document or promise.',
+  },
+  {
+    key: 'seller_finance',
+    label: 'Seller finance',
+    fit: 'Seller can wait for price, owns meaningful equity, or wants income instead of one cash check.',
+    guardrail: 'Disclose terms clearly and avoid implying tax/legal advice.',
+  },
+  {
+    key: 'investor_buyer_match',
+    label: 'Investor buyer match',
+    fit: 'Property fits a known buyer, builder, rental, or creative-finance buy box with enough margin.',
+    guardrail: 'Do not overstate buyer demand; use confirmed buy-box notes and buyer packet proof.',
+  },
+  {
+    key: 'lender_rescue_referral',
+    label: 'Lender rescue / refi referral',
+    fit: 'Seller wants to keep the property and has enough income/equity for a lender or counselor path.',
+    guardrail: 'Make clear VestBlock is not guaranteeing foreclosure stoppage or credit approval.',
+  },
+  {
+    key: 'attorney_housing_referral',
+    label: 'Attorney / housing counselor referral',
+    fit: 'Owner-occupant foreclosure, bankruptcy, probate, or legal distress where advice must come from licensed parties.',
+    guardrail: 'Do not give legal advice; route to qualified counsel or HUD-approved housing resources.',
+  },
+  {
+    key: 'surplus_funds_followup',
+    label: 'Surplus funds follow-up',
+    fit: 'Auction/REO outcome creates possible surplus, relocation, or second-touch opportunity.',
+    guardrail: 'Follow state rules for surplus recovery and avoid upfront-fee foreclosure-rescue claims.',
+  },
+]
+
+function uniqueValues<T extends string>(values: T[]) {
+  return [...new Set(values)]
+}
+
+function boundedNumber(value: number | null | undefined, min: number, max: number) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(min, Math.min(max, parsed))
+}
+
+export function buildForeclosureLeadRoute(input: ForeclosureLeadSignalInput): ForeclosureLeadRoute {
+  const signals: ForeclosureSignalKey[] = []
+  if (input.taxDelinquent) signals.push('tax_delinquency')
+  if (input.codeViolation) signals.push('code_violation')
+  if (input.vacant) signals.push('vacancy')
+  if (input.probate) signals.push('probate')
+  if (input.bankruptcyDismissed) signals.push('bankruptcy_dismissal')
+  if (input.evictionLandlord) signals.push('eviction_landlord')
+  if (input.expiredListing) signals.push('expired_listing')
+  if (input.multipleLiens) signals.push('multiple_liens')
+  if (input.foreclosureFiled) signals.push('foreclosure_filing')
+  if (input.auctionPostponed) signals.push('auction_postponed')
+  if (input.failedAuctionReo) signals.push('failed_auction_reo')
+
+  const equity = boundedNumber(input.equityPercent, 0, 100)
+  const daysToSale = input.daysToSale == null ? null : boundedNumber(input.daysToSale, 0, 365)
+  const buyerMatches = boundedNumber(input.buyerMatchCount, 0, 50)
+  const lenderMatches = boundedNumber(input.lenderMatchCount, 0, 50)
+  const rentalDemand = boundedNumber(input.rentalDemand, 0, 10)
+  const arvSpread = boundedNumber(input.arvSpread, 0, 500000)
+  const ownerOccupied = Boolean(input.ownerOccupied)
+  const hasTaxCodeStack = Boolean(input.taxDelinquent && input.codeViolation)
+
+  let score = 18
+  score += Math.min(24, equity * 0.3)
+  score += signals.length * 5
+  if (hasTaxCodeStack) score += 12
+  if (input.vacant && (input.taxDelinquent || input.codeViolation)) score += 8
+  if (input.bankruptcyDismissed) score += 8
+  if (input.auctionPostponed) score += 7
+  score += Math.min(10, buyerMatches * 4)
+  score += Math.min(6, lenderMatches * 3)
+  if (rentalDemand >= 7) score += 6
+  if (arvSpread >= 25000) score += 8
+  if (daysToSale !== null && daysToSale <= 14) score += 12
+  else if (daysToSale !== null && daysToSale <= 45) score += 7
+  if (ownerOccupied && input.foreclosureFiled) score -= 5
+
+  const buckets: ForeclosureExitBucketKey[] = []
+  if (input.failedAuctionReo) {
+    buckets.push('surplus_funds_followup', 'investor_buyer_match')
+  } else if (input.foreclosureFiled && equity < 10) {
+    buckets.push('short_sale', 'lender_rescue_referral')
+  } else {
+    if (equity >= 25) buckets.push('cash_offer', 'wholesale_assignment')
+    if (equity >= 35 && buyerMatches > 0) buckets.push('investor_buyer_match')
+    if (equity >= 20 && (input.expiredListing || (daysToSale !== null && daysToSale > 14))) buckets.push('novation')
+    if (equity >= 15 && rentalDemand >= 6 && (input.evictionLandlord || input.absenteeOwner)) buckets.push('subject_to', 'seller_finance')
+    if (lenderMatches > 0 && ownerOccupied) buckets.push('lender_rescue_referral')
+  }
+  if (ownerOccupied && input.foreclosureFiled) buckets.push('attorney_housing_referral')
+  if (!buckets.length) buckets.push('cash_offer')
+
+  const complianceFlags: string[] = []
+  if (ownerOccupied && input.foreclosureFiled) {
+    complianceFlags.push('Owner-occupant foreclosure: require attorney/housing-counselor language and no foreclosure-stop promises.')
+  }
+  if (input.bankruptcyDismissed) complianceFlags.push('Bankruptcy signal: avoid legal advice and verify case status before outreach.')
+  if (input.probate) complianceFlags.push('Probate signal: verify personal representative authority before discussing terms.')
+  if (daysToSale !== null && daysToSale <= 14) complianceFlags.push('Sale date under 14 days: urgent review, no guaranteed rescue claims.')
+
+  const urgency: ForeclosureLeadRoute['urgency'] =
+    daysToSale !== null && daysToSale <= 14 ? 'urgent' : signals.length >= 3 || score >= 65 ? 'active' : 'watch'
+  const uniqueBuckets = uniqueValues(buckets)
+  const bestExit =
+    uniqueBuckets.find((bucket) => bucket === 'investor_buyer_match') ||
+    uniqueBuckets.find((bucket) => bucket === 'novation') ||
+    uniqueBuckets[0]
+
+  const label = FORECLOSURE_EXIT_BUCKETS.find((bucket) => bucket.key === bestExit)?.label || 'Fast cash offer'
+  const nextMove =
+    urgency === 'urgent'
+      ? `Run owner-safety compliance review, verify title/sale date, then prepare ${label.toLowerCase()} outreach.`
+      : `Verify source evidence, run analyzer, and queue ${label.toLowerCase()} outreach with the right guardrails.`
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(score))),
+    urgency,
+    signals: uniqueValues(signals),
+    buckets: uniqueBuckets,
+    bestExit,
+    complianceFlags,
+    nextMove,
+  }
+}
+
+export function buildForeclosureCommandSnapshot(input: {
+  buyerMatchesOpen?: number
+  lenderMatchesOpen?: number
+  freshDealMachineExports?: number
+  sampleLead?: ForeclosureLeadSignalInput
+} = {}): CommandCenterForeclosureCommand {
+  const sampleRoute = buildForeclosureLeadRoute(
+    input.sampleLead || {
+      equityPercent: 42,
+      daysToSale: 21,
+      ownerOccupied: false,
+      absenteeOwner: true,
+      vacant: true,
+      taxDelinquent: true,
+      codeViolation: true,
+      foreclosureFiled: true,
+      buyerMatchCount: input.buyerMatchesOpen || 0,
+      lenderMatchCount: input.lenderMatchesOpen || 0,
+      rentalDemand: 7,
+      arvSpread: 32000,
+    }
+  )
+  const freshExports = Number(input.freshDealMachineExports || 0)
+  const status: CommandStatus = sampleRoute.urgency === 'urgent' ? 'red' : freshExports > 0 ? 'green' : 'yellow'
+
+  return {
+    status,
+    summary: `${FORECLOSURE_COUNTY_SOURCES.length} county lanes, ${FORECLOSURE_EXIT_BUCKETS.length} exit buckets, sample route ${sampleRoute.score}/100 into ${sampleRoute.bestExit.replace(/_/g, ' ')}.`,
+    nextMove:
+      freshExports > 0
+        ? 'Ingest the latest DealMachine exports, stack public distress signals, then route each lead to the best exit before drafting.'
+        : 'Build/export fresh DealMachine distress lists before sending; keep county evidence and exit route attached to each lead.',
+    countySources: FORECLOSURE_COUNTY_SOURCES,
+    exitBuckets: FORECLOSURE_EXIT_BUCKETS,
+    starterPlays: [
+      {
+        key: 'foreclosure-county-checklists',
+        label: 'County source checklists',
+        difficulty: 'easy',
+        testPath: 'scripts/test-command-center-ops.ts',
+        reason: 'Pure config and command-center payload; easiest to verify without browser automation.',
+      },
+      {
+        key: 'foreclosure-exit-routing',
+        label: 'Exit-option routing',
+        difficulty: 'easy',
+        testPath: 'scripts/test-command-center-ops.ts',
+        reason: 'Pure score/bucket function with deterministic inputs and no live data dependency.',
+      },
+      {
+        key: 'auction-cancellation-watch',
+        label: 'Auction cancellation watch',
+        difficulty: 'medium',
+        testPath: 'scripts/test-command-center-ops.ts + source adapter tests',
+        reason: 'Model is simple, but each county source needs a separate adapter and freshness check.',
+      },
+      {
+        key: 'bankruptcy-dismissal-watch',
+        label: 'Bankruptcy dismissal watch',
+        difficulty: 'hard',
+        testPath: 'adapter-specific integration tests',
+        reason: 'High value but court-source specific and compliance sensitive.',
+      },
+    ],
+    sampleRoute,
+    guardrails: [
+      'No foreclosure-stop promises, no upfront foreclosure-rescue fees, and no bank/government impersonation.',
+      'Use attorney-reviewed language for owner-occupant foreclosure, subject-to, short-sale, probate, and bankruptcy paths.',
+      'Disclose VestBlock as an investor/buyer or buyer representative; never tell owners to avoid their lender or attorney.',
+      'Keep cash offer, novation, short-sale, subject-to, seller-finance, and referral outreach in separate lanes.',
+    ],
+  }
+}
+
+function averageNumbers(values: number[]) {
+  const usable = values.filter((value) => Number.isFinite(value))
+  if (!usable.length) return null
+  return Math.round(usable.reduce((sum, value) => sum + value, 0) / usable.length)
+}
+
+function checklistMarket(row: AnyRow) {
+  return [row.city, row.state].filter(Boolean).join(', ') || 'Unknown market'
+}
+
+function checklistIsClosed(row: AnyRow) {
+  const status = lower(row.outreach_status || row.status)
+  return ['sent', 'responded', 'do_not_contact', 'done', 'completed', 'complete', 'archived'].includes(status)
+}
+
+function checklistIsReady(row: AnyRow) {
+  const status = lower(row.outreach_status || row.status)
+  const confidence = Number(row.confidence_score || 0)
+  return ['ready', 'approved'].includes(status) && confidence >= 60 && Boolean(row.contact_email || row.contact_phone)
+}
+
+export function buildOsintSourceBoard(input: {
+  researchChecklists?: AnyRow[]
+  dmExports?: { file: string; ageDays: number }[]
+  taxCodeStack?: CommandCenterTaxCodeStack
+  distressStackRows?: number | null
+  foreclosureCommand?: CommandCenterForeclosureCommand
+}): CommandCenterOsintSourceBoard {
+  const checklists = input.researchChecklists || []
+  const open = checklists.filter((row) => !checklistIsClosed(row))
+  const ready = open.filter(checklistIsReady)
+  const needsReview = open.filter((row) => lower(row.outreach_status || row.status) === 'needs_review')
+  const blocked = open.filter((row) => lower(row.recommended_lane) === 'no_outreach' || lower(row.outreach_status || row.status) === 'not_ready')
+  const averageConfidence = averageNumbers(open.map((row) => Number(row.confidence_score || 0)))
+  const freshDmExports = (input.dmExports || []).filter((file) => file.ageDays <= 7)
+  const taxCodeRows = Number(input.taxCodeStack?.writtenRows || 0)
+  const publicStackRows = Number(input.distressStackRows || 0)
+  const foreclosureLanes = input.foreclosureCommand?.countySources.length || FORECLOSURE_COUNTY_SOURCES.length
+
+  const rawSourceCards = [
+    {
+      key: 'dealmachine-contacts',
+      label: 'DealMachine Contacts',
+      status: freshDmExports.length ? 'green' : (input.dmExports || []).length ? 'yellow' : 'red',
+      cadence: 'export after list build',
+      count: freshDmExports.length,
+      signalScore: Math.min(100, freshDmExports.length * 18 + (ready.length ? 20 : 0)),
+      detail: freshDmExports.length
+        ? `${freshDmExports.length} fresh Contacts export${freshDmExports.length === 1 ? '' : 's'} with DNC visibility can feed checklists.`
+        : 'No fresh Contacts export is visible; build/export before increasing seller sends.',
+      nextAction: 'Export Contacts with phone type and DNC columns, then ingest into research checklists.',
+    },
+    {
+      key: 'tax-code-stack',
+      label: 'Tax + code stack',
+      status: taxCodeRows > 0 ? 'green' : publicStackRows > 0 ? 'yellow' : 'red',
+      cadence: 'daily public-record refresh',
+      count: taxCodeRows || publicStackRows,
+      signalScore: Math.min(100, Math.round((taxCodeRows || publicStackRows) / 25) + (taxCodeRows > 0 ? 35 : 10)),
+      detail: taxCodeRows
+        ? `${taxCodeRows} stacked tax/code row${taxCodeRows === 1 ? '' : 's'} available for higher-intent owner review.`
+        : publicStackRows
+          ? `${publicStackRows} public distress row${publicStackRows === 1 ? '' : 's'} need DealMachine/contact overlay.`
+          : 'Public tax/code stack has no usable rows yet.',
+      nextAction: taxCodeRows ? 'Route stacked rows into seller-options copy.' : 'Run the daily stack and overlay DealMachine Contacts.',
+    },
+    {
+      key: 'county-foreclosure-watch',
+      label: 'County foreclosure watch',
+      status: input.foreclosureCommand?.status || 'yellow',
+      cadence: 'daily core counties',
+      count: foreclosureLanes,
+      signalScore: Math.min(100, foreclosureLanes * 12 + (input.foreclosureCommand?.sampleRoute.score || 0) * 0.3),
+      detail: `${foreclosureLanes} county source lane${foreclosureLanes === 1 ? '' : 's'} are configured for foreclosure, auction, tax, code, probate, and vacancy evidence.`,
+      nextAction: 'Attach county evidence before choosing cash, novation, short-sale, subject-to, or referral copy.',
+    },
+    {
+      key: 'research-checklist-qa',
+      label: 'Research checklist QA',
+      status: ready.length ? 'green' : needsReview.length ? 'yellow' : open.length ? 'yellow' : 'red',
+      cadence: 'before outreach',
+      count: open.length,
+      signalScore: Math.min(100, (averageConfidence || 0) + Math.min(20, ready.length * 4)),
+      detail: `${open.length} open checklist${open.length === 1 ? '' : 's'}; ${ready.length} ready and ${needsReview.length} need review.`,
+      nextAction: ready.length ? 'Work ready checklists first, then move needs-review rows through owner/source validation.' : 'Create checklist rows from fresh exports and public source stacks.',
+    },
+  ] satisfies CommandCenterOsintSourceBoard['sourceCards']
+  const sourceCards: CommandCenterOsintSourceBoard['sourceCards'] = rawSourceCards.map((card) => ({
+    ...card,
+    signalScore: Math.max(0, Math.min(100, Math.round(card.signalScore))),
+  }))
+
+  const marketMap = new Map<string, { market: string; count: number; ready: number; confidence: number[] }>()
+  for (const row of open) {
+    const market = checklistMarket(row)
+    const entry = marketMap.get(market) || { market, count: 0, ready: 0, confidence: [] }
+    entry.count += 1
+    if (checklistIsReady(row)) entry.ready += 1
+    entry.confidence.push(Number(row.confidence_score || 0))
+    marketMap.set(market, entry)
+  }
+
+  const marketSignals = [...marketMap.values()]
+    .map((row) => ({
+      market: row.market,
+      count: row.count,
+      ready: row.ready,
+      averageConfidence: averageNumbers(row.confidence),
+    }))
+    .sort((a, b) => b.ready - a.ready || b.count - a.count)
+    .slice(0, 6)
+
+  const redCount = sourceCards.filter((card) => card.status === 'red').length
+  const greenCount = sourceCards.filter((card) => card.status === 'green').length
+  const status: CommandStatus = redCount >= 2 ? 'red' : greenCount >= 2 ? 'green' : 'yellow'
+
+  return {
+    status,
+    summary: `${sourceCards.length} OSINT source lane${sourceCards.length === 1 ? '' : 's'} online; ${ready.length} checklist${ready.length === 1 ? '' : 's'} ready and ${needsReview.length} need review.`,
+    nextMove:
+      ready.length > 0
+        ? 'Work ready research checklists into the correct outreach lane before building more generic volume.'
+        : freshDmExports.length
+          ? 'Convert fresh DealMachine exports into research checklists, then stack county/tax/code evidence before sends.'
+          : 'Build fresh DealMachine Contacts exports and public-record source evidence before new seller outreach.',
+    totals: {
+      checklists: open.length,
+      ready: ready.length,
+      needsReview: needsReview.length,
+      blocked: blocked.length,
+      averageConfidence,
+    },
+    sourceCards,
+    marketSignals,
+    actions: [
+      navigateAction('osint-board-open-checklists', 'Open checklists', '/admin/research-checklists', 'primary'),
+      navigateAction('osint-board-open-sources', 'Open lead sources', '/admin/lead-sources'),
+      navigateAction('osint-board-open-research', 'Open research', '/admin/research'),
+    ],
+  }
 }
 
 export function buildOutcomeLearningSnapshot(input: {
@@ -2155,8 +2764,9 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       ageDays: file.ageDays,
       market: marketFromDmExportFile(file.file),
     })),
+    latestExportRequest: local.dealMachineExportRequest,
     summary: local.dmExports.length
-      ? `${freshDmExports.length} fresh export${freshDmExports.length === 1 ? '' : 's'} and ${staleDmExports.length} stale export${staleDmExports.length === 1 ? '' : 's'} on disk.`
+      ? `${freshDmExports.length} fresh export${freshDmExports.length === 1 ? '' : 's'} and ${staleDmExports.length} stale export${staleDmExports.length === 1 ? '' : 's'} on disk${local.dealMachineExportRequest?.totalRows ? `; latest request has ${local.dealMachineExportRequest.totalRows} row${local.dealMachineExportRequest.totalRows === 1 ? '' : 's'} waiting for a Contacts export` : ''}.`
       : 'No DealMachine contact exports are on disk yet.',
   }
 
@@ -2376,6 +2986,18 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     dealPipelineItems: t.dealPipelineItems,
     propertyBuyerPackets: t.propertyBuyerPackets,
     propertyBuyerPacketSends: t.propertyBuyerPacketSends,
+  })
+  const foreclosureCommand = buildForeclosureCommandSnapshot({
+    buyerMatchesOpen: pendingBuyerMatches,
+    lenderMatchesOpen: pendingLenderMatches,
+    freshDealMachineExports: freshDmExports.length,
+  })
+  const osintSourceBoard = buildOsintSourceBoard({
+    researchChecklists: t.researchChecklists,
+    dmExports: local.dmExports,
+    taxCodeStack: local.taxCodeStack,
+    distressStackRows: local.distressStackRows,
+    foreclosureCommand,
   })
 
   // ── Market heat ────────────────────────────────────────────────────────────
@@ -3553,10 +4175,12 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     sourceGovernor,
     suppressionCenter,
     dealMachineFreshness,
+    osintSourceBoard,
     outcomeLearning,
     outboundGovernance,
     buyBoxGraph,
     dealPipeline,
+    foreclosureCommand,
     autopilot,
     inbox: {
       summary: inboxSummary,
@@ -3580,6 +4204,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       dmExports: local.dmExports.slice(0, 6),
       onMarketSweep: local.onMarketSweep,
       taxCodeStack: local.taxCodeStack,
+      dealMachineExportRequest: local.dealMachineExportRequest,
       distressStackRows: local.distressStackRows,
       suppressionRecords: local.suppressionRecords.slice(0, 6),
     },

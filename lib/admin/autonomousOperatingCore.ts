@@ -190,6 +190,16 @@ const STRATEGY_DEFINITIONS: Array<Omit<StrategyBatchPlan, 'status' | 'markets' |
       'Ask for condition and timing details without overpromising; disclose that builder pricing depends on access, title, zoning, and scope.',
   },
   {
+    strategyKey: 'land-wholesale',
+    strategyName: 'Land wholesale / developer activity',
+    sourceProvider: 'dealmachine',
+    feeThesis: '$15k-$60k+ when a vacant lot, land parcel, or teardown/infill file is worth more to a developer than the owner-facing value signal implies.',
+    targetBuyerLane: 'Infill developers, builders, land buyers, lot assemblers, and construction companies',
+    qualificationGate: 'Vacant/land/lot signal + developer activity score + title/access/utilities/zoning review before final price',
+    copyGuardrail:
+      'Use only a conditional 30-50% first-pass review range based on public value/listing signals; never present it as a final offer before buildability, utilities, access, survey, title, and liens are checked.',
+  },
+  {
     strategyKey: 'small-multifamily-portfolio',
     strategyName: 'Small multifamily / portfolio breakup',
     sourceProvider: 'dealmachine',
@@ -274,7 +284,13 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
     title: 'Prepare strategy-specific seller batches',
     cadence: 'hourly while slots remain',
     priority: 85,
-    config: { channel: 'email', sms: 'review_only', maxPerStrategy: 100 },
+    config: {
+      channel: 'email',
+      sms: 'review_only',
+      maxPerStrategy: 100,
+      dealMachineContactExportRequired: true,
+      noDealMachineSkipTraceDefault: true,
+    },
   },
   {
     jobKey: 'reply-memory-sync',
@@ -352,6 +368,9 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
   if (strategyKey === 'builder-infill-teardown') {
     return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Detroit, MI'])
   }
+  if (strategyKey === 'land-wholesale') {
+    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Columbus, OH', 'Cincinnati, OH', 'Indianapolis, IN', 'Louisville, KY'])
+  }
   if (strategyKey === 'small-multifamily-portfolio') {
     return normalizeMarketList([...heated, 'Cleveland, OH', 'Toledo, OH', 'Milwaukee, WI', 'Cincinnati, OH'])
   }
@@ -372,24 +391,27 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
 
 function strategyCommand(strategyKey: string, markets: string[], target: number) {
   const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join('|')
-  if (strategyKey === 'tax-code-stack') return `pnpm run distress:tax-code-stack:new-markets -- --limit=${target}`
+  if (strategyKey === 'tax-code-stack') return `pnpm run distress:dealmachine:export-request -- --strategy=tax-code-stack --markets="${marketArg}" --limit=${target}`
   if (strategyKey === 'senior-out-of-state-landlord') {
-    return `pnpm run sellers:outreach:portfolio-landlords -- --market="${marketArg}" --limit=${target}`
+    return `pnpm run distress:dealmachine:export-request -- --strategy=senior-out-of-state-landlord --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'builder-infill-teardown') {
-    return `pnpm run sellers:high-fee:builder-infill -- --market="${marketArg}" --limit=${target}`
+    return `pnpm run distress:dealmachine:export-request -- --strategy=builder-infill-teardown --markets="${marketArg}" --limit=${target}`
+  }
+  if (strategyKey === 'land-wholesale') {
+    return `pnpm run distress:dealmachine:export-request -- --strategy=land-wholesale --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'small-multifamily-portfolio') {
-    return `pnpm run sellers:high-fee:small-multifamily -- --market="${marketArg}" --limit=${target}`
+    return `pnpm run distress:dealmachine:export-request -- --strategy=small-multifamily-portfolio --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'institutional-btr-buybox') {
-    return `pnpm run sellers:high-fee:institutional-btr -- --market="${marketArg}" --limit=${target}`
+    return `pnpm run distress:dealmachine:export-request -- --strategy=institutional-btr-buybox --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'on-market-lowball-agent-sweep') {
     return `pnpm run sellers:on-market-lowball -- --limit=${target}`
   }
   if (strategyKey === 'commercial-small-bay-distress') {
-    return `pnpm run sellers:high-fee:commercial-distress -- --market="${marketArg}" --limit=${target}`
+    return `pnpm run distress:dealmachine:export-request -- --strategy=commercial-small-bay-distress --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'novation-retail-spread') {
     return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --offer-mode=novation --limit=${target}`
@@ -461,6 +483,13 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
         : 'Opt-outs and DNC records are visible before batching.',
     },
     {
+      label: 'DM exports',
+      value: 'contacts',
+      status: 'yellow',
+      detail:
+        'DealMachine lanes must generate an exact contact-export request, ingest the downloaded Contacts CSV, and verify DNC columns before sending. Skip tracing is not the default path.',
+    },
+    {
       label: 'Reply memory',
       value: replyMemories7d,
       status: replyMemories7d || input.replySignals7d === 0 ? 'green' : 'yellow',
@@ -505,7 +534,7 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
       : firstBlocked
         ? `${firstBlocked.strategyName}: ${firstBlocked.blockedReason}`
         : topBatch
-          ? `Run ${topBatch.strategyName} in ${topBatch.markets.slice(0, 2).join(' and ')} with ${topBatch.targetEmailCount || 100} separated emails and SMS review tasks.`
+          ? `Run ${topBatch.strategyName} in ${topBatch.markets.slice(0, 2).join(' and ')} with ${topBatch.targetEmailCount || 100} separated emails and SMS review tasks. DealMachine lanes start with a contact-export request, not skip tracing.`
           : 'Seed the durable jobs, then run a dry autopilot pass.'
 
   return {

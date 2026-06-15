@@ -790,7 +790,21 @@ async function main() {
     if (BCC) payload.bcc = BCC
     const { data, error } = await resend.emails.send(payload)
     const ok = !error
-    results.push({ ok, email: draft.agent_email, address: draft.address, id: data?.id || null, error: error?.message || null })
+    results.push({
+      ok,
+      strategy: LOWBALL_MODE ? "on-market-lowball-agent-sweep" : "stale-listing-creative-finance",
+      offer_mode: OFFER_MODE,
+      market: draft.market,
+      email: draft.agent_email,
+      subject: draft.subject,
+      address: draft.address,
+      price: draft.price,
+      days_on_market: draft.days_on_market,
+      distress_score: draft.distress_score,
+      sent_from: from,
+      id: data?.id || null,
+      error: error?.message || null,
+    })
     console.log(`${ok ? "ok" : "failed"} ${i + 1}/${drafts.length} ${draft.address} ${ok ? data?.id : error?.message}`)
     if (i < drafts.length - 1) await sleep(THROTTLE_MS)
   }

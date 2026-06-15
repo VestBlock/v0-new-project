@@ -276,7 +276,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     name: 'Fresh-City DealMachine Loop',
     category: 'acquisition',
     thesis:
-      'Philadelphia, Kansas City, and New Orleans have 14k+ DealMachine-ready addresses queued but zero contact exports. One Atlas session per city (build list → skip-trace → export) unlocks the whole automated outreach loop.',
+      'Philadelphia, Kansas City, and New Orleans have 14k+ DealMachine-ready addresses queued but zero contact exports. One Atlas session per city (build exact list → export Contacts with DNC fields → ingest) unlocks the whole automated outreach loop without making skip tracing the default.',
     whyNow: [
       dmBlocked
         ? 'No fresh contact exports on disk — the entire fresh-city lane is blocked on a 15-minute manual step.'
@@ -285,12 +285,12 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     ],
     score: clampScore(dmBlocked ? 78 : 40),
     effort: 'low',
-    expectedOutcome: 'Three untouched metros enter the outreach loop with skip-traced owner contacts.',
+    expectedOutcome: 'Three untouched metros enter the outreach loop with verified DealMachine contact exports and DNC visibility.',
     directives: [
       {
         agent: 'acquisition',
-        action: 'Build + skip-trace DealMachine lists for Philadelphia and Kansas City',
-        detail: 'Atlas → List Builder with the saved filters, convert to static, Export Contacts, drop in data/dm-exports/.',
+        action: 'Build exact DealMachine contact-export lists for Philadelphia and Kansas City',
+        detail: 'Generate the export request package, build the exact saved/static list in Atlas, Export Contacts with phone type and DNC columns, then drop the CSV in data/dm-exports/. Do not run DealMachine skip tracing unless explicitly approved.',
         priority: dmBlocked ? 'urgent' : 'normal',
       },
       {
@@ -301,6 +301,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     steps: [
+      { label: 'Build export request package', command: 'npm run distress:dealmachine:export-request:all' },
       { label: 'Ingest latest export', command: 'npm run distress:dealmachine:ingest-export:apply' },
       { label: 'Open the operating doc', href: '/admin/market-expansion' },
     ],
@@ -368,6 +369,75 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     ],
     complianceNote:
       'Use public-record language carefully. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
+  })
+
+  // ── 3B. Pre-auction distress routing ───────────────────────────────────────
+  plays.push({
+    key: 'pre-auction-distress-routing-layer',
+    name: 'Pre-Auction Distress Routing Layer',
+    category: 'acquisition',
+    thesis:
+      'Foreclosure and distress leads should not all receive the same cash-buyer pitch. Route each property into cash, assignment, novation, short sale, subject-to, seller finance, buyer match, lender referral, attorney referral, or surplus follow-up before outreach.',
+    whyNow: [
+      data.foreclosureCommand.summary,
+      `${data.foreclosureCommand.countySources.length} starter county lanes are configured: ${data.foreclosureCommand.countySources
+        .map((source) => `${source.market} ${source.state}`)
+        .join(', ')}.`,
+      `Sample route is ${data.foreclosureCommand.sampleRoute.urgency} with best exit ${data.foreclosureCommand.sampleRoute.bestExit.replace(/_/g, ' ')}.`,
+      freshExports.length
+        ? `${freshExports.length} fresh DealMachine export${freshExports.length === 1 ? '' : 's'} can be stacked with public distress evidence now.`
+        : 'Fresh DealMachine exports are still the bottleneck before this can send at scale.',
+    ],
+    score: clampScore(
+      70 +
+        (data.foreclosureCommand.status === 'green' ? 8 : data.foreclosureCommand.status === 'yellow' ? 2 : -6) +
+        (remainingOutboundCapacity > 0 ? 4 : 0) +
+        (openMatches > 0 ? 4 : 0)
+    ),
+    effort: 'medium',
+    expectedOutcome:
+      'Distress leads enter the right lane before contact, which should raise reply quality, protect compliance, and create bigger assignment opportunities than generic lowball outreach.',
+    directives: [
+      {
+        agent: 'acquisition',
+        action: 'Run the county source checklist before outreach',
+        detail:
+          'Prioritize Milwaukee, Toledo, Cleveland, Detroit, and Waukesha. Attach foreclosure/tax/code/vacancy/auction evidence to the lead record before it enters copy generation.',
+        priority: 'high',
+      },
+      {
+        agent: 'underwriting',
+        action: 'Route every distress lead through the exit-option stack',
+        detail:
+          'Score cash offer, assignment, novation, short sale, subject-to, seller finance, buyer match, lender referral, attorney referral, and surplus follow-up. Use the best exit to determine copy and next action.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Keep distress copy separated by exit bucket',
+        detail:
+          'Do not mix foreclosure, tax-code, on-market, portfolio landlord, buyer-match, or referral language. Each lane needs its own subject line, ask, and compliance footer.',
+        priority: 'high',
+      },
+      {
+        agent: 'qa',
+        action: 'Gate sensitive foreclosure paths',
+        detail:
+          'Owner-occupant foreclosure, subject-to, short sale, probate, and bankruptcy dismissal need attorney/housing-counselor guardrails before anything sends.',
+        priority: 'urgent',
+      },
+    ],
+    steps: [
+      {
+        label: 'Build fresh DealMachine lists',
+        command: 'pnpm run distress:dealmachine:website-list-builder:build -- --max-builds=30 --max-count=250',
+      },
+      { label: 'Request export package', command: 'pnpm run distress:dealmachine:export-request:all' },
+      { label: 'Ingest latest export', command: 'pnpm run distress:dealmachine:ingest-export:apply' },
+      { label: 'Open command center', href: '/admin/command-center' },
+    ],
+    complianceNote:
+      'No foreclosure-stop promises, no upfront foreclosure-rescue fees, no legal/tax advice, no bank/government impersonation, and no subject-to or owner-occupant foreclosure paperwork without attorney-reviewed language.',
   })
 
   // ── 4. Reply resurrection ──────────────────────────────────────────────────
@@ -454,6 +524,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     steps: [
       { label: 'Discover builder partners', command: 'npm run investors:builders:discover' },
       { label: 'Builder infill seller batch', command: 'npm run sellers:high-fee:builder-infill -- --market="milwaukee-wi|toledo-oh" --limit=100' },
+      { label: 'Land wholesale seller batch', command: 'npm run sellers:high-fee:land-wholesale -- --market="milwaukee-wi|toledo-oh|columbus-oh|cincinnati-oh" --limit=100 --cash-min-pct=0.30 --cash-max-pct=0.50' },
       { label: 'Multifamily seller batch', command: 'npm run sellers:high-fee:small-multifamily -- --market="cleveland-oh|toledo-oh" --limit=100' },
       { label: 'Commercial seller batch', command: 'npm run sellers:high-fee:commercial-distress -- --market="milwaukee-wi|cleveland-oh" --limit=100' },
     ],

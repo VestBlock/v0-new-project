@@ -9,6 +9,7 @@ import { checkAdminAccess } from '@/lib/auth/admin'
 import { runDailyOperatingLoop } from '@/lib/admin/dailyOperatingLoop'
 import { loadOperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
+import { commandCenterAuthError } from '../auth'
 
 const loopRunSchema = z.object({
   dryRun: z.boolean().optional().default(true),
@@ -19,7 +20,7 @@ const loopRunSchema = z.object({
 export async function GET() {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   try {
@@ -64,7 +65,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   const parsed = loopRunSchema.safeParse(await request.json().catch(() => ({})))

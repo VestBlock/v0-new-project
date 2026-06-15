@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { CommandCenterData } from "@/lib/admin/commandCenter"
-import type { CommandCenterModeKey } from "./command-center-command-deck"
+import type { CommandCenterModeKey } from "./command-center-types"
 
 type CopilotMessage = {
   id: string
@@ -40,7 +40,15 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function buildBoardBrief(data: CommandCenterData, mode: CommandCenterModeKey, focusAgentName?: string) {
+function isLocalCommand(query: string) {
+  return (
+    /^analyze(\s+.+)?$/i.test(query) ||
+    /^(show|open|launch|start|work)\s+/i.test(query) ||
+    /property command|outreach command|inbox command|boss strategy|strategy engine|lender matches|buyer matches|seller queue|lead queue|market watch|find builders/i.test(query)
+  )
+}
+
+function buildBoardBrief(data: CommandCenterData, mode: CommandCenterModeKey) {
   const sendReady =
     data.outreachQueues.flatMap((queue) => queue.kpis).find((kpi) => kpi.label.toLowerCase() === "send-ready")?.value ?? 0
   const hotReplies = data.inbox.sections.find((section) => section.key === "hot_replies")?.items.length ?? 0
@@ -204,7 +212,7 @@ export function CommandCenterCopilotPanel({
     },
   ])
 
-  const boardBrief = useMemo(() => buildBoardBrief(data, activeMode, focusAgentName), [activeMode, data, focusAgentName])
+  const boardBrief = useMemo(() => buildBoardBrief(data, activeMode), [activeMode, data])
   const signalCards = useMemo(() => buildSignalCards(data, activeMode), [activeMode, data])
   const quickPrompts = useMemo(() => buildQuickPrompts(data, activeMode), [activeMode, data])
 
@@ -220,6 +228,20 @@ export function CommandCenterCopilotPanel({
 
     setMessages((current) => [...current, userMessage])
     setInput("")
+
+    if (isLocalCommand(query)) {
+      onRunCommand(query)
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-command-${Date.now()}`,
+          role: "assistant",
+          content: "Opening that command inside the cockpit.",
+        },
+      ])
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -263,7 +285,7 @@ export function CommandCenterCopilotPanel({
     } finally {
       setLoading(false)
     }
-  }, [activeMode, focusAgentName, loading])
+  }, [activeMode, focusAgentName, loading, onRunCommand])
 
   useEffect(() => {
     if (!seed?.prompt || handledSeedRef.current === seed.id) return

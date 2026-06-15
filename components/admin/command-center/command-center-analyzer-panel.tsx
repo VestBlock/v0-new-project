@@ -134,6 +134,13 @@ type CommandCenterAnalyzerResult = {
       label: string
       summary: string
     }
+    signalScore: {
+      score: number
+      label: string
+      summary: string
+      signals: string[]
+      nextAction: string
+    }
     fundingReadiness: {
       label: string
       recommendedPath: string
@@ -873,6 +880,7 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                   { label: "Seller offer", value: money(result.opportunity.builderDisposition.recommendedSellerOffer), tone: "text-amber-200" },
                   { label: "Deal assignment", value: money(result.opportunity.dealMath.assignmentFee), tone: "text-violet-300" },
                   { label: "Builder spread", value: money(result.opportunity.builderDisposition.projectedGrossSpread), tone: "text-cyan-200" },
+                  { label: "Signal score", value: `${result.opportunity.signalScore.score}/100`, tone: "text-emerald-300" },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                     <p className="vb-mono text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
@@ -908,7 +916,7 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
                   <p className="text-xs font-semibold text-white">Comp-backed ARV</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -949,6 +957,34 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                       <span className="text-xs text-slate-500">Add listing signals if you want seller-pressure context in the stack.</span>
                     )}
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-white">Source signal</p>
+                      <p className="mt-2 text-sm font-medium text-emerald-100">{result.opportunity.signalScore.label}</p>
+                    </div>
+                    <span className="vb-mono text-sm font-semibold tabular-nums text-emerald-200">
+                      {result.opportunity.signalScore.score}/100
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-300">{result.opportunity.signalScore.summary}</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {result.opportunity.signalScore.signals.length ? (
+                      result.opportunity.signalScore.signals.slice(0, 5).map((signal) => (
+                        <span
+                          key={signal}
+                          className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-2 py-0.5 text-[0.65rem] text-emerald-100"
+                        >
+                          {signal}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">Needs source evidence.</span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-emerald-100/80">{result.opportunity.signalScore.nextAction}</p>
                 </div>
               </div>
 

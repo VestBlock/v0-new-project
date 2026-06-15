@@ -13,6 +13,7 @@ import {
 import { getCommandCenterData, type CommandCenterData } from "@/lib/admin/commandCenter"
 import { getOpenAIClient } from "@/lib/openai-server"
 import { COMMAND_CENTER_SELF_IMPROVING_SYSTEM_PROMPT } from "@/lib/admin/selfImprovement"
+import { commandCenterAuthError } from "../auth"
 
 const copilotRequestSchema = z.object({
   query: z.string().trim().min(1).max(1200),
@@ -208,7 +209,7 @@ function buildFallbackResponse(
 export async function POST(request: NextRequest) {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   try {

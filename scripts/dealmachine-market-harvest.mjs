@@ -13,6 +13,7 @@
  *   node --env-file=.env.local scripts/dealmachine-market-harvest.mjs --markets="Milwaukee,WI|Toledo,OH"
  *   node --env-file=.env.local scripts/dealmachine-market-harvest.mjs --top-markets=5 --contactable-only
  *   node --env-file=.env.local scripts/dealmachine-market-harvest.mjs --markets="Milwaukee,WI" --contactable-only --stacked
+ *   node --env-file=.env.local scripts/dealmachine-market-harvest.mjs --markets="Columbus,OH|Macon,GA" --contactable-only --stacked --fresh-only --newer-than=2026-06-01
  */
 
 import fs from "node:fs"
@@ -31,6 +32,9 @@ const REQUEST_TIMEOUT_MS = getArg("timeout-ms") ? Number.parseInt(getArg("timeou
 const CONTACTABLE_ONLY = args.includes("--contactable-only")
 const STACKED = args.includes("--stacked") || args.includes("--stacks")
 const TOP_MARKETS = getArg("top-markets") ? Number.parseInt(getArg("top-markets"), 10) : 0
+const RECENT_CUTOFF = getArg("newer-than") || getArg("created-after") || "2026-01-01"
+const FRESH_ONLY = args.includes("--fresh-only") || args.includes("--new-only")
+const WRITE_EMPTY_MARKET_FILES = args.includes("--write-empty")
 const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
 const TMP_DIR = path.join(process.cwd(), "tmp")
 const API_BASE = "https://api.dealmachine.com/public/v1"
@@ -103,7 +107,7 @@ function deriveTopMarkets(leads, limit) {
   return [...counts.values()]
     .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
     .slice(0, limit)
-    .map(({ count, ...market }) => market)
+    .map(({ count: _count, ...market }) => market)
 }
 
 function numberish(value) {
@@ -126,7 +130,7 @@ function boolish(value) {
   return value === true || String(value || "").toLowerCase() === "yes"
 }
 
-function isRecentLead(lead, cutoff = "2026-01-01") {
+function isRecentLead(lead, cutoff = RECENT_CUTOFF) {
   const created = String(lead.date_created || "").slice(0, 10)
   return Boolean(created) && created >= cutoff
 }
@@ -243,7 +247,7 @@ const STACK_DEFINITIONS = [
     label: "recent + live seller problem + contactable",
     match: (row) => {
       if (!row.contactable || row.market_status === "Sold" || row.market_status === "Fail" || row.preforeclosure_status === "Bank Owned") return false
-      if (String(row.date_created || "").slice(0, 10) < "2026-01-01") return false
+      if (String(row.date_created || "").slice(0, 10) < RECENT_CUTOFF) return false
       const signals = [
         boolish(row.tax_delinquent) || row.past_due_amount_value > 0,
         boolish(row.active_lien),
@@ -515,6 +519,14 @@ function writeCsv(file, rows) {
   fs.writeFileSync(file, [columns.join(","), ...rows.map((row) => columns.map((col) => esc(row[col])).join(","))].join("\n"))
 }
 
+function writeMarketCsv(file, rows) {
+  if (!rows.length && fs.existsSync(file) && !WRITE_EMPTY_MARKET_FILES) {
+    return { file, written: false, preservedExisting: true }
+  }
+  writeCsv(file, rows)
+  return { file, written: true, preservedExisting: false }
+}
+
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.mkdirSync(TMP_DIR, { recursive: true })
@@ -539,6 +551,7 @@ async function main() {
     const market = markets.find((item) => item.key === key)
     if (!market) continue
     if (CONTACTABLE_ONLY && !lead.has_email_address && !lead.has_phone_number) continue
+    if (FRESH_ONLY && !isRecentLead(lead)) continue
     byMarket.get(market.key)?.push(buildRow(lead, market))
   }
 
@@ -550,27 +563,25 @@ async function main() {
     const jsonPath = path.join(OUT_DIR, `dealmachine-api-${slug}.json`)
     const readyCsvPath = path.join(OUT_DIR, `dealmachine-api-${slug}-ready-now.csv`)
     const exportQueuePath = path.join(OUT_DIR, `dealmachine-api-${slug}-atlas-export-needed.csv`)
-    writeCsv(csvPath, rows)
+    const allWrite = writeMarketCsv(csvPath, rows)
     fs.writeFileSync(jsonPath, JSON.stringify(rows, null, 2))
-    writeCsv(
-      readyCsvPath,
-      rows.filter((row) => row.surfaced_emails || row.surfaced_phone_numbers)
-    )
-    writeCsv(
-      exportQueuePath,
-      rows.filter((row) => row.atlas_export_needed === "true")
-    )
+    const readyRows = rows.filter((row) => row.surfaced_emails || row.surfaced_phone_numbers)
+    const exportRows = rows.filter((row) => row.atlas_export_needed === "true")
+    const readyWrite = writeMarketCsv(readyCsvPath, readyRows)
+    const exportWrite = writeMarketCsv(exportQueuePath, exportRows)
     const stackSummaries = []
     if (STACKED) {
       for (const stack of STACK_DEFINITIONS) {
         const stackRows = rows.filter(stack.match)
         const stackPath = path.join(OUT_DIR, `dealmachine-api-${slug}-${stack.key}.csv`)
-        writeCsv(stackPath, stackRows)
+        const stackWrite = writeMarketCsv(stackPath, stackRows)
         stackSummaries.push({
           key: stack.key,
           label: stack.label,
           rows: stackRows.length,
           path: stackPath,
+          written: stackWrite.written,
+          preservedExisting: stackWrite.preservedExisting,
         })
       }
     }
@@ -587,6 +598,11 @@ async function main() {
       jsonPath,
       readyCsvPath,
       exportQueuePath,
+      writes: {
+        all: allWrite,
+        ready: readyWrite,
+        exportQueue: exportWrite,
+      },
       stacks: stackSummaries,
     })
   }
@@ -594,7 +610,7 @@ async function main() {
   const summaryPath = path.join(OUT_DIR, `dealmachine-api-harvest-summary-${stamp}.json`)
   fs.writeFileSync(
     summaryPath,
-    JSON.stringify({ fetched: allLeads.length, pageSize: PAGE_SIZE, maxPages: MAX_PAGES, hitPageCap: harvest.hitPageCap, markets: summary }, null, 2)
+    JSON.stringify({ fetched: allLeads.length, pageSize: PAGE_SIZE, maxPages: MAX_PAGES, hitPageCap: harvest.hitPageCap, freshOnly: FRESH_ONLY, newerThan: RECENT_CUTOFF, markets: summary }, null, 2)
   )
 
   console.log("=== DealMachine market harvest ===")
@@ -603,6 +619,8 @@ async function main() {
   console.log(`Markets:       ${markets.map((market) => `${market.city}, ${market.state}`).join(" | ")}`)
   console.log(`Contactable:   ${CONTACTABLE_ONLY ? "yes" : "no"}`)
   console.log(`Stacked:       ${STACKED ? "yes" : "no"}`)
+  console.log(`Fresh only:    ${FRESH_ONLY ? `yes, >= ${RECENT_CUTOFF}` : "no"}`)
+  console.log(`Write empty:   ${WRITE_EMPTY_MARKET_FILES ? "yes" : "no"}`)
   console.log(`Snapshot:      ${snapshotPath}`)
   console.log(`Summary:       ${summaryPath}`)
   for (const item of summary) {

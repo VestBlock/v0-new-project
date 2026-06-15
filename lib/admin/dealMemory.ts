@@ -174,6 +174,7 @@ function propertyAnalysisRecord(input: {
     createdAt,
     metadata: {
       listingPressure: input.opportunity.listingContext.pressureLabel,
+      signalScore: input.opportunity.signalScore,
       riskFlags: input.opportunity.riskFlags,
       selectedCompCount: input.opportunity.comparables.usedCount,
     },
@@ -336,6 +337,7 @@ export async function recordPropertyAnalysisRun(input: {
       grade: record.grade,
       spread: record.spread,
       primaryRoute: record.primaryRouteLabel,
+      signalScore: input.opportunity.signalScore?.score ?? null,
     },
   })
 

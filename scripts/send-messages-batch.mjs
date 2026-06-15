@@ -7,12 +7,20 @@ import { execFileSync } from "node:child_process"
 const RESULTS_DIR = path.resolve("tmp/outreach")
 
 function parseArgs(argv) {
-  const args = { queue: "", limit: Infinity, delayMs: 900, send: false, dryRun: false, service: "sms" }
+  const args = { queue: "", limit: Infinity, delayMs: 900, send: false, dryRun: false, service: "sms", strategy: "", excludePhones: [] }
   for (const raw of argv) {
     if (raw.startsWith("--queue=")) args.queue = path.resolve(raw.slice(8))
     else if (raw.startsWith("--limit=")) args.limit = Number(raw.slice(8)) || Infinity
     else if (raw.startsWith("--delay-ms=")) args.delayMs = Number(raw.slice(11)) || 900
     else if (raw.startsWith("--service=")) args.service = raw.slice(10).toLowerCase()
+    else if (raw.startsWith("--strategy=")) args.strategy = raw.slice(11)
+    else if (raw.startsWith("--exclude-phones=")) {
+      args.excludePhones = raw
+        .slice(17)
+        .split(/[,\s]+/)
+        .map(normalizePhone)
+        .filter(Boolean)
+    }
     else if (raw === "--send") args.send = true
     else if (raw === "--dry-run") args.dryRun = true
   }
@@ -103,12 +111,34 @@ function loadAlreadySent() {
       const json = JSON.parse(fs.readFileSync(file, "utf8"))
       for (const item of json.results || []) {
         if ((item.status === "verified" || item.status === "submitted") && item.phone && item.text_message) {
-          sent.add(`${item.phone}::${item.text_message}`)
+          sent.add(normalizePhone(item.phone))
         }
       }
     } catch {}
   }
   return sent
+}
+
+function writeResultsFile(outPath, args, results, selectedCount) {
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      {
+        createdAt: new Date().toISOString(),
+        queue: args.queue,
+        strategy: args.strategy || null,
+        send: !args.dryRun,
+        service: args.service,
+        selected: selectedCount,
+        submitted: results.filter((row) => row.status === "submitted").length,
+        verified: results.filter((row) => row.status === "verified").length,
+        failed: results.filter((row) => row.status === "failed").length,
+        results,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 function sendMessage(phone, message, servicePreference) {
@@ -155,16 +185,24 @@ function main() {
   }
   fs.mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = buildRunStamp()
+  const outPath = path.join(RESULTS_DIR, `dealmachine-export-phone-send-results-${stamp}.json`)
   const queue = parseCsv(fs.readFileSync(args.queue, "utf8"))
   const alreadySent = loadAlreadySent()
+  const excludedPhones = new Set(args.excludePhones)
+  const seenPhones = new Set()
   const candidates = queue
     .filter((row) => String(row.can_text).toLowerCase() === "true")
     .map((row) => ({
       ...row,
       phone: normalizePhone(row.phone),
-      sent_key: `${normalizePhone(row.phone)}::${row.text_message}`,
     }))
-    .filter((row) => isMobileRow(row) && row.phone && row.text_message && !alreadySent.has(row.sent_key))
+    .filter((row) => isMobileRow(row) && row.phone && row.text_message)
+    .filter((row) => !alreadySent.has(row.phone) && !excludedPhones.has(row.phone))
+    .filter((row) => {
+      if (seenPhones.has(row.phone)) return false
+      seenPhones.add(row.phone)
+      return true
+    })
     .slice(0, args.limit)
 
   const results = []
@@ -175,6 +213,7 @@ function main() {
   for (const row of candidates) {
     const record = {
       phone: row.phone,
+      strategy: row.strategy || args.strategy || "unknown",
       owner_name: row.owner_name,
       property_address_full: row.property_address_full,
       market: row.market,
@@ -196,27 +235,10 @@ function main() {
       console.error(`FAILED ${row.phone} :: ${row.property_address_full} :: ${record.error}`)
     }
     results.push(record)
+    writeResultsFile(outPath, args, results, candidates.length)
   }
 
-  const outPath = path.join(RESULTS_DIR, `dealmachine-export-phone-send-results-${stamp}.json`)
-  fs.writeFileSync(
-    outPath,
-    JSON.stringify(
-      {
-        createdAt: new Date().toISOString(),
-        queue: args.queue,
-        send: !args.dryRun,
-        service: args.service,
-        selected: candidates.length,
-        submitted: results.filter((row) => row.status === "submitted").length,
-        verified: results.filter((row) => row.status === "verified").length,
-        failed: results.filter((row) => row.status === "failed").length,
-        results,
-      },
-      null,
-      2,
-    ),
-  )
+  writeResultsFile(outPath, args, results, candidates.length)
   console.log(`Results file: ${outPath}`)
 }
 

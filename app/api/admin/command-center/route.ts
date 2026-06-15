@@ -4,11 +4,12 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { checkAdminAccess } from '@/lib/auth/admin'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
+import { commandCenterAuthError } from './auth'
 
 export async function GET() {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   try {

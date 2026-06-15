@@ -95,13 +95,14 @@ const baseInput: AutopilotSnapshotInput = {
 }
 
 const batches = buildStrategyBatchPlans(baseInput)
-assert.equal(batches.length, 9, 'Autopilot should keep seller and high-fee strategies separated')
+assert.equal(batches.length, 10, 'Autopilot should keep seller and high-fee strategies separated')
 assert.deepEqual(
   batches.map((batch) => batch.strategyKey),
   [
     'tax-code-stack',
     'senior-out-of-state-landlord',
     'builder-infill-teardown',
+    'land-wholesale',
     'small-multifamily-portfolio',
     'institutional-btr-buybox',
     'on-market-lowball-agent-sweep',
@@ -116,6 +117,11 @@ assert.ok(batches.every((batch) => batch.targetSmsReviewCount === batch.targetEm
 assert.ok(batches.every((batch) => batch.feeThesis && batch.targetBuyerLane && batch.qualificationGate), 'Every strategy should explain fee thesis, buyer lane, and gate')
 assert.ok(batches[0]?.markets.includes('Cleveland, OH'), 'Tax/code stack should use refresh markets first')
 assert.equal(batches.find((batch) => batch.strategyKey === 'builder-infill-teardown')?.targetBuyerLane.includes('builders'), true)
+assert.equal(batches.find((batch) => batch.strategyKey === 'land-wholesale')?.targetBuyerLane.includes('land buyers'), true)
+assert.ok(
+  batches.find((batch) => batch.strategyKey === 'land-wholesale')?.command.includes('--strategy=land-wholesale'),
+  'Land wholesale lane should use the DealMachine export-request path'
+)
 assert.ok(
   batches.find((batch) => batch.strategyKey === 'on-market-lowball-agent-sweep')?.markets.includes('Milwaukee, WI'),
   'On-market lane should use hot markets first'

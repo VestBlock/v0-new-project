@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { checkAdminAccess } from '@/lib/auth/admin'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
 import { runCommandCenterAutopilot } from '@/lib/admin/autonomousOperatingSystem'
+import { commandCenterAuthError } from '../auth'
 
 const autopilotRunSchema = z.object({
   dryRun: z.boolean().optional().default(true),
@@ -18,7 +19,7 @@ const autopilotRunSchema = z.object({
 export async function GET() {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   try {
@@ -35,7 +36,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+    return commandCenterAuthError(adminCheck)
   }
 
   const parsed = autopilotRunSchema.safeParse(await request.json().catch(() => ({})))

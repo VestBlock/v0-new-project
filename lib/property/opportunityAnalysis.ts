@@ -170,6 +170,13 @@ export type PropertyOpportunityAnalysis = {
     summary: string
     strengths: string[]
   }
+  signalScore: {
+    score: number
+    label: 'High-intent signal' | 'Useful signal' | 'Thin signal' | 'Needs source evidence'
+    summary: string
+    signals: string[]
+    nextAction: string
+  }
   fundingReadiness: {
     score: number
     label: 'Ready to route' | 'Needs more file prep' | 'Needs borrower cleanup' | 'Manual review'
@@ -439,6 +446,22 @@ function dealStrengthSummary(
   if (score >= 62) return 'There is enough signal here to keep the deal moving, but the file still needs discipline.'
   if (score >= 42) return 'This is a watchlist deal until pricing, scope, or borrower details improve.'
   return 'The current structure is thin and should be tightened before real routing.'
+}
+
+function signalScoreLabel(score: number): PropertyOpportunityAnalysis['signalScore']['label'] {
+  if (score >= 78) return 'High-intent signal'
+  if (score >= 58) return 'Useful signal'
+  if (score >= 36) return 'Thin signal'
+  return 'Needs source evidence'
+}
+
+function signalScoreSummary(score: number, signals: string[]) {
+  if (score >= 78) {
+    return `This file has strong source evidence and seller-pressure signals: ${signals.slice(0, 3).join(', ')}.`
+  }
+  if (score >= 58) return 'There is enough source context to keep researching and route the property with more confidence.'
+  if (score >= 36) return 'The file has some useful signals, but it still needs public-record evidence or better listing context before outreach.'
+  return 'The file is mostly assumption-driven. Add public records, comps, photos, listing history, or owner/source evidence before routing.'
 }
 
 function fundingReadinessLabel(score: number): PropertyOpportunityAnalysis['fundingReadiness']['label'] {
@@ -952,6 +975,51 @@ export function buildPropertyOpportunityAnalysis(
     totalCapitalAvailable !== null && totalCashNeeded !== null && totalCapitalAvailable < totalCashNeeded ? 'Overleveraged capital stack' : null,
   ].filter(Boolean) as string[]
 
+  const sourceSignalText = [
+    input.propertyCondition,
+    input.occupancyStatus,
+    input.timelineToSell,
+    input.preferredSalePath,
+    input.exitStrategy,
+    listingStatus,
+    listingNotes,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const sourceSignalFlags = [
+    liensOrTaxes > 0 ? 'Lien or tax amount entered' : null,
+    stringIncludesOneOf(sourceSignalText, [/tax|delinquen|past.?due/i]) ? 'Tax delinquency language' : null,
+    stringIncludesOneOf(sourceSignalText, [/code|violation|unsafe|condemn|blight/i]) ? 'Code or condition language' : null,
+    stringIncludesOneOf(sourceSignalText, [/vacant|abandoned|boarded/i]) ? 'Vacancy language' : null,
+    stringIncludesOneOf(sourceSignalText, [/foreclosure|sheriff|auction|preforeclosure/i]) ? 'Foreclosure or auction language' : null,
+    stringIncludesOneOf(sourceSignalText, [/probate|estate/i]) ? 'Probate or estate language' : null,
+    stringIncludesOneOf(sourceSignalText, [/expired|withdrawn|cancelled/i]) ? 'Expired listing language' : null,
+    daysOnMarket !== null && daysOnMarket >= 90 ? `${daysOnMarket} days on market` : null,
+    priceCutCount !== null && priceCutCount > 0 ? `${priceCutCount} price cut${priceCutCount === 1 ? '' : 's'}` : null,
+    listingSourceUrl ? 'Listing/source URL attached' : null,
+    usableComps.length ? `${usableComps.length} sold comp${usableComps.length === 1 ? '' : 's'} entered` : null,
+    estimate.confidence >= 65 ? 'Baseline estimate confidence is usable' : null,
+  ].filter(Boolean) as string[]
+  const signalScoreValue = bounded(
+    Math.min(24, sourceSignalFlags.length * 6) +
+      Math.min(18, usableComps.length * 4) +
+      Math.min(16, Math.round(listingPressurePoints * 0.7)) +
+      (listingSourceUrl ? 10 : 0) +
+      (liensOrTaxes > 0 ? 10 : 0) +
+      (hasListingContext ? 8 : 0) +
+      Math.min(14, Math.round(estimate.confidence / 7))
+  )
+  const signalScore = {
+    score: signalScoreValue,
+    label: signalScoreLabel(signalScoreValue),
+    summary: signalScoreSummary(signalScoreValue, sourceSignalFlags),
+    signals: sourceSignalFlags,
+    nextAction:
+      signalScoreValue >= 58
+        ? 'Attach source evidence to the deal file, then let the route stack choose outreach and buyer packet language.'
+        : 'Add public-record sources, photo/listing evidence, and at least two sold comps before sending or packaging.',
+  } satisfies PropertyOpportunityAnalysis['signalScore']
+
   let recommendedFundingPath: PropertyOpportunityAnalysis['fundingReadiness']['recommendedPath'] = 'Manual review'
   if (isWholesaleStyle) {
     recommendedFundingPath = 'Transactional funding'
@@ -1358,6 +1426,7 @@ export function buildPropertyOpportunityAnalysis(
       summary: dealStrengthSummary(dealStrengthScore, dealGrade, assignmentSpread),
       strengths,
     },
+    signalScore,
     fundingReadiness: {
       score: fundingReadinessScore,
       label: fundingReadinessLabel(fundingReadinessScore),

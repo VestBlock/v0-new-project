@@ -2,20 +2,13 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import type { User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isConfiguredAdminEmail } from '@/lib/auth/admin-emails';
 
 export type AdminCheck = {
   isAdmin: boolean;
   user: User | null;
   reason?: string;
 };
-
-function configuredAdminEmails() {
-  return [process.env.ADMIN_ALERT_EMAIL]
-    .filter(Boolean)
-    .flatMap((value) => String(value).split(','))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 export async function getServerUser() {
   const cookieStorePromise = cookies();
@@ -68,7 +61,7 @@ export async function checkAdminAccess(): Promise<AdminCheck> {
   }
 
   const email = user.email?.toLowerCase();
-  if (email && configuredAdminEmails().includes(email)) {
+  if (isConfiguredAdminEmail(email)) {
     return { isAdmin: true, user };
   }
 

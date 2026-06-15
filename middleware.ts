@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isConfiguredAdminEmail } from '@/lib/auth/admin-emails';
 
 const protectedAdminPages = [
   '/admin',
@@ -92,14 +93,6 @@ function withNoIndex(response: NextResponse, pathname: string) {
   }
 
   return response;
-}
-
-function configuredAdminEmails() {
-  return [process.env.ADMIN_ALERT_EMAIL]
-    .filter(Boolean)
-    .flatMap((value) => String(value).split(','))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
 }
 
 function getSupabaseConfig() {
@@ -279,7 +272,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const email = user.email?.toLowerCase();
-  let isAdmin = Boolean(email && configuredAdminEmails().includes(email));
+  let isAdmin = isConfiguredAdminEmail(email);
 
   if (!isAdmin && config && accessToken) {
     const role = await getUserProfileRole({

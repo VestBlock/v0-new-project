@@ -18,10 +18,20 @@ const originalResolveFilename = (Module as any)._resolveFilename
 }
 
 const {
+  buildForeclosureCommandSnapshot,
+  buildForeclosureLeadRoute,
+  buildOsintSourceBoard,
   buildBuyBoxGraphSnapshot,
   buildOutboundGovernanceSnapshot,
   buildOutcomeLearningSnapshot,
 } = require('../lib/admin/commandCenter') as typeof import('../lib/admin/commandCenter')
+const { configuredAdminEmails, isConfiguredAdminEmail } =
+  require('../lib/auth/admin-emails') as typeof import('../lib/auth/admin-emails')
+
+assert.ok(configuredAdminEmails().includes('contact@vestblock.io'))
+assert.ok(isConfiguredAdminEmail('contact@vestblock.io'))
+assert.ok(isConfiguredAdminEmail('acquisitions@vestblock.io'))
+assert.ok(isConfiguredAdminEmail('vestblockio@gmail.com'))
 
 const learning = buildOutcomeLearningSnapshot({
   replySignals7d: 2,
@@ -106,5 +116,75 @@ assert.equal(graph.status, 'green')
 assert.equal(graph.recentProperties[0]?.suggestedLane, 'Builder / developer')
 assert.equal(graph.recentProperties[1]?.suggestedLane, 'Creative route')
 assert.equal(graph.lanes.find((lane) => lane.key === 'creative')?.count, 1)
+
+const foreclosureRoute = buildForeclosureLeadRoute({
+  equityPercent: 45,
+  daysToSale: 10,
+  ownerOccupied: true,
+  foreclosureFiled: true,
+  taxDelinquent: true,
+  codeViolation: true,
+  vacant: true,
+  buyerMatchCount: 2,
+  lenderMatchCount: 1,
+  rentalDemand: 7,
+  arvSpread: 32000,
+})
+
+assert.equal(foreclosureRoute.urgency, 'urgent')
+assert.ok(foreclosureRoute.buckets.includes('investor_buyer_match'))
+assert.ok(foreclosureRoute.buckets.includes('attorney_housing_referral'))
+assert.ok(foreclosureRoute.complianceFlags.some((flag) => flag.includes('Owner-occupant')))
+assert.ok(foreclosureRoute.nextMove.includes('compliance review'))
+
+const foreclosureSnapshot = buildForeclosureCommandSnapshot({
+  buyerMatchesOpen: 2,
+  lenderMatchesOpen: 1,
+  freshDealMachineExports: 2,
+})
+
+assert.equal(foreclosureSnapshot.status, 'green')
+assert.equal(foreclosureSnapshot.countySources.length, 5)
+assert.equal(foreclosureSnapshot.exitBuckets.length, 10)
+assert.ok(foreclosureSnapshot.starterPlays.some((play) => play.difficulty === 'easy'))
+assert.ok(foreclosureSnapshot.guardrails.some((guardrail) => guardrail.includes('foreclosure-stop promises')))
+
+const osintBoard = buildOsintSourceBoard({
+  researchChecklists: [
+    {
+      city: 'Milwaukee',
+      state: 'WI',
+      outreach_status: 'ready',
+      confidence_score: 76,
+      contact_email: 'seller@example.com',
+      recommended_lane: 'seller_fast_cash',
+    },
+    {
+      city: 'Toledo',
+      state: 'OH',
+      outreach_status: 'needs_review',
+      confidence_score: 52,
+      recommended_lane: 'seller_creative',
+    },
+  ],
+  dmExports: [{ file: 'milwaukee-wi-2026-06-14.csv', ageDays: 0 }],
+  taxCodeStack: {
+    latestRunAt: '2026-06-14T12:00:00.000Z',
+    writtenRows: 42,
+    totalOutputRows: 100,
+    markets: [],
+    sourceNeededCount: 0,
+    latestSummaryFile: 'tax-code-summary.json',
+    summary: 'test',
+  },
+  distressStackRows: 100,
+  foreclosureCommand: foreclosureSnapshot,
+})
+
+assert.equal(osintBoard.status, 'green')
+assert.equal(osintBoard.totals.checklists, 2)
+assert.equal(osintBoard.totals.ready, 1)
+assert.ok(osintBoard.sourceCards.find((card) => card.key === 'dealmachine-contacts')?.status === 'green')
+assert.ok(osintBoard.marketSignals.find((market) => market.market === 'Milwaukee, WI')?.ready === 1)
 
 console.log('command-center-ops: ok')

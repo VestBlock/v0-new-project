@@ -1,6 +1,11 @@
 /**
- * Skip-trace prep — turns the distress-stack MASTER into an upload-ready file
- * for DealMachine or any other skip-trace service.
+ * Manual skip-trace prep — turns the distress-stack MASTER into an upload-ready
+ * file for DealMachine or any other skip-trace service.
+ *
+ * This is not VestBlock's default DealMachine workflow. Default flow is:
+ *   dealmachine-export-request -> DealMachine Contacts export -> ingest export
+ *
+ * Use this script only when a human explicitly approves paid skip tracing.
  *
  * We already have owner name + property address from public records.
  * Upload this file to DealMachine → Lists → Import to run skip-trace,
@@ -76,7 +81,8 @@ function main() {
   fs.writeFileSync(OUT, [cols.join(","), ...out.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n"))
 
   const withOwner = out.filter((r) => r.owner_name).length
-  console.log("=== Skip-trace upload prepared ===")
+  console.log("=== Manual skip-trace upload prepared ===")
+  console.log("Default workflow warning: use DealMachine contact exports first; skip tracing requires explicit approval.")
   console.log(`Records:         ${out.length} (deduped${MARKET_FILTER ? `, ${MARKET_FILTER} only` : ""})`)
   console.log(`With owner name: ${withOwner} (${Math.round((withOwner / out.length) * 100)}%)`)
   console.log(`File:            ${OUT}`)
@@ -86,7 +92,7 @@ function main() {
   console.log("  2. Upload: data/distress-leads/skip-trace-upload.csv")
   console.log("  3. Map: owner_name → Owner Name, property_address → Street Address,")
   console.log("          city → City, state → State")
-  console.log("  4. Let DealMachine skip-trace the list (included in your plan)")
+  console.log("  4. Only run skip tracing if explicitly approved; otherwise use Contacts export from an existing DealMachine list")
   console.log("  5. Export → Contacts → save to: data/dm-exports/<market>-YYYY-MM-DD.csv")
   console.log("  6. Run: npm run distress:dealmachine:ingest-export")
   console.log("  7. Then send: npm run distress:dealmachine:export-outreach -- --send")

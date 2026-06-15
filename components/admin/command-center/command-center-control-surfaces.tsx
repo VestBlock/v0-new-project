@@ -12,6 +12,7 @@ import {
   Home,
   Loader2,
   Mail,
+  Radar,
   Send,
   ShieldCheck,
   Sparkles,
@@ -167,6 +168,7 @@ export function CommandCenterStrategyOpsPanel({
   sourceGovernor,
   suppressionCenter,
   dealMachineFreshness,
+  osintSourceBoard,
   outcomeLearning,
   outboundGovernance,
   buyBoxGraph,
@@ -182,6 +184,7 @@ export function CommandCenterStrategyOpsPanel({
   sourceGovernor: CommandCenterData["sourceGovernor"]
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
+  osintSourceBoard: CommandCenterData["osintSourceBoard"]
   outcomeLearning: CommandCenterData["outcomeLearning"]
   outboundGovernance: CommandCenterData["outboundGovernance"]
   buyBoxGraph: CommandCenterData["buyBoxGraph"]
@@ -631,6 +634,80 @@ export function CommandCenterStrategyOpsPanel({
           </div>
         </div>
 
+        <div className="rounded-2xl border border-cyan-300/15 bg-slate-950/55 p-4 xl:col-span-2">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Radar className="h-4 w-4 text-cyan-200" />
+                <h3 className="text-sm font-semibold text-white">OSINT signal board</h3>
+              </div>
+              <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-400">{osintSourceBoard.summary}</p>
+              <p className="mt-2 text-xs leading-5 text-cyan-100/80">{osintSourceBoard.nextMove}</p>
+            </div>
+            <span className={cn("vb-mono rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[0.62rem] uppercase tracking-[0.14em]", kpiTone(osintSourceBoard.status))}>
+              {osintSourceBoard.status}
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+            {[
+              { label: "Open", value: osintSourceBoard.totals.checklists, tone: osintSourceBoard.totals.checklists ? "yellow" : "red" },
+              { label: "Ready", value: osintSourceBoard.totals.ready, tone: osintSourceBoard.totals.ready ? "green" : "yellow" },
+              { label: "Review", value: osintSourceBoard.totals.needsReview, tone: osintSourceBoard.totals.needsReview ? "yellow" : "green" },
+              { label: "Blocked", value: osintSourceBoard.totals.blocked, tone: osintSourceBoard.totals.blocked ? "red" : "green" },
+              { label: "Avg score", value: osintSourceBoard.totals.averageConfidence ?? "--", tone: osintSourceBoard.totals.averageConfidence && osintSourceBoard.totals.averageConfidence >= 60 ? "green" : "yellow" },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <p className="vb-mono text-[0.55rem] uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
+                <p className={cn("mt-1 text-lg font-semibold tabular-nums", kpiTone(metric.tone as AgentKpi["status"]))}>{metric.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {osintSourceBoard.sourceCards.map((card) => (
+              <div key={card.key} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{card.label}</p>
+                    <p className="mt-1 vb-mono text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">{card.cadence}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={cn("vb-mono text-[0.58rem] uppercase tracking-[0.14em]", kpiTone(card.status))}>{card.status}</span>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-cyan-100">{card.signalScore}/100</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-400">{card.detail}</p>
+                <p className="mt-2 text-xs leading-5 text-cyan-100/80">{card.nextAction}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-wrap gap-1.5">
+              {osintSourceBoard.marketSignals.length ? (
+                osintSourceBoard.marketSignals.map((market) => (
+                  <span key={market.market} className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[0.65rem] text-slate-300">
+                    {market.market} · {market.ready}/{market.count} ready
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-slate-500">No checklist market mix yet.</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {osintSourceBoard.actions.map((action) => (
+                <StreamActionButton
+                  key={action.id}
+                  action={action}
+                  runningActionId={runningActionId}
+                  onAction={onAction}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-2xl border border-white/[0.07] bg-slate-950/55 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -774,6 +851,44 @@ export function CommandCenterStrategyOpsPanel({
                 <span className="text-xs text-slate-500">No saved export markets yet.</span>
               )}
             </div>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-cyan-100">Contact export package</p>
+                {dealMachineFreshness.latestExportRequest ? (
+                  <p className="mt-1 text-[0.65rem] leading-5 text-slate-400">
+                    {dealMachineFreshness.latestExportRequest.totalRows} row{dealMachineFreshness.latestExportRequest.totalRows === 1 ? "" : "s"} waiting for a DealMachine Contacts download
+                    {dealMachineFreshness.latestExportRequest.ageMinutes != null ? ` · ${dealMachineFreshness.latestExportRequest.ageMinutes}m old` : ""}.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[0.65rem] leading-5 text-slate-500">
+                    No export-request package yet. Generate one before retrying a zero-sendable DealMachine lane.
+                  </p>
+                )}
+              </div>
+              <span className={cn("vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em]", dealMachineFreshness.latestExportRequest ? "text-amber-300" : "text-slate-500")}>
+                {dealMachineFreshness.latestExportRequest ? "export" : "none"}
+              </span>
+            </div>
+            {dealMachineFreshness.latestExportRequest ? (
+              <div className="mt-2 space-y-1.5 text-[0.62rem] leading-4 text-slate-500">
+                <p>
+                  <span className="text-cyan-100/80">Strategies:</span>{" "}
+                  {dealMachineFreshness.latestExportRequest.strategies.join(", ") || "not tagged"}
+                </p>
+                <p>
+                  <span className="text-cyan-100/80">Rule:</span>{" "}
+                  Contacts export only, include phone type + DNC columns, no DealMachine skip tracing by default.
+                </p>
+                {dealMachineFreshness.latestExportRequest.csvPath ? (
+                  <p className="truncate">
+                    <span className="text-cyan-100/80">CSV:</span> {dealMachineFreshness.latestExportRequest.csvPath}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-3 space-y-2">
