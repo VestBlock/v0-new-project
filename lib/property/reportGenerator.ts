@@ -167,7 +167,7 @@ function buildTopMetrics(payload: AnalyzerReportPayload) {
     { label: 'Rough value', value: money(estimate.estimateValue) },
     { label: 'Rent hint', value: money(estimate.rentEstimate) },
     { label: 'Cap rate', value: percent(opportunity.metrics.capRatePercent) },
-    { label: 'Cash on cash', value: percent(opportunity.metrics.cashOnCashReturnPercent) },
+    { label: 'Cash on cash (13% min)', value: percent(opportunity.metrics.cashOnCashReturnPercent) },
   ]
 }
 
@@ -242,7 +242,7 @@ function buildFinancialOverview(payload: AnalyzerReportPayload) {
     { label: 'MAO 70%', value: money(opportunity.metrics.mao70) },
     { label: 'Flip profit', value: money(opportunity.metrics.flipProfit) },
     { label: 'Flip ROI', value: percent(opportunity.metrics.flipRoiPercent) },
-    { label: 'Cash on cash', value: percent(opportunity.metrics.cashOnCashReturnPercent) },
+    { label: 'Cash on cash (13% min)', value: percent(opportunity.metrics.cashOnCashReturnPercent) },
   ])
 }
 
@@ -339,9 +339,18 @@ function buildCreativeStructures(payload: AnalyzerReportPayload) {
                 { label: 'Suggested price', value: money(offer.metrics.suggestedPurchasePrice) },
                 { label: 'Cash to seller now', value: money(offer.metrics.cashToSellerNow) },
                 { label: 'Cash to close', value: money(offer.metrics.cashToClose) },
+                { label: 'Entry fee', value: money(offer.metrics.entryFee) },
                 { label: 'Monthly payment', value: money(offer.metrics.monthlyPayment) },
                 { label: 'Monthly cash flow', value: money(offer.metrics.estimatedMonthlyCashFlow) },
+                { label: 'Senior debt', value: money(offer.metrics.seniorDebt) },
+                { label: 'Seller carry', value: money(offer.metrics.sellerCarryBalance) },
+                { label: 'Wrap/seller spread', value: money(offer.metrics.sellerMonthlySpread) },
+                { label: 'Balloon balance', value: money(offer.metrics.balloonBalance) },
+                { label: 'Exit LTV', value: offer.metrics.exitLoanToValuePercent !== null ? `${offer.metrics.exitLoanToValuePercent}%` : 'Needs details' },
               ])}
+              <p class="muted"><strong>Trust:</strong> ${escapeHtml(offer.trustLabel || 'Needs proof')} ${Number.isFinite(offer.trustScore) ? escapeHtml(`(${offer.trustScore}/100)`) : ''}</p>
+              ${offer.terms?.length ? `<div class="notes"><h3>Modeled terms</h3>${orderedList(offer.terms.slice(0, 6))}</div>` : ''}
+              ${offer.guardrails?.length ? `<div class="notes"><h3>Guardrails</h3>${orderedList(offer.guardrails.slice(0, 5))}</div>` : ''}
               ${offer.caution ? `<p class="warning">${escapeHtml(offer.caution)}</p>` : ''}
             </div>
           `

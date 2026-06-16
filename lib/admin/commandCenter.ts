@@ -11,7 +11,12 @@ import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/a
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
 import { buildDealMemorySnapshot, type DealMemorySnapshot } from '@/lib/admin/dealMemory'
 import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
-import { buildAutopilotSnapshot, type AutopilotSnapshot } from '@/lib/admin/autonomousOperatingCore'
+import {
+  SOURCE_DOCTRINE,
+  buildAutopilotSnapshot,
+  type AutopilotSnapshot,
+  type SourceDoctrineLane,
+} from '@/lib/admin/autonomousOperatingCore'
 
 export type CommandStatus = 'green' | 'yellow' | 'red'
 export type AgentStatus = 'active' | 'attention' | 'idle'
@@ -621,6 +626,7 @@ export type CommandCenterData = {
   operatingArchitecture: CommandCenterOperatingArchitecture
   dealMemory: DealMemorySnapshot
   sourceGovernor: SourceGovernorSnapshot
+  sourceDoctrine: SourceDoctrineLane[]
   suppressionCenter: CommandCenterSuppressionCenter
   dealMachineFreshness: CommandCenterDealMachineFreshness
   osintSourceBoard: CommandCenterOsintSourceBoard
@@ -4173,6 +4179,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     operatingArchitecture,
     dealMemory,
     sourceGovernor,
+    sourceDoctrine: SOURCE_DOCTRINE,
     suppressionCenter,
     dealMachineFreshness,
     osintSourceBoard,

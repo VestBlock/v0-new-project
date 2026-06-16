@@ -15,6 +15,8 @@ type SearchOutscraperGoogleMapsInput = {
   requestTimeoutMs?: number
 }
 
+const OUTSCRAPER_API_BASE_URL = (process.env.OUTSCRAPER_API_BASE_URL || 'https://api.datapipeplatform.cloud').replace(/\/+$/, '')
+
 function pickString(record: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = record[key]
@@ -114,7 +116,7 @@ export async function searchOutscraperGoogleMaps(input: SearchOutscraperGoogleMa
   const normalizedLeads: NormalizedLeadInput[] = []
   const region = input.region || (input.state?.length === 2 ? 'us' : null)
   const queries = input.niches.map((niche) => `${niche} ${input.city}${input.state ? ` ${input.state}` : ''} usa`)
-  const response = await fetch('https://api.app.outscraper.com/maps/search-v3', {
+  const response = await fetch(`${OUTSCRAPER_API_BASE_URL}/google-maps-search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

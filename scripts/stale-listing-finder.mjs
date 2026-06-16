@@ -55,6 +55,7 @@ const INPUT_CSV = getArg("input-csv")
 const THROTTLE_MS = Number.parseInt(getArg("throttle") || "2000", 10)
 const BCC = getArg("bcc") || ""
 const ANALYZER_BASE = (process.env.ANALYZER_URL || "https://vestblock.io").replace(/\/$/, "")
+const OUTSCRAPER_API_BASE_URL = (process.env.OUTSCRAPER_API_BASE_URL || "https://api.datapipeplatform.cloud").replace(/\/+$/, "")
 const OFFER_MODE = normalizeSlug(getArg("offer-mode") || getArg("strategy") || "creative")
 const SOURCE = normalizeSlug(getArg("source") || (INPUT_CSV ? "csv" : "manual"))
 const LOWBALL_MODE = ["lowball", "cash-lowball", "as-is-cash", "on-market-lowball"].includes(OFFER_MODE)
@@ -277,7 +278,7 @@ async function harvestOutscraper(market) {
 
   let response
   try {
-    response = await fetch(`https://api.app.outscraper.com/zillow-search?${params}`, {
+    response = await fetch(`${OUTSCRAPER_API_BASE_URL}/zillow-search?${params}`, {
       headers: {
         Accept: "application/json",
         "X-API-KEY": apiKey.replace(/[\r\n\t]/g, ""),

@@ -88,7 +88,7 @@ export type AutopilotReplyMemoryRow = {
 export type StrategyBatchPlan = {
   strategyKey: string
   strategyName: string
-  sourceProvider: 'dealmachine' | 'homeharvest' | 'public_records' | 'manual_csv'
+  sourceProvider: 'dealmachine' | 'homeharvest' | 'public_records' | 'manual_csv' | 'instantly'
   feeThesis: string
   targetBuyerLane: string
   qualificationGate: string
@@ -99,6 +99,16 @@ export type StrategyBatchPlan = {
   blockedReason: string | null
   command: string
   copyGuardrail: string
+}
+
+export type SourceDoctrineLane = {
+  key: 'seller_stacking' | 'network_capture' | 'dispatch'
+  label: string
+  primarySources: string[]
+  useFor: string[]
+  doNotUseFor: string[]
+  dailyLoopRule: string
+  commandHints: string[]
 }
 
 export type AutopilotSnapshotInput = {
@@ -147,6 +157,7 @@ export type AutopilotSnapshot = {
     replyMemories7d: number
     suppressionBlocks7d: number
   }
+  sourceDoctrine: SourceDoctrineLane[]
   batches: StrategyBatchPlan[]
   guardrails: {
     label: string
@@ -158,7 +169,125 @@ export type AutopilotSnapshot = {
 
 const DEFAULT_MARKETS = ['Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Detroit, MI']
 
+export const SOURCE_DOCTRINE: SourceDoctrineLane[] = [
+  {
+    key: 'seller_stacking',
+    label: 'Seller stacking and public-record evidence',
+    primarySources: ['DealMachine', 'DataPipe/Outscraper', 'county/public records', 'HomeHarvest/on-market sweeps'],
+    useFor: [
+      'motivated seller lists',
+      'tax delinquent + code violation stacks',
+      'vacant/absentee/landlord owner signals',
+      'on-market stale/condition-heavy listings',
+      'county record source maps and checklist evidence',
+    ],
+    doNotUseFor: [
+      'generic buyer network building',
+      'lender list building',
+      'national acquisition-manager prospecting',
+    ],
+    dailyLoopRule:
+      'Use DataPipe/Outscraper only when a stack, county source, map/local operator, builder, or public-record lane needs company/location evidence; do not spend it on generic network prospecting.',
+    commandHints: [
+      'distress:dealmachine:export-request:all',
+      'outscraper:county-records',
+      'outscraper:fire-damage',
+      'outscraper:land',
+    ],
+  },
+  {
+    key: 'network_capture',
+    label: 'Buyer, lender, builder, and operator lead capture',
+    primarySources: ['Instantly SuperSearch/Lead Finder', 'Instantly campaigns', 'manual CSV import'],
+    useFor: [
+      'cash buyers and real estate investors',
+      'hard money, private money, DSCR, bridge, and construction lenders',
+      'builders and developers',
+      'wholesalers and disposition managers',
+      'acquisition managers and property operators',
+    ],
+    doNotUseFor: [
+      'motivated seller discovery',
+      'tax delinquent source creation',
+      'foreclosure/probate/code source evidence',
+      'county record scraping',
+    ],
+    dailyLoopRule:
+      'Use Instantly as the default network-building source. Capture buy boxes, lending criteria, acquisition criteria, markets served, and referral/JV fit; route replies into buyer/lender/builder memory.',
+    commandHints: [
+      'instantly:doctor',
+      'instantly:demand',
+      'instantly:push',
+      'instantly:campaign',
+    ],
+  },
+  {
+    key: 'dispatch',
+    label: 'Outbound dispatch and learning',
+    primarySources: ['Instantly campaigns', 'acquisitions@vestblock.io', 'command-center reply memory'],
+    useFor: [
+      'network outreach dispatch',
+      'warm-start buyer/lender campaigns',
+      'reply classification',
+      'suppression learning',
+      'buy-box and lender-criteria memory',
+    ],
+    doNotUseFor: [
+      'unreviewed SMS sending',
+      'mixing seller and network copy in the same campaign',
+      'sending from contact@vestblock.io unless explicitly approved',
+    ],
+    dailyLoopRule:
+      'Keep seller campaigns, buyer/lender/builder campaigns, and follow-up campaigns separated. Stop on reply, learn the criteria, and update the next source decision before adding volume.',
+    commandHints: [
+      'outlook acquisitions monitor',
+      'instantly:campaign',
+      'lead source shootout after each new source test',
+    ],
+  },
+]
+
 const STRATEGY_DEFINITIONS: Array<Omit<StrategyBatchPlan, 'status' | 'markets' | 'targetEmailCount' | 'targetSmsReviewCount' | 'blockedReason' | 'command'>> = [
+  {
+    strategyKey: 'buyer-demand-capture',
+    strategyName: 'Buyer demand capture',
+    sourceProvider: 'instantly',
+    feeThesis: '$15k-$50k+ when seller outreach is aimed at buyers whose buy boxes are already verified.',
+    targetBuyerLane: 'Cash buyers, dispo managers, acquisition managers, landlords, and local investor operators',
+    qualificationGate: 'Instantly/contact source + real estate role + market served + buy-box or acquisition criteria captured',
+    copyGuardrail:
+      'Ask for buy-box criteria and partnership fit; do not send property claims, guaranteed deal flow, or seller-style copy.',
+  },
+  {
+    strategyKey: 'capital-desk-lender-capture',
+    strategyName: 'Capital desk lender capture',
+    sourceProvider: 'instantly',
+    feeThesis: '$10k-$40k referral/JV upside when deals with funding gaps can be routed to lenders fast.',
+    targetBuyerLane: 'Hard money, private money, DSCR, bridge, construction, and transactional lenders',
+    qualificationGate: 'Lender role + states served + product type + minimum deal size + borrower/deal no-go rules',
+    copyGuardrail:
+      'Collect lending criteria only; do not promise borrower volume, approvals, rates, terms, or closings.',
+  },
+  {
+    strategyKey: 'developer-builder-demand-capture',
+    strategyName: 'Developer / builder demand capture',
+    sourceProvider: 'instantly',
+    feeThesis: '$25k-$100k+ when land, fire damage, teardown, or infill seller leads are matched to builders before offer follow-up.',
+    targetBuyerLane: 'Developers, infill builders, general contractors, land buyers, and construction company owners',
+    qualificationGate: 'Builder/developer role + markets served + asset appetite + lot/rehab/fire-damage tolerance captured',
+    copyGuardrail:
+      'Ask what they buy/build and where; do not imply a specific property is available unless a real packet is ready.',
+  },
+  {
+    strategyKey: 'creative-finance-buyer-capture',
+    strategyName: 'Creative finance buyer capture',
+    sourceProvider: 'instantly',
+    feeThesis: '$15k-$60k+ when lowball cash offers can be followed by subject-to, seller-finance, or hybrid terms for buyers who actually understand them.',
+    targetBuyerLane: 'Subject-to buyers, seller-finance buyers, wrap buyers, rental operators, and creative acquisition managers',
+    qualificationGate: 'Creative finance role/keywords + proof of activity + markets served + minimum cash-flow criteria',
+    copyGuardrail:
+      'Keep it criteria-first; do not discuss due-on-sale, legal conclusions, or specific seller terms until attorney-reviewed property facts exist.',
+  },
   {
     strategyKey: 'tax-code-stack',
     strategyName: 'Tax delinquent + code violation',
@@ -268,7 +397,14 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
     title: 'Choose daily focus and challenger strategy',
     cadence: 'daily morning',
     priority: 100,
-    config: { localHour: 8, output: 'strategy plan + source blockers + send target' },
+    config: {
+      localHour: 8,
+      output: 'strategy plan + source blockers + send target',
+      sourceDoctrine: {
+        sellerStacking: 'DealMachine + DataPipe/Outscraper + county/public records',
+        networkCapture: 'Instantly SuperSearch/Lead Finder + Instantly campaigns',
+      },
+    },
   },
   {
     jobKey: 'source-rotation',
@@ -276,7 +412,14 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
     title: 'Rotate markets and sources before scraping',
     cadence: 'every 6 hours',
     priority: 90,
-    config: { avoidRepeatHours: 18, preferOwnedFreeSources: true },
+    config: {
+      avoidRepeatHours: 18,
+      preferOwnedFreeSources: true,
+      rules: [
+        'Outscraper/DataPipe only for stack methods, county records, local operators, builders, and map evidence.',
+        'Instantly is the default for buyer, lender, builder, wholesaler, acquisition-manager, and operator network capture.',
+      ],
+    },
   },
   {
     jobKey: 'seller-outreach-batch',
@@ -290,6 +433,7 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
       maxPerStrategy: 100,
       dealMachineContactExportRequired: true,
       noDealMachineSkipTraceDefault: true,
+      forbiddenSources: ['instantly_supersearch', 'instantly_lead_finder'],
     },
   },
   {
@@ -314,7 +458,10 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
     title: 'Route due seller and partner follow-ups',
     cadence: 'hourly',
     priority: 80,
-    config: { staleHours: [24, 48, 72] },
+    config: {
+      staleHours: [24, 48, 72],
+      keepLanesSeparated: ['seller', 'buyer', 'lender', 'builder', 'operator'],
+    },
   },
   {
     jobKey: 'deal-routing-sync',
@@ -362,6 +509,18 @@ function sourceBlockedReason(input: AutopilotSnapshotInput, provider: string) {
 function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
   const heated = normalizeMarketList(input.marketHeat.map((market) => market.market))
   const refresh = normalizeMarketList(input.nextRefreshMarkets)
+  if (strategyKey === 'buyer-demand-capture') {
+    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Detroit, MI', 'Indianapolis, IN'])
+  }
+  if (strategyKey === 'capital-desk-lender-capture') {
+    return normalizeMarketList(['Nationwide', 'Midwest', 'Ohio', 'Michigan', 'Wisconsin'])
+  }
+  if (strategyKey === 'developer-builder-demand-capture') {
+    return normalizeMarketList([...heated, 'Kansas City, MO', 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Indianapolis, IN'])
+  }
+  if (strategyKey === 'creative-finance-buyer-capture') {
+    return normalizeMarketList([...heated, 'Phoenix, AZ', 'Tampa, FL', 'Dallas, TX', 'Atlanta, GA', 'Kansas City, MO'])
+  }
   if (strategyKey === 'tax-code-stack') {
     return normalizeMarketList([...refresh, 'Cleveland, OH', 'Columbus, OH', 'Indianapolis, IN', 'Louisville, KY'])
   }
@@ -391,6 +550,19 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
 
 function strategyCommand(strategyKey: string, markets: string[], target: number) {
   const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join('|')
+  const marketList = markets.join('|')
+  if (strategyKey === 'buyer-demand-capture') {
+    return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=buyer-demand-capture --market="${marketList}" --limit=${target}`
+  }
+  if (strategyKey === 'capital-desk-lender-capture') {
+    return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=capital-desk-lender-capture --market="${marketList}" --limit=${target}`
+  }
+  if (strategyKey === 'developer-builder-demand-capture') {
+    return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=developer-builder-demand-capture --market="${marketList}" --limit=${target}`
+  }
+  if (strategyKey === 'creative-finance-buyer-capture') {
+    return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=creative-finance-buyer-capture --market="${marketList}" --limit=${target}`
+  }
   if (strategyKey === 'tax-code-stack') return `pnpm run distress:dealmachine:export-request -- --strategy=tax-code-stack --markets="${marketArg}" --limit=${target}`
   if (strategyKey === 'senior-out-of-state-landlord') {
     return `pnpm run distress:dealmachine:export-request -- --strategy=senior-out-of-state-landlord --markets="${marketArg}" --limit=${target}`
@@ -443,7 +615,7 @@ export function buildStrategyBatchPlans(input: AutopilotSnapshotInput): Strategy
       status,
       markets,
       targetEmailCount,
-      targetSmsReviewCount: targetEmailCount,
+      targetSmsReviewCount: definition.sourceProvider === 'instantly' ? 0 : targetEmailCount,
       blockedReason,
       command: strategyCommand(definition.strategyKey, markets, Math.max(targetEmailCount, 100)),
     }
@@ -488,6 +660,13 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
       status: 'yellow',
       detail:
         'DealMachine lanes must generate an exact contact-export request, ingest the downloaded Contacts CSV, and verify DNC columns before sending. Skip tracing is not the default path.',
+    },
+    {
+      label: 'Source doctrine',
+      value: 'split',
+      status: 'green',
+      detail:
+        'Outscraper/DataPipe is reserved for stacking, county/public records, local operators, and builder/source evidence. Instantly is the network lead-capture engine for buyers, lenders, builders, wholesalers, acquisition managers, and operators.',
     },
     {
       label: 'Reply memory',
@@ -553,6 +732,7 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
       replyMemories7d,
       suppressionBlocks7d,
     },
+    sourceDoctrine: SOURCE_DOCTRINE,
     batches,
     guardrails,
   }

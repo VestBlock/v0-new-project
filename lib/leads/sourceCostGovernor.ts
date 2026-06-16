@@ -5,6 +5,7 @@ export type SourceCostProvider =
   | 'homeharvest'
   | 'google_places'
   | 'outscraper'
+  | 'instantly'
   | 'public_records'
   | 'manual_csv'
 
@@ -93,11 +94,21 @@ const DEFAULT_POLICIES: Record<SourceCostProvider, SourcePolicy> = {
     provider: 'outscraper',
     label: 'Outscraper',
     costTier: 'paid',
-    dailyLimit: 0,
-    cooldownHours: 168,
+    dailyLimit: 4,
+    cooldownHours: 12,
     requiresPaidApproval: true,
     requiresApiKey: 'OUTSCRAPER_API_KEY',
     envEnableFlag: 'LEADS_ENABLE_OUTSCRAPER',
+    defaultEnabled: false,
+  },
+  instantly: {
+    provider: 'instantly',
+    label: 'Instantly network database and outreach',
+    costTier: 'paid',
+    dailyLimit: 2,
+    cooldownHours: 0,
+    requiresApiKey: 'INSTANTLY_API_KEY',
+    envEnableFlag: 'LEADS_ENABLE_INSTANTLY',
     defaultEnabled: false,
   },
   public_records: {
@@ -186,7 +197,7 @@ export function evaluateSourceCost(provider: SourceCostProvider, input: SourceCo
       costTier: policy.costTier,
       reason:
         provider === 'outscraper'
-          ? 'Paid scraper quarantined. Use DealMachine exports, HomeHarvest, or manual CSV until paid scraping is approved.'
+            ? 'Paid scraper disabled. Enable only with funded credits, ALLOW_PAID_SCRAPING=true, LEADS_ENABLE_OUTSCRAPER=true, and a daily source limit.'
           : 'Source disabled by environment policy.',
       dailyLimit,
       usedToday,
@@ -283,6 +294,7 @@ function sourceKeyMatches(row: Record<string, any>, provider: SourceCostProvider
   if (provider === 'homeharvest') return source.includes('homeharvest') || source.includes('stale_listing')
   if (provider === 'google_places') return source.includes('google_places')
   if (provider === 'outscraper') return source.includes('outscraper')
+  if (provider === 'instantly') return source.includes('instantly')
   if (provider === 'public_records') return /code|tax|probate|preforeclosure|vacant|accela|cincinnati|milwaukee/.test(source)
   return source.includes('csv')
 }
@@ -316,6 +328,7 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
     'public_records',
     'google_places',
     'outscraper',
+    'instantly',
     'manual_csv',
   ]
   const lanes = providers.map((provider) => {
@@ -339,17 +352,17 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
   const status: SourceGovernorSnapshot['status'] = red ? 'red' : paidSourcesBlocked > 0 || cooldownsActive > 0 ? 'yellow' : 'green'
 
   const nextActions = [
-    paidSourcesBlocked > 0 ? 'Keep paid scrapers quarantined until revenue or a specific operator override justifies them.' : null,
+    paidSourcesBlocked > 0 ? 'Keep paid sources controlled until funded credits, explicit approval flags, and daily source limits are configured.' : null,
     cooldownsActive > 0 ? 'Do not rerun cooled-down markets; rotate into a different source or market first.' : null,
-    runnable > 0 ? 'Use allowed lanes first: DealMachine exports, public records, HomeHarvest/on-market sweeps, or manual CSV.' : null,
+    runnable > 0 ? 'Use allowed lanes first: DealMachine seller exports, public records, HomeHarvest/on-market sweeps, Instantly network building, or manual CSV.' : null,
   ].filter(Boolean) as string[]
 
   return {
     status,
     summary:
       status === 'green'
-        ? 'Source usage is clean: owned/free lanes are available and no paid scraper is active.'
-        : 'Source governor is protecting usage by blocking paid scrapers or cooling down repeated runs.',
+        ? 'Source usage is clean: allowed lanes are available and paid scrapers are inside configured limits.'
+        : 'Source governor is protecting usage by blocking unapproved paid scrapers or cooling down repeated runs.',
     paidSourcesBlocked,
     cooldownsActive,
     lanes,

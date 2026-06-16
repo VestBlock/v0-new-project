@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowRight, CheckCircle2, Download, FileText, Home, Loader2, Radar, Send, ShieldCheck, TrendingUp, Users } from "lucide-react"
+import { ArrowRight, Calculator, CheckCircle2, Download, FileText, Home, Loader2, Radar, Send, ShieldCheck, TrendingUp, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -152,6 +152,33 @@ type CommandCenterAnalyzerResult = {
       label: string
       score: number
       summary: string
+    }>
+    creativeOffers: Array<{
+      key: "seller_finance" | "subject_to" | "wrap_mortgage" | "hybrid_morby"
+      label: string
+      viability: "Meets target" | "Borderline" | "Below target" | "Needs more inputs"
+      summary: string
+      caution: string | null
+      trustScore: number
+      trustLabel: "Offer-ready" | "Promising" | "Needs proof" | "Do not send"
+      terms: string[]
+      guardrails: string[]
+      metrics: {
+        maxPriceToHitTargetCashFlow: number | null
+        suggestedPurchasePrice: number | null
+        cashToSellerNow: number | null
+        cashToClose: number | null
+        entryFee: number | null
+        seniorDebt: number | null
+        sellerCarryBalance: number | null
+        monthlyPayment: number | null
+        totalMonthlyPayment: number | null
+        estimatedMonthlyCashFlow: number | null
+        paymentSpread: number | null
+        sellerMonthlySpread: number | null
+        balloonBalance: number | null
+        exitLoanToValuePercent: number | null
+      }
     }>
     builderDisposition: {
       label: string
@@ -311,6 +338,13 @@ function dealGradeTone(value: CommandCenterAnalyzerResult["opportunity"]["dealMa
   return "border-white/10 bg-white/[0.04] text-slate-200"
 }
 
+function creativeTrustTone(value: CommandCenterAnalyzerResult["opportunity"]["creativeOffers"][number]["trustLabel"]) {
+  if (value === "Offer-ready") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+  if (value === "Promising") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
+  if (value === "Needs proof") return "border-amber-400/20 bg-amber-400/10 text-amber-100"
+  return "border-rose-400/20 bg-rose-400/10 text-rose-100"
+}
+
 export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: PropertyCommandSeed | null }) {
   const [form, setForm] = useState<CommandCenterAnalyzerForm>(() => createInitialForm(commandSeed))
   const [result, setResult] = useState<CommandCenterAnalyzerResult | null>(null)
@@ -347,6 +381,10 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
 
   const routeFit = useMemo(
     () => [...(result?.opportunity.routeFit || [])].sort((left, right) => right.score - left.score).slice(0, 3),
+    [result]
+  )
+  const topCreativeOffers = useMemo(
+    () => [...(result?.opportunity.creativeOffers || [])].sort((left, right) => right.trustScore - left.trustScore).slice(0, 2),
     [result]
   )
 
@@ -1039,6 +1077,43 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                         ))
                       ) : (
                         <span className="text-xs text-slate-500">No major risk flags surfaced from this pass.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <Calculator className="h-4 w-4 text-cyan-200" />
+                      <p className="text-xs font-semibold text-white">Creative follow-up</p>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {topCreativeOffers.length ? (
+                        topCreativeOffers.map((offer) => (
+                          <div key={offer.key} className="rounded-xl border border-white/[0.06] bg-slate-950/40 px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-slate-100">{offer.label}</p>
+                              <Badge className={creativeTrustTone(offer.trustLabel)}>
+                                {offer.trustLabel} · {offer.trustScore}/100
+                              </Badge>
+                            </div>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {[
+                                { label: "Suggested", value: money(offer.metrics.suggestedPurchasePrice) },
+                                { label: "Entry fee", value: money(offer.metrics.entryFee) },
+                                { label: "Cash flow", value: money(offer.metrics.estimatedMonthlyCashFlow) },
+                                { label: "Exit LTV", value: Number.isFinite(offer.metrics.exitLoanToValuePercent) ? `${offer.metrics.exitLoanToValuePercent}%` : "—" },
+                              ].map((item) => (
+                                <div key={item.label} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
+                                  <p className="vb-mono text-[0.52rem] uppercase tracking-[0.12em] text-slate-500">{item.label}</p>
+                                  <p className="mt-0.5 text-xs font-semibold text-white">{item.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[0.68rem] leading-5 text-slate-400">{offer.guardrails[0] || offer.summary}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs leading-5 text-slate-500">Run the analyzer with rent, payoff, and terms inputs to generate a creative follow-up.</p>
                       )}
                     </div>
                   </div>

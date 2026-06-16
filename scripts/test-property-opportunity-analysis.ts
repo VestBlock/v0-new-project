@@ -19,7 +19,10 @@ const originalResolveFilename = (Module as any)._resolveFilename
 
 import type { RoughPropertyEstimate } from '../lib/property/roughEstimate'
 
-const { buildPropertyOpportunityAnalysis } = require('../lib/property/opportunityAnalysis') as typeof import('../lib/property/opportunityAnalysis')
+const {
+  MIN_CASH_ON_CASH_RETURN_PERCENT,
+  buildPropertyOpportunityAnalysis,
+} = require('../lib/property/opportunityAnalysis') as typeof import('../lib/property/opportunityAnalysis')
 
 const baseEstimate: RoughPropertyEstimate = {
   source: 'seller_supplied',
@@ -97,5 +100,126 @@ const thinSignal = buildPropertyOpportunityAnalysis(
 assert.equal(thinSignal.signalScore.label, 'Needs source evidence')
 assert.ok(thinSignal.signalScore.score < 36)
 assert.ok(thinSignal.signalScore.nextAction.includes('public-record sources'))
+
+const creativeTerms = buildPropertyOpportunityAnalysis(
+  {
+    address: '789 Terms Ave',
+    city: 'Kansas City',
+    state: 'MO',
+    propertyType: 'Single Family',
+    propertyCondition: 'Fair / Dated',
+    occupancyStatus: 'Tenant occupied',
+    askingPrice: 145000,
+    afterRepairValue: 190000,
+    repairBudget: 12000,
+    monthlyRentEstimate: 1850,
+    monthlyTaxes: 165,
+    monthlyInsurance: 115,
+    targetMonthlyCashFlow: 250,
+    mortgageBalance: 92000,
+    liensOrTaxes: 3500,
+    monthlyDebtService: 620,
+    creativeDownPayment: 7500,
+    creativeNoteInterestRate: 5,
+    creativeAmortizationYears: 30,
+    creativeBalloonYears: 7,
+    existingLoanInterestRate: 3.25,
+    existingLoanRemainingTermYears: 24,
+    exitStrategy: 'seller finance',
+  },
+  {
+    ...baseEstimate,
+    askingPrice: 145000,
+    mortgageBalance: 92000,
+    liensOrTaxesAmount: 3500,
+    estimateValue: 180000,
+    rentEstimate: 1850,
+    ltvEstimate: 51.1,
+    equityEstimate: 88000,
+  }
+)
+
+assert.equal(creativeTerms.creativeOffers.length, 4)
+
+const subjectTo = creativeTerms.creativeOffers.find((offer) => offer.key === 'subject_to')
+assert.ok(subjectTo)
+assert.ok(subjectTo!.metrics.entryFee !== null && subjectTo!.metrics.entryFee > 0)
+assert.ok(subjectTo!.trustScore >= 0 && subjectTo!.trustScore <= 100)
+assert.ok(subjectTo!.trustLabel)
+assert.ok(subjectTo!.guardrails.some((guardrail) => guardrail.includes('due-on-sale')))
+assert.ok(subjectTo!.terms.some((term) => term.includes('Subject-to price target')))
+
+const wrap = creativeTerms.creativeOffers.find((offer) => offer.key === 'wrap_mortgage')
+assert.ok(wrap)
+assert.ok(wrap!.metrics.sellerMonthlySpread !== null)
+assert.ok(wrap!.metrics.exitLoanToValuePercent !== null)
+
+const hybrid = creativeTerms.creativeOffers.find((offer) => offer.key === 'hybrid_morby')
+assert.ok(hybrid)
+assert.ok(hybrid!.metrics.seniorDebt !== null && hybrid!.metrics.sellerCarryBalance !== null)
+assert.ok(hybrid!.terms.some((term) => term.includes('Senior debt target')))
+
+const lowCashOnCash = buildPropertyOpportunityAnalysis(
+  {
+    address: '1313 Thin Yield Ln',
+    city: 'Dayton',
+    state: 'OH',
+    propertyType: 'Single Family',
+    propertyCondition: 'Average',
+    monthlyRentEstimate: 1500,
+    monthlyTaxes: 200,
+    monthlyInsurance: 100,
+    exitStrategy: 'rental',
+  },
+  {
+    ...baseEstimate,
+    estimateValue: 150000,
+    askingPrice: 120000,
+    rentEstimate: 1500,
+    mortgageBalance: 0,
+    liensOrTaxesAmount: 0,
+    equityEstimate: 150000,
+    ltvEstimate: 0,
+  }
+)
+
+assert.ok(lowCashOnCash.metrics.cashOnCashReturnPercent !== null)
+assert.ok(lowCashOnCash.metrics.cashOnCashReturnPercent! < MIN_CASH_ON_CASH_RETURN_PERCENT)
+assert.ok(lowCashOnCash.riskFlags.includes(`Cash-on-cash below ${MIN_CASH_ON_CASH_RETURN_PERCENT}% floor`))
+assert.ok(lowCashOnCash.dealStrength.score <= 58)
+assert.notEqual(lowCashOnCash.dealStrength.label, 'Promising')
+assert.notEqual(lowCashOnCash.dealStrength.label, 'Strong')
+assert.notEqual(lowCashOnCash.fundingReadiness.recommendedPath, 'DSCR')
+
+const healthyCashOnCash = buildPropertyOpportunityAnalysis(
+  {
+    address: '1414 Strong Yield Ave',
+    city: 'Toledo',
+    state: 'OH',
+    propertyType: 'Single Family',
+    propertyCondition: 'Average',
+    monthlyRentEstimate: 1900,
+    monthlyTaxes: 140,
+    monthlyInsurance: 90,
+    exitStrategy: 'rental',
+    creditScoreRange: '700+',
+    entityStatus: 'Active LLC',
+    documentsAvailable: 'Bank statements, rent support, lease, operating agreement, EIN',
+  },
+  {
+    ...baseEstimate,
+    estimateValue: 150000,
+    askingPrice: 105000,
+    rentEstimate: 1900,
+    mortgageBalance: 0,
+    liensOrTaxesAmount: 0,
+    equityEstimate: 150000,
+    ltvEstimate: 0,
+  }
+)
+
+assert.ok(healthyCashOnCash.metrics.cashOnCashReturnPercent !== null)
+assert.ok(healthyCashOnCash.metrics.cashOnCashReturnPercent! >= MIN_CASH_ON_CASH_RETURN_PERCENT)
+assert.ok(healthyCashOnCash.dealStrength.strengths.includes(`Cash-on-cash clears the ${MIN_CASH_ON_CASH_RETURN_PERCENT}% floor`))
 
 console.log('property-opportunity-analysis: ok')

@@ -44,6 +44,14 @@ const baseInput: AutopilotSnapshotInput = {
       costTier: 'paid',
       reason: 'Paid scraper quarantined.',
     },
+    {
+      provider: 'instantly',
+      label: 'Instantly network database and outreach',
+      status: 'allowed',
+      canRun: true,
+      costTier: 'paid',
+      reason: 'Source is within budget and cooldown policy.',
+    },
   ],
   marketHeat: [
     { market: 'Milwaukee, WI', heat: 80, leads: 120, replied: 2 },
@@ -95,10 +103,14 @@ const baseInput: AutopilotSnapshotInput = {
 }
 
 const batches = buildStrategyBatchPlans(baseInput)
-assert.equal(batches.length, 10, 'Autopilot should keep seller and high-fee strategies separated')
+assert.equal(batches.length, 14, 'Autopilot should keep network, seller, and high-fee strategies separated')
 assert.deepEqual(
   batches.map((batch) => batch.strategyKey),
   [
+    'buyer-demand-capture',
+    'capital-desk-lender-capture',
+    'developer-builder-demand-capture',
+    'creative-finance-buyer-capture',
     'tax-code-stack',
     'senior-out-of-state-landlord',
     'builder-infill-teardown',
@@ -113,9 +125,30 @@ assert.deepEqual(
   'Strategy ordering should stay stable for command-center review'
 )
 assert.ok(batches.every((batch) => batch.targetEmailCount <= 100), 'No strategy should exceed 100 planned emails per batch')
-assert.ok(batches.every((batch) => batch.targetSmsReviewCount === batch.targetEmailCount), 'SMS should mirror email count as review-only tasks')
+assert.ok(
+  batches
+    .filter((batch) => batch.sourceProvider === 'instantly')
+    .every((batch) => batch.targetSmsReviewCount === 0),
+  'Instantly network capture should stay email-first with no SMS review tasks'
+)
+assert.ok(
+  batches
+    .filter((batch) => batch.sourceProvider !== 'instantly')
+    .every((batch) => batch.targetSmsReviewCount === batch.targetEmailCount),
+  'Seller/property lanes should mirror email count as SMS review-only tasks'
+)
 assert.ok(batches.every((batch) => batch.feeThesis && batch.targetBuyerLane && batch.qualificationGate), 'Every strategy should explain fee thesis, buyer lane, and gate')
-assert.ok(batches[0]?.markets.includes('Cleveland, OH'), 'Tax/code stack should use refresh markets first')
+assert.equal(batches[0]?.strategyKey, 'buyer-demand-capture', 'Buyer demand capture should be the first visible revenue lane')
+assert.equal(batches[0]?.sourceProvider, 'instantly')
+assert.ok(batches[0]?.command.includes('instantly:doctor'), 'Buyer demand capture should verify Instantly before scale-up')
+assert.ok(batches[0]?.command.includes('instantly:demand'), 'Buyer demand capture should use the Instantly demand adapter')
+assert.ok(
+  batches
+    .filter((batch) => batch.sourceProvider === 'instantly')
+    .every((batch) => batch.command.includes(`--lane=${batch.strategyKey}`)),
+  'Instantly demand commands should stay lane-separated'
+)
+assert.ok(batches.find((batch) => batch.strategyKey === 'tax-code-stack')?.markets.includes('Cleveland, OH'), 'Tax/code stack should use refresh markets first')
 assert.equal(batches.find((batch) => batch.strategyKey === 'builder-infill-teardown')?.targetBuyerLane.includes('builders'), true)
 assert.equal(batches.find((batch) => batch.strategyKey === 'land-wholesale')?.targetBuyerLane.includes('land buyers'), true)
 assert.ok(
@@ -130,6 +163,25 @@ assert.ok(
 const snapshot = buildAutopilotSnapshot(baseInput)
 assert.equal(snapshot.status, 'green')
 assert.equal(snapshot.mode, 'send_ready')
+assert.equal(snapshot.sourceDoctrine.length, 3)
+assert.ok(
+  snapshot.sourceDoctrine
+    .find((lane) => lane.key === 'seller_stacking')
+    ?.dailyLoopRule.includes('DataPipe/Outscraper'),
+  'Seller stacking doctrine should reserve DataPipe/Outscraper for stack/source evidence'
+)
+assert.ok(
+  snapshot.sourceDoctrine
+    .find((lane) => lane.key === 'network_capture')
+    ?.dailyLoopRule.includes('Instantly'),
+  'Network doctrine should make Instantly the default buyer/lender/builder lead-capture source'
+)
+assert.equal(
+  snapshot.batches.filter((batch) => batch.sourceProvider === 'instantly').length,
+  4,
+  'Autopilot should include dedicated Instantly demand-capture lanes'
+)
+assert.equal(snapshot.guardrails.find((guardrail) => guardrail.label === 'Source doctrine')?.status, 'green')
 assert.equal(snapshot.durable.jobsConfigured, DEFAULT_AUTOPILOT_JOBS.length)
 assert.equal(snapshot.durable.jobsDue, 2)
 assert.equal(snapshot.durable.strategyRuns7d, 1)

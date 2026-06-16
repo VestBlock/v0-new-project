@@ -242,18 +242,29 @@ type AnalyzerResult = {
     }
     riskFlags: string[]
     creativeOffers: Array<{
-      key: "seller_finance" | "subject_to" | "wrap_mortgage"
+      key: "seller_finance" | "subject_to" | "wrap_mortgage" | "hybrid_morby"
       label: string
       viability: "Meets target" | "Borderline" | "Below target" | "Needs more inputs"
       summary: string
       caution: string | null
+      trustScore: number
+      trustLabel: "Offer-ready" | "Promising" | "Needs proof" | "Do not send"
+      terms: string[]
+      guardrails: string[]
       metrics: {
         targetMonthlyCashFlow: number | null
         maxPriceToHitTargetCashFlow: number | null
         suggestedPurchasePrice: number | null
         cashToSellerNow: number | null
         cashToClose: number | null
+        entryFee: number | null
+        arrearsAndLiens: number | null
+        closingBuffer: number | null
+        repairReserve: number | null
+        operatingReserve: number | null
         financedBalance: number | null
+        seniorDebt: number | null
+        sellerCarryBalance: number | null
         existingLoanBalance: number | null
         existingLoanPayment: number | null
         noteRatePercent: number | null
@@ -262,7 +273,11 @@ type AnalyzerResult = {
         monthlyPayment: number | null
         totalMonthlyPayment: number | null
         estimatedMonthlyCashFlow: number | null
+        paymentSpread: number | null
+        sellerMonthlySpread: number | null
         balloonBalance: number | null
+        balloonEquityCushion: number | null
+        exitLoanToValuePercent: number | null
       }
     }>
     routeFit: Array<{
@@ -397,6 +412,13 @@ function creativeViabilityTone(value: AnalyzerResult["opportunity"]["creativeOff
   if (value === "Borderline") return "border-amber-400/20 bg-amber-400/10 text-amber-100"
   if (value === "Below target") return "border-rose-400/20 bg-rose-400/10 text-rose-100"
   return "border-white/10 bg-white/[0.04] text-slate-200"
+}
+
+function creativeTrustTone(value: AnalyzerResult["opportunity"]["creativeOffers"][number]["trustLabel"]) {
+  if (value === "Offer-ready") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+  if (value === "Promising") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
+  if (value === "Needs proof") return "border-amber-400/20 bg-amber-400/10 text-amber-100"
+  return "border-rose-400/20 bg-rose-400/10 text-rose-100"
 }
 
 function dealStrengthTone(value: AnalyzerResult["opportunity"]["dealStrength"]["label"]) {
@@ -1722,7 +1744,7 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                        <p className="text-sm font-medium text-white">Cash on cash</p>
+                        <p className="text-sm font-medium text-white">Cash on cash (13% min)</p>
                         <p className="mt-3 text-lg font-semibold text-white">{formatPercent(result.opportunity.metrics.cashOnCashReturnPercent)}</p>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -1779,7 +1801,12 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                             <p className="text-lg font-semibold text-white">{offer.label}</p>
                             <p className="mt-2 text-sm leading-6 text-slate-400">{offer.summary}</p>
                           </div>
-                          <Badge className={creativeViabilityTone(offer.viability)}>{offer.viability}</Badge>
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <Badge className={creativeViabilityTone(offer.viability)}>{offer.viability}</Badge>
+                            <Badge className={creativeTrustTone(offer.trustLabel)}>
+                              {offer.trustLabel} · {offer.trustScore}/100
+                            </Badge>
+                          </div>
                         </div>
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
                           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
@@ -1799,11 +1826,21 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                             <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.cashToClose)}</p>
                           </div>
                           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Entry fee</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.entryFee)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Exit LTV</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{formatPercent(offer.metrics.exitLoanToValuePercent)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
                             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
                               {offer.key === "subject_to"
                                 ? "Seller carry payment"
                                 : offer.key === "wrap_mortgage"
                                   ? "Wrap note payment"
+                                  : offer.key === "hybrid_morby"
+                                    ? "Seller carry payment"
                                   : "Note payment"}
                             </p>
                             <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.monthlyPayment)}</p>
@@ -1811,6 +1848,20 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
                             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Monthly cash flow</p>
                             <p className="mt-2 text-lg font-semibold text-white">{formatMoney(offer.metrics.estimatedMonthlyCashFlow)}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Senior debt</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{formatMoney(offer.metrics.seniorDebt)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Seller carry</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{formatMoney(offer.metrics.sellerCarryBalance)}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Payment spread</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{formatMoney(offer.metrics.paymentSpread)}</p>
                           </div>
                         </div>
                         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -1832,11 +1883,33 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Existing loan stack</p>
                             <p className="mt-2 text-sm text-slate-300">
                               Balance {formatMoney(offer.metrics.existingLoanBalance)} • Payment {formatMoney(offer.metrics.existingLoanPayment)}
+                              {offer.metrics.sellerMonthlySpread !== null
+                                ? ` • Seller spread ${formatMoney(offer.metrics.sellerMonthlySpread)}`
+                                : ""}
                             </p>
                           </div>
                         )}
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Offer terms</p>
+                            <div className="mt-2 space-y-1.5">
+                              {offer.terms.slice(0, 5).map((term) => (
+                                <p key={term} className="text-xs leading-5 text-slate-300">{term}</p>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-3">
+                            <p className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Trust guardrails</p>
+                            <div className="mt-2 space-y-1.5">
+                              {offer.guardrails.slice(0, 4).map((guardrail) => (
+                                <p key={guardrail} className="text-xs leading-5 text-amber-50/90">{guardrail}</p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-sm text-slate-400">
                           <span>Balloon due estimate {formatMoney(offer.metrics.balloonBalance)}</span>
+                          <span>Balloon cushion {formatMoney(offer.metrics.balloonEquityCushion)}</span>
                           <span>Target cash flow {formatMoney(offer.metrics.targetMonthlyCashFlow)}</span>
                         </div>
                         {offer.caution ? (

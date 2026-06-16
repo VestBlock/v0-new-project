@@ -37,6 +37,8 @@ import {
   remainingLoanBalance,
 } from '@/lib/property/formulas'
 
+export const MIN_CASH_ON_CASH_RETURN_PERCENT = 13
+
 export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
   selectedComps?: Array<{
     address?: string | null
@@ -92,7 +94,7 @@ export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
   existingLoanRemainingTermYears?: string | number | null
 }
 
-export type CreativeOfferKey = 'seller_finance' | 'subject_to' | 'wrap_mortgage'
+export type CreativeOfferKey = 'seller_finance' | 'subject_to' | 'wrap_mortgage' | 'hybrid_morby'
 
 export type PropertyOpportunityAnalysis = {
   metrics: {
@@ -211,13 +213,24 @@ export type PropertyOpportunityAnalysis = {
     viability: 'Meets target' | 'Borderline' | 'Below target' | 'Needs more inputs'
     summary: string
     caution: string | null
+    trustScore: number
+    trustLabel: 'Offer-ready' | 'Promising' | 'Needs proof' | 'Do not send'
+    terms: string[]
+    guardrails: string[]
     metrics: {
       targetMonthlyCashFlow: number | null
       maxPriceToHitTargetCashFlow: number | null
       suggestedPurchasePrice: number | null
       cashToSellerNow: number | null
       cashToClose: number | null
+      entryFee: number | null
+      arrearsAndLiens: number | null
+      closingBuffer: number | null
+      repairReserve: number | null
+      operatingReserve: number | null
       financedBalance: number | null
+      seniorDebt: number | null
+      sellerCarryBalance: number | null
       existingLoanBalance: number | null
       existingLoanPayment: number | null
       noteRatePercent: number | null
@@ -226,7 +239,11 @@ export type PropertyOpportunityAnalysis = {
       monthlyPayment: number | null
       totalMonthlyPayment: number | null
       estimatedMonthlyCashFlow: number | null
+      paymentSpread: number | null
+      sellerMonthlySpread: number | null
       balloonBalance: number | null
+      balloonEquityCushion: number | null
+      exitLoanToValuePercent: number | null
     }
   }>
   routeFit: Array<{
@@ -334,6 +351,187 @@ function creativeSummary(
   return `${label} does not currently hit the monthly cash-flow target.`
 }
 
+function paymentFactor(annualRatePercent: number | null, amortizationYears: number | null) {
+  const payment = calculateMonthlyMortgagePayment(1, annualRatePercent, amortizationYears)
+  return Number.isFinite(payment) ? Number(payment) : null
+}
+
+function sumFinite(values: Array<number | null | undefined>) {
+  const numericValues = values.filter((value): value is number => Number.isFinite(value))
+  if (numericValues.length !== values.length) return null
+  return Math.round(numericValues.reduce((sum, value) => sum + value, 0) * 100) / 100
+}
+
+function calculateCreativeEntryFee(inputs: {
+  cashToClose: number | null
+  repairBudget: number | null
+  totalMonthlyPayment: number | null
+}) {
+  const repairReserve = Number.isFinite(inputs.repairBudget) ? Math.max(0, Number(inputs.repairBudget)) : 0
+  const operatingReserve = Number.isFinite(inputs.totalMonthlyPayment)
+    ? Math.round(Math.max(0, Number(inputs.totalMonthlyPayment)) * 3)
+    : null
+  const entryFee = sumFinite([inputs.cashToClose, repairReserve, operatingReserve])
+
+  return {
+    entryFee,
+    repairReserve,
+    operatingReserve,
+  }
+}
+
+function balloonExitMetrics(inputs: {
+  propertyValue: number | null
+  balloonBalance: number | null
+  existingLoanBalance?: number | null
+}) {
+  const totalExitDebt =
+    Number.isFinite(inputs.balloonBalance) || Number.isFinite(inputs.existingLoanBalance)
+      ? Number(inputs.balloonBalance || 0) + Number(inputs.existingLoanBalance || 0)
+      : null
+  const exitLoanToValuePercent = percent(totalExitDebt, inputs.propertyValue)
+  const balloonEquityCushion =
+    Number.isFinite(inputs.propertyValue) && Number.isFinite(totalExitDebt)
+      ? Math.round((Number(inputs.propertyValue) - Number(totalExitDebt)) * 100) / 100
+      : null
+
+  return {
+    exitLoanToValuePercent,
+    balloonEquityCushion,
+  }
+}
+
+function creativeTrustLabel(score: number): PropertyOpportunityAnalysis['creativeOffers'][number]['trustLabel'] {
+  if (score >= 78) return 'Offer-ready'
+  if (score >= 62) return 'Promising'
+  if (score >= 42) return 'Needs proof'
+  return 'Do not send'
+}
+
+function scoreCreativeOffer(inputs: {
+  viability: PropertyOpportunityAnalysis['creativeOffers'][number]['viability']
+  monthlyCashFlow: number | null
+  targetMonthlyCashFlow: number | null
+  entryFee: number | null
+  propertyValue: number | null
+  suggestedPurchasePrice: number | null
+  balloonEquityCushion: number | null
+  exitLoanToValuePercent: number | null
+  hasExistingLoanDetails?: boolean
+  sellerMonthlySpread?: number | null
+  riskCount: number
+}) {
+  const cashFlowScore =
+    Number.isFinite(inputs.monthlyCashFlow) && Number.isFinite(inputs.targetMonthlyCashFlow)
+      ? Math.min(24, Math.max(0, Math.round((Number(inputs.monthlyCashFlow) / Math.max(Number(inputs.targetMonthlyCashFlow), 1)) * 20)))
+      : 4
+  const viabilityScore =
+    inputs.viability === 'Meets target' ? 24 : inputs.viability === 'Borderline' ? 14 : inputs.viability === 'Below target' ? 4 : 0
+  const entryFeeScore =
+    Number.isFinite(inputs.entryFee) && Number.isFinite(inputs.propertyValue) && Number(inputs.propertyValue) > 0
+      ? Math.max(0, Math.min(16, Math.round(16 - (Number(inputs.entryFee) / Number(inputs.propertyValue)) * 85)))
+      : 4
+  const priceScore =
+    Number.isFinite(inputs.suggestedPurchasePrice) && Number.isFinite(inputs.propertyValue) && Number(inputs.propertyValue) > 0
+      ? Math.max(0, Math.min(14, Math.round((1 - Number(inputs.suggestedPurchasePrice) / Number(inputs.propertyValue)) * 40 + 10)))
+      : 4
+  const exitScore =
+    Number.isFinite(inputs.balloonEquityCushion) && Number(inputs.balloonEquityCushion) > 0
+      ? Number.isFinite(inputs.exitLoanToValuePercent) && Number(inputs.exitLoanToValuePercent) <= 75
+        ? 12
+        : 7
+      : 0
+  const loanDetailScore = inputs.hasExistingLoanDetails === undefined ? 8 : inputs.hasExistingLoanDetails ? 10 : 0
+  const spreadScore =
+    inputs.sellerMonthlySpread === undefined
+      ? 6
+      : Number.isFinite(inputs.sellerMonthlySpread) && Number(inputs.sellerMonthlySpread) >= 0
+        ? 8
+        : 0
+
+  return bounded(
+    viabilityScore +
+      cashFlowScore +
+      entryFeeScore +
+      priceScore +
+      exitScore +
+      loanDetailScore +
+      spreadScore -
+      inputs.riskCount * 3
+  )
+}
+
+function formatMoneyForTerm(value: number | null) {
+  if (!Number.isFinite(value)) return 'unknown'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value))
+}
+
+function formatRateForTerm(value: number | null) {
+  if (!Number.isFinite(value)) return 'unknown rate'
+  return `${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)}%`
+}
+
+function buildCreativeTerms(inputs: {
+  label: string
+  suggestedPurchasePrice: number | null
+  cashToSellerNow: number | null
+  financedBalance: number | null
+  seniorDebt?: number | null
+  sellerCarryBalance?: number | null
+  existingLoanPayment?: number | null
+  noteRatePercent: number | null
+  amortizationYears: number | null
+  balloonYears: number | null
+  monthlyPayment: number | null
+  totalMonthlyPayment: number | null
+}) {
+  const terms = [
+    `${inputs.label} price target: ${formatMoneyForTerm(inputs.suggestedPurchasePrice)}.`,
+    `Cash to seller now: ${formatMoneyForTerm(inputs.cashToSellerNow)}.`,
+    inputs.seniorDebt !== undefined ? `Senior debt target: ${formatMoneyForTerm(inputs.seniorDebt)}.` : null,
+    inputs.sellerCarryBalance !== undefined ? `Seller carry balance: ${formatMoneyForTerm(inputs.sellerCarryBalance)}.` : null,
+    inputs.financedBalance !== null ? `Financed balance: ${formatMoneyForTerm(inputs.financedBalance)}.` : null,
+    `Seller note: ${formatRateForTerm(inputs.noteRatePercent)} over ${inputs.amortizationYears || 'unknown'} years with ${inputs.balloonYears || 'unknown'} year balloon.`,
+    inputs.existingLoanPayment !== undefined ? `Underlying payment to verify: ${formatMoneyForTerm(inputs.existingLoanPayment)} monthly.` : null,
+    `Modeled note payment: ${formatMoneyForTerm(inputs.monthlyPayment)} monthly.`,
+    `Total modeled monthly carry: ${formatMoneyForTerm(inputs.totalMonthlyPayment)}.`,
+  ].filter(Boolean) as string[]
+
+  return terms
+}
+
+function buildCreativeGuardrails(inputs: {
+  key: CreativeOfferKey
+  hasExistingLoanDetails?: boolean
+  entryFee: number | null
+  monthlyCashFlow: number | null
+  targetMonthlyCashFlow: number | null
+  exitLoanToValuePercent: number | null
+  sellerMonthlySpread?: number | null
+}) {
+  const guardrails = [
+    'Verify title, payoff, taxes, insurance, utilities, occupancy, and repair scope before sending a written offer.',
+    inputs.key === 'subject_to' || inputs.key === 'wrap_mortgage'
+      ? 'Have a real estate attorney review due-on-sale, servicing, disclosure, and seller-liability language before closing.'
+      : null,
+    inputs.hasExistingLoanDetails === false ? 'Do not send this structure until the underlying payoff, payment, rate, and remaining term are verified.' : null,
+    Number.isFinite(inputs.monthlyCashFlow) && Number.isFinite(inputs.targetMonthlyCashFlow) && Number(inputs.monthlyCashFlow) < Number(inputs.targetMonthlyCashFlow)
+      ? 'Monthly cash flow is below target; improve price, rate, amortization, or seller carry terms before sending.'
+      : null,
+    Number.isFinite(inputs.entryFee) && Number(inputs.entryFee) > 35000
+      ? 'Entry fee is heavy; confirm this does not kill assignment spread or operator cash reserves.'
+      : null,
+    Number.isFinite(inputs.exitLoanToValuePercent) && Number(inputs.exitLoanToValuePercent) > 80
+      ? 'Balloon/refi exit is tight; require a stronger discount, longer balloon, or more principal paydown.'
+      : null,
+    inputs.sellerMonthlySpread !== undefined && Number.isFinite(inputs.sellerMonthlySpread) && Number(inputs.sellerMonthlySpread) < 0
+      ? 'Wrap spread is negative; do not pitch a wrap unless the buyer payment or underlying terms change.'
+      : null,
+  ].filter(Boolean) as string[]
+
+  return guardrails
+}
+
 function normalizedExitStrategy(value?: string | null) {
   const normalized = String(value || '').trim().toLowerCase()
   if (!normalized) return 'not_sure'
@@ -436,8 +634,13 @@ function dealStrengthScoreWithDealMath(
 function dealStrengthSummary(
   score: number,
   dealGrade: PropertyOpportunityAnalysis['dealMath']['grade'],
-  assignmentSpread: number | null
+  assignmentSpread: number | null,
+  lowCashOnCashReturn = false
 ) {
+  if (lowCashOnCashReturn) {
+    return `Cash-on-cash is below the ${MIN_CASH_ON_CASH_RETURN_PERCENT}% VestBlock floor, so this should stay in review unless price, financing, rent, or entry cash improves.`
+  }
+
   if (dealGrade === 'RISKY' && assignmentSpread !== null && assignmentSpread < 0) {
     return 'Assignment math is not protected at the current seller ask; keep it in review until price, ARV, fee, or terms improve.'
   }
@@ -713,6 +916,15 @@ export function buildPropertyOpportunityAnalysis(
     creativeDownPayment !== null
       ? Math.round((creativeDownPayment + liensOrTaxes + (fixedCreativeClosingBuffer || 0)) * 100) / 100
       : null
+  const sellerFinanceEntry = calculateCreativeEntryFee({
+    cashToClose: sellerFinanceCashToClose,
+    repairBudget,
+    totalMonthlyPayment: sellerFinanceTotalMonthlyPayment,
+  })
+  const sellerFinanceExit = balloonExitMetrics({
+    propertyValue: arv ?? estimate.estimateValue,
+    balloonBalance: sellerFinanceBalloonBalance,
+  })
 
   const existingLoanBalance = estimate.mortgageBalance
   const calculatedExistingLoanPayment =
@@ -784,6 +996,16 @@ export function buildPropertyOpportunityAnalysis(
     creativeDownPayment !== null
       ? Math.round((creativeDownPayment + liensOrTaxes + (fixedCreativeClosingBuffer || 0)) * 100) / 100
       : null
+  const subjectToEntry = calculateCreativeEntryFee({
+    cashToClose: subjectToCashToClose,
+    repairBudget,
+    totalMonthlyPayment: subjectToTotalMonthlyPayment,
+  })
+  const subjectToExit = balloonExitMetrics({
+    propertyValue: arv ?? estimate.estimateValue,
+    balloonBalance: subjectToBalloonBalance,
+    existingLoanBalance,
+  })
   const wrapNoteInterestRate =
     existingLoanInterestRate !== null
       ? Math.round(((existingLoanInterestRate + creativeNoteInterestRate) / 2) * 100) / 100
@@ -833,6 +1055,94 @@ export function buildPropertyOpportunityAnalysis(
     creativeDownPayment !== null
       ? Math.round((creativeDownPayment + liensOrTaxes + (fixedCreativeClosingBuffer || 0)) * 100) / 100
       : null
+  const wrapSellerMonthlySpread =
+    wrapMonthlyPayment !== null && existingLoanPayment !== null
+      ? Math.round((wrapMonthlyPayment - existingLoanPayment) * 100) / 100
+      : null
+  const wrapEntry = calculateCreativeEntryFee({
+    cashToClose: wrapCashToClose,
+    repairBudget,
+    totalMonthlyPayment: wrapTotalMonthlyPayment,
+  })
+  const wrapExit = balloonExitMetrics({
+    propertyValue: arv ?? estimate.estimateValue,
+    balloonBalance: wrapBalloonBalance,
+  })
+  const hybridSeniorRate = interestRate ?? 8
+  const hybridSeniorTermYears = loanTermYears ?? 30
+  const hybridSeniorShare = 0.7
+  const hybridSellerShare = 0.3
+  const hybridSeniorFactor = paymentFactor(hybridSeniorRate, hybridSeniorTermYears)
+  const hybridSellerFactor = paymentFactor(creativeNoteInterestRate, creativeAmortizationYears)
+  const hybridPaymentFactor =
+    hybridSeniorFactor !== null && hybridSellerFactor !== null
+      ? hybridSeniorFactor * hybridSeniorShare + hybridSellerFactor * hybridSellerShare
+      : null
+  const hybridMaxPrice =
+    paymentCapacityBeforeDebt !== null && hybridPaymentFactor !== null && hybridPaymentFactor > 0
+      ? roundToNearest(paymentCapacityBeforeDebt / hybridPaymentFactor, 500)
+      : null
+  const hybridSuggestedPrice =
+    hybridMaxPrice !== null
+      ? creativeValueAnchor !== null
+        ? Math.min(creativeValueAnchor, hybridMaxPrice)
+        : hybridMaxPrice
+      : creativeValueAnchor
+  const hybridSeniorDebt =
+    hybridSuggestedPrice !== null ? Math.round(hybridSuggestedPrice * hybridSeniorShare) : null
+  const hybridSellerCarryBalance =
+    hybridSuggestedPrice !== null ? Math.max(0, Math.round(hybridSuggestedPrice * hybridSellerShare)) : null
+  const hybridSeniorPayment = calculateMonthlyMortgagePayment(
+    hybridSeniorDebt,
+    hybridSeniorRate,
+    hybridSeniorTermYears
+  )
+  const hybridSellerCarryPayment = calculateMonthlyMortgagePayment(
+    hybridSellerCarryBalance,
+    creativeNoteInterestRate,
+    creativeAmortizationYears
+  )
+  const hybridMonthlyPayment =
+    hybridSeniorPayment !== null && hybridSellerCarryPayment !== null
+      ? Math.round((hybridSeniorPayment + hybridSellerCarryPayment) * 100) / 100
+      : null
+  const hybridTotalMonthlyPayment =
+    hybridMonthlyPayment !== null
+      ? Math.round((hybridMonthlyPayment + (operatingExpenses.total || 0)) * 100) / 100
+      : null
+  const hybridMonthlyCashFlow =
+    monthlyRent !== null && hybridTotalMonthlyPayment !== null
+      ? Math.round((monthlyRent - hybridTotalMonthlyPayment) * 100) / 100
+      : null
+  const hybridSellerBalloonBalance = remainingLoanBalance(
+    hybridSellerCarryBalance,
+    creativeNoteInterestRate,
+    creativeAmortizationYears,
+    Math.round(creativeBalloonYears * 12)
+  )
+  const hybridSeniorBalloonBalance = remainingLoanBalance(
+    hybridSeniorDebt,
+    hybridSeniorRate,
+    hybridSeniorTermYears,
+    Math.round(creativeBalloonYears * 12)
+  )
+  const hybridBalloonBalance =
+    hybridSellerBalloonBalance !== null || hybridSeniorBalloonBalance !== null
+      ? Math.round((Number(hybridSellerBalloonBalance || 0) + Number(hybridSeniorBalloonBalance || 0)) * 100) / 100
+      : null
+  const hybridCashToClose =
+    fixedCreativeClosingBuffer !== null
+      ? Math.round((liensOrTaxes + fixedCreativeClosingBuffer) * 100) / 100
+      : null
+  const hybridEntry = calculateCreativeEntryFee({
+    cashToClose: hybridCashToClose,
+    repairBudget,
+    totalMonthlyPayment: hybridTotalMonthlyPayment,
+  })
+  const hybridExit = balloonExitMetrics({
+    propertyValue: arv ?? estimate.estimateValue,
+    balloonBalance: hybridBalloonBalance,
+  })
 
   const distress = conditionScore(input.propertyCondition)
   const urgency = timelineScore(input.timelineToSell)
@@ -939,6 +1249,10 @@ export function buildPropertyOpportunityAnalysis(
     estimatedMonthlyCashFlow !== null ? estimatedMonthlyCashFlow * 12 : null,
     operatorCashNeeded && operatorCashNeeded > 0 ? operatorCashNeeded : operatorCashAvailable || downPayment || null
   )
+  const clearsCashOnCashFloor =
+    cashOnCashReturnPercent !== null && cashOnCashReturnPercent >= MIN_CASH_ON_CASH_RETURN_PERCENT
+  const lowCashOnCashReturn =
+    cashOnCashReturnPercent !== null && cashOnCashReturnPercent < MIN_CASH_ON_CASH_RETURN_PERCENT
   const flipRoiPercent = calculateReturnOnInvestment(
     flipProfit,
     operatorCashNeeded && operatorCashNeeded > 0 ? operatorCashNeeded : operatorCashAvailable || downPayment || null
@@ -965,6 +1279,9 @@ export function buildPropertyOpportunityAnalysis(
     rentToPriceRatioPercent !== null && rentToPriceRatioPercent < 0.8 ? 'Weak rent-to-price ratio' : null,
     repairBudget !== null && arv !== null && repairBudget / arv >= 0.22 ? 'Rehab too high' : null,
     estimatedMonthlyCashFlow !== null && estimatedMonthlyCashFlow < 0 ? 'Negative cash flow' : null,
+    lowCashOnCashReturn
+      ? `Cash-on-cash below ${MIN_CASH_ON_CASH_RETURN_PERCENT}% floor`
+      : null,
     dscr !== null && dscr < 1.05 ? 'DSCR below lender threshold' : null,
     vacancyPercent >= 10 ? 'High vacancy assumption' : null,
     flipProfit !== null && flipProfit < 15000 && isFlipStyle ? 'Thin profit spread' : null,
@@ -1027,7 +1344,7 @@ export function buildPropertyOpportunityAnalysis(
     recommendedFundingPath = 'Credit prep'
   } else if (!entityReady) {
     recommendedFundingPath = 'Business credit builder'
-  } else if (isRentalStyle && dscr !== null && dscr >= 1.1 && (creditScore ?? 680) >= 660) {
+  } else if (isRentalStyle && dscr !== null && dscr >= 1.1 && (creditScore ?? 680) >= 660 && !lowCashOnCashReturn) {
     recommendedFundingPath = 'DSCR'
   } else if (isFlipStyle && flipProfit !== null && flipProfit >= 15000) {
     recommendedFundingPath = 'Hard money'
@@ -1047,6 +1364,7 @@ export function buildPropertyOpportunityAnalysis(
       (hasBankStatements ? 8 : 0) +
       (hasEntityDocs ? 6 : 0) +
       (dscr !== null ? (dscr >= 1.2 ? 10 : dscr >= 1.05 ? 6 : 0) : 4) +
+      (cashOnCashReturnPercent !== null ? (clearsCashOnCashFloor ? 10 : -10) : isRentalStyle ? -4 : 2) +
       (operatorCashNeeded !== null && operatorCashNeeded > 0
         ? Math.max(0, Math.min(12, Math.round((operatorCashAvailable / operatorCashNeeded) * 12)))
         : 8) -
@@ -1058,6 +1376,7 @@ export function buildPropertyOpportunityAnalysis(
       (hasRent ? 16 : 4) +
       (equityPercent !== null && equityPercent >= 20 ? 14 : 5) +
       (dscr !== null && dscr >= 1.1 ? 18 : dscr !== null ? 8 : 4) +
+      (cashOnCashReturnPercent !== null ? (clearsCashOnCashFloor ? 12 : -8) : 0) +
       fundingReadinessScore * 0.34
   )
   const builderDisposition = buildBuilderDispositionPlan({
@@ -1139,24 +1458,88 @@ export function buildPropertyOpportunityAnalysis(
     },
   ].sort((a, b) => b.score - a.score)
 
+  const sellerFinanceViability = creativeViabilityLabel(
+    sellerFinanceMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    sellerFinanceSuggestedPrice,
+    sellerFinanceMaxPrice
+  )
+  const subjectToViability = creativeViabilityLabel(
+    subjectToMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    subjectToSuggestedPrice,
+    subjectToMaxPrice
+  )
+  const wrapViability = creativeViabilityLabel(
+    wrapMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    wrapSuggestedPrice,
+    wrapMaxPrice
+  )
+  const hybridViability = creativeViabilityLabel(
+    hybridMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    hybridSuggestedPrice,
+    hybridMaxPrice
+  )
+  const sellerFinanceTrustScore = scoreCreativeOffer({
+    viability: sellerFinanceViability,
+    monthlyCashFlow: sellerFinanceMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    entryFee: sellerFinanceEntry.entryFee,
+    propertyValue: arv ?? estimate.estimateValue,
+    suggestedPurchasePrice: sellerFinanceSuggestedPrice,
+    balloonEquityCushion: sellerFinanceExit.balloonEquityCushion,
+    exitLoanToValuePercent: sellerFinanceExit.exitLoanToValuePercent,
+    riskCount: riskFlags.length,
+  })
+  const subjectToTrustScore = scoreCreativeOffer({
+    viability: subjectToViability,
+    monthlyCashFlow: subjectToMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    entryFee: subjectToEntry.entryFee,
+    propertyValue: arv ?? estimate.estimateValue,
+    suggestedPurchasePrice: subjectToSuggestedPrice,
+    balloonEquityCushion: subjectToExit.balloonEquityCushion,
+    exitLoanToValuePercent: subjectToExit.exitLoanToValuePercent,
+    hasExistingLoanDetails:
+      existingLoanBalance !== null && existingLoanPayment !== null && existingLoanInterestRate !== null && existingLoanRemainingTermYears !== null,
+    riskCount: riskFlags.length,
+  })
+  const wrapTrustScore = scoreCreativeOffer({
+    viability: wrapViability,
+    monthlyCashFlow: wrapMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    entryFee: wrapEntry.entryFee,
+    propertyValue: arv ?? estimate.estimateValue,
+    suggestedPurchasePrice: wrapSuggestedPrice,
+    balloonEquityCushion: wrapExit.balloonEquityCushion,
+    exitLoanToValuePercent: wrapExit.exitLoanToValuePercent,
+    hasExistingLoanDetails:
+      existingLoanBalance !== null && existingLoanPayment !== null && existingLoanInterestRate !== null && existingLoanRemainingTermYears !== null,
+    sellerMonthlySpread: wrapSellerMonthlySpread,
+    riskCount: riskFlags.length,
+  })
+  const hybridTrustScore = scoreCreativeOffer({
+    viability: hybridViability,
+    monthlyCashFlow: hybridMonthlyCashFlow,
+    targetMonthlyCashFlow,
+    entryFee: hybridEntry.entryFee,
+    propertyValue: arv ?? estimate.estimateValue,
+    suggestedPurchasePrice: hybridSuggestedPrice,
+    balloonEquityCushion: hybridExit.balloonEquityCushion,
+    exitLoanToValuePercent: hybridExit.exitLoanToValuePercent,
+    riskCount: riskFlags.length,
+  })
+
   const creativeOffers: PropertyOpportunityAnalysis['creativeOffers'] = [
     {
       key: 'seller_finance',
       label: 'Seller finance',
-      viability: creativeViabilityLabel(
-        sellerFinanceMonthlyCashFlow,
-        targetMonthlyCashFlow,
-        sellerFinanceSuggestedPrice,
-        sellerFinanceMaxPrice
-      ),
+      viability: sellerFinanceViability,
       summary: creativeSummary(
         'Seller finance',
-        creativeViabilityLabel(
-          sellerFinanceMonthlyCashFlow,
-          targetMonthlyCashFlow,
-          sellerFinanceSuggestedPrice,
-          sellerFinanceMaxPrice
-        ),
+        sellerFinanceViability,
         askingPrice,
         sellerFinanceMaxPrice
       ),
@@ -1166,13 +1549,40 @@ export function buildPropertyOpportunityAnalysis(
         sellerFinanceMaxPrice < askingPrice
           ? 'At the current cash-flow target, the price likely needs to come in below asking.'
           : null,
+      trustScore: sellerFinanceTrustScore,
+      trustLabel: creativeTrustLabel(sellerFinanceTrustScore),
+      terms: buildCreativeTerms({
+        label: 'Seller finance',
+        suggestedPurchasePrice: sellerFinanceSuggestedPrice,
+        cashToSellerNow: creativeDownPayment,
+        financedBalance: sellerFinanceFinancedBalance,
+        noteRatePercent: creativeNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: sellerFinanceMonthlyPayment,
+        totalMonthlyPayment: sellerFinanceTotalMonthlyPayment,
+      }),
+      guardrails: buildCreativeGuardrails({
+        key: 'seller_finance',
+        entryFee: sellerFinanceEntry.entryFee,
+        monthlyCashFlow: sellerFinanceMonthlyCashFlow,
+        targetMonthlyCashFlow,
+        exitLoanToValuePercent: sellerFinanceExit.exitLoanToValuePercent,
+      }),
       metrics: {
         targetMonthlyCashFlow,
         maxPriceToHitTargetCashFlow: sellerFinanceMaxPrice,
         suggestedPurchasePrice: sellerFinanceSuggestedPrice,
         cashToSellerNow: creativeDownPayment,
         cashToClose: sellerFinanceCashToClose,
+        entryFee: sellerFinanceEntry.entryFee,
+        arrearsAndLiens: liensOrTaxes,
+        closingBuffer: fixedCreativeClosingBuffer,
+        repairReserve: sellerFinanceEntry.repairReserve,
+        operatingReserve: sellerFinanceEntry.operatingReserve,
         financedBalance: sellerFinanceFinancedBalance,
+        seniorDebt: null,
+        sellerCarryBalance: sellerFinanceFinancedBalance,
         existingLoanBalance: null,
         existingLoanPayment: null,
         noteRatePercent: creativeNoteInterestRate,
@@ -1181,26 +1591,20 @@ export function buildPropertyOpportunityAnalysis(
         monthlyPayment: sellerFinanceMonthlyPayment,
         totalMonthlyPayment: sellerFinanceTotalMonthlyPayment,
         estimatedMonthlyCashFlow: sellerFinanceMonthlyCashFlow,
+        paymentSpread: sellerFinanceMonthlyCashFlow,
+        sellerMonthlySpread: null,
         balloonBalance: sellerFinanceBalloonBalance,
+        balloonEquityCushion: sellerFinanceExit.balloonEquityCushion,
+        exitLoanToValuePercent: sellerFinanceExit.exitLoanToValuePercent,
       },
     },
     {
       key: 'subject_to',
       label: 'Subject-to + seller carry',
-      viability: creativeViabilityLabel(
-        subjectToMonthlyCashFlow,
-        targetMonthlyCashFlow,
-        subjectToSuggestedPrice,
-        subjectToMaxPrice
-      ),
+      viability: subjectToViability,
       summary: creativeSummary(
         'Subject-to',
-        creativeViabilityLabel(
-          subjectToMonthlyCashFlow,
-          targetMonthlyCashFlow,
-          subjectToSuggestedPrice,
-          subjectToMaxPrice
-        ),
+        subjectToViability,
         askingPrice,
         subjectToMaxPrice
       ),
@@ -1212,13 +1616,44 @@ export function buildPropertyOpportunityAnalysis(
               subjectToMaxPrice < askingPrice
             ? 'The existing loan and carry capacity do not support full asking at the target spread.'
             : null,
+      trustScore: subjectToTrustScore,
+      trustLabel: creativeTrustLabel(subjectToTrustScore),
+      terms: buildCreativeTerms({
+        label: 'Subject-to',
+        suggestedPurchasePrice: subjectToSuggestedPrice,
+        cashToSellerNow: creativeDownPayment,
+        financedBalance: subjectToSellerCarryBalance,
+        sellerCarryBalance: subjectToSellerCarryBalance,
+        existingLoanPayment,
+        noteRatePercent: creativeNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: subjectToSellerCarryPayment,
+        totalMonthlyPayment: subjectToTotalMonthlyPayment,
+      }),
+      guardrails: buildCreativeGuardrails({
+        key: 'subject_to',
+        hasExistingLoanDetails:
+          existingLoanBalance !== null && existingLoanPayment !== null && existingLoanInterestRate !== null && existingLoanRemainingTermYears !== null,
+        entryFee: subjectToEntry.entryFee,
+        monthlyCashFlow: subjectToMonthlyCashFlow,
+        targetMonthlyCashFlow,
+        exitLoanToValuePercent: subjectToExit.exitLoanToValuePercent,
+      }),
       metrics: {
         targetMonthlyCashFlow,
         maxPriceToHitTargetCashFlow: subjectToMaxPrice,
         suggestedPurchasePrice: subjectToSuggestedPrice,
         cashToSellerNow: creativeDownPayment,
         cashToClose: subjectToCashToClose,
+        entryFee: subjectToEntry.entryFee,
+        arrearsAndLiens: liensOrTaxes,
+        closingBuffer: fixedCreativeClosingBuffer,
+        repairReserve: subjectToEntry.repairReserve,
+        operatingReserve: subjectToEntry.operatingReserve,
         financedBalance: subjectToSellerCarryBalance,
+        seniorDebt: existingLoanBalance,
+        sellerCarryBalance: subjectToSellerCarryBalance,
         existingLoanBalance,
         existingLoanPayment,
         noteRatePercent: creativeNoteInterestRate,
@@ -1227,42 +1662,69 @@ export function buildPropertyOpportunityAnalysis(
         monthlyPayment: subjectToSellerCarryPayment,
         totalMonthlyPayment: subjectToTotalMonthlyPayment,
         estimatedMonthlyCashFlow: subjectToMonthlyCashFlow,
+        paymentSpread: subjectToMonthlyCashFlow,
+        sellerMonthlySpread: null,
         balloonBalance: subjectToBalloonBalance,
+        balloonEquityCushion: subjectToExit.balloonEquityCushion,
+        exitLoanToValuePercent: subjectToExit.exitLoanToValuePercent,
       },
     },
     {
       key: 'wrap_mortgage',
       label: 'Wrap mortgage',
-      viability: creativeViabilityLabel(
-        wrapMonthlyCashFlow,
-        targetMonthlyCashFlow,
-        wrapSuggestedPrice,
-        wrapMaxPrice
-      ),
+      viability: wrapViability,
       summary: creativeSummary(
         'Wrap mortgage',
-        creativeViabilityLabel(
-          wrapMonthlyCashFlow,
-          targetMonthlyCashFlow,
-          wrapSuggestedPrice,
-          wrapMaxPrice
-        ),
+        wrapViability,
         askingPrice,
         wrapMaxPrice
       ),
       caution:
         existingLoanBalance === null
           ? 'Add the existing payoff and underlying loan terms to stress-test a true wrap structure.'
-          : askingPrice !== null && wrapMaxPrice !== null && wrapMaxPrice < askingPrice
-            ? 'The wrap note still needs a lower price or softer seller terms to hit the cash-flow target.'
-            : null,
+          : wrapSellerMonthlySpread !== null && wrapSellerMonthlySpread < 0
+            ? 'The modeled wrap payment is below the underlying payment. Do not pitch a wrap until payment spread is positive.'
+            : askingPrice !== null && wrapMaxPrice !== null && wrapMaxPrice < askingPrice
+              ? 'The wrap note still needs a lower price or softer seller terms to hit the cash-flow target.'
+              : null,
+      trustScore: wrapTrustScore,
+      trustLabel: creativeTrustLabel(wrapTrustScore),
+      terms: buildCreativeTerms({
+        label: 'Wrap mortgage',
+        suggestedPurchasePrice: wrapSuggestedPrice,
+        cashToSellerNow: creativeDownPayment,
+        financedBalance: wrapFinancedBalance,
+        existingLoanPayment,
+        noteRatePercent: wrapNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: wrapMonthlyPayment,
+        totalMonthlyPayment: wrapTotalMonthlyPayment,
+      }),
+      guardrails: buildCreativeGuardrails({
+        key: 'wrap_mortgage',
+        hasExistingLoanDetails:
+          existingLoanBalance !== null && existingLoanPayment !== null && existingLoanInterestRate !== null && existingLoanRemainingTermYears !== null,
+        entryFee: wrapEntry.entryFee,
+        monthlyCashFlow: wrapMonthlyCashFlow,
+        targetMonthlyCashFlow,
+        exitLoanToValuePercent: wrapExit.exitLoanToValuePercent,
+        sellerMonthlySpread: wrapSellerMonthlySpread,
+      }),
       metrics: {
         targetMonthlyCashFlow,
         maxPriceToHitTargetCashFlow: wrapMaxPrice,
         suggestedPurchasePrice: wrapSuggestedPrice,
         cashToSellerNow: creativeDownPayment,
         cashToClose: wrapCashToClose,
+        entryFee: wrapEntry.entryFee,
+        arrearsAndLiens: liensOrTaxes,
+        closingBuffer: fixedCreativeClosingBuffer,
+        repairReserve: wrapEntry.repairReserve,
+        operatingReserve: wrapEntry.operatingReserve,
         financedBalance: wrapFinancedBalance,
+        seniorDebt: existingLoanBalance,
+        sellerCarryBalance: wrapFinancedBalance,
         existingLoanBalance,
         existingLoanPayment,
         noteRatePercent: wrapNoteInterestRate,
@@ -1271,7 +1733,76 @@ export function buildPropertyOpportunityAnalysis(
         monthlyPayment: wrapMonthlyPayment,
         totalMonthlyPayment: wrapTotalMonthlyPayment,
         estimatedMonthlyCashFlow: wrapMonthlyCashFlow,
+        paymentSpread: wrapMonthlyCashFlow,
+        sellerMonthlySpread: wrapSellerMonthlySpread,
         balloonBalance: wrapBalloonBalance,
+        balloonEquityCushion: wrapExit.balloonEquityCushion,
+        exitLoanToValuePercent: wrapExit.exitLoanToValuePercent,
+      },
+    },
+    {
+      key: 'hybrid_morby',
+      label: 'Hybrid seller-carry stack',
+      viability: hybridViability,
+      summary:
+        hybridViability === 'Meets target'
+          ? 'Hybrid terms can support a higher headline price by pairing senior debt with a seller-financed down-payment note.'
+          : hybridViability === 'Borderline'
+            ? 'Hybrid terms may work if the seller accepts carryback and the senior debt stays disciplined.'
+            : 'Hybrid terms need a lower price, longer amortization, or softer rate before they are safe to pitch.',
+      caution:
+        hybridMaxPrice !== null && askingPrice !== null && hybridMaxPrice < askingPrice
+          ? 'The hybrid stack does not support full asking at the target cash-flow spread.'
+          : null,
+      trustScore: hybridTrustScore,
+      trustLabel: creativeTrustLabel(hybridTrustScore),
+      terms: buildCreativeTerms({
+        label: 'Hybrid',
+        suggestedPurchasePrice: hybridSuggestedPrice,
+        cashToSellerNow: 0,
+        financedBalance: hybridSuggestedPrice,
+        seniorDebt: hybridSeniorDebt,
+        sellerCarryBalance: hybridSellerCarryBalance,
+        noteRatePercent: creativeNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: hybridSellerCarryPayment,
+        totalMonthlyPayment: hybridTotalMonthlyPayment,
+      }),
+      guardrails: buildCreativeGuardrails({
+        key: 'hybrid_morby',
+        entryFee: hybridEntry.entryFee,
+        monthlyCashFlow: hybridMonthlyCashFlow,
+        targetMonthlyCashFlow,
+        exitLoanToValuePercent: hybridExit.exitLoanToValuePercent,
+      }),
+      metrics: {
+        targetMonthlyCashFlow,
+        maxPriceToHitTargetCashFlow: hybridMaxPrice,
+        suggestedPurchasePrice: hybridSuggestedPrice,
+        cashToSellerNow: 0,
+        cashToClose: hybridCashToClose,
+        entryFee: hybridEntry.entryFee,
+        arrearsAndLiens: liensOrTaxes,
+        closingBuffer: fixedCreativeClosingBuffer,
+        repairReserve: hybridEntry.repairReserve,
+        operatingReserve: hybridEntry.operatingReserve,
+        financedBalance: hybridSuggestedPrice,
+        seniorDebt: hybridSeniorDebt,
+        sellerCarryBalance: hybridSellerCarryBalance,
+        existingLoanBalance: null,
+        existingLoanPayment: null,
+        noteRatePercent: creativeNoteInterestRate,
+        amortizationYears: creativeAmortizationYears,
+        balloonYears: creativeBalloonYears,
+        monthlyPayment: hybridSellerCarryPayment,
+        totalMonthlyPayment: hybridTotalMonthlyPayment,
+        estimatedMonthlyCashFlow: hybridMonthlyCashFlow,
+        paymentSpread: hybridMonthlyCashFlow,
+        sellerMonthlySpread: null,
+        balloonBalance: hybridBalloonBalance,
+        balloonEquityCushion: hybridExit.balloonEquityCushion,
+        exitLoanToValuePercent: hybridExit.exitLoanToValuePercent,
       },
     },
   ]
@@ -1303,8 +1834,18 @@ export function buildPropertyOpportunityAnalysis(
   const rawDealStrengthScore = bounded(
     (Math.min(20, Math.max(0, ((discountToValuePercent ?? equityPercent ?? 0) / 20) * 20))) +
       (estimatedMonthlyCashFlow !== null
-        ? Math.min(15, Math.max(0, (estimatedMonthlyCashFlow / Math.max(targetMonthlyCashFlow, 1)) * 10 + 5))
+        ? Math.min(
+            clearsCashOnCashFloor || cashOnCashReturnPercent === null ? 15 : 7,
+            Math.max(0, (estimatedMonthlyCashFlow / Math.max(targetMonthlyCashFlow, 1)) * 10 + 5)
+          )
         : 4) +
+      (cashOnCashReturnPercent !== null
+        ? clearsCashOnCashFloor
+          ? Math.min(12, Math.max(0, ((cashOnCashReturnPercent - MIN_CASH_ON_CASH_RETURN_PERCENT) / 12) * 8 + 4))
+          : -14
+        : isRentalStyle
+          ? -4
+          : 0) +
       (Math.min(10, Math.max(0, ((rentToPriceRatioPercent ?? 0) / 1.2) * 10))) +
       (repairBudget !== null && arv !== null
         ? Math.min(10, Math.max(0, 10 - (repairBudget / Math.max(arv, 1)) * 25))
@@ -1315,16 +1856,22 @@ export function buildPropertyOpportunityAnalysis(
       Math.min(8, usableComps.length * 2) +
       Math.max(0, 10 - riskFlags.length * 2)
   )
-  const dealStrengthScore = dealStrengthScoreWithDealMath(
+  const dealStrengthScoreBeforeCashOnCash = dealStrengthScoreWithDealMath(
     rawDealStrengthScore,
     dealGrade,
     assignmentSpread,
     endBuyerProfit
   )
+  const dealStrengthScore = lowCashOnCashReturn
+    ? Math.min(dealStrengthScoreBeforeCashOnCash, 58)
+    : dealStrengthScoreBeforeCashOnCash
 
   const strengths = [
     discountToValuePercent !== null && discountToValuePercent >= 12 ? 'Price sits well below rough value' : null,
-    estimatedMonthlyCashFlow !== null && estimatedMonthlyCashFlow >= targetMonthlyCashFlow ? 'Monthly cash flow clears the target' : null,
+    estimatedMonthlyCashFlow !== null && estimatedMonthlyCashFlow >= targetMonthlyCashFlow && (cashOnCashReturnPercent === null || clearsCashOnCashFloor)
+      ? 'Monthly cash flow clears the target'
+      : null,
+    clearsCashOnCashFloor ? `Cash-on-cash clears the ${MIN_CASH_ON_CASH_RETURN_PERCENT}% floor` : null,
     dscr !== null && dscr >= 1.15 ? 'Debt coverage is lender friendly' : null,
     flipProfit !== null && flipProfit >= 25000 ? 'Projected flip spread is healthy' : null,
     fundingReadinessScore >= 70 ? 'File looks ready for capital review' : null,
@@ -1423,7 +1970,7 @@ export function buildPropertyOpportunityAnalysis(
     dealStrength: {
       score: dealStrengthScore,
       label: dealStrengthLabel(dealStrengthScore),
-      summary: dealStrengthSummary(dealStrengthScore, dealGrade, assignmentSpread),
+      summary: dealStrengthSummary(dealStrengthScore, dealGrade, assignmentSpread, lowCashOnCashReturn),
       strengths,
     },
     signalScore,

@@ -290,7 +290,7 @@ export function CommandCenterStrategyOpsPanel({
           </div>
 
           <div className="mt-3 space-y-2">
-            {autopilot.batches.slice(0, 5).map((batch) => (
+            {autopilot.batches.slice(0, 8).map((batch) => (
               <div key={batch.strategyKey} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
