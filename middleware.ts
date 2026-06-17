@@ -5,6 +5,11 @@ const protectedAdminPages = [
   '/admin',
   '/admin-panel',
   '/admin/test',
+  '/dev/command-center-preview',
+];
+
+const protectedAdminApis = [
+  '/api/admin',
 ];
 
 const protectedAuthenticatedPages = [
@@ -53,6 +58,7 @@ function matchProtectedPath(pathname: string, paths: string[]) {
 function matchesProtectedPath(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedAdminApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
     matchProtectedPath(pathname, protectedDiagnostics) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
@@ -60,7 +66,10 @@ function matchesProtectedPath(pathname: string) {
 }
 
 function isProtectedApi(pathname: string) {
-  return matchProtectedPath(pathname, protectedDiagnosticApis);
+  return (
+    matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedDiagnosticApis)
+  );
 }
 
 function isDiagnosticPath(pathname: string) {
@@ -73,6 +82,7 @@ function isDiagnosticPath(pathname: string) {
 function requiresAdmin(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedAdminApis) ||
     matchProtectedPath(pathname, protectedDiagnostics) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
   );
@@ -81,6 +91,7 @@ function requiresAdmin(pathname: string) {
 function shouldNoIndex(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
+    matchProtectedPath(pathname, protectedAdminApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
     matchProtectedPath(pathname, protectedDiagnostics)
   );
@@ -314,6 +325,7 @@ export const config = {
     '/admin/:path*',
     '/admin-panel/:path*',
     '/admin/test/:path*',
+    '/dev/command-center-preview/:path*',
     '/auth-debug/:path*',
     '/chat/:path*',
     '/credit-dashboard/:path*',
@@ -330,6 +342,7 @@ export const config = {
     '/tools/grants/:path*',
     '/tools/my-dispute-letters/:path*',
     '/user-hub/:path*',
+    '/api/admin/:path*',
     '/api/execute-sql/:path*',
     '/api/run-db-setup/:path*',
     '/api/setup-database/:path*',

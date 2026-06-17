@@ -131,7 +131,8 @@ export default async function ScrapeRunsPage() {
     })) || []),
   ].sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime())
 
-  const recentPartnerRuns = partnerRuns.filter((run) => Date.now() - new Date(run.startedAt).getTime() <= 7 * 24 * 60 * 60 * 1000)
+  const currentTime = new Date().getTime()
+  const recentPartnerRuns = partnerRuns.filter((run) => currentTime - new Date(run.startedAt).getTime() <= 7 * 24 * 60 * 60 * 1000)
   const cooledDownRuns = recentPartnerRuns.filter((run) => isCooldownNote(run.note))
   const failedPartnerRuns = recentPartnerRuns.filter((run) => run.status === 'failed')
   const activePartnerRuns = recentPartnerRuns.filter((run) => !isCooldownNote(run.note) && run.status !== 'failed')

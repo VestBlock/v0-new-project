@@ -331,9 +331,9 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     directives: [
       {
         agent: 'acquisition',
-        action: 'Harvest DealMachine tax-delinquent owner rows in four new markets',
+        action: 'Run the VestBlock tax/code stack play for new markets',
         detail:
-          'Run Cleveland, Columbus, Indianapolis, and Louisville through the DealMachine API harvest with contactable + stacked filters. Keep this separate from on-market listing-agent data.',
+          'Use the single VestBlock runner so DealMachine harvest, public-record code overlay, missing-city export planning, and stack output stay in one repeatable lane. Keep this separate from on-market listing-agent data.',
         priority: 'high',
       },
       {
@@ -359,12 +359,20 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     steps: [
-      { label: 'Harvest new markets', command: 'npm run distress:tax-code-stack:harvest-new-markets' },
-      { label: 'Build tax + code list', command: 'npm run distress:tax-code-stack:new-markets' },
+      {
+        label: 'Run VestBlock tax/code play',
+        command:
+          'npm run vestblock:tax-code-stack -- --markets="Kansas City,MO|Omaha,NE|Des Moines,IA|Wichita,KS" --per-city=30',
+      },
+      {
+        label: 'Run and build missing DealMachine lists',
+        command:
+          'npm run vestblock:tax-code-stack:build -- --markets="Kansas City,MO|Omaha,NE|Des Moines,IA|Wichita,KS" --per-city=30',
+      },
       {
         label: 'Preview outreach from stack',
         command:
-          'npm run distress:dealmachine:export-outreach -- --strategy=tax-code-stack --market=cleveland-oh --queue-csv=data/distress-leads/dealmachine-tax-code-stack-<stamp>.csv --export-csv=data/dm-exports/cleveland-oh-<date>.csv --limit=100',
+          'npm run distress:dealmachine:export-outreach -- --strategy=tax-code-stack --market=kansas-city-mo --queue-csv=data/distress-leads/dealmachine-tax-code-stack-<stamp>.csv --export-csv=data/dm-exports/kansas-city-mo-<date>.csv --limit=30',
       },
     ],
     complianceNote:

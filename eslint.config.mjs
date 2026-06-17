@@ -40,6 +40,10 @@ const eslintConfig = [
       '@typescript-eslint/no-require-imports': 'off',
       'prefer-const': 'warn',
       'react/no-unescaped-entities': 'off',
+      'react-hooks/error-boundaries': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 ];

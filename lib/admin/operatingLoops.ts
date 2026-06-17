@@ -271,6 +271,22 @@ function sortEvents(events: CampaignLedgerEvent[]) {
   return [...events].sort((a, b) => Date.parse(b.sentAt || '') - Date.parse(a.sentAt || '') || a.id.localeCompare(b.id))
 }
 
+function writeCampaignLedgerCache(events: CampaignLedgerEvent[]) {
+  try {
+    fs.mkdirSync(LEDGER_DIR, { recursive: true })
+    fs.writeFileSync(LEDGER_PATH, `${events.map((event) => JSON.stringify(event)).join('\n')}${events.length ? '\n' : ''}`, 'utf8')
+    fs.writeFileSync(SUMMARY_PATH, `${JSON.stringify(buildCampaignRollups(events), null, 2)}\n`, 'utf8')
+    return { ledgerPath: LEDGER_PATH, summaryPath: SUMMARY_PATH }
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
+    if (code === 'EROFS' || code === 'EACCES' || code === 'EPERM') {
+      console.warn('Campaign ledger cache skipped because the runtime filesystem is not writable.')
+      return { ledgerPath: 'memory:campaign-ledger', summaryPath: 'memory:campaign-summary' }
+    }
+    throw error
+  }
+}
+
 export function syncCampaignLedger(): { events: CampaignLedgerEvent[]; ledgerPath: string; summaryPath: string } {
   const outreachDir = path.join(process.cwd(), 'tmp', 'outreach')
   const events = sortEvents([
@@ -279,11 +295,7 @@ export function syncCampaignLedger(): { events: CampaignLedgerEvent[]; ledgerPat
     ...buildBlockedSourceEvents(),
   ])
 
-  fs.mkdirSync(LEDGER_DIR, { recursive: true })
-  fs.writeFileSync(LEDGER_PATH, `${events.map((event) => JSON.stringify(event)).join('\n')}${events.length ? '\n' : ''}`, 'utf8')
-  fs.writeFileSync(SUMMARY_PATH, `${JSON.stringify(buildCampaignRollups(events), null, 2)}\n`, 'utf8')
-
-  return { events, ledgerPath: LEDGER_PATH, summaryPath: SUMMARY_PATH }
+  return { events, ...writeCampaignLedgerCache(events) }
 }
 
 function topMarkets(events: CampaignLedgerEvent[]) {

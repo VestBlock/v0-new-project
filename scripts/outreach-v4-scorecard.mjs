@@ -3,6 +3,8 @@ import path from 'node:path'
 
 import { loadSentLedgerSummary } from '../lib/leads/outreach-v4/sent-ledger.mjs'
 
+const ALLOW_STALE = process.argv.includes('--allow-stale')
+
 function getArgValue(name, fallback = '') {
   const prefix = `${name}=`
   const inline = process.argv.find((arg) => arg.startsWith(prefix))
@@ -36,6 +38,13 @@ function findLatestOutreachV4Run(baseDir) {
   }
 
   return null
+}
+
+function daysBetween(date, referenceDate) {
+  const left = Date.parse(`${date}T00:00:00.000Z`)
+  const right = Date.parse(`${referenceDate}T00:00:00.000Z`)
+  if (!Number.isFinite(left) || !Number.isFinite(right)) return null
+  return Math.max(0, Math.round((right - left) / 86400000))
 }
 
 function normalizeScorecard(scorecard) {
@@ -151,16 +160,29 @@ async function main() {
   const normalized = normalizeScorecard(loaded)
   const withApproval = mergeApprovalState(normalized.scorecard, readOptionalJson(approvalSummaryPath))
   const withLedger = mergeLedgerState(withApproval.scorecard, loadSentLedgerSummary({ date }))
+  const usedLatestAvailableRun = date !== requestedDate
+  const staleAgeDays = usedLatestAvailableRun ? daysBetween(date, requestedDate) : 0
+  const staleWarning = usedLatestAvailableRun
+    ? `No V4 scorecard exists for ${requestedDate}; using ${date}, which is ${staleAgeDays ?? 'unknown'} day(s) old. Run npm run outreach:v4-dry-run before trusting outreach readiness.`
+    : null
   const scorecard = {
     ...withLedger.scorecard,
+    ok: usedLatestAvailableRun ? false : withLedger.scorecard.ok,
     requestedDate,
     resolvedDate: date,
-    usedLatestAvailableRun: date !== requestedDate,
+    usedLatestAvailableRun,
+    dataFreshness: usedLatestAvailableRun ? 'stale' : 'current',
+    staleAgeDays,
+    staleWarning,
+    exactNextAction: staleWarning || withLedger.scorecard.exactNextAction,
   }
   if (normalized.changed || withApproval.changed || withLedger.changed) {
     fs.writeFileSync(scorecardPath, `${JSON.stringify(scorecard, null, 2)}\n`)
   }
   console.log(JSON.stringify(scorecard, null, 2))
+  if (usedLatestAvailableRun && !ALLOW_STALE) {
+    process.exitCode = 1
+  }
 }
 
 main().catch((error) => {

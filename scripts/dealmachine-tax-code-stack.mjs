@@ -172,7 +172,14 @@ function codeMarketKey(row, fallbackMarket) {
 }
 
 function taxSignal(row) {
-  return boolish(row.tax_delinquent) || numberish(row.past_due_amount_value || row.past_due_amount || row.delinquent_amount) > 0
+  return boolish(row.tax_delinquent) || taxAmountValue(row) > 0
+}
+
+function taxAmountValue(row) {
+  const direct = numberish(row.past_due_amount_value || row.past_due_amount || row.delinquent_amount)
+  if (direct > 0) return direct
+  const noteMatch = String(row.recent_note || "").match(/\b(?:delinquent amount|past due amount)\s*:\s*\$?([0-9][0-9,]*(?:\.\d+)?)/i)
+  return noteMatch ? numberish(noteMatch[1]) : 0
 }
 
 function contactable(row) {
@@ -289,7 +296,7 @@ function severityBoost(codeHit) {
 function priorityScore(row, codeHit) {
   let score = 50
   score += severityBoost(codeHit)
-  score += Math.min(25, Math.floor(numberish(row.past_due_amount_value || row.past_due_amount) / 1000))
+  score += Math.min(25, Math.floor(taxAmountValue(row) / 1000))
   if (contactable(row)) score += 12
   if (numberish(row.equity_percent_value || row.equity_percent) >= 25) score += 10
   if (boolish(row.out_of_state_owner)) score += 8
@@ -310,7 +317,7 @@ function buildOutputRow(row, market, codeHit) {
     tax_delinquent: row.tax_delinquent || "",
     tax_delinquent_year: row.tax_delinquent_year || "",
     past_due_amount: row.past_due_amount || row.delinquent_amount || "",
-    past_due_amount_value: row.past_due_amount_value || numberish(row.past_due_amount || row.delinquent_amount),
+    past_due_amount_value: row.past_due_amount_value || taxAmountValue(row),
     code_violation_hit: codeHit ? "true" : "false",
     code_violation: codeHit?.violation || "",
     code_violation_date: codeHit?.violation_date || "",

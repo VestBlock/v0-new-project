@@ -33,6 +33,11 @@ spy_daily_signal.pine
 spy_swing_conservative_strategy.pine
 spy_swing_strategy.pine
 
+
+# local command-center runtime memory and generated buyer packets
+/data/command-center/
+/data/property-portfolios/
+/reports/
 # local revenue/outreach operating data; keep scripts and docs tracked, not raw exports
 /data/distress-leads/
 /data/distress-sources/

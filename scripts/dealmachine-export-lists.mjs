@@ -28,6 +28,7 @@ const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
 const DEDUPE_BY_DEALMACHINE = args.includes("--dealmachine-dedupe")
+const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || (SEND ? 10 * 60 * 1000 : 0))
 
 function selectedChromeUrl() {
   return execFileSync(
@@ -70,6 +71,7 @@ function loadBuiltLists(file) {
   return rows
     .map((row) => ({
       market: row.market || [row.city, row.state].filter(Boolean).join(", "),
+      strategyKey: row.strategyKey || row.strategy_key || row.strategy || "contacts",
       count: Number(row.count || row.estimated_count || 0),
       id: row.list?.id || row.list_id || row.id,
       title: row.title || row.list?.title || `DealMachine list ${row.list?.id || row.list_id || row.id}`,
@@ -83,6 +85,7 @@ function makeBrowserPayload(lists) {
     send: SEND,
     emails: EMAILS,
     dealmachineDedupe: DEDUPE_BY_DEALMACHINE,
+    waitForContactsMs: WAIT_FOR_CONTACTS_MS,
     lists,
   }
 
@@ -118,6 +121,38 @@ function makeBrowserPayload(lists) {
       return { ok: response.ok, status: response.status, data }
     }
 
+    const exportableCount = async (list) => {
+      const started = Date.now()
+      do {
+        const countResponse = await post({
+          type: "export_actual_count",
+          select_all: 1,
+          total_count: list.count,
+          list_id: list.id,
+          export_type: "contacts",
+          include_likely_owners: true,
+          include_family: false,
+          include_likely_renters: false,
+          include_potential_property_owners: false,
+          scrub_dnc: true,
+          scrub_landline: true,
+          scrub_wireless: false,
+          deduplicate: CONFIG.dealmachineDedupe,
+          remove_items_without_phone_numbers: false
+        })
+        const countResult = countResponse.data?.results || countResponse.data || {}
+        const actualCount =
+          countResult.total_count_not_yet_exported ??
+          countResult.actual_count ??
+          countResult.count ??
+          null
+        if (!CONFIG.send || Number(actualCount || 0) > 0 || Date.now() - started >= CONFIG.waitForContactsMs) {
+          return { countResponse, countResult, actualCount }
+        }
+        await sleep(5000)
+      } while (true)
+    }
+
     ;(async () => {
       try {
         if (!token) throw new Error("DealMachine token was not found in the active Chrome tab.")
@@ -126,27 +161,29 @@ function makeBrowserPayload(lists) {
         const selectedColumns = settings.user_column_preferences?.contact_export_columns || []
 
         for (const list of CONFIG.lists) {
-          const countResponse = await post({
-            type: "export_actual_count",
-            select_all: 1,
-            total_count: list.count,
-            list_id: list.id
-          })
-          const countResult = countResponse.data?.results || countResponse.data || {}
+          const { countResponse, countResult, actualCount } = await exportableCount(list)
           const row = {
             ...list,
             countStatus: countResponse.status,
             countOk: countResponse.ok,
-            actualCount: countResult.total_count_not_yet_exported ?? null,
+            actualCount,
+            countResult,
             exported: false
           }
 
           if (CONFIG.send) {
-            const exportFileName = ["vestblock", "land-wholesale", slug(list.market), new Date().toISOString().slice(0, 10), list.id].join("-")
+            if (!countResponse.ok || Number(actualCount || 0) <= 0) {
+              row.exportBlocked = true
+              row.exportBlockReason = "blocked_zero_exportable_contacts"
+              window.vbDmExportLists.rows.push(row)
+              await sleep(350)
+              continue
+            }
+            const exportFileName = ["vestblock", slug(list.strategyKey || "contacts"), slug(list.market), new Date().toISOString().slice(0, 10), list.id].join("-")
             const exportResponse = await post({
               type: "export_v2",
               select_all: 1,
-              total_count: list.count,
+              total_count: Number(actualCount || list.count || 0),
               emails: CONFIG.emails,
               list_id: list.id,
               selected_columns: selectedColumns.join(","),
@@ -194,6 +231,10 @@ function pollResults() {
     const raw = chromeJavascript("JSON.stringify(window.vbDmExportLists || null)")
     if (raw && raw !== "null") {
       const parsed = JSON.parse(raw)
+      if (parsed.runId !== RUN_ID) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
+        continue
+      }
       process.stdout.write(`\r${parsed.rows?.length || 0} lists checked${parsed.send ? " / export mode" : " / dry run"}`)
       if (parsed.done) {
         process.stdout.write("\n")
@@ -227,7 +268,7 @@ function writeOutputs(results) {
       "",
       ...(results.rows || []).map(
         (row) =>
-          `- ${row.market}: list ${row.id}, ${row.count} leads, not-yet-exported ${row.actualCount ?? "n/a"}, export ${row.exported ? "started" : results.send ? "not started" : "dry run"}`
+          `- ${row.market}: list ${row.id}, ${row.count} estimated leads, exportable contacts ${row.actualCount ?? "n/a"}, export ${row.exported ? "started" : row.exportBlocked ? row.exportBlockReason : results.send ? "not started" : "dry run"}`
       ),
       "",
       "## Next Step",
@@ -241,7 +282,7 @@ function writeOutputs(results) {
       "Then start outreach with the explicit export CSV so VestBlock's send logs dedupe recipients:",
       "",
       "```bash",
-      "node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=<city-state> --strategy=land-wholesale --export-csv=/path/to/dealmachine-contacts.csv --send",
+      "node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=<city-state> --strategy=<strategy-key> --export-csv=/path/to/dealmachine-contacts.csv --send",
       "```",
       "",
     ].join("\n")

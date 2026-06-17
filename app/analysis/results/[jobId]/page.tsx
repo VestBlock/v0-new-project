@@ -19,7 +19,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface AnalysisJob {
   id: string;
@@ -43,16 +43,7 @@ export default function AnalysisResultsPage() {
 
   const jobId = params.jobId as string;
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-
-    fetchAnalysisJob();
-  }, [isAuthenticated, jobId]);
-
-  const fetchAnalysisJob = async () => {
+  const fetchAnalysisJob = useCallback(async () => {
     try {
       const { data: jobData, error: jobError } = await supabase
         .from('analysis_jobs')
@@ -68,7 +59,16 @@ export default function AnalysisResultsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [jobId, supabase, user]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    fetchAnalysisJob();
+  }, [fetchAnalysisJob, isAuthenticated, router]);
 
   if (!isAuthenticated) {
     return <div>Please log in to view results.</div>;

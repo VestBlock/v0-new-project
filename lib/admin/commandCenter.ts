@@ -9,7 +9,11 @@ import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
-import { buildDealMemorySnapshot, type DealMemorySnapshot } from '@/lib/admin/dealMemory'
+import {
+  buildDealMemorySnapshot,
+  loadLocalPropertyAnalysisMemory,
+  type DealMemorySnapshot,
+} from '@/lib/admin/dealMemory'
 import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
 import {
   SOURCE_DOCTRINE,
@@ -736,6 +740,74 @@ const withinDays = (value: string | null | undefined, days: number) => hoursSinc
 
 const lower = (value?: string | null) => String(value || '').toLowerCase()
 
+function readLocalJsonl(file: string): AnyRow[] {
+  try {
+    if (!fs.existsSync(file)) return []
+    return fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as AnyRow)
+  } catch {
+    return []
+  }
+}
+
+function mergeRowsById(primary: AnyRow[], localRows: AnyRow[]) {
+  const rows = new Map<string, AnyRow>()
+  for (const row of localRows) {
+    const id = String(row.id || '')
+    if (id) rows.set(id, row)
+  }
+  for (const row of primary) {
+    const id = String(row.id || '')
+    if (id) rows.set(id, row)
+  }
+  return [...rows.values()]
+}
+
+function normalizeLocalBuyerPacket(row: AnyRow): AnyRow {
+  return {
+    ...row,
+    property_analysis_run_id: row.property_analysis_run_id || row.propertyAnalysisRunId || null,
+    property_address: row.property_address || row.propertyAddress || null,
+    zip_code: row.zip_code || row.zipCode || null,
+    selected_buyer_count: row.selected_buyer_count ?? row.selectedBuyerCount ?? 0,
+    sent_count: row.sent_count ?? row.sentCount ?? 0,
+    opened_count: row.opened_count ?? row.openedCount ?? 0,
+    replied_count: row.replied_count ?? row.repliedCount ?? 0,
+    last_sent_at: row.last_sent_at || row.lastSentAt || null,
+    created_at: row.created_at || row.createdAt || null,
+    updated_at: row.updated_at || row.updatedAt || row.created_at || row.createdAt || null,
+    metadata_json: row.metadata_json || row.metadata || {},
+  }
+}
+
+function normalizeLocalPipelineItem(row: AnyRow): AnyRow {
+  return {
+    ...row,
+    property_analysis_run_id: row.property_analysis_run_id || row.propertyAnalysisRunId || null,
+    buyer_packet_id: row.buyer_packet_id || row.buyerPacketId || null,
+    lead_id: row.lead_id || row.leadId || null,
+    property_address: row.property_address || row.propertyAddress || null,
+    zip_code: row.zip_code || row.zipCode || null,
+    current_stage: row.current_stage || row.currentStage || null,
+    stage_label: row.stage_label || row.stageLabel || null,
+    deal_grade: row.deal_grade || row.dealGrade || null,
+    deal_strength_score: row.deal_strength_score ?? row.dealStrengthScore ?? null,
+    buyer_packet_sent_count: row.buyer_packet_sent_count ?? row.buyerPacketSentCount ?? 0,
+    buyer_reply_count: row.buyer_reply_count ?? row.buyerReplyCount ?? 0,
+    estimated_assignment_fee: row.estimated_assignment_fee ?? row.estimatedAssignmentFee ?? null,
+    expected_profit: row.expected_profit ?? row.expectedProfit ?? null,
+    next_action: row.next_action || row.nextAction || null,
+    next_action_at: row.next_action_at || row.nextActionAt || null,
+    created_at: row.created_at || row.createdAt || null,
+    updated_at: row.updated_at || row.updatedAt || row.created_at || row.createdAt || null,
+    metadata_json: row.metadata_json || row.metadata || {},
+  }
+}
+
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value))
 }
@@ -1201,6 +1273,14 @@ function loadTaxCodeStack(): CommandCenterTaxCodeStack {
 
 function loadLocalSignals() {
   const dmExports: { file: string; ageDays: number }[] = []
+  const localCommandCenterDir = path.join(process.cwd(), 'data', 'command-center')
+  const propertyAnalysisRuns = loadLocalPropertyAnalysisMemory()
+  const propertyBuyerPackets = readLocalJsonl(path.join(localCommandCenterDir, 'property-buyer-packets.jsonl')).map(
+    normalizeLocalBuyerPacket
+  )
+  const dealPipelineItems = readLocalJsonl(path.join(localCommandCenterDir, 'deal-pipeline-items.jsonl')).map(
+    normalizeLocalPipelineItem
+  )
   const suppressionRecords: {
     email: string
     reason: string
@@ -1263,7 +1343,17 @@ function loadLocalSignals() {
 
   suppressionRecords.sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
 
-  return { dmExports, onMarketSweep, taxCodeStack, dealMachineExportRequest, distressStackRows, suppressionRecords }
+  return {
+    dmExports,
+    onMarketSweep,
+    taxCodeStack,
+    dealMachineExportRequest,
+    distressStackRows,
+    suppressionRecords,
+    propertyAnalysisRuns,
+    propertyBuyerPackets,
+    dealPipelineItems,
+  }
 }
 
 function eventMetadata(event: AnyRow): Record<string, any> {
@@ -2092,6 +2182,7 @@ export function buildDealPipelineSnapshot(input: {
   propertyBuyerPacketSends?: AnyRow[]
 }): CommandCenterDealPipeline {
   const stageOrder = [
+    { key: 'diligence_required', label: 'Diligence Required' },
     { key: 'analyzed', label: 'Analyzed' },
     { key: 'offer_sent', label: 'Offer Sent' },
     { key: 'under_contract', label: 'Under Contract' },
@@ -2136,7 +2227,7 @@ export function buildDealPipelineSnapshot(input: {
     }
   })
 
-  const packetReady = packets.filter((packet) => ['ready', 'partial'].includes(lower(packet.status))).length
+  const packetReady = packets.filter((packet) => ['ready', 'ready_for_review', 'partial'].includes(lower(packet.status))).length
   const packetSent = packets.filter((packet) => ['sent', 'partial'].includes(lower(packet.status))).length
   const activeDeals = activeItems.length
   const status: CommandStatus =
@@ -2530,8 +2621,11 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const issues: DataSourceIssue[] = []
   const t = await loadTables(admin, issues)
   const local = loadLocalSignals()
+  const propertyAnalysisRuns = mergeRowsById(t.propertyAnalysisRuns, local.propertyAnalysisRuns)
+  const propertyBuyerPackets = mergeRowsById(t.propertyBuyerPackets, local.propertyBuyerPackets)
+  const dealPipelineItems = mergeRowsById(t.dealPipelineItems, local.dealPipelineItems)
   const liveDataReachable = issues.length === 0
-  const dealMemory = buildDealMemorySnapshot(t.propertyAnalysisRuns)
+  const dealMemory = buildDealMemorySnapshot(propertyAnalysisRuns)
   const sourceGovernor = buildSourceGovernorSnapshot({
     scrapeRuns: t.scrapeRuns,
     dealMachineExports: local.dmExports,
@@ -2981,7 +3075,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     missingSuppressionDb,
   })
   const buyBoxGraph = buildBuyBoxGraphSnapshot({
-    propertyAnalysisRuns: t.propertyAnalysisRuns,
+    propertyAnalysisRuns,
     buyers: t.buyers,
     lenders: t.lenders,
     investorPipelineRows,
@@ -2989,8 +3083,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     pendingLenderMatches,
   })
   const dealPipeline = buildDealPipelineSnapshot({
-    dealPipelineItems: t.dealPipelineItems,
-    propertyBuyerPackets: t.propertyBuyerPackets,
+    dealPipelineItems,
+    propertyBuyerPackets,
     propertyBuyerPacketSends: t.propertyBuyerPacketSends,
   })
   const foreclosureCommand = buildForeclosureCommandSnapshot({

@@ -124,6 +124,7 @@ function loadBuiltLists(files) {
 }
 
 function browserExportPayload(lists, email, send) {
+  const waitForContactsMs = Number(getArg("wait-ms") || (send ? 10 * 60 * 1000 : 0))
   return `(() => {
   const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
   const runId = ${JSON.stringify(RUN_ID)}
@@ -131,6 +132,7 @@ function browserExportPayload(lists, email, send) {
   const lists = ${JSON.stringify(lists)}
   const email = ${JSON.stringify(email)}
   const send = ${JSON.stringify(send)}
+  const waitForContactsMs = ${JSON.stringify(waitForContactsMs)}
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   window.vbDmSavedListExport = { done: false, runId, email, send, results: [], startedAt: new Date().toISOString() }
   const api = async (body) => {
@@ -148,43 +150,75 @@ function browserExportPayload(lists, email, send) {
     try { data = JSON.parse(text) } catch (error) { data = { error: text.slice(0, 500) } }
     return { ok: res.ok, status: res.status, data }
   }
+  const exportableCount = async (item) => {
+    const started = Date.now()
+    do {
+      const countResponse = await api({
+        type: "export_actual_count",
+        select_all: 1,
+        list_id: item.listId,
+        total_count: item.estimatedCount || 0,
+        export_type: "contacts",
+        include_likely_owners: 1,
+        include_family: 0,
+        include_likely_renters: 0,
+        include_potential_property_owners: 0,
+        scrub_dnc: 1,
+        scrub_landline: 1,
+        scrub_wireless: 0,
+        deduplicate: 1,
+        remove_items_without_phone_numbers: 0
+      })
+      const countResult = countResponse.data?.results || countResponse.data || {}
+      const actualCount =
+        countResult.total_count_not_yet_exported ??
+        countResult.actual_count ??
+        countResult.count ??
+        countResponse.data?.actual_count ??
+        null
+      if (!send || Number(actualCount || 0) > 0 || Date.now() - started >= waitForContactsMs) {
+        return { countResponse, countResult, actualCount }
+      }
+      await sleep(5000)
+    } while (true)
+  }
   const results = []
   ;(async () => {
     if (!token) throw new Error("DealMachine token was not found. Open app.dealmachine.com/map and log in.")
     for (const item of lists) {
       let actualCount = null
       let actualCountStatus = null
+      let countResult = {}
       try {
-        const countResponse = await api({
-          type: "export_actual_count",
-          select_all: 1,
-          list_id: item.listId,
-          total_count: item.estimatedCount || 0,
-          export_type: "contacts",
-          include_likely_owners: 1,
-          include_family: 0,
-          include_likely_renters: 0,
-          include_potential_property_owners: 0,
-          scrub_dnc: 1,
-          scrub_landline: 1,
-          scrub_wireless: 0,
-          deduplicate: 1,
-          remove_items_without_phone_numbers: 0
-        })
+        const countResponsePayload = await exportableCount(item)
+        const countResponse = countResponsePayload.countResponse
         actualCountStatus = countResponse.status
-        actualCount = countResponse.data?.results?.actual_count ?? countResponse.data?.results?.count ?? countResponse.data?.actual_count ?? null
+        actualCount = countResponsePayload.actualCount
+        countResult = countResponsePayload.countResult
       } catch (error) {
         actualCountStatus = 0
       }
       if (!send) {
-        results.push({ ...item, requested: false, dryRun: true, actualCount, actualCountStatus })
+        results.push({ ...item, requested: false, dryRun: true, actualCount, actualCountStatus, countResult })
+        continue
+      }
+      if (Number(actualCount || 0) <= 0) {
+        results.push({
+          ...item,
+          requested: false,
+          exportBlocked: true,
+          exportBlockReason: "blocked_zero_exportable_contacts",
+          actualCount,
+          actualCountStatus,
+          countResult
+        })
         continue
       }
       const fileName = String(item.title || "VestBlock DealMachine Contacts Export").slice(0, 150)
       const response = await api({
         type: "export_v2",
         select_all: 1,
-        total_count: item.estimatedCount || actualCount || 0,
+        total_count: actualCount || item.estimatedCount || 0,
         new_filters: null,
         emails: email,
         list_id: item.listId,
@@ -208,7 +242,7 @@ function browserExportPayload(lists, email, send) {
         remove_items_without_phone_numbers: 0,
         export_file_name: fileName
       })
-      results.push({ ...item, requested: response.ok && response.data?.error !== true, actualCount, actualCountStatus, status: response.status, response: response.data })
+      results.push({ ...item, requested: response.ok && response.data?.error !== true, actualCount, actualCountStatus, countResult, status: response.status, response: response.data })
       await sleep(350)
     }
     window.vbDmSavedListExport = { done: true, runId, email, send, results, finishedAt: new Date().toISOString() }

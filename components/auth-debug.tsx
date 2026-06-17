@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getSupabaseClient } from "@/lib/supabase/client"
@@ -14,14 +14,7 @@ export function AuthDebug() {
   const supabase = getSupabaseClient()
   const router = useRouter()
 
-  // Automatically check auth state when component mounts
-  useEffect(() => {
-    if (isVisible) {
-      checkAuthState()
-    }
-  }, [isVisible])
-
-  const checkAuthState = async () => {
+  const checkAuthState = useCallback(async () => {
     setIsLoading(true)
     try {
       // Get session
@@ -47,7 +40,7 @@ export function AuthDebug() {
         if (key) {
           try {
             localStorageItems[key] = localStorage.getItem(key)
-          } catch (e) {
+          } catch {
             localStorageItems[key] = "Error reading value"
           }
         }
@@ -71,7 +64,14 @@ export function AuthDebug() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [supabase])
+
+  // Automatically check auth state when component mounts
+  useEffect(() => {
+    if (isVisible) {
+      checkAuthState()
+    }
+  }, [checkAuthState, isVisible])
 
   const handleSignOut = async () => {
     setIsLoading(true)
