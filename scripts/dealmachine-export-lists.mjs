@@ -23,12 +23,13 @@ const getArg = (name) => {
 }
 
 const LISTS_JSON = getArg("lists-json") || getArg("file")
-const EMAILS = getArg("emails") || getArg("email") || process.env.DEALMACHINE_EXPORT_EMAIL || "profitautomationllc@gmail.com"
+const EMAILS = getArg("emails") || getArg("email") || process.env.DEALMACHINE_EXPORT_EMAIL || "acquisitions@vestblock.io"
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
 const DEDUPE_BY_DEALMACHINE = args.includes("--dealmachine-dedupe")
 const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || (SEND ? 10 * 60 * 1000 : 0))
+const EXPLICIT_TOKEN = getArg("token") || String(process.env.DEALMACHINE_WEB_TOKEN || "").trim()
 
 function selectedChromeUrl() {
   return execFileSync(
@@ -77,6 +78,107 @@ function loadBuiltLists(file) {
       title: row.title || row.list?.title || `DealMachine list ${row.list?.id || row.list_id || row.id}`,
     }))
     .filter((row) => row.id && row.count > 0)
+}
+
+async function dmPost(token, body) {
+  const response = await fetch("https://api.dealmachine.com/v2/list/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-DM-Client-Key": DM_CLIENT_KEY,
+      "Origin": "https://app.dealmachine.com",
+      "Referer": "https://app.dealmachine.com/",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    },
+    body: JSON.stringify({ token, ...body }),
+  })
+  const text = await response.text()
+  let data
+  try { data = JSON.parse(text) } catch (error) { data = { raw: text.slice(0, 500) } }
+  return { ok: response.ok, status: response.status, data }
+}
+
+async function directExportableCount(token, list) {
+  const started = Date.now()
+  do {
+    const countResponse = await dmPost(token, {
+      type: "export_actual_count",
+      select_all: 1,
+      total_count: list.count,
+      list_id: list.id,
+      export_type: "contacts",
+      include_likely_owners: true,
+      include_family: false,
+      include_likely_renters: false,
+      include_potential_property_owners: false,
+      scrub_dnc: true,
+      scrub_landline: true,
+      scrub_wireless: false,
+      deduplicate: DEDUPE_BY_DEALMACHINE,
+      remove_items_without_phone_numbers: false,
+    })
+    const countResult = countResponse.data?.results || countResponse.data || {}
+    const actualCount = countResult.total_count_not_yet_exported ?? countResult.actual_count ?? countResult.count ?? null
+    if (!SEND || Number(actualCount || 0) > 0 || Date.now() - started >= WAIT_FOR_CONTACTS_MS) {
+      return { countResponse, countResult, actualCount }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+  } while (true)
+}
+
+function normalizeSlug(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+}
+
+async function runDirectExport(lists, token) {
+  const rows = []
+  const errors = []
+  const startedAt = new Date().toISOString()
+  for (const list of lists) {
+    const { countResponse, countResult, actualCount } = await directExportableCount(token, list)
+    const row = { ...list, countStatus: countResponse.status, countOk: countResponse.ok, actualCount, countResult, exported: false }
+    if (countResponse.data?.error === "Invalid token.") {
+      throw new Error("DealMachine direct token is invalid. Clear DEALMACHINE_WEB_TOKEN or refresh it from a logged-in browser session.")
+    }
+    if (SEND) {
+      if (!countResponse.ok || Number(actualCount || 0) <= 0) {
+        row.exportBlocked = true
+        row.exportBlockReason = "blocked_zero_exportable_contacts"
+        rows.push(row)
+        continue
+      }
+      const exportFileName = ["vestblock", normalizeSlug(list.strategyKey || "contacts"), normalizeSlug(list.market), new Date().toISOString().slice(0, 10), list.id].join("-")
+      const exportResponse = await dmPost(token, {
+        type: "export_v2",
+        select_all: 1,
+        total_count: Number(actualCount || list.count || 0),
+        emails: EMAILS,
+        list_id: list.id,
+        selected_columns: "",
+        include_all_columns: 1,
+        export_type: "contacts",
+        include_likely_owners: true,
+        include_family: false,
+        include_likely_renters: false,
+        include_potential_property_owners: false,
+        scrub_dnc: true,
+        scrub_landline: true,
+        scrub_wireless: false,
+        deduplicate: DEDUPE_BY_DEALMACHINE,
+        remove_items_without_phone_numbers: false,
+        export_file_name: exportFileName,
+      })
+      row.exportStatus = exportResponse.status
+      row.exportOk = exportResponse.ok
+      row.exportError = exportResponse.data?.error || false
+      row.exportResult = exportResponse.data?.results || exportResponse.data || null
+      row.exported = exportResponse.ok && exportResponse.data?.error === false
+      row.exportFileName = exportFileName
+    }
+    rows.push(row)
+  }
+  return { runId: RUN_ID, done: true, send: SEND, startedAt, rows, errors, finishedAt: new Date().toISOString(), mode: "direct_api" }
 }
 
 function makeBrowserPayload(lists) {
@@ -290,11 +392,7 @@ function writeOutputs(results) {
   return { jsonPath, mdPath }
 }
 
-function main() {
-  const url = selectedChromeUrl()
-  if (!/app\.dealmachine\.com/i.test(url)) {
-    throw new Error(`Open DealMachine in Chrome before running this script. Current tab: ${url}`)
-  }
+async function main() {
   const lists = loadBuiltLists(LISTS_JSON)
   if (!lists.length) throw new Error("No built DealMachine lists were found in the JSON.")
   console.log("=== DealMachine Contacts Export ===")
@@ -302,10 +400,22 @@ function main() {
   console.log(`Lists:       ${lists.length}`)
   console.log(`Destination: ${EMAILS}`)
   console.log(`DM dedupe:   ${DEDUPE_BY_DEALMACHINE ? "on" : "off; VestBlock send logs will dedupe"}`)
+  console.log(`Runner:      ${EXPLICIT_TOKEN ? "direct API token" : "Chrome browser session"}`)
   console.log("")
-  const start = chromeJavascript(makeBrowserPayload(lists))
-  if (!/started/.test(start)) throw new Error(`Could not start DealMachine export runner: ${start}`)
-  const results = pollResults()
+  let results
+  if (EXPLICIT_TOKEN) {
+    results = await runDirectExport(lists, EXPLICIT_TOKEN)
+  } else {
+    const url = selectedChromeUrl()
+    if (!/app\.dealmachine\.com/i.test(url)) {
+      throw new Error(`Open DealMachine in Chrome before running this script. Current tab: ${url}`)
+    }
+    const start = chromeJavascript(makeBrowserPayload(lists))
+    if (!/started/.test(start)) throw new Error(`Could not start DealMachine export runner: ${start}`)
+    results = pollResults()
+  }
+  results.sourceFile = path.resolve(LISTS_JSON)
+  results.destination = EMAILS
   const outputs = writeOutputs(results)
   console.log(`Report: ${outputs.mdPath}`)
   console.log(`JSON:   ${outputs.jsonPath}`)

@@ -69,6 +69,7 @@ const instantlyAccount = instantly.parsed?.accounts?.[0] || null
 const warmupActive = Boolean(instantlyAccount?.warmup_status)
 const activeInstantlyCampaigns = (instantly.parsed?.campaigns || []).filter((campaign) => Number(campaign.status) === 1)
 const dealMachineDownloadNeedsAuth = /Gmail read scope is missing/i.test(dealMachineDownload.parsed?.error || dealMachineDownload.stderrTail || dealMachineDownload.stdoutTail || '')
+const dealMachineExportEmail = process.env.DEALMACHINE_EXPORT_EMAIL || 'acquisitions@vestblock.io'
 
 const recommendations = []
 if (waitingExport.length) {
@@ -92,11 +93,11 @@ if (blockedZeroExportable.length) {
     action: `Rebuild or replace ${blockedZeroExportable.length} zero-export lane(s): ${blockedZeroExportable.map((lane) => lane.market).join(', ')}. Do not keep waiting for emails from those lists.`,
   })
 }
-if (dealMachineDownloadNeedsAuth) {
+if (dealMachineDownloadNeedsAuth && /gmail\.com$/i.test(dealMachineExportEmail)) {
   recommendations.push({
     priority: 'critical',
     lane: 'DealMachine export downloader',
-    action: 'Complete the one-time Gmail read OAuth grant so Boss can download DealMachine export CSVs directly instead of relying on manual email downloads.',
+    action: 'Complete the one-time Gmail read OAuth grant, or switch DEALMACHINE_EXPORT_EMAIL to acquisitions@vestblock.io so Outlook can monitor exports.',
   })
 }
 if (warmupActive) {
@@ -169,7 +170,8 @@ const plan = {
     blockedZeroExportableLanes: blockedZeroExportable.length,
     needsContactExportLanes: needsContactExport.length,
     dealMachineExportDownloaderOk: Boolean(dealMachineDownload.parsed?.ok),
-    dealMachineExportDownloaderNeedsAuth: dealMachineDownloadNeedsAuth,
+    dealMachineExportEmail,
+    dealMachineExportDownloaderNeedsAuth: dealMachineDownloadNeedsAuth && /gmail\.com$/i.test(dealMachineExportEmail),
     smsReviewAccepted: sms?.acceptedCount || 0,
   },
   resourceRules: {

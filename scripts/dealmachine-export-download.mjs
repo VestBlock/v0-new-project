@@ -39,7 +39,8 @@ const MAX_RESULTS = Number.parseInt(arg('max', '10'), 10) || 10
 const SINCE_ISO = arg('since')
 const DESTINATION = arg('destination', OUT_DIR)
 const FILENAME_HINT = arg('filename-contains')
-const DEALMACHINE_GMAIL_ACCOUNT = process.env.DEALMACHINE_GMAIL_ACCOUNT || process.env.DEALMACHINE_EXPORT_EMAIL || 'profitautomationllc@gmail.com'
+const DEALMACHINE_GMAIL_ACCOUNT = process.env.DEALMACHINE_GMAIL_ACCOUNT || process.env.DEALMACHINE_ACCOUNT_EMAIL || 'profitautomationllc@gmail.com'
+const DEALMACHINE_EXPORT_EMAIL = process.env.DEALMACHINE_EXPORT_EMAIL || 'acquisitions@vestblock.io'
 
 function requiredEnv() {
   return ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
@@ -325,7 +326,8 @@ async function main() {
       redirectUri: oauthRedirectUri(),
       authUrl: authUrl(),
       scopes: GMAIL_READ_SCOPES,
-      nextStep: 'Approve with the DealMachine Gmail account. If the browser ends on a localhost error page, copy the full localhost URL and pass it to --exchange-code with --write-env.'
+      exportEmail: DEALMACHINE_EXPORT_EMAIL,
+      nextStep: 'Prefer routing DealMachine exports to acquisitions@vestblock.io. Use Gmail OAuth only if exports must land in the DealMachine Gmail inbox.'
     }, null, 2))
     return
   }
