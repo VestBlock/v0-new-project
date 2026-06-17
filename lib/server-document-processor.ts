@@ -1,4 +1,4 @@
-import { parsePdfBuffer } from "@/lib/pdf/parse"
+import { parsePdfBuffer } from "./pdf/parse"
 
 const MAX_FILE_SIZE_MB = 15
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -13,8 +13,8 @@ export interface ServerExtractionResult {
     extractionMethod: string
     warnings: string[]
     error?: string
-    pdfParseImported?: boolean // New flag for this test
-    pdfParseIsFunction?: boolean // New flag
+    pdfParseImported?: boolean
+    pdfParseIsFunction?: boolean
     arrayBufferObtained?: boolean
     bufferConversionSuccessful?: boolean
     bufferLength?: number
@@ -79,19 +79,35 @@ export async function processDocumentDirectly(file: File, clientUserId: string):
       return { text: "Error during ArrayBuffer step.", metadata }
     }
 
-    if (arrayBuffer) {
-      try {
-        const nodeBuffer = Buffer.from(arrayBuffer)
-        metadata.bufferConversionSuccessful = true
-        metadata.bufferLength = nodeBuffer.length
-      } catch (bufferError: any) {
-        metadata.error = `Failed to convert to Buffer: ${bufferError.message}`
-        return { text: "Error during Buffer conversion step.", metadata }
-      }
+    let nodeBuffer: Buffer
+    try {
+      nodeBuffer = Buffer.from(arrayBuffer)
+      metadata.bufferConversionSuccessful = true
+      metadata.bufferLength = nodeBuffer.length
+    } catch (bufferError: any) {
+      metadata.error = `Failed to convert to Buffer: ${bufferError.message}`
+      return { text: "Error during Buffer conversion step.", metadata }
     }
 
-    const resultText = `Buffer validation results: pdfParseImported=${metadata.pdfParseImported}, pdfParseIsFunction=${metadata.pdfParseIsFunction}, bufferConversionSuccessful=${metadata.bufferConversionSuccessful}, error=${metadata.error || "none"}`
-    return { text: resultText, metadata }
+    let parsed
+    try {
+      parsed = await parsePdfBuffer(nodeBuffer)
+    } catch (parseError: any) {
+      metadata.error = `PDF parser failed: ${parseError.message || "Unknown parser error"}`
+      return { text: `Error: ${metadata.error}`, metadata }
+    }
+
+    metadata.extractionMethod = "pdf-parse"
+    metadata.pageCount = parsed.numpages || undefined
+
+    const text = String(parsed.text || "").trim()
+    if (!text) {
+      metadata.error = "No selectable text was found in this PDF. It may be image-based, scanned, or secured."
+      metadata.warnings.push("No selectable PDF text found; OCR may be required.")
+      return { text: `Error: ${metadata.error}`, metadata }
+    }
+
+    return { text, metadata }
   } catch (error: any) {
     metadata.error = `Outer catch: ${error.message || "Unknown error"}`
     return { text: `Outer catch error: ${metadata.error}`, metadata }

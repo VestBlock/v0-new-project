@@ -153,7 +153,8 @@
     "distress:dealmachine:owner-email:send": "node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100 --send",
     "distress:dealmachine:owner-email:address-pass:send": "node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100 --address-pass --send",
     "distress:dealmachine:push": "node --env-file=.env.local scripts/dealmachine-push.mjs --push",
-    "distress:dealmachine:pull": "node --env-file=.env.local scripts/dealmachine-push.mjs --pull"
+    "distress:dealmachine:pull": "node --env-file=.env.local scripts/dealmachine-push.mjs --pull",
+    "test:server-document-processor": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-server-document-processor.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",
