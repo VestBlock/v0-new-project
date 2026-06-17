@@ -20,7 +20,7 @@ const args = process.argv.slice(2)
 const SEND = args.includes("--send") || args.includes("--export")
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
-const DEFAULT_EMAIL = "acquisitions@vestblock.io"
+const DEFAULT_EMAIL = process.env.DEALMACHINE_EXPORT_EMAIL || "profitautomationllc@gmail.com"
 
 function getArg(name) {
   const hit = [...args].reverse().find((arg) => arg.startsWith(`--${name}=`))

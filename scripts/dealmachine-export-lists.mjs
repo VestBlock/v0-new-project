@@ -23,7 +23,7 @@ const getArg = (name) => {
 }
 
 const LISTS_JSON = getArg("lists-json") || getArg("file")
-const EMAILS = getArg("emails") || getArg("email") || "acquisitions@vestblock.io"
+const EMAILS = getArg("emails") || getArg("email") || process.env.DEALMACHINE_EXPORT_EMAIL || "profitautomationllc@gmail.com"
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"

@@ -156,7 +156,10 @@
     "distress:dealmachine:pull": "node --env-file=.env.local scripts/dealmachine-push.mjs --pull",
     "test:server-document-processor": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-server-document-processor.ts",
     "revenue:resource-plan": "node --env-file=.env.local scripts/resource-strategy-planner.mjs",
-    "dealmachine:export-doctor": "node scripts/dealmachine-export-doctor.mjs"
+    "dealmachine:export-doctor": "node scripts/dealmachine-export-doctor.mjs",
+    "dealmachine:download-export": "node --env-file=.env.local scripts/dealmachine-export-download.mjs",
+    "dealmachine:download-export:apply": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --apply --ingest --split-by-market",
+    "dealmachine:gmail-auth-url": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --auth-url"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",

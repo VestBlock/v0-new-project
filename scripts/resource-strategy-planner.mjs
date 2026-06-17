@@ -57,6 +57,7 @@ const rotation = readJson(path.join(OUT_DIR, 'tax-code-stack-rotation.json'))
 const smsPath = latestJson(path.join(ROOT, 'tmp', 'outreach'), /^sms-review-queue-.*\.json$/)
 const sms = smsPath ? readJson(smsPath) : null
 const instantly = runJson('instantly-doctor', 'npm', ['run', 'instantly:doctor'])
+const dealMachineDownload = runJson('dealmachine-export-download', 'npm', ['run', 'dealmachine:download-export', '--', '--max=1'])
 
 const lanes = Array.isArray(rotation?.lanes) ? rotation.lanes : []
 const waitingExport = lanes.filter((lane) => lane.status === 'waiting_for_dealmachine_export_email')
@@ -67,6 +68,7 @@ const totalKnownSellerLeads = lanes.reduce((sum, lane) => sum + Number(lane.know
 const instantlyAccount = instantly.parsed?.accounts?.[0] || null
 const warmupActive = Boolean(instantlyAccount?.warmup_status)
 const activeInstantlyCampaigns = (instantly.parsed?.campaigns || []).filter((campaign) => Number(campaign.status) === 1)
+const dealMachineDownloadNeedsAuth = /Gmail read scope is missing/i.test(dealMachineDownload.parsed?.error || dealMachineDownload.stderrTail || dealMachineDownload.stdoutTail || '')
 
 const recommendations = []
 if (waitingExport.length) {
@@ -88,6 +90,13 @@ if (blockedZeroExportable.length) {
     priority: 'critical',
     lane: 'DealMachine export repair',
     action: `Rebuild or replace ${blockedZeroExportable.length} zero-export lane(s): ${blockedZeroExportable.map((lane) => lane.market).join(', ')}. Do not keep waiting for emails from those lists.`,
+  })
+}
+if (dealMachineDownloadNeedsAuth) {
+  recommendations.push({
+    priority: 'critical',
+    lane: 'DealMachine export downloader',
+    action: 'Complete the one-time Gmail read OAuth grant so Boss can download DealMachine export CSVs directly instead of relying on manual email downloads.',
   })
 }
 if (warmupActive) {
@@ -159,6 +168,8 @@ const plan = {
     waitingDealMachineExportLanes: waitingExport.length,
     blockedZeroExportableLanes: blockedZeroExportable.length,
     needsContactExportLanes: needsContactExport.length,
+    dealMachineExportDownloaderOk: Boolean(dealMachineDownload.parsed?.ok),
+    dealMachineExportDownloaderNeedsAuth: dealMachineDownloadNeedsAuth,
     smsReviewAccepted: sms?.acceptedCount || 0,
   },
   resourceRules: {
@@ -176,6 +187,7 @@ const plan = {
     'npm run instantly:doctor',
     'npm run vestblock:tax-code-stack:rotation',
     'npm run dealmachine:export-doctor',
+    'npm run dealmachine:download-export:apply',
     'npm run outreach:sms-review -- --limit=100',
   ],
 }
