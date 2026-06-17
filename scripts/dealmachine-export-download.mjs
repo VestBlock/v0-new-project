@@ -28,6 +28,7 @@ const arg = (name, fallback = null) => {
 }
 
 const AUTH_URL = has('--auth-url')
+const LEGACY_OOB = has('--legacy-oob')
 const EXCHANGE_CODE = arg('exchange-code')
 const WRITE_ENV = has('--write-env')
 const APPLY = has('--apply')
@@ -49,7 +50,20 @@ function missingEnv(keys) {
 }
 
 function oauthRedirectUri() {
-  return process.env.GOOGLE_OAUTH_REDIRECT_URI || 'urn:ietf:wg:oauth:2.0:oob'
+  if (LEGACY_OOB) return 'urn:ietf:wg:oauth:2.0:oob'
+  return process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://127.0.0.1:53682/oauth2callback'
+}
+
+function extractAuthCode(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return raw
+  if (!/^https?:\/\//i.test(raw)) return raw
+  const parsed = new URL(raw)
+  const error = parsed.searchParams.get('error')
+  if (error) throw new Error(parsed.searchParams.get('error_description') || error)
+  const code = parsed.searchParams.get('code')
+  if (!code) throw new Error('Callback URL did not include a code query parameter.')
+  return code
 }
 
 function authUrl() {
@@ -60,13 +74,16 @@ function authUrl() {
   url.searchParams.set('redirect_uri', oauthRedirectUri())
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('access_type', 'offline')
-  url.searchParams.set('prompt', 'consent')
+  url.searchParams.set('prompt', 'select_account consent')
   url.searchParams.set('scope', GMAIL_READ_SCOPES.join(' '))
+  url.searchParams.set('include_granted_scopes', 'false')
+  url.searchParams.set('authuser', '-1')
   url.searchParams.set('login_hint', DEALMACHINE_GMAIL_ACCOUNT)
   return url.toString()
 }
 
-async function exchangeCode(code) {
+async function exchangeCode(codeOrCallbackUrl) {
+  const code = extractAuthCode(codeOrCallbackUrl)
   const missing = missingEnv(requiredEnv())
   if (missing.length) throw new Error(`Missing Google OAuth env vars: ${missing.join(', ')}`)
   const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -302,7 +319,14 @@ async function downloadFromMessages() {
 
 async function main() {
   if (AUTH_URL) {
-    console.log(JSON.stringify({ ok: true, account: DEALMACHINE_GMAIL_ACCOUNT, authUrl: authUrl(), scopes: GMAIL_READ_SCOPES }, null, 2))
+    console.log(JSON.stringify({
+      ok: true,
+      account: DEALMACHINE_GMAIL_ACCOUNT,
+      redirectUri: oauthRedirectUri(),
+      authUrl: authUrl(),
+      scopes: GMAIL_READ_SCOPES,
+      nextStep: 'Approve with the DealMachine Gmail account. If the browser ends on a localhost error page, copy the full localhost URL and pass it to --exchange-code with --write-env.'
+    }, null, 2))
     return
   }
   if (EXCHANGE_CODE) {
