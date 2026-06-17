@@ -61,6 +61,7 @@ const instantly = runJson('instantly-doctor', 'npm', ['run', 'instantly:doctor']
 const lanes = Array.isArray(rotation?.lanes) ? rotation.lanes : []
 const waitingExport = lanes.filter((lane) => lane.status === 'waiting_for_dealmachine_export_email')
 const readyCsv = lanes.filter((lane) => lane.status === 'csv_ready_for_daily_send')
+const blockedZeroExportable = lanes.filter((lane) => lane.status === 'blocked_zero_exportable_contacts')
 const needsContactExport = lanes.filter((lane) => lane.status === 'needs_contact_export')
 const totalKnownSellerLeads = lanes.reduce((sum, lane) => sum + Number(lane.knownLeadCount || 0), 0)
 const instantlyAccount = instantly.parsed?.accounts?.[0] || null
@@ -80,6 +81,13 @@ if (readyCsv.length) {
     priority: 'high',
     lane: 'Seller outreach',
     action: `Run daily-capped seller outreach from ${readyCsv.length} CSV-ready lane(s), keeping market/strategy copy separate.`,
+  })
+}
+if (blockedZeroExportable.length) {
+  recommendations.push({
+    priority: 'critical',
+    lane: 'DealMachine export repair',
+    action: `Rebuild or replace ${blockedZeroExportable.length} zero-export lane(s): ${blockedZeroExportable.map((lane) => lane.market).join(', ')}. Do not keep waiting for emails from those lists.`,
   })
 }
 if (warmupActive) {
@@ -149,6 +157,7 @@ const plan = {
     sellerLeadsKnownInRotation: totalKnownSellerLeads,
     csvReadyLanes: readyCsv.length,
     waitingDealMachineExportLanes: waitingExport.length,
+    blockedZeroExportableLanes: blockedZeroExportable.length,
     needsContactExportLanes: needsContactExport.length,
     smsReviewAccepted: sms?.acceptedCount || 0,
   },
@@ -166,6 +175,7 @@ const plan = {
     'npm run revenue:resource-plan',
     'npm run instantly:doctor',
     'npm run vestblock:tax-code-stack:rotation',
+    'npm run dealmachine:export-doctor',
     'npm run outreach:sms-review -- --limit=100',
   ],
 }
