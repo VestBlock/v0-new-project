@@ -131,6 +131,7 @@
     "distress:dealmachine:website-list-builder:build": "node scripts/dealmachine-website-list-builder.mjs --build",
     "distress:dealmachine:saved-list-export": "node scripts/dealmachine-saved-list-export.mjs",
     "distress:dealmachine:saved-list-export:send": "node scripts/dealmachine-saved-list-export.mjs --send",
+    "distress:dealmachine:direct-contact-probe": "node scripts/dealmachine-direct-contact-probe.mjs",
     "distress:dealmachine:export-request": "node --env-file=.env.local scripts/dealmachine-export-request.mjs",
     "distress:dealmachine:export-request:all": "node --env-file=.env.local scripts/dealmachine-export-request.mjs --strategy=all --limit=100",
     "distress:dealmachine:fresh-export-package": "node --env-file=.env.local scripts/dealmachine-export-request.mjs --strategy=all --limit=100",
