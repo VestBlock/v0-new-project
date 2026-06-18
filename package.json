@@ -159,7 +159,9 @@
     "dealmachine:export-doctor": "node scripts/dealmachine-export-doctor.mjs",
     "dealmachine:download-export": "node --env-file=.env.local scripts/dealmachine-export-download.mjs",
     "dealmachine:download-export:apply": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --apply --ingest --split-by-market",
-    "dealmachine:gmail-auth-url": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --auth-url"
+    "dealmachine:gmail-auth-url": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --auth-url",
+    "portfolio:milwaukee-10-unit:buyer-packet": "node scripts/generate-portfolio-buyer-packet.mjs",
+    "portfolio:milwaukee-10-unit:packets": "npm run portfolio:milwaukee-10-unit && npm run portfolio:milwaukee-10-unit:buyer-packet && node scripts/generate-redacted-buyer-packet.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",
