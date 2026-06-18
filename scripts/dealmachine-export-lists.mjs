@@ -145,10 +145,18 @@ function normalizeSlug(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
 }
 
+async function directContactExportColumns(token) {
+  const settingsResponse = await dmPost(token, { type: "get_export_settings_for_user" })
+  const settings = settingsResponse.data?.results?.export_settings || {}
+  const columns = settings.user_column_preferences?.contact_export_columns || []
+  return Array.isArray(columns) ? columns.filter(Boolean) : []
+}
+
 async function runDirectExport(lists, token) {
   const rows = []
   const errors = []
   const startedAt = new Date().toISOString()
+  const selectedColumns = await directContactExportColumns(token)
   for (const list of lists) {
     const { countResponse, countResult, actualCount } = await directExportableCount(token, list)
     const row = { ...list, countStatus: countResponse.status, countOk: countResponse.ok, actualCount, countResult, waitedMs: WAIT_FOR_CONTACTS_MS, exported: false }
@@ -169,8 +177,8 @@ async function runDirectExport(lists, token) {
         total_count: Number(actualCount || list.count || 0),
         emails: EMAILS,
         list_id: list.id,
-        selected_columns: "",
-        include_all_columns: 1,
+        selected_columns: selectedColumns.join(","),
+        include_all_columns: selectedColumns.length ? 0 : 1,
         export_type: "contacts",
         include_likely_owners: true,
         include_family: false,
@@ -189,10 +197,11 @@ async function runDirectExport(lists, token) {
       row.exportResult = exportResponse.data?.results || exportResponse.data || null
       row.exported = exportResponse.ok && exportResponse.data?.error === false
       row.exportFileName = exportFileName
+      row.selectedColumnCount = selectedColumns.length
     }
     rows.push(row)
   }
-  return { runId: RUN_ID, done: true, send: SEND, startedAt, rows, errors, finishedAt: new Date().toISOString(), mode: "direct_api" }
+  return { runId: RUN_ID, done: true, send: SEND, startedAt, rows, errors, finishedAt: new Date().toISOString(), mode: "direct_api", selectedColumnCount: selectedColumns.length }
 }
 
 function makeBrowserPayload(lists) {
@@ -322,6 +331,7 @@ function makeBrowserPayload(lists) {
             row.exportResult = exportResponse.data?.results || exportResponse.data || null
             row.exported = exportResponse.ok && exportResponse.data?.error === false
             row.exportFileName = exportFileName
+            row.selectedColumnCount = selectedColumns.length
           }
 
           window.vbDmExportLists.rows.push(row)

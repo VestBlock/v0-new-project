@@ -33,6 +33,8 @@ const BCC = getArg("bcc") || ""
 const CONFIG_FILE = getArg("config-file")
 const EXPORT_CSV = getArg("export-csv")
 const QUEUE_CSV = getArg("queue-csv")
+const REQUIRE_QUEUE_MATCH = args.includes("--require-queue-match")
+const EXPORT_ONLY = args.includes("--export-only") || (Boolean(getArg("export-csv")) && !QUEUE_CSV && !REQUIRE_QUEUE_MATCH)
 const MARKET_ARG = (getArg("market") || getArg("markets") || "").trim()
 const STRATEGY = normalizeMarketSlug(getArg("strategy") || "seller-options")
 const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 7
@@ -144,11 +146,15 @@ function loadMarketConfigs() {
     const file = path.resolve(CONFIG_FILE)
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"))
     if (!Array.isArray(parsed)) throw new Error("Config file must be a JSON array.")
-    return parsed.map((entry) => ({
-      market: normalizeMarketSlug(entry.market),
-      queueCsv: String(entry.queueCsv || "").trim(),
-      exportCsv: String(entry.exportCsv || "").trim(),
-    }))
+    return parsed.map((entry) => {
+      const queueCsv = String(entry.queueCsv || "").trim()
+      return {
+        market: normalizeMarketSlug(entry.market),
+        queueCsv,
+        exportCsv: String(entry.exportCsv || "").trim(),
+        requireQueueMatch: entry.requireQueueMatch !== false && Boolean(queueCsv),
+      }
+    })
   }
 
   if (!MARKET_ARG) {
@@ -171,10 +177,12 @@ function loadMarketConfigs() {
       )
     }
 
+    const inferredQueueCsv = QUEUE_CSV ? path.resolve(QUEUE_CSV) : (EXPORT_ONLY ? "" : findQueueCsvForMarket(market))
     return {
       market,
-      queueCsv: QUEUE_CSV ? path.resolve(QUEUE_CSV) : findQueueCsvForMarket(market),
+      queueCsv: inferredQueueCsv,
       exportCsv,
+      requireQueueMatch: Boolean(QUEUE_CSV || REQUIRE_QUEUE_MATCH),
     }
   })
 }
@@ -908,7 +916,7 @@ function loadMatches(marketConfigs) {
   for (const config of marketConfigs) {
     const exportRows = loadCsv(config.exportCsv)
     const queueRows = config.queueCsv && fs.existsSync(config.queueCsv) ? loadCsv(config.queueCsv) : []
-    const requireQueueMatch = queueRows.length > 0
+    const requireQueueMatch = Boolean(config.requireQueueMatch) && queueRows.length > 0
     const queueByAddress = new Map()
     for (const row of queueRows) {
       const key = normalizeAddress(queueAddress(row))
@@ -1004,9 +1012,9 @@ function loadMatches(marketConfigs) {
         buyer_packet_summary: queue?.buyer_packet_summary || queue?.notes || "",
         distress_score: queue ? queueDistressScore(queue) : 0,
         dealmachine_id: queue?.dealmachine_id || hit.lead_id || hit.id || "",
-        queue_strategy_key: queue?.strategy_key || "",
-        queue_strategy_name: queue?.strategy_name || "",
-        export_reason: queue?.export_reason || "",
+        queue_strategy_key: queue?.strategy_key || STRATEGY,
+        queue_strategy_name: queue?.strategy_name || STRATEGY.replace(/-/g, " "),
+        export_reason: queue?.export_reason || (EXPORT_ONLY ? "explicit_dealmachine_contact_export" : ""),
         request_source_file: queue?.source_file || "",
         emails,
         phones,
