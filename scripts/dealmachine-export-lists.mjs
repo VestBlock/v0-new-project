@@ -28,7 +28,8 @@ const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
 const DEDUPE_BY_DEALMACHINE = args.includes("--dealmachine-dedupe")
-const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || (SEND ? 10 * 60 * 1000 : 0))
+const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || 0)
+const REQUEST_TIMEOUT_MS = Number(getArg("request-timeout-ms") || 45 * 1000)
 const EXPLICIT_TOKEN = getArg("token") || String(process.env.DEALMACHINE_WEB_TOKEN || "").trim()
 
 function selectedChromeUrl() {
@@ -81,18 +82,31 @@ function loadBuiltLists(file) {
 }
 
 async function dmPost(token, body) {
-  const response = await fetch("https://api.dealmachine.com/v2/list/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "X-DM-Client-Key": DM_CLIENT_KEY,
-      "Origin": "https://app.dealmachine.com",
-      "Referer": "https://app.dealmachine.com/",
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-    },
-    body: JSON.stringify({ token, ...body }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch("https://api.dealmachine.com/v2/list/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-DM-Client-Key": DM_CLIENT_KEY,
+        "Origin": "https://app.dealmachine.com",
+        "Referer": "https://app.dealmachine.com/",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      },
+      body: JSON.stringify({ token, ...body }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      return { ok: false, status: 0, data: { error: "DealMachine request timed out", timeoutMs: REQUEST_TIMEOUT_MS } }
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
   const text = await response.text()
   let data
   try { data = JSON.parse(text) } catch (error) { data = { raw: text.slice(0, 500) } }
@@ -137,7 +151,7 @@ async function runDirectExport(lists, token) {
   const startedAt = new Date().toISOString()
   for (const list of lists) {
     const { countResponse, countResult, actualCount } = await directExportableCount(token, list)
-    const row = { ...list, countStatus: countResponse.status, countOk: countResponse.ok, actualCount, countResult, exported: false }
+    const row = { ...list, countStatus: countResponse.status, countOk: countResponse.ok, actualCount, countResult, waitedMs: WAIT_FOR_CONTACTS_MS, exported: false }
     if (countResponse.data?.error === "Invalid token.") {
       throw new Error("DealMachine direct token is invalid. Clear DEALMACHINE_WEB_TOKEN or refresh it from a logged-in browser session.")
     }
@@ -375,7 +389,7 @@ function writeOutputs(results) {
       "",
       "## Next Step",
       "",
-      "When DealMachine emails the Contacts CSV, save it into `data/dm-exports/` and ingest it:",
+      "When DealMachine emails the Contacts CSV, save it into `data/dm-exports/` and ingest it. If exportable contacts are 0, the list has no currently export-ready contacts and should be fixed upstream with contact discovery/skip data before retrying:",
       "",
       "```bash",
       "pnpm run distress:dealmachine:ingest-export:apply -- --file=/path/to/dealmachine-contacts.csv --split-by-market",
@@ -401,6 +415,8 @@ async function main() {
   console.log(`Destination: ${EMAILS}`)
   console.log(`DM dedupe:   ${DEDUPE_BY_DEALMACHINE ? "on" : "off; VestBlock send logs will dedupe"}`)
   console.log(`Runner:      ${EXPLICIT_TOKEN ? "direct API token" : "Chrome browser session"}`)
+  console.log(`Wait zero:   ${WAIT_FOR_CONTACTS_MS}ms`)
+  console.log(`Timeout:     ${REQUEST_TIMEOUT_MS}ms/request`)
   console.log("")
   let results
   if (EXPLICIT_TOKEN) {

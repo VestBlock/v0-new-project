@@ -69,6 +69,7 @@ const POLL_TIMEOUT_MS = numberArg("poll-timeout-ms", 12 * 60 * 1000)
 const RUN_ID = `vb-dm-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const USER_MARKETS = parseMarkets(getArg("markets") || getArg("market") || DEFAULT_MARKETS.join("|"))
 const USER_STRATEGIES = parseList(getArg("strategies") || getArg("strategy") || DEFAULT_STRATEGIES.join("|")).map(normalizeSlug)
+const EXPLICIT_TOKEN = getArg("token") || String(process.env.DEALMACHINE_WEB_TOKEN || "").trim()
 
 function numberArg(name, fallback) {
   const raw = getArg(name)
@@ -274,7 +275,10 @@ function makeBrowserPayload() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "X-DM-Client-Key": DM_CLIENT_KEY
+          "X-DM-Client-Key": DM_CLIENT_KEY,
+          "Origin": "https://app.dealmachine.com",
+          "Referer": "https://app.dealmachine.com/",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
         },
         signal: controller.signal,
         body: JSON.stringify({ token, ...body })
@@ -367,7 +371,7 @@ function makeBrowserPayload() {
     ].join(" ").slice(0, 150)
     const response = await api({
       title,
-      type: "build_list",
+      type: "build_list_v2",
       using_new_filters: 1,
       list_type: "build_list",
       list_area_type: "city",
@@ -375,7 +379,20 @@ function makeBrowserPayload() {
       list_area_2: row.state,
       list_geo_fence: JSON.stringify([]),
       list_filters: JSON.stringify(row.filters),
-      estimated_count: row.count
+      location_type: "city",
+      city: row.city,
+      state: row.state,
+      zip: "",
+      fips: "",
+      drawing_coordinates: JSON.stringify([]),
+      estimated_count: row.count,
+      property_flags: null,
+      property_types: null,
+      property_flags_and_or: null,
+      use_beds_exact: false,
+      search_locations: null,
+      attached_property_ids: null,
+      use_vision: false
     }, Math.max(CONFIG.timeoutMs, 45000))
     const result = {
       city: row.city,
@@ -457,6 +474,38 @@ function pollResults() {
   return last || { done: false, fatal: "Timed out before the browser run finished." }
 }
 
+
+async function runWithDirectToken() {
+  const previousWindow = globalThis.window
+  const previousLocalStorage = globalThis.localStorage
+  globalThis.window = {}
+  globalThis.localStorage = { getItem: (key) => (key === "token" ? EXPLICIT_TOKEN : null) }
+  try {
+    const start = Function(`return ${makeBrowserPayload()}`)()
+    if (!/started/.test(start)) throw new Error(`Could not start direct DealMachine runner: ${start}`)
+    const started = Date.now()
+    let last = null
+    while (Date.now() - started < POLL_TIMEOUT_MS) {
+      last = globalThis.window.vbDmWebsiteListBuilder || null
+      if (last) {
+        process.stdout.write(`\r${last.progress || "working"} | selected ${last.selected?.length || 0} | built ${last.built?.length || 0} | skipped ${last.skipped?.length || 0}`)
+        if (last.done) {
+          process.stdout.write("\n")
+          return JSON.parse(JSON.stringify(last))
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS))
+    }
+    process.stdout.write("\n")
+    return last || { done: false, fatal: "Timed out before the direct DealMachine run finished." }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+    if (previousLocalStorage === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = previousLocalStorage
+  }
+}
+
 function writeOutputs(results) {
   fs.mkdirSync(OUT_DIR, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, "-")
@@ -518,23 +567,29 @@ function writeOutputs(results) {
   return { jsonPath, mdPath }
 }
 
-function main() {
-  const url = selectedChromeUrl()
-  if (!/app\.dealmachine\.com/i.test(url)) {
-    throw new Error(`Open DealMachine in the active Chrome tab before running this script. Current tab: ${url}`)
-  }
+async function main() {
   console.log("=== DealMachine website list builder ===")
   console.log(`Mode:        ${BUILD ? "build lists" : "count only"}`)
   console.log(`Markets:     ${USER_MARKETS.map((market) => `${market.city}, ${market.state}`).join(" | ")}`)
   console.log(`Strategies:  ${USER_STRATEGIES.join(" | ")}`)
   console.log(`Count range: ${MIN_COUNT}-${MAX_COUNT}`)
   console.log(`Max builds:  ${MAX_BUILDS}`)
+  console.log(`Runner:      ${EXPLICIT_TOKEN ? "direct API token" : "Chrome browser session"}`)
   console.log("")
-  const start = chromeJavascript(makeBrowserPayload())
-  if (!/started/.test(start)) {
-    throw new Error(`Could not start browser runner: ${start}`)
+  let results
+  if (EXPLICIT_TOKEN) {
+    results = await runWithDirectToken()
+  } else {
+    const url = selectedChromeUrl()
+    if (!/app\.dealmachine\.com/i.test(url)) {
+      throw new Error(`Open DealMachine in the active Chrome tab before running this script. Current tab: ${url}`)
+    }
+    const start = chromeJavascript(makeBrowserPayload())
+    if (!/started/.test(start)) {
+      throw new Error(`Could not start browser runner: ${start}`)
+    }
+    results = pollResults()
   }
-  const results = pollResults()
   const outputs = writeOutputs(results)
   console.log("")
   console.log(`Selected lanes: ${results.selected?.length || 0}`)

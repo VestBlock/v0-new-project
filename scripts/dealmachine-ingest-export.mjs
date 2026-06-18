@@ -335,10 +335,14 @@ function main() {
     process.exit(1)
   }
 
-  // Validate it's actually a DealMachine Contacts export
-  const hasContactCols = header.some((h) => /email|phone/i.test(h))
+  // Validate it's actually a DealMachine Contacts export. Some current
+  // DealMachine Contacts exports include contact identity + associated property
+  // address but omit email/phone fields when no sendable contact data is present.
+  const hasSendableContactCols = header.some((h) => /email|phone/i.test(h))
+  const hasContactIdentityCols = header.some((h) => /^contact_id$/i.test(h)) &&
+    header.some((h) => /first.*name|last.*name|full.*name|owner/i.test(h))
   const hasAddressCols = header.some((h) => /address/i.test(h))
-  if (!hasContactCols || !hasAddressCols) {
+  if ((!hasSendableContactCols && !hasContactIdentityCols) || !hasAddressCols) {
     console.error("This file doesn't look like a DealMachine Contacts export.")
     console.error("Make sure you exported 'Contacts' (not just 'Leads') from DealMachine.")
     console.error(`Columns found: ${header.slice(0, 8).join(", ")}`)
