@@ -323,6 +323,15 @@ export type PropertyOpportunityAnalysis = {
     }>
     dataSources: string[]
     osintChecks: string[]
+    publicRecordIntelligence: {
+      score: number
+      label: 'Source gap' | 'Needs public-record check' | 'Public-record leads present' | 'Stacked public-record lead'
+      summary: string
+      sourceFreshness: 'Current source date' | 'Dated source date' | 'Missing source date'
+      signals: string[]
+      buyerTalkingPoints: string[]
+      checks: string[]
+    }
     dueDiligenceNeeds: string[]
   }
   nextSteps: string[]
@@ -348,6 +357,24 @@ function buyerNeighborhoodLabel(score: number): PropertyOpportunityAnalysis['buy
   if (score >= 55) return 'Watchlist neighborhood'
   if (score >= 38) return 'Thin neighborhood signal'
   return 'Needs local verification'
+}
+
+function publicRecordLabel(score: number): PropertyOpportunityAnalysis['buyerIntelligence']['publicRecordIntelligence']['label'] {
+  if (score >= 72) return 'Stacked public-record lead'
+  if (score >= 52) return 'Public-record leads present'
+  if (score >= 28) return 'Needs public-record check'
+  return 'Source gap'
+}
+
+function sourceFreshnessLabel(sourceDate: string | null): PropertyOpportunityAnalysis['buyerIntelligence']['publicRecordIntelligence']['sourceFreshness'] {
+  if (!sourceDate) return 'Missing source date'
+
+  const parsed = new Date(sourceDate)
+  if (Number.isNaN(parsed.getTime())) return 'Dated source date'
+
+  const ageDays = (Date.now() - parsed.getTime()) / 86400000
+  if (ageDays >= -1 && ageDays <= 45) return 'Current source date'
+  return 'Dated source date'
 }
 
 function rangeAround(value: number | null, lowFactor: number, highFactor: number, nearest = 50) {
@@ -906,6 +933,51 @@ function buildBuyerIntelligence(inputs: {
     'Buyer demand scan: compare investor activity, recent cash sales, builder permits, and nearby rehab/resale velocity.',
   ]
 
+  const uniqueOsintSignals = [...new Set(osintSignals.map((signal) => cleanOptionalString(String(signal))).filter((signal): signal is string => Boolean(signal)))]
+  const publicRecordScore = bounded(
+    (sourceDate ? 16 : 0) +
+      Math.min(30, uniqueOsintSignals.length * 6) +
+      (truthySignal(inputs.input.taxDelinquent) ? 12 : 0) +
+      (truthySignal(inputs.input.codeViolation) ? 12 : 0) +
+      (truthySignal(inputs.input.activeLien) ? 10 : 0) +
+      (truthySignal(inputs.input.vacancySignal) ? 8 : 0) +
+      (truthySignal(inputs.input.absenteeOwner) ? 8 : 0) +
+      (inputs.input.ownerType ? 4 : 0) +
+      (inputs.input.dealMachineListName || inputs.input.sourceSystem ? 8 : 0)
+  )
+  const sourceFreshness = sourceFreshnessLabel(sourceDate)
+  const publicRecordSignals = uniqueOsintSignals.length
+    ? uniqueOsintSignals
+    : ['No public-record distress signals were attached to this analysis.']
+  const publicRecordTalkingPoints = [
+    sourceDate ? `Source date attached: ${sourceDate}.` : 'No source date was attached; refresh DealMachine and county records before buyer marketing.',
+    uniqueOsintSignals.length
+      ? `${uniqueOsintSignals.length} public-record or OSINT signal${uniqueOsintSignals.length === 1 ? '' : 's'} attached for buyer screening.`
+      : 'Public-record evidence needs to be added before this reads like a stacked lead.',
+    truthySignal(inputs.input.taxDelinquent) ? 'Tax delinquency should be verified because it can explain seller pressure and title cleanup needs.' : null,
+    truthySignal(inputs.input.codeViolation) ? 'Code violation signal should be verified because it can affect repair budget, permits, and buyer appetite.' : null,
+    truthySignal(inputs.input.activeLien) ? 'Lien signal should be verified before pricing because it can change payoff and assignment room.' : null,
+    truthySignal(inputs.input.vacancySignal) ? 'Vacancy signal should be verified because it can improve access but increase security and condition risk.' : null,
+    truthySignal(inputs.input.absenteeOwner) ? 'Absentee ownership should be verified because it can support remote-seller motivation and mailer/outreach context.' : null,
+  ].filter(Boolean) as string[]
+
+  const publicRecordIntelligence = {
+    score: publicRecordScore,
+    label: publicRecordLabel(publicRecordScore),
+    summary:
+      publicRecordScore >= 72
+        ? 'The file has multiple stacked public-record signals and is ready for focused verification before buyer distribution.'
+        : publicRecordScore >= 52
+          ? 'The file has useful public-record leads, but buyer-facing claims still need source screenshots or county links.'
+          : publicRecordScore >= 28
+            ? 'The file has light source context. Run the county and OSINT checklist before treating motivation as verified.'
+            : 'The file is thin on public-record evidence. Do not market distress, taxes, liens, or violations until sources are attached.',
+    sourceFreshness,
+    signals: publicRecordSignals.slice(0, 8),
+    buyerTalkingPoints: publicRecordTalkingPoints.slice(0, 8),
+    checks: osintChecks,
+  }
+
   const dueDiligenceNeeds = [
     'Verify actual rent roll, leases, deposits, tenant balances, and utility responsibility.',
     'Verify neighborhood demand with active rentals, vacancy, days-on-market, and buyer feedback.',
@@ -954,6 +1026,7 @@ function buildBuyerIntelligence(inputs: {
     priceSensitivity,
     dataSources: [...new Set(dataSources)],
     osintChecks,
+    publicRecordIntelligence,
     dueDiligenceNeeds: [...new Set(dueDiligenceNeeds)].slice(0, 10),
   }
 }

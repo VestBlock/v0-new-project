@@ -320,6 +320,9 @@ function buildBuyerIntelligence(payload: AnalyzerReportPayload) {
   const priceRows = Array.isArray(intel.priceSensitivity) ? intel.priceSensitivity : []
   const dataSources = Array.isArray(intel.dataSources) ? intel.dataSources : []
   const osintChecks = Array.isArray(intel.osintChecks) ? intel.osintChecks : []
+  const publicRecord = intel.publicRecordIntelligence || {}
+  const publicSignals = Array.isArray(publicRecord.signals) ? publicRecord.signals : []
+  const buyerTalkingPoints = Array.isArray(publicRecord.buyerTalkingPoints) ? publicRecord.buyerTalkingPoints : []
   const dueDiligenceNeeds = Array.isArray(intel.dueDiligenceNeeds) ? intel.dueDiligenceNeeds : []
 
   return `
@@ -332,6 +335,8 @@ function buildBuyerIntelligence(payload: AnalyzerReportPayload) {
       { label: 'Repair range', value: rangeValue(repair.low, repair.base, repair.high) },
       { label: 'Repair confidence', value: repair.confidence || 'Needs review' },
       { label: 'Buyer offer band', value: rangeValue(offer.low, offer.base, offer.high) },
+      { label: 'Public record score', value: publicRecord.score !== undefined ? `${publicRecord.label || 'Public record'} (${publicRecord.score}/100)` : 'Needs review' },
+      { label: 'Source freshness', value: publicRecord.sourceFreshness || 'Needs review' },
       { label: 'Diligence items', value: dueDiligenceNeeds.length ? String(dueDiligenceNeeds.length) : 'Needs review' },
     ])}
     <div class="notes">
@@ -339,6 +344,11 @@ function buildBuyerIntelligence(payload: AnalyzerReportPayload) {
       ${dataSources.length ? orderedList(dataSources) : '<p class="muted">No DealMachine or OSINT source metadata was attached.</p>'}
       <h3>Range notes</h3>
       ${orderedList([rent.summary, value.summary, repair.summary, offer.summary, neighborhood.summary].filter(Boolean))}
+      <h3>Public record intelligence</h3>
+      ${publicRecord.summary ? `<p>${publicRecord.summary}</p>` : '<p class="muted">Public-record intelligence needs source data.</p>'}
+      ${buyerTalkingPoints.length ? orderedList(buyerTalkingPoints) : '<p class="muted">No buyer-facing public-record talking points were generated.</p>'}
+      <h3>Public record signals</h3>
+      ${publicSignals.length ? orderedList(publicSignals) : '<p class="muted">No public-record signals were attached.</p>'}
       <h3>Neighborhood screening factors</h3>
       ${orderedList(neighborhood.factors || [])}
       <h3>Rent sensitivity</h3>

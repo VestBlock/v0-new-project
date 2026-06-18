@@ -63,12 +63,35 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
   const lines: string[] = []
   let current = ''
 
+  const pushLongWord = (word: string) => {
+    let chunk = ''
+    for (const char of word) {
+      const next = `${chunk}${char}`
+      if (!chunk || font.widthOfTextAtSize(next, size) <= maxWidth) {
+        chunk = next
+      } else {
+        lines.push(chunk)
+        chunk = char
+      }
+    }
+    current = chunk
+  }
+
   for (const word of words) {
     const next = current ? `${current} ${word}` : word
     if (font.widthOfTextAtSize(next, size) <= maxWidth) {
       current = next
+      continue
+    }
+
+    if (current) {
+      lines.push(current)
+      current = ''
+    }
+
+    if (font.widthOfTextAtSize(word, size) > maxWidth) {
+      pushLongWord(word)
     } else {
-      if (current) lines.push(current)
       current = word
     }
   }
@@ -432,6 +455,69 @@ export async function buildPremiumBuyerPacketPdf(input: BuyerPacketPdfInput): Pr
   drawBullets(pageIntel, Array.isArray(intel?.osintChecks) ? intel.osintChecks : [], MARGIN + 4, 92, {
     font: regular,
     size: 7.3,
+    color: MUTED,
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
+    lineHeight: 9,
+    limit: 6,
+  })
+
+  const publicRecord = intel?.publicRecordIntelligence || {}
+  const pagePublic = addPage(doc)
+  pagePublic.drawText('VESTBLOCK', { x: MARGIN, y: PAGE_HEIGHT - 56, size: 14, font: bold, color: CYAN })
+  drawSectionTitle(pagePublic, 'Public record intelligence', MARGIN, PAGE_HEIGHT - 120, bold)
+  const publicMetrics = [
+    { label: 'Public record score', value: publicRecord?.score !== undefined ? `${safeText(publicRecord.label)} (${publicRecord.score}/100)` : 'Needs review', color: CYAN },
+    { label: 'Source freshness', value: safeText(publicRecord?.sourceFreshness || 'Needs review'), color: GREEN },
+    { label: 'Signals attached', value: Array.isArray(publicRecord?.signals) ? String(publicRecord.signals.length) : 'Needs review', color: INK },
+    { label: 'DealMachine list', value: safeText(intel?.dataSources?.find?.((source: string) => /DealMachine list:/i.test(source))?.replace(/^DealMachine list: /i, '') || 'Needs review'), color: CYAN },
+    { label: 'Data date', value: safeText(intel?.dataSources?.find?.((source: string) => /Data date:/i.test(source))?.replace(/^Data date: /i, '') || 'Needs refresh'), color: MUTED },
+    { label: 'Checks queued', value: Array.isArray(publicRecord?.checks) ? String(publicRecord.checks.length) : 'Needs review', color: AMBER },
+  ]
+  publicMetrics.forEach((metric, index) => {
+    const row = Math.floor(index / 3)
+    const col = index % 3
+    drawMetric(pagePublic, {
+      ...metric,
+      x: MARGIN + col * (metricWidth + 12),
+      y: PAGE_HEIGHT - 150 - row * 72,
+      width: metricWidth,
+      font: regular,
+      bold,
+    })
+  })
+
+  drawSectionTitle(pagePublic, 'Buyer-facing read', MARGIN, 500, bold)
+  let publicY = drawWrapped(pagePublic, publicRecord?.summary || 'Public-record intelligence needs DealMachine, county, and OSINT source data before buyer distribution.', MARGIN + 10, 472, {
+    font: regular,
+    size: 10,
+    color: rgb(0.78, 0.86, 0.94),
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
+    lineHeight: 14,
+  })
+  publicY -= 8
+  publicY = drawBullets(pagePublic, Array.isArray(publicRecord?.buyerTalkingPoints) ? publicRecord.buyerTalkingPoints : [], MARGIN + 4, publicY, {
+    font: regular,
+    size: 8.7,
+    color: INK,
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
+    lineHeight: 11,
+    limit: 7,
+  })
+
+  drawSectionTitle(pagePublic, 'Attached public-record signals', MARGIN, 286, bold)
+  drawBullets(pagePublic, Array.isArray(publicRecord?.signals) ? publicRecord.signals : [], MARGIN + 4, 258, {
+    font: regular,
+    size: 8.8,
+    color: rgb(0.78, 0.86, 0.94),
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
+    lineHeight: 12,
+    limit: 8,
+  })
+
+  drawSectionTitle(pagePublic, 'Verification checklist', MARGIN, 138, bold)
+  drawBullets(pagePublic, Array.isArray(publicRecord?.checks) ? publicRecord.checks : [], MARGIN + 4, 110, {
+    font: regular,
+    size: 7.4,
     color: MUTED,
     maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
     lineHeight: 9,
