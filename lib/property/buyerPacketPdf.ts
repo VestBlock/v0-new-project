@@ -148,6 +148,38 @@ function addPage(doc: PDFDocument) {
   return page
 }
 
+
+function rangeText(low: unknown, base: unknown, high: unknown, formatter = money) {
+  const lowText = formatter(low)
+  const baseText = formatter(base)
+  const highText = formatter(high)
+  if (lowText === 'Needs review' && baseText === 'Needs review' && highText === 'Needs review') return 'Needs review'
+  return `${lowText} - ${highText} | base ${baseText}`
+}
+
+function drawBullets(
+  page: PDFPage,
+  items: string[],
+  x: number,
+  y: number,
+  options: { font: PDFFont; size: number; color?: ReturnType<typeof rgb>; maxWidth: number; lineHeight?: number; limit?: number }
+) {
+  let nextY = y
+  const limit = options.limit ?? items.length
+  for (const item of items.map(safeText).filter(Boolean).slice(0, limit)) {
+    page.drawCircle({ x: x + 4, y: nextY + 3, size: 2.2, color: CYAN })
+    nextY = drawWrapped(page, item, x + 14, nextY, {
+      font: options.font,
+      size: options.size,
+      color: options.color ?? INK,
+      maxWidth: options.maxWidth - 14,
+      lineHeight: options.lineHeight ?? options.size + 4,
+    })
+    nextY -= 4
+  }
+  return nextY
+}
+
 function bestRoute(opportunity: any) {
   const routes = Array.isArray(opportunity?.routeFit) ? [...opportunity.routeFit] : []
   return routes.sort((a, b) => Number(b?.score || 0) - Number(a?.score || 0))[0] || null
@@ -253,7 +285,7 @@ export async function buildPremiumBuyerPacketPdf(input: BuyerPacketPdfInput): Pr
     { label: 'Occupancy', value: safeText(form.occupancyStatus || 'Needs review') },
     { label: 'Seller timeline', value: safeText(form.timelineToSell || 'Needs review') },
     { label: 'Asking price', value: money(estimate.askingPrice ?? opportunity?.dealMath?.sellerAsk) },
-    { label: 'Rent hint', value: money(estimate.rentEstimate) },
+    { label: 'Rent range', value: rangeText(opportunity?.buyerIntelligence?.rentMarketRange?.low, opportunity?.buyerIntelligence?.rentMarketRange?.base ?? estimate.rentEstimate, opportunity?.buyerIntelligence?.rentMarketRange?.high) },
     { label: 'Cash review', value: `${money(opportunity?.metrics?.conservativeCashReview)} to ${money(opportunity?.metrics?.balancedCashReview)}` },
     { label: 'DSCR', value: percent(opportunity?.metrics?.dscr, 'x') },
     { label: 'Cap rate', value: percent(opportunity?.metrics?.capRatePercent) },
@@ -309,6 +341,101 @@ export async function buildPremiumBuyerPacketPdf(input: BuyerPacketPdfInput): Pr
     color: MUTED,
     maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
     lineHeight: 15,
+  })
+
+
+
+  const intel = opportunity?.buyerIntelligence || {}
+  const pageIntel = addPage(doc)
+  pageIntel.drawText('VESTBLOCK', { x: MARGIN, y: PAGE_HEIGHT - 56, size: 14, font: bold, color: CYAN })
+  drawSectionTitle(pageIntel, 'Buyer range intelligence', MARGIN, PAGE_HEIGHT - 120, bold)
+  const intelMetrics = [
+    { label: 'Rent market range', value: rangeText(intel?.rentMarketRange?.low, intel?.rentMarketRange?.base, intel?.rentMarketRange?.high), color: GREEN },
+    { label: 'Neighborhood score', value: intel?.neighborhoodScore?.score !== undefined ? `${safeText(intel.neighborhoodScore.label)} (${intel.neighborhoodScore.score}/100)` : 'Needs review', color: CYAN },
+    { label: 'Value range', value: rangeText(intel?.valueRange?.low, intel?.valueRange?.base, intel?.valueRange?.high), color: INK },
+    { label: 'Repair range', value: rangeText(intel?.repairRange?.low, intel?.repairRange?.base, intel?.repairRange?.high), color: AMBER },
+    { label: 'Buyer offer band', value: rangeText(intel?.offerRange?.low, intel?.offerRange?.base, intel?.offerRange?.high), color: CYAN },
+    { label: 'Range confidence', value: `${safeText(intel?.rentMarketRange?.confidence || 'Needs rent')} / ${safeText(intel?.valueRange?.confidence || 'Needs value')}`, color: MUTED },
+  ]
+  intelMetrics.forEach((metric, index) => {
+    const row = Math.floor(index / 3)
+    const col = index % 3
+    drawMetric(pageIntel, {
+      ...metric,
+      x: MARGIN + col * (metricWidth + 12),
+      y: PAGE_HEIGHT - 150 - row * 72,
+      width: metricWidth,
+      font: regular,
+      bold,
+    })
+  })
+
+  drawSectionTitle(pageIntel, 'DealMachine, OSINT, and data date', MARGIN, 500, bold)
+  let dataY = 472
+  dataY = drawBullets(pageIntel, Array.isArray(intel?.dataSources) ? intel.dataSources : [], MARGIN + 4, dataY, {
+    font: regular,
+    size: 8.5,
+    color: rgb(0.78, 0.86, 0.94),
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
+    lineHeight: 11,
+    limit: 6,
+  })
+  if (!Array.isArray(intel?.dataSources) || !intel.dataSources.length) {
+    dataY = drawWrapped(pageIntel, 'No DealMachine or OSINT source metadata was attached to this analysis.', MARGIN + 10, dataY, {
+      font: regular,
+      size: 9,
+      color: MUTED,
+      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
+    })
+  }
+
+  drawSectionTitle(pageIntel, 'Rent sensitivity', MARGIN, 374, bold)
+  let sensitivityY = 346
+  const rentRows = Array.isArray(intel?.rentalSensitivity) ? intel.rentalSensitivity.slice(0, 3) : []
+  if (rentRows.length) {
+    for (const row of rentRows) {
+      const line = `${safeText(row.label)} | Rent ${money(row.monthlyRent)} | NOI ${money(row.noiAnnual)} | Cash flow ${money(row.monthlyCashFlow)} | DSCR ${percent(row.dscr, 'x')} | Cap ${percent(row.capRatePercent)}`
+      sensitivityY = drawWrapped(pageIntel, line, MARGIN + 10, sensitivityY, {
+        font: regular,
+        size: 8.5,
+        color: rgb(0.78, 0.86, 0.94),
+        maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
+        lineHeight: 12,
+      })
+      sensitivityY -= 5
+    }
+  } else {
+    sensitivityY = drawWrapped(pageIntel, 'Rent sensitivity needs a rent input or verified lease data.', MARGIN + 10, sensitivityY, {
+      font: regular,
+      size: 10,
+      color: MUTED,
+      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
+    })
+  }
+
+  drawSectionTitle(pageIntel, 'Price sensitivity', MARGIN, 236, bold)
+  let priceY = 208
+  const priceRows = Array.isArray(intel?.priceSensitivity) ? intel.priceSensitivity.slice(0, 3) : []
+  for (const row of priceRows) {
+    const line = `${safeText(row.label)} | Price ${money(row.purchasePrice)} | Cap ${percent(row.capRatePercent)} | DSCR ${percent(row.dscr, 'x')} | Cash flow ${money(row.monthlyCashFlow)} | CoC ${percent(row.cashOnCashReturnPercent)}`
+    priceY = drawWrapped(pageIntel, line, MARGIN + 10, priceY, {
+      font: regular,
+      size: 8.5,
+      color: rgb(0.78, 0.86, 0.94),
+      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
+      lineHeight: 12,
+    })
+    priceY -= 5
+  }
+
+  drawSectionTitle(pageIntel, 'OSINT checks to run', MARGIN, 116, bold)
+  drawBullets(pageIntel, Array.isArray(intel?.osintChecks) ? intel.osintChecks : [], MARGIN + 4, 92, {
+    font: regular,
+    size: 7.3,
+    color: MUTED,
+    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
+    lineHeight: 9,
+    limit: 6,
   })
 
   const page3 = addPage(doc)

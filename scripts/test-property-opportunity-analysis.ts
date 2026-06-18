@@ -222,4 +222,42 @@ assert.ok(healthyCashOnCash.metrics.cashOnCashReturnPercent !== null)
 assert.ok(healthyCashOnCash.metrics.cashOnCashReturnPercent! >= MIN_CASH_ON_CASH_RETURN_PERCENT)
 assert.ok(healthyCashOnCash.dealStrength.strengths.includes(`Cash-on-cash clears the ${MIN_CASH_ON_CASH_RETURN_PERCENT}% floor`))
 
+const buyerIntelligence = buildPropertyOpportunityAnalysis(
+  {
+    address: '1515 Source Stack St',
+    city: 'Kansas City',
+    state: 'MO',
+    propertyType: 'Duplex',
+    propertyCondition: 'Vacant / code violation',
+    monthlyRentEstimate: 1650,
+    askingPrice: 112000,
+    afterRepairValue: 190000,
+    repairBudget: 18000,
+    monthlyTaxes: 180,
+    monthlyInsurance: 120,
+    sourceSystem: 'DealMachine + VestBlock OSINT',
+    dealMachineListName: 'tax-code-stack-kansas-city-mo',
+    dealMachineListId: '1296527',
+    dealMachineExportDate: '2026-06-18',
+    osintSignals: ['Tax delinquency match', 'Code violation match'],
+    taxDelinquent: true,
+    codeViolation: true,
+    vacancySignal: true,
+    selectedComps: [
+      { address: '1 Comp Ave', salePrice: 185000, squareFeet: 1600, distanceMiles: 0.4 },
+      { address: '2 Comp Ave', salePrice: 192000, squareFeet: 1550, distanceMiles: 0.6 },
+    ],
+    exitStrategy: 'rental',
+  },
+  { ...baseEstimate, askingPrice: 112000, rentEstimate: 1650, estimateValue: 180000 }
+)
+
+assert.ok(buyerIntelligence.buyerIntelligence.rentMarketRange.low !== null)
+assert.ok(buyerIntelligence.buyerIntelligence.rentMarketRange.high !== null)
+assert.ok(buyerIntelligence.buyerIntelligence.neighborhoodScore.score > 0)
+assert.ok(buyerIntelligence.buyerIntelligence.dataSources.some((source) => source.includes('DealMachine list')))
+assert.ok(buyerIntelligence.buyerIntelligence.dataSources.some((source) => source.includes('2026-06-18')))
+assert.ok(buyerIntelligence.buyerIntelligence.osintChecks.some((check) => check.includes('County tax portal')))
+assert.ok(buyerIntelligence.buyerIntelligence.dueDiligenceNeeds.some((item) => item.includes('rent roll')))
+
 console.log('property-opportunity-analysis: ok')
