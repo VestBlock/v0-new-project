@@ -920,7 +920,7 @@ function buildBuyerIntelligence(inputs: {
       capRatePercent: calculateCapRate(baseNoi, item.price),
       dscr: inputs.dscr,
       monthlyCashFlow: inputs.estimatedMonthlyCashFlow,
-      cashOnCashReturnPercent: calculateCashOnCashReturn(inputs.estimatedMonthlyCashFlow, cashNeeded),
+      cashOnCashReturnPercent: calculateCashOnCashReturn(inputs.estimatedMonthlyCashFlow !== null ? inputs.estimatedMonthlyCashFlow * 12 : null, cashNeeded),
     }
   })
 

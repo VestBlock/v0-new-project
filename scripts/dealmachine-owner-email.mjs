@@ -487,12 +487,9 @@ function buildEmail(contact) {
   const property = contact.property_line
   const location = contact.city_state ? ` in ${contact.city_state}` : ""
   const ownerLine = contact.owner_name ? `I have ${contact.owner_name} connected to the property record.` : ""
-  const signalLine = contact.distress_stack
-    ? `The note I have on this file is: ${contact.distress_stack}.`
+  const signalLine = contact.distress_stack || contact.delinquent_amount
+    ? "The property came through a local review lane where ownership, timing, condition, or carrying costs may matter, so I wanted to ask directly instead of making assumptions."
     : "The property came through my review list, so I wanted to ask directly instead of making assumptions."
-  const amountLine = contact.delinquent_amount
-    ? `I also have a public-record amount noted as ${contact.delinquent_amount}; if that is outdated or not relevant, no problem.`
-    : ""
   const subject = `Question about ${property}`
   const address = mailingAddress()
   const body = [
@@ -501,7 +498,6 @@ function buildEmail(contact) {
     `I'm Robert with VestBlock. I wanted to ask about ${property}${location}. ${ownerLine}`,
     "",
     signalLine,
-    amountLine,
     "",
     "If it would help, I can review this specific property and walk through several options. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic for this property.",
     "",

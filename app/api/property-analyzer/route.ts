@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
 import { recordPropertyAnalysisRun } from '@/lib/admin/dealMemory'
+import { fetchAttomPropertyEnrichment, type AttomPropertyEnrichment } from '@/lib/property/attom'
 
 const compFieldSchema = z.union([z.string(), z.number()]).optional().transform((value) => {
   if (value === undefined || value === null) return ''
@@ -102,6 +103,72 @@ function envBool(name: string, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
 }
 
+
+type AnalyzerData = z.infer<typeof analyzerSchema> & {
+  sourceSystem?: string | null
+  sourceDate?: string | null
+  osintSignals?: string[] | null
+  absenteeOwner?: boolean | null
+  ownerType?: string | null
+  attom?: AttomPropertyEnrichment | null
+}
+
+function joinSourceSystem(current: string | null | undefined, provider: string) {
+  const parts = String(current || '')
+    .split(/[|,]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (!parts.includes(provider)) parts.push(provider)
+  return parts.join(' | ')
+}
+
+function fillIfMissing(value: string, fallback: string | number | null | undefined) {
+  if (value.trim()) return value
+  if (fallback === null || fallback === undefined) return ''
+  return String(fallback)
+}
+
+async function enrichAnalyzerDataWithAttom(data: z.infer<typeof analyzerSchema>): Promise<AnalyzerData> {
+  if (envBool('ATTOM_PROPERTY_ENRICHMENT_DISABLED', false)) return data
+
+  try {
+    const attom = await fetchAttomPropertyEnrichment({
+      address: data.propertyAddress,
+      city: data.city,
+      state: data.state,
+      zipCode: data.zipCode,
+    })
+
+    if (!attom) return data
+
+    const sourceSignals = [
+      ...attom.signals,
+      attom.apn ? `ATTOM APN: ${attom.apn}` : null,
+      attom.ownerMailingAddress ? `ATTOM owner mailing address: ${attom.ownerMailingAddress}` : null,
+      attom.constructionType ? `ATTOM construction: ${attom.constructionType}` : null,
+    ].filter(Boolean) as string[]
+
+    return {
+      ...data,
+      propertyType: fillIfMissing(data.propertyType, attom.propertyType),
+      bathrooms: fillIfMissing(data.bathrooms, attom.bathsTotal),
+      squareFeet: fillIfMissing(data.squareFeet, attom.livingSize),
+      propertyCondition: fillIfMissing(data.propertyCondition, attom.condition),
+      estimatedValue: fillIfMissing(data.estimatedValue, attom.marketValue),
+      monthlyTaxes: fillIfMissing(data.monthlyTaxes, attom.taxAmount !== null ? Math.round(attom.taxAmount / 12) : null),
+      sourceSystem: joinSourceSystem(null, 'ATTOM'),
+      sourceDate: attom.sourceDate,
+      osintSignals: sourceSignals,
+      absenteeOwner: attom.absenteeOwner,
+      ownerType: attom.ownerName ? 'Individual owner' : null,
+      attom,
+    }
+  } catch (error) {
+    console.warn('ATTOM enrichment skipped:', error)
+    return data
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const parsed = analyzerSchema.safeParse(await request.json().catch(() => ({})))
@@ -113,7 +180,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const data = parsed.data
+    const data = await enrichAnalyzerDataWithAttom(parsed.data)
     const address = buildFullAddress(data)
     const estimate = await buildRoughPropertyEstimate({
       address,
@@ -158,6 +225,11 @@ export async function POST(request: NextRequest) {
         timelineToSell: data.timelineToSell || null,
         occupancyStatus: data.occupancyStatus || null,
         preferredSalePath: data.preferredSalePath || null,
+        sourceSystem: data.sourceSystem || null,
+        sourceDate: data.sourceDate || null,
+        osintSignals: data.osintSignals || null,
+        absenteeOwner: data.absenteeOwner ?? null,
+        ownerType: data.ownerType || null,
         afterRepairValue: data.afterRepairValue || null,
         repairBudget: data.repairBudget || null,
         assignmentFee: data.assignmentFee || null,

@@ -347,7 +347,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'outreach',
         action: 'Preview seller-options outreach for the double-stack only',
         detail:
-          'Use the tax-code-stack strategy so copy references public-record pressure carefully, avoids threats, honors suppressions, and never sends SMS automatically.',
+          'Use the tax-code-stack strategy internally, but first-touch copy should not name tax delinquency, preforeclosure, code violations, liens, or dollar amounts. Keep public-record pressure as scoring/context only, avoid threats, honor suppressions, and never send SMS automatically.',
         priority: 'normal',
       },
       {
@@ -376,7 +376,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     complianceNote:
-      'Use public-record language carefully. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
+      'Use public-record signals internally only on first touch. Do not name tax delinquency, preforeclosure, code violations, liens, or dollar amounts unless a human approves that context for a reply. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
   })
 
   // ── 3B. Pre-auction distress routing ───────────────────────────────────────
@@ -410,7 +410,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'acquisition',
         action: 'Run the county source checklist before outreach',
         detail:
-          'Prioritize Milwaukee, Toledo, Cleveland, Detroit, and Waukesha. Attach foreclosure/tax/code/vacancy/auction evidence to the lead record before it enters copy generation.',
+          'Prioritize Milwaukee, Toledo, Cleveland, Detroit, and Waukesha. Attach foreclosure/tax/code/vacancy/auction evidence to the lead record for scoring and routing, but keep that evidence out of first-touch copy unless a human approves it.',
         priority: 'high',
       },
       {
@@ -424,7 +424,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'outreach',
         action: 'Keep distress copy separated by exit bucket',
         detail:
-          'Do not mix foreclosure, tax-code, on-market, portfolio landlord, buyer-match, or referral language. Each lane needs its own subject line, ask, and compliance footer.',
+          'Do not mix foreclosure, tax-code, on-market, portfolio landlord, buyer-match, or referral language. Each lane needs its own subject line, ask, and compliance footer, and sensitive source signals stay internal on first touch.',
         priority: 'high',
       },
       {

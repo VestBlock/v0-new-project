@@ -55,7 +55,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Failed landlord exit review: portfolio, absentee, tax, lien, vacancy, or management-friction signals",
     reason: "failed_landlord_exit_lane",
     pattern: /landlord|rental|portfolio|multi|absentee|out of state|tax|delinquent|lien|vacant|eviction|code|violation/i,
-    signal: "The file landed in a landlord-friction lane, which usually means portfolio, absentee, tax, lien, vacancy, or management-pressure signals may be present.",
+    signal: "The file landed in a landlord-friction lane, so I wanted to ask directly instead of making assumptions about timing or management plans.",
     ask: "If simplifying one rental, a few doors, or a harder-to-manage property would help, I can review the as-is options and tell you quickly if it does or does not fit."
   },
   "insurance-damage-event": {
@@ -73,7 +73,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Stalled rehab review: vacant, lien, tax, permit, heavy-rehab, or unfinished-project signals",
     reason: "zombie_rehab_lane",
     pattern: /rehab|unfinished|vacant|permit|lien|tax|delinquent|code|violation|repair|demo|shell|boarded/i,
-    signal: "The address looks like it may belong in a stalled-project review lane, where timing, repairs, permits, or capital can matter more than a normal offer formula.",
+    signal: "The address looks like it may belong in a stalled-project review lane, where timing, repairs, access, or capital can matter more than a normal offer formula.",
     ask: "If the project is paused, unfinished, or simply not worth more time, I can review the as-is exit paths without asking you to clean it up first."
   },
   "senior-downsizer": {
@@ -100,7 +100,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Probate/vacant/equity review with cleanout, title, and as-is seller path",
     reason: "probate_vacant_equity_lane",
     pattern: /probate|estate|heir|vacant|inherited|cleanout|equity|tax|delinquent/i,
-    signal: "The address came through a vacant/equity estate-style review lane; if the public data is wrong, no problem.",
+    signal: "The address came through a vacant/equity review lane; if the data is wrong, no problem.",
     ask: "If cleanout, title timing, repairs, or family logistics are part of the decision, I can review an as-is path and keep it straightforward."
   },
   "tired-airbnb-midterm": {
@@ -118,7 +118,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Utility, water, nuisance, lien, tax, or municipal-pressure seller review",
     reason: "utility_lien_water_shutoff_lane",
     pattern: /water|utility|nuisance|lien|tax|delinquent|municipal|code|violation|vacant/i,
-    signal: "The file came through a municipal-pressure lane, where liens, utilities, taxes, or nuisance items can create friction.",
+    signal: "The file came through a property-friction lane, where carrying costs, utilities, condition, or timing can create pressure.",
     ask: "If any of those items are making the property harder to keep, I can review the as-is options and avoid wasting your time if it is not a fit."
   },
   "contractor-distress-flip": {
@@ -145,7 +145,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Portfolio fragmentation review: identify one weak door inside a multi-property owner file",
     reason: "portfolio_fragmentation_lane",
     pattern: /portfolio|multiple properties|multi|landlord|rental|tax|lien|vacant|code|violation|absentee/i,
-    signal: "The owner record appears to belong in a portfolio-fragmentation lane, where one or two properties may be worth reviewing separately from the whole group.",
+    signal: "The owner record appears to belong in a portfolio review lane, where one or two properties may be worth reviewing separately from the whole group.",
     ask: "If you would consider selling only the problem property, a small subset, or the whole group, I can keep the review organized around what you actually want to simplify."
   },
   "buyer-reverse-engineering": {
@@ -172,7 +172,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Judgment, lien, municipal, tax, or title-pressure seller review",
     reason: "judgment_lien_pressure_lane",
     pattern: /judgment|lien|tax|delinquent|municipal|title|code|violation|nuisance|foreclosure/i,
-    signal: "The file came through a lien/title-pressure lane; if that signal is old or already handled, no problem.",
+    signal: "The file came through a title/timing review lane; if the signal is old or already handled, no problem.",
     ask: "If title, lien, tax, or timing issues are making a normal sale difficult, I can review whether an as-is path still makes sense."
   },
   "tax-assessment-shock": {
@@ -181,7 +181,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Tax burden or assessment-shock review for high-equity owners",
     reason: "tax_assessment_shock_lane",
     pattern: /assessment|tax|delinquent|high equity|equity|senior|absentee|out of state/i,
-    signal: "The property landed in a tax-burden/high-equity review lane, so I wanted to ask directly instead of assuming the public data tells the whole story.",
+    signal: "The property landed in a carrying-cost/high-equity review lane, so I wanted to ask directly instead of assuming the public data tells the whole story.",
     ask: "If the tax burden or carrying cost has changed your plans, I can review a few options and only continue if the numbers are realistic."
   }
 }
@@ -553,10 +553,8 @@ function buildEmail(contact) {
     "",
     `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
     "",
-    `I came across this property while reviewing local off-market and distress opportunities in ${contact.market_label}.`,
-    contact.tax_delinquent === "Yes"
-      ? "I also see a tax-delinquent signal on the file, which is one reason it landed on my review list."
-      : "The property came through my review list, so I wanted to ask directly instead of assuming anything.",
+    `I came across this property while reviewing local as-is opportunities in ${contact.market_label}.`,
+    "The property came through my review list, so I wanted to ask directly instead of assuming anything.",
     "",
     "If it would help, I can review this specific property and walk through several options. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic for this property.",
     pathLine ? `For this address, the review may include ${pathLine}.` : "",
@@ -582,11 +580,9 @@ function buildRemoteTaxEquityEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
   const market = contact.market_label || marketLabelFromAddress(property) || "the area"
-  const taxLine = contact.past_due_amount
-    ? `I have a tax-delinquent signal with ${contact.past_due_amount} shown in the review queue; if that is outdated or already handled, no problem.`
-    : "I have a tax-delinquent signal on the review queue; if that is outdated or already handled, no problem."
+  const taxLine = "The property came through a local review lane where ownership distance, equity, timing, or carrying costs may matter, so I wanted to ask directly instead of assuming anything."
   const distanceLine = contact.out_of_state_mailing === "true"
-    ? "The owner mailing address also appears to be outside the property state, which is one reason this landed in a remote-owner review lane."
+    ? "The owner mailing address appears to be outside the property state, which can make a simple review useful if the timing is right."
     : "The file also landed in a remote-owner/high-equity review lane, so I wanted to ask directly instead of assuming anything."
   const subject = `Question about ${line}`
   const body = [
@@ -621,12 +617,8 @@ function buildRemoteTaxEquityEmail(contact) {
 function buildTaxCodeStackEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
-  const codeLine = contact.code_violation
-    ? `The file also had a local code/condition signal noted as "${contact.code_violation}", so I wanted to ask directly instead of guessing about the situation.`
-    : "The file had a local property-condition signal, so I wanted to ask directly instead of guessing about the situation."
-  const taxLine = contact.past_due_amount
-    ? `I also have a tax-delinquent signal with ${contact.past_due_amount} shown in the review queue; if that is outdated or already handled, no problem.`
-    : "I also have a tax-delinquent signal on the review queue; if that is outdated or already handled, no problem."
+  const codeLine = "The property came through a local review lane where condition, repairs, timing, or carrying costs may matter, so I wanted to ask directly instead of guessing about the situation."
+  const taxLine = "I am not assuming anything from public data; I only want to see whether a clean as-is review would be useful or whether I should close the file out."
   const subject = `Question about ${line}`
   const body = [
     `Hi ${contact.first_name},`,
@@ -703,7 +695,7 @@ function buildBuilderInfillEmail(contact) {
   const line = property.split(",")[0]
   const market = contact.market_label || marketLabelFromAddress(property) || "your market"
   const signalLine = contact.property_type || contact.zoning || contact.code_violation
-    ? `The file has a few builder-review signals on it${contact.property_type ? `, including "${contact.property_type}"` : ""}${contact.zoning ? ` and zoning/use noted as "${contact.zoning}"` : ""}${contact.code_violation ? `, plus a condition note marked "${contact.code_violation}"` : ""}.`
+    ? "The address landed in a builder/infill review lane, so I wanted to ask about the real use, condition, and timing instead of guessing."
     : "The address landed in a builder/infill review lane, so I wanted to ask about the real condition and timing instead of guessing."
   const subject = `Question about ${line}`
   const body = [
@@ -1851,6 +1843,17 @@ async function main() {
   const rawContacts = applyStrategyFilter(loadMatches(marketConfigs)).sort(
     (a, b) => b.distress_score - a.distress_score || a.property_address_full.localeCompare(b.property_address_full)
   )
+  const diagnostics = {
+    strategyFitContacts: rawContacts.length,
+    contactsWithUsableEmail: rawContacts.filter((contact) => contact.emails.length > 0).length,
+    contactsWithTextablePhone: rawContacts.filter((contact) => contact.phones.some(isTextablePhone)).length,
+    skippedAlreadyContactedProperty: 0,
+    skippedDuplicatePropertyInBatch: 0,
+    skippedSuppressedEmail: 0,
+    skippedDuplicateEmailInBatch: 0,
+    skippedAlreadyContactedEmail: 0,
+    skippedNoSelectedEmail: 0,
+  }
 
   const emailDrafts = []
   const phoneQueue = []
@@ -1861,15 +1864,31 @@ async function main() {
 
   for (const contact of rawContacts) {
     const propertyKey = normalizeAddress(contact.property_address_full)
-    if (alreadyContacted.sentProperties.has(propertyKey)) continue
-    if (seenEmailProperty.has(propertyKey)) continue
+    if (alreadyContacted.sentProperties.has(propertyKey)) {
+      diagnostics.skippedAlreadyContactedProperty += 1
+      continue
+    }
+    if (seenEmailProperty.has(propertyKey)) {
+      diagnostics.skippedDuplicatePropertyInBatch += 1
+      continue
+    }
 
     let emailSelectedForProperty = false
     for (const email of contact.emails) {
       const normalizedEmail = email.toLowerCase()
       const key = `${contact.property_address_full}|${normalizedEmail}`
-      if (suppressedEmails.has(normalizedEmail)) continue
-      if (seenEmail.has(key) || seenRecipientEmail.has(normalizedEmail) || alreadyContacted.sentEmails.has(normalizedEmail)) continue
+      if (suppressedEmails.has(normalizedEmail)) {
+        diagnostics.skippedSuppressedEmail += 1
+        continue
+      }
+      if (seenEmail.has(key) || seenRecipientEmail.has(normalizedEmail)) {
+        diagnostics.skippedDuplicateEmailInBatch += 1
+        continue
+      }
+      if (alreadyContacted.sentEmails.has(normalizedEmail)) {
+        diagnostics.skippedAlreadyContactedEmail += 1
+        continue
+      }
       const cashReview = cashRangeFromContact(contact)
       seenEmail.add(key)
       seenRecipientEmail.add(normalizedEmail)
@@ -1927,6 +1946,8 @@ async function main() {
       emailSelectedForProperty = true
       if (emailSelectedForProperty) break
     }
+
+    if (contact.emails.length > 0 && !emailSelectedForProperty) diagnostics.skippedNoSelectedEmail += 1
 
     let phoneSelectedForProperty = false
     for (const phone of contact.phones) {
@@ -2038,9 +2059,20 @@ async function main() {
 
   console.log("=== DealMachine export outreach ===")
   console.log(`Mode:           ${SEND ? "LIVE SEND (Resend)" : "DRY RUN"}`)
+  console.log(`Strategy fit:   ${diagnostics.strategyFitContacts}`)
+  console.log(`Contacts email: ${diagnostics.contactsWithUsableEmail}`)
+  console.log(`Contacts phone: ${diagnostics.contactsWithTextablePhone}`)
   console.log(`Matched emails: ${emailDrafts.length}`)
   console.log(`Selected send:  ${selectedDrafts.length}`)
   console.log(`Phone queue:    ${phoneQueue.length}`)
+  console.log(`Skip stats:     ${JSON.stringify({
+    alreadyContactedProperty: diagnostics.skippedAlreadyContactedProperty,
+    duplicatePropertyInBatch: diagnostics.skippedDuplicatePropertyInBatch,
+    suppressedEmail: diagnostics.skippedSuppressedEmail,
+    duplicateEmailInBatch: diagnostics.skippedDuplicateEmailInBatch,
+    alreadyContactedEmail: diagnostics.skippedAlreadyContactedEmail,
+    noSelectedEmail: diagnostics.skippedNoSelectedEmail,
+  })}`)
   console.log(`Strategy:       ${STRATEGY}`)
   console.log(`Email CSV:      ${emailCsv}`)
   console.log(`Phone CSV:      ${phoneCsv}`)
