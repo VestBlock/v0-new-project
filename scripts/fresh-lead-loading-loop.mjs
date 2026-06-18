@@ -112,7 +112,8 @@ async function main() {
   }
 
   if (runDealMachine) {
-    const dm = run('DealMachine saved-list builder', 'node', ['scripts/dealmachine-website-list-builder.mjs', '--build', '--max-builds=8', `--markets=${markets}`, '--strategies=tax-code-stack|vacant-equity|portfolio-landlord|preforeclosure-equity|tax-remote-equity-rotation'])
+    const chromeSessionEnv = { ...process.env, DEALMACHINE_WEB_TOKEN: '' }
+    const dm = run('DealMachine saved-list builder', 'node', ['scripts/dealmachine-website-list-builder.mjs', '--build', '--max-builds=8', `--markets=${markets}`, '--strategies=tax-code-stack|vacant-equity|portfolio-landlord|preforeclosure-equity|tax-remote-equity-rotation'], { env: chromeSessionEnv })
     if (!dm.ok) dm.blocker = 'If Chrome says JavaScript from Apple Events is off, open Chrome on the Pro, go to View > Developer > Allow JavaScript from Apple Events, then rerun with --dealmachine.'
     steps.push(dm)
   }
