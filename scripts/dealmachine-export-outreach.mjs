@@ -48,6 +48,144 @@ const SMALL_MULTIFAMILY_STRATEGIES = new Set(["small-multifamily-portfolio", "mu
 const INSTITUTIONAL_BTR_STRATEGIES = new Set(["institutional-btr-buybox", "btr-buybox", "sfr-aggregator-buybox", "institutional-sfr"])
 const COMMERCIAL_DISTRESS_STRATEGIES = new Set(["commercial-small-bay-distress", "small-bay-distress", "commercial-distress", "mixed-use-distress"])
 const NOVATION_RETAIL_STRATEGIES = new Set(["novation-retail-spread", "retail-spread-novation", "novation"])
+const EPIC_STRATEGY_CONFIG = {
+  "failed-landlord-exit": {
+    label: "Failed landlord exit",
+    niche: "epic_failed_landlord_exit",
+    angle: "Failed landlord exit review: portfolio, absentee, tax, lien, vacancy, or management-friction signals",
+    reason: "failed_landlord_exit_lane",
+    pattern: /landlord|rental|portfolio|multi|absentee|out of state|tax|delinquent|lien|vacant|eviction|code|violation/i,
+    signal: "The file landed in a landlord-friction lane, which usually means portfolio, absentee, tax, lien, vacancy, or management-pressure signals may be present.",
+    ask: "If simplifying one rental, a few doors, or a harder-to-manage property would help, I can review the as-is options and tell you quickly if it does or does not fit."
+  },
+  "insurance-damage-event": {
+    label: "Insurance / damage event",
+    niche: "epic_insurance_damage_event",
+    angle: "Damage-event seller review for fire, storm, boarded, insurance, or heavy-repair signals",
+    reason: "insurance_damage_event_lane",
+    pattern: /fire|storm|damage|insurance|boarded|unsafe|condemned|shell|repair|rehab|vacant|code|violation|lien/i,
+    signal: "The file came through a damage-event review lane, so I am trying to verify the real condition instead of relying on public data.",
+    ask: "If there are repairs, insurance delays, access issues, or cleanup decisions still hanging over the property, I can review it as-is before you spend more time managing the project."
+  },
+  "zombie-rehab": {
+    label: "Zombie rehab / stalled project",
+    niche: "epic_zombie_rehab",
+    angle: "Stalled rehab review: vacant, lien, tax, permit, heavy-rehab, or unfinished-project signals",
+    reason: "zombie_rehab_lane",
+    pattern: /rehab|unfinished|vacant|permit|lien|tax|delinquent|code|violation|repair|demo|shell|boarded/i,
+    signal: "The address looks like it may belong in a stalled-project review lane, where timing, repairs, permits, or capital can matter more than a normal offer formula.",
+    ask: "If the project is paused, unfinished, or simply not worth more time, I can review the as-is exit paths without asking you to clean it up first."
+  },
+  "senior-downsizer": {
+    label: "Equity-rich downsizer",
+    niche: "epic_senior_downsizer",
+    angle: "Equity-rich simplify/downsize review with soft, low-pressure seller language",
+    reason: "senior_downsizer_lane",
+    pattern: /equity|owner occupied|long term|senior|tax|high equity|free and clear|absentee/i,
+    signal: "The file landed in a high-equity simplify lane, so I wanted to ask directly and carefully rather than make assumptions.",
+    ask: "If selling as-is, downsizing, or just understanding options would be useful, I can keep the review simple and pressure-free."
+  },
+  "rent-gap-multifamily": {
+    label: "Small multifamily rent gap",
+    niche: "epic_rent_gap_multifamily",
+    angle: "Small multifamily rent-gap review: rental upside, occupancy, and portfolio buyer fit",
+    reason: "rent_gap_multifamily_lane",
+    pattern: /duplex|triplex|fourplex|multi|multifamily|apartment|units|rent|rental|portfolio|landlord/i,
+    signal: "The file reads like a rental or small multifamily review, where rents, occupancy, and condition can change the buyer lane.",
+    ask: "If you would consider selling one property or a small group, I can review rental-buyer, cash, or flexible options after confirming the real rent roll and condition."
+  },
+  "probate-vacant-equity": {
+    label: "Probate + vacant + equity",
+    niche: "epic_probate_vacant_equity",
+    angle: "Probate/vacant/equity review with cleanout, title, and as-is seller path",
+    reason: "probate_vacant_equity_lane",
+    pattern: /probate|estate|heir|vacant|inherited|cleanout|equity|tax|delinquent/i,
+    signal: "The address came through a vacant/equity estate-style review lane; if the public data is wrong, no problem.",
+    ask: "If cleanout, title timing, repairs, or family logistics are part of the decision, I can review an as-is path and keep it straightforward."
+  },
+  "tired-airbnb-midterm": {
+    label: "Tired Airbnb / midterm rental",
+    niche: "epic_tired_airbnb_midterm",
+    angle: "Short-term or midterm rental fatigue review for operators whose rental plan may have changed",
+    reason: "tired_airbnb_midterm_lane",
+    pattern: /airbnb|short term|str|midterm|furnished|rental|vacancy|booking|portfolio|absentee/i,
+    signal: "The property landed in a rental-operator review lane, where occupancy, operations, and market changes can matter more than the public value estimate.",
+    ask: "If the rental plan is not performing the way you expected, I can review whether a clean as-is exit or buyer-match path makes sense."
+  },
+  "utility-lien-water-shutoff": {
+    label: "Utility / water lien pressure",
+    niche: "epic_utility_lien_pressure",
+    angle: "Utility, water, nuisance, lien, tax, or municipal-pressure seller review",
+    reason: "utility_lien_water_shutoff_lane",
+    pattern: /water|utility|nuisance|lien|tax|delinquent|municipal|code|violation|vacant/i,
+    signal: "The file came through a municipal-pressure lane, where liens, utilities, taxes, or nuisance items can create friction.",
+    ask: "If any of those items are making the property harder to keep, I can review the as-is options and avoid wasting your time if it is not a fit."
+  },
+  "contractor-distress-flip": {
+    label: "Contractor distress buyer-seller flip",
+    niche: "epic_contractor_distress_flip",
+    angle: "Contractor-heavy distress lane paired with rehab/fire/structural buyer demand",
+    reason: "contractor_distress_flip_lane",
+    pattern: /contractor|fire|structural|rehab|repair|damage|vacant|code|violation|demo|shell|boarded/i,
+    signal: "The property came through a contractor-heavy review lane, so condition and repair scope matter more than a simple Zestimate-style number.",
+    ask: "If you have photos or a rough idea of the repair situation, I can review whether the deal fits a contractor, builder, or heavy-rehab buyer lane."
+  },
+  "small-commercial-owner-exit": {
+    label: "Small commercial owner exit",
+    niche: "epic_small_commercial_owner_exit",
+    angle: "Small commercial, mixed-use, retail, office, warehouse, or small-bay owner exit review",
+    reason: "small_commercial_owner_exit_lane",
+    pattern: /commercial|mixed use|retail|office|warehouse|industrial|small bay|shop|storage|zoning|vacant|lease/i,
+    signal: "The file reads like a small commercial or mixed-use review, where use, leases, access, zoning, and condition drive the decision.",
+    ask: "If vacancy, repairs, leases, or timing are making the property harder to carry, I can review whether it fits a real operator-buyer lane."
+  },
+  "portfolio-fragmentation": {
+    label: "Portfolio fragmentation",
+    niche: "epic_portfolio_fragmentation",
+    angle: "Portfolio fragmentation review: identify one weak door inside a multi-property owner file",
+    reason: "portfolio_fragmentation_lane",
+    pattern: /portfolio|multiple properties|multi|landlord|rental|tax|lien|vacant|code|violation|absentee/i,
+    signal: "The owner record appears to belong in a portfolio-fragmentation lane, where one or two properties may be worth reviewing separately from the whole group.",
+    ask: "If you would consider selling only the problem property, a small subset, or the whole group, I can keep the review organized around what you actually want to simplify."
+  },
+  "buyer-reverse-engineering": {
+    label: "Buyer reverse-engineering",
+    niche: "epic_buyer_reverse_engineering",
+    angle: "Buyer-pattern sourced seller review using active buyer demand before seller follow-up",
+    reason: "buyer_reverse_engineering_lane",
+    pattern: /buyer|buy box|cash buyer|rental|portfolio|duplex|land|builder|vacant|equity|absentee/i,
+    signal: "This address came up because it may resemble property types active buyers have been asking us to find.",
+    ask: "If you are open to a clean review, I can compare it against real buyer criteria first instead of guessing at an offer."
+  },
+  "permit-spike-developer-land": {
+    label: "Permit spike developer / land",
+    niche: "epic_permit_spike_developer_land",
+    angle: "Permit-spike/developer-activity land, infill, teardown, or assemblage review",
+    reason: "permit_spike_developer_land_lane",
+    pattern: /permit|new construction|developer|infill|land|lot|vacant|zoning|assemblage|teardown|demo/i,
+    signal: "The property landed in a developer-activity lane, where nearby permits, infill, land, teardown, or zoning patterns may matter.",
+    ask: "If you would consider selling the parcel, lot, or structure as-is, I can review whether a builder/developer path is realistic."
+  },
+  "judgment-lien-pressure": {
+    label: "Judgment / lien pressure",
+    niche: "epic_judgment_lien_pressure",
+    angle: "Judgment, lien, municipal, tax, or title-pressure seller review",
+    reason: "judgment_lien_pressure_lane",
+    pattern: /judgment|lien|tax|delinquent|municipal|title|code|violation|nuisance|foreclosure/i,
+    signal: "The file came through a lien/title-pressure lane; if that signal is old or already handled, no problem.",
+    ask: "If title, lien, tax, or timing issues are making a normal sale difficult, I can review whether an as-is path still makes sense."
+  },
+  "tax-assessment-shock": {
+    label: "Tax assessment shock",
+    niche: "epic_tax_assessment_shock",
+    angle: "Tax burden or assessment-shock review for high-equity owners",
+    reason: "tax_assessment_shock_lane",
+    pattern: /assessment|tax|delinquent|high equity|equity|senior|absentee|out of state/i,
+    signal: "The property landed in a tax-burden/high-equity review lane, so I wanted to ask directly instead of assuming the public data tells the whole story.",
+    ask: "If the tax burden or carrying cost has changed your plans, I can review a few options and only continue if the numbers are realistic."
+  }
+}
+const EPIC_STRATEGIES = new Set(Object.keys(EPIC_STRATEGY_CONFIG))
 const LOWBALL_MIN_PCT = boundedPercent(getArg("cash-min-pct") || "0.50", 0.5)
 const LOWBALL_MAX_PCT = boundedPercent(getArg("cash-max-pct") || "0.60", 0.6)
 const MAX_CASH_REVIEW_ANCHOR = getArg("max-anchor") ? numberish(getArg("max-anchor")) : 750000
@@ -840,6 +978,42 @@ function buildLandWholesaleEmail(contact) {
   return { subject, body }
 }
 
+function buildEpicStrategyEmail(contact) {
+  const config = EPIC_STRATEGY_CONFIG[STRATEGY]
+  if (!config) return buildEmail(contact)
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "the market"
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    config.signal,
+    "",
+    `I am reviewing a small, separated batch of ${market} properties in our ${config.label.toLowerCase()} lane. I am not assuming you want to sell and I am not sending a blind offer.`,
+    config.ask,
+    "",
+    "Any number or path would depend on real condition, access, title, liens, occupancy, and timing. If the data is wrong or this is not relevant, I can close the file out.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I take it off my review list?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, tax advisor, title company, contractor, developer, or closing agent. We do not guarantee offers, sale timelines, buyer demand, closing, tax outcomes, zoning outcomes, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
 function buildOnMarketCashReviewEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
@@ -888,6 +1062,7 @@ function buildStrategyEmail(contact) {
   if (INSTITUTIONAL_BTR_STRATEGIES.has(STRATEGY)) return buildInstitutionalBtrEmail(contact)
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(STRATEGY)) return buildCommercialDistressEmail(contact)
   if (NOVATION_RETAIL_STRATEGIES.has(STRATEGY)) return buildNovationRetailSpreadEmail(contact)
+  if (EPIC_STRATEGIES.has(STRATEGY)) return buildEpicStrategyEmail(contact)
   return buildEmail(contact)
 }
 
@@ -1338,6 +1513,18 @@ function applyStrategyFilter(contacts) {
         anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
       ]))
   }
+  if (EPIC_STRATEGIES.has(STRATEGY)) {
+    const config = EPIC_STRATEGY_CONFIG[STRATEGY]
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter((contact) => config.pattern.test(strategyHaystack(contact)) || hasDistressSignal(contact) || contact.strategy_fit === "true")
+      .map((contact) => withStrategyReason(contact, [
+        config.reason,
+        hasDistressSignal(contact) ? "distress_or_public_record_signal" : "pattern_fit",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+        anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
+      ]))
+  }
   if (!PORTFOLIO_STRATEGIES.has(STRATEGY)) return annotated
   return annotated.filter((contact) => contact.strategy_fit === "true")
 }
@@ -1391,6 +1578,7 @@ function strategyLeadNiche(strategy) {
   if (PORTFOLIO_STRATEGIES.has(strategy)) return "dealmachine_portfolio_landlord"
   if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "dealmachine_tax_remote_equity_rotation"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "dealmachine_tax_code_stack"
+  if (EPIC_STRATEGY_CONFIG[strategy]) return EPIC_STRATEGY_CONFIG[strategy].niche
   return "dealmachine_owner_contact"
 }
 
@@ -1405,6 +1593,7 @@ function strategyOutreachAngle(strategy) {
   if (PORTFOLIO_STRATEGIES.has(strategy)) return "Portfolio landlord simplification review"
   if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "Tax delinquent remote-owner equity seller review"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "Tax delinquent and code-violation seller review"
+  if (EPIC_STRATEGY_CONFIG[strategy]) return EPIC_STRATEGY_CONFIG[strategy].angle
   return "Seller options review from DealMachine owner-contact export"
 }
 

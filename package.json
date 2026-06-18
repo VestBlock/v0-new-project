@@ -161,7 +161,11 @@
     "dealmachine:download-export:apply": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --apply --ingest --split-by-market",
     "dealmachine:gmail-auth-url": "node --env-file=.env.local scripts/dealmachine-export-download.mjs --auth-url",
     "portfolio:milwaukee-10-unit:buyer-packet": "node scripts/generate-portfolio-buyer-packet.mjs",
-    "portfolio:milwaukee-10-unit:packets": "npm run portfolio:milwaukee-10-unit && npm run portfolio:milwaukee-10-unit:buyer-packet && node scripts/generate-redacted-buyer-packet.mjs"
+    "portfolio:milwaukee-10-unit:packets": "npm run portfolio:milwaukee-10-unit && npm run portfolio:milwaukee-10-unit:buyer-packet && node scripts/generate-redacted-buyer-packet.mjs",
+    "sellers:strategy-rotation": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs",
+    "sellers:strategy-rotation:count": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --count",
+    "sellers:strategy-rotation:build": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --build",
+    "sellers:strategy-rotation:export": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --export"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",

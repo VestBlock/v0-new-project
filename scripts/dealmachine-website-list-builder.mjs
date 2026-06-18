@@ -56,6 +56,21 @@ const DEFAULT_STRATEGIES = [
   "expired-lowball",
   "active-stale-lowball",
   "lien-equity",
+  "failed-landlord-exit",
+  "insurance-damage-event",
+  "zombie-rehab",
+  "senior-downsizer",
+  "rent-gap-multifamily",
+  "probate-vacant-equity",
+  "tired-airbnb-midterm",
+  "utility-lien-water-shutoff",
+  "contractor-distress-flip",
+  "small-commercial-owner-exit",
+  "portfolio-fragmentation",
+  "buyer-reverse-engineering",
+  "permit-spike-developer-land",
+  "judgment-lien-pressure",
+  "tax-assessment-shock",
 ]
 
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
@@ -258,6 +273,126 @@ function makeBrowserPayload() {
         { variant: "active-lien-oos-equity60-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 60), residential] },
         { variant: "active-lien-absentee-equity65-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 65), residential] },
         { variant: "active-lien-equity75-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 75), residential] }
+      ]
+    },
+    "failed-landlord-exit": {
+      label: "Failed landlord exit",
+      variants: [
+        { variant: "multi-oos-tax-equity50-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "multi-oos-lien-equity50-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "multi-vacant-absentee-equity55-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("is_vacant", "USPS Vacant?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 55), residential] }
+      ]
+    },
+    "insurance-damage-event": {
+      label: "Insurance / damage event",
+      variants: [
+        { variant: "vacant-lien-equity45-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "vacant-tax-equity45-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "vacant-oos-equity55-residential", items: [boolYes("is_vacant", "USPS Vacant?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 55), residential] }
+      ]
+    },
+    "zombie-rehab": {
+      label: "Zombie rehab / stalled project",
+      variants: [
+        { variant: "vacant-lien-oos-equity50-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("active_lien", "Property Has Active Lien?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "vacant-tax-oos-equity50-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "vacant-absentee-equity65-offmarket", items: [boolYes("is_vacant", "USPS Vacant?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 65), offMarket, residential] }
+      ]
+    },
+    "senior-downsizer": {
+      label: "Equity-rich senior downsizer",
+      variants: [
+        { variant: "oos-equity80-offmarket-residential", items: [outOfStateAbsentee, numMin("equity_percent", "Equity percent", 80), offMarket, residential] },
+        { variant: "absentee-equity85-offmarket-residential", items: [absenteeOrCorporate, numMin("equity_percent", "Equity percent", 85), offMarket, residential] },
+        { variant: "equity90-offmarket-residential", items: [numMin("equity_percent", "Equity percent", 90), offMarket, residential] }
+      ]
+    },
+    "rent-gap-multifamily": {
+      label: "Small multifamily rent gap",
+      variants: [
+        { variant: "multi-oos-equity60-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), numMin("equity_percent", "Equity percent", 60), residential] },
+        { variant: "absentee-equity70-residential", items: [absenteeOrCorporate, numMin("equity_percent", "Equity percent", 70), residential] },
+        { variant: "tax-absentee-equity55-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 55), residential] }
+      ]
+    },
+    "probate-vacant-equity": {
+      label: "Probate + vacant + equity",
+      variants: [
+        { variant: "vacant-oos-equity70-residential", items: [boolYes("is_vacant", "USPS Vacant?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 70), residential] },
+        { variant: "vacant-absentee-equity75-residential", items: [boolYes("is_vacant", "USPS Vacant?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 75), residential] },
+        { variant: "vacant-tax-equity60-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 60), residential] }
+      ]
+    },
+    "tired-airbnb-midterm": {
+      label: "Tired Airbnb / midterm rental",
+      variants: [
+        { variant: "absentee-equity65-active-residential", items: [absenteeOrCorporate, numMin("equity_percent", "Equity percent", 65), active, residential] },
+        { variant: "oos-equity70-residential", items: [outOfStateAbsentee, numMin("equity_percent", "Equity percent", 70), residential] },
+        { variant: "multi-oos-equity55-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), numMin("equity_percent", "Equity percent", 55), residential] }
+      ]
+    },
+    "utility-lien-water-shutoff": {
+      label: "Utility / water lien pressure",
+      variants: [
+        { variant: "active-lien-oos-equity45-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "active-lien-vacant-equity45-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), boolYes("is_vacant", "USPS Vacant?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "active-lien-tax-equity45-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 45), residential] }
+      ]
+    },
+    "contractor-distress-flip": {
+      label: "Contractor distress buyer-seller flip",
+      variants: [
+        { variant: "vacant-code-proxy-equity45-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "vacant-tax-equity45-residential", items: [boolYes("is_vacant", "USPS Vacant?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "vacant-oos-equity50-offmarket", items: [boolYes("is_vacant", "USPS Vacant?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), offMarket, residential] }
+      ]
+    },
+    "small-commercial-owner-exit": {
+      label: "Small commercial owner exit",
+      variants: [
+        { variant: "commercial-oos-equity55-offmarket", items: [outOfStateAbsentee, numMin("equity_percent", "Equity percent", 55), offMarket] },
+        { variant: "commercial-tax-equity50", items: [boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 50)] },
+        { variant: "commercial-lien-equity50", items: [boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 50)] }
+      ]
+    },
+    "portfolio-fragmentation": {
+      label: "Portfolio fragmentation",
+      variants: [
+        { variant: "multi-oos-tax-equity45-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "multi-oos-lien-equity45-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "multi-vacant-oos-equity45-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), boolYes("is_vacant", "USPS Vacant?"), numMin("equity_percent", "Equity percent", 45), residential] }
+      ]
+    },
+    "buyer-reverse-engineering": {
+      label: "Buyer reverse-engineering",
+      variants: [
+        { variant: "buyer-pattern-oos-equity65-residential", items: [outOfStateAbsentee, numMin("equity_percent", "Equity percent", 65), residential] },
+        { variant: "buyer-pattern-vacant-equity60-residential", items: [boolYes("is_vacant", "USPS Vacant?"), numMin("equity_percent", "Equity percent", 60), residential] },
+        { variant: "buyer-pattern-multi-equity55-residential", items: [boolYes("owner_has_multiple_properties", "Owner has multiple properties"), numMin("equity_percent", "Equity percent", 55), residential] }
+      ]
+    },
+    "permit-spike-developer-land": {
+      label: "Permit spike developer / land",
+      variants: [
+        { variant: "vacant-land-oos-equity60", items: [vacantLand, outOfStateAbsentee, numMin("equity_percent", "Equity percent", 60), offMarket] },
+        { variant: "vacant-land-equity80", items: [vacantLand, numMin("equity_percent", "Equity percent", 80), offMarket] },
+        { variant: "vacant-oos-equity60-residential", items: [boolYes("is_vacant", "USPS Vacant?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 60), residential] }
+      ]
+    },
+    "judgment-lien-pressure": {
+      label: "Judgment / lien pressure",
+      variants: [
+        { variant: "lien-oos-equity50-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "lien-tax-equity45-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 45), residential] },
+        { variant: "lien-equity65-residential", items: [boolYes("active_lien", "Property Has Active Lien?"), numMin("equity_percent", "Equity percent", 65), residential] }
+      ]
+    },
+    "tax-assessment-shock": {
+      label: "Tax assessment shock",
+      variants: [
+        { variant: "tax-high-equity80-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 80), residential] },
+        { variant: "tax-oos-equity70-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 70), residential] },
+        { variant: "tax-absentee-equity70-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 70), residential] }
       ]
     }
   }
