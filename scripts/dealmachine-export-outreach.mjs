@@ -17,6 +17,7 @@ import path from "node:path"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
+const STAGE_COMMAND_CENTER = args.includes("--stage-command-center") || args.includes("--queue-command-center")
 const SYNC_COMMAND_CENTER = !args.includes("--no-command-center-sync")
 const getArg = (name) => {
   const hit = [...args].reverse().find((arg) => arg.startsWith(`--${name}=`))
@@ -1615,6 +1616,7 @@ async function upsertCommandCenterLead(admin, draft, result) {
   const existing = await findExistingCommandCenterLead(admin, draft, externalId)
   const now = new Date().toISOString()
   const sentOk = Boolean(result.ok)
+  const staged = result.stage === "ready"
   const strategy = normalizeMarketSlug(draft.strategy || STRATEGY)
   const onMarketStrategy = ON_MARKET_STRATEGIES.has(strategy)
   const suggestedPaths = sellerPathList(draft.suggested_exit_paths) || "seller options"
@@ -1641,8 +1643,8 @@ async function upsertCommandCenterLead(admin, draft, result) {
     email_valid: true,
     bounce_risk_score: 10,
     status: sentOk ? "contacted" : "outreach_ready",
-    outreach_status: sentOk ? "sent" : "failed",
-    delivery_status: sentOk ? "sent" : "failed",
+    outreach_status: sentOk ? "sent" : staged ? "needs_review" : "failed",
+    delivery_status: sentOk ? "sent" : staged ? "queued" : "failed",
     last_contacted_at: sentOk ? now : null,
     last_outreach_generated_at: now,
     imported_at: now,
@@ -1743,6 +1745,7 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
   if (findError) throw findError
 
   const sentOk = Boolean(result.ok)
+  const staged = result.stage === "ready"
   const payload = {
     lead_id: leadId,
     channel: "email",
@@ -1752,12 +1755,12 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
     language: "en",
     compliance_note: "Includes seller-options disclosure, opt-out language, and mailing address.",
     generated_with: "dealmachine_export_outreach",
-    status: sentOk ? "sent" : "failed",
-    approved_at: now,
+    status: sentOk ? "sent" : staged ? "needs_review" : "failed",
+    approved_at: sentOk ? now : null,
     approved_by_user_id: null,
     sent_at: sentOk ? now : null,
-    send_provider: "resend",
-    send_error: sentOk ? null : result.error || "Resend send failed.",
+    send_provider: sentOk ? "resend" : null,
+    send_error: sentOk || staged ? null : result.error || "Resend send failed.",
     last_generated_at: now,
   }
 
@@ -1784,15 +1787,16 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
 async function syncCommandCenterSend(admin, draft, result) {
   const leadId = await upsertCommandCenterLead(admin, draft, result)
   const outreachMessageId = await upsertCommandCenterOutreachMessage(admin, leadId, draft, result)
+  const staged = result.stage === "ready"
   const { error } = await admin.from("outreach_send_events").insert({
     lead_id: leadId,
     outreach_message_id: outreachMessageId,
     channel: "email",
-    provider: "resend",
-    status: result.ok ? "sent" : "failed",
+    provider: result.ok ? "resend" : staged ? "vestblock_queue" : "resend",
+    status: result.ok ? "sent" : staged ? "queued" : "failed",
     recipient: draft.email,
     subject: draft.subject,
-    error_message: result.ok ? null : result.error || "Resend send failed.",
+    error_message: result.ok || staged ? null : result.error || "Resend send failed.",
     metadata_json: {
       source: "dealmachine_export_outreach",
       market: draft.market,
@@ -1830,7 +1834,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 async function main() {
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
-  const commandCenterAdmin = SEND && SYNC_COMMAND_CENTER ? supabaseAdmin() : null
+  const commandCenterAdmin = (SEND || STAGE_COMMAND_CENTER) && SYNC_COMMAND_CENTER ? supabaseAdmin() : null
 
   fs.mkdirSync(DM_EXPORT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
@@ -2077,10 +2081,45 @@ async function main() {
   console.log(`Email CSV:      ${emailCsv}`)
   console.log(`Phone CSV:      ${phoneCsv}`)
   console.log(`Draft review:   ${draftsTxt}`)
-  console.log(`CC sync:        ${SEND && SYNC_COMMAND_CENTER ? "enabled" : "disabled"}`)
+  console.log(`CC sync:        ${(SEND || STAGE_COMMAND_CENTER) && SYNC_COMMAND_CENTER ? "enabled" : "disabled"}`)
+
+  if (STAGE_COMMAND_CENTER) {
+    if (!selectedDrafts.length) {
+      console.log("No selected drafts to stage.")
+      return
+    }
+    if (!commandCenterAdmin) throw new Error("Command-center staging requires Supabase env vars and command-center sync enabled.")
+    const results = []
+    for (let index = 0; index < selectedDrafts.length; index++) {
+      const draft = selectedDrafts[index]
+      const result = { ok: false, stage: "ready", id: null }
+      let commandCenter = null
+      try {
+        commandCenter = await syncCommandCenterSend(commandCenterAdmin, draft, result)
+      } catch (error) {
+        commandCenter = { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+      results.push({
+        strategy: draft.strategy || STRATEGY,
+        market: draft.market,
+        email: draft.email,
+        subject: draft.subject,
+        property_address_full: draft.property_address_full,
+        dealmachine_id: draft.dealmachine_id,
+        commandCenter,
+        ...result,
+      })
+      const syncLabel = commandCenter ? (commandCenter.ok ? "staged" : `stage-failed: ${commandCenter.error}`) : "not-staged"
+      console.log(`queued ${index + 1}/${selectedDrafts.length} ${draft.property_address_full} ${syncLabel}`)
+    }
+    fs.writeFileSync(path.join(OUTREACH_DIR, `dealmachine-export-outreach-staged-${stamp}.json`), JSON.stringify(results, null, 2))
+    const staged = results.filter((row) => row.commandCenter?.ok).length
+    console.log(`Done. Staged ${staged}/${results.length} to command center; no emails sent.`)
+    return
+  }
 
   if (!SEND || !selectedDrafts.length) {
-    console.log(SEND ? "No selected drafts to send." : "Dry run only. Re-run with --send to deliver through Resend.")
+    console.log(SEND ? "No selected drafts to send." : "Dry run only. Re-run with --send to deliver through Resend, or --stage-command-center to queue in VestBlock.")
     return
   }
 

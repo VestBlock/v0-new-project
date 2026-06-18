@@ -165,7 +165,12 @@
     "sellers:strategy-rotation": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs",
     "sellers:strategy-rotation:count": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --count",
     "sellers:strategy-rotation:build": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --build",
-    "sellers:strategy-rotation:export": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --export"
+    "sellers:strategy-rotation:export": "node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --export",
+    "leads:import-outsourced-real-estate": "node --env-file=.env.local scripts/import-outsourced-real-estate-leads.mjs",
+    "leads:import-stale-listings": "node --env-file=.env.local scripts/import-stale-listing-seller-leads.mjs",
+    "leads:fresh-loop": "node --env-file=.env.local scripts/fresh-lead-loading-loop.mjs",
+    "leads:fresh-loop:verify": "node --env-file=.env.local scripts/fresh-lead-loading-loop.mjs --verify-only",
+    "leads:fresh-loop:with-dealmachine": "node --env-file=.env.local scripts/fresh-lead-loading-loop.mjs --dealmachine"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",
