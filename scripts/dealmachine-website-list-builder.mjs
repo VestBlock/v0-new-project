@@ -62,6 +62,7 @@ const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const MAX_COUNT = numberArg("max-count", 350)
 const MIN_COUNT = numberArg("min-count", 1)
 const MAX_BUILDS = numberArg("max-builds", BUILD ? 40 : 0)
+const ROTATIONS_PER_MARKET = numberArg("rotations-per-market", 1)
 const TIMEOUT_MS = numberArg("timeout-ms", 30000)
 const PAUSE_MS = numberArg("pause-ms", 500)
 const POLL_MS = numberArg("poll-ms", 1500)
@@ -141,6 +142,7 @@ function makeBrowserPayload() {
     minCount: MIN_COUNT,
     maxCount: MAX_COUNT,
     maxBuilds: MAX_BUILDS,
+    rotationsPerMarket: ROTATIONS_PER_MARKET,
     timeoutMs: TIMEOUT_MS,
     pauseMs: PAUSE_MS,
     markets: USER_MARKETS,
@@ -191,6 +193,15 @@ function makeBrowserPayload() {
         { variant: "tax-oos-equity50-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), residential] },
         { variant: "tax-absentee-equity60-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), absenteeOrCorporate, numMin("equity_percent", "Equity percent", 60), residential] },
         { variant: "tax-equity70-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), numMin("equity_percent", "Equity percent", 70), residential] }
+      ]
+    },
+    "tax-remote-equity-rotation": {
+      label: "Tax delinquent remote-owner equity rotation",
+      variants: [
+        { variant: "tax-oos-equity70-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 70), residential] },
+        { variant: "tax-oos-equity60-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 60), residential] },
+        { variant: "tax-oos-equity50-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), outOfStateAbsentee, numMin("equity_percent", "Equity percent", 50), residential] },
+        { variant: "tax-multi-oos-equity60-residential", items: [boolYes("TaxDelinquent", "Tax delinquent?"), boolYes("owner_has_multiple_properties", "Owner has multiple properties"), boolYes("out_of_state_owner", "Out of State Owner?"), numMin("equity_percent", "Equity percent", 60), residential] }
       ]
     },
     "vacant-equity": {
@@ -299,10 +310,10 @@ function makeBrowserPayload() {
     const response = await api({
       type: "build_list_count",
       list_filters: JSON.stringify(listFilters),
-      location_type: "city",
+      location_type: variant.locationType || "city",
       city: market.city,
       state: market.state,
-      zip: "",
+      zip: variant.zip || "",
       fips: "",
       drawing_coordinates: JSON.stringify([])
     })
@@ -317,16 +328,37 @@ function makeBrowserPayload() {
       count,
       status: response.status,
       error: response.data?.error || false,
-      filters: listFilters
+      filters: listFilters,
+      locationType: variant.locationType || "city",
+      zip: variant.zip || ""
     }
     window.vbDmWebsiteListBuilder.rows.push({ ...row, filters: undefined })
     return row
   }
 
-  const chooseVariant = async (market, strategyKey) => {
+  const zipRotationMap = {
+    "tulsa-ok": ["74104", "74105", "74107", "74110", "74112", "74115", "74126", "74127", "74130", "74136"],
+    "dayton-oh": ["45403", "45404", "45410", "45414", "45416", "45420", "45426", "45429", "45431", "45432", "45459"],
+    "akron-oh": ["44301", "44302", "44303", "44304", "44305", "44306", "44307", "44310", "44311", "44312", "44313", "44314", "44319", "44320"],
+    "little-rock-ar": ["72201", "72202", "72204", "72205", "72206", "72207", "72209", "72210", "72211", "72212", "72223", "72227"],
+    "kansas-city-mo": ["64108", "64109", "64110", "64111", "64123", "64124", "64127", "64128", "64130", "64131", "64132", "64133", "64134", "64137"]
+  }
+
+  const rotationVariantsFor = (market, variant) => {
+    const zips = zipRotationMap[slug(market.city + "-" + market.state)] || []
+    return zips.map((zip) => ({
+      variant: variant.variant + "-zip-" + zip,
+      items: variant.items,
+      locationType: "zip",
+      zip
+    }))
+  }
+
+  const chooseVariants = async (market, strategyKey) => {
     ensureActive()
     const strategy = strategies[strategyKey]
-    if (!strategy) return null
+    if (!strategy) return []
+    const selected = []
     let lastZero = null
     let lastOversized = null
     for (const variant of strategy.variants) {
@@ -343,10 +375,36 @@ function makeBrowserPayload() {
       }
       if (row.count > CONFIG.maxCount) {
         lastOversized = row
+        const rotationCandidates = []
+        for (const rotationVariant of rotationVariantsFor(market, variant)) {
+          window.vbDmWebsiteListBuilder.progress = market.city + ", " + market.state + " / " + strategyKey + " / " + rotationVariant.variant
+          const rotationRow = await countVariant({ market, strategyKey, strategy, variant: rotationVariant })
+          await sleep(CONFIG.pauseMs)
+          if (rotationRow.error || rotationRow.count === null) {
+            window.vbDmWebsiteListBuilder.errors.push({ ...rotationRow, filters: undefined })
+            continue
+          }
+          if (rotationRow.count < CONFIG.minCount) {
+            lastZero = rotationRow
+            continue
+          }
+          if (rotationRow.count > CONFIG.maxCount) {
+            lastOversized = rotationRow
+            continue
+          }
+          rotationCandidates.push(rotationRow)
+        }
+        rotationCandidates
+          .sort((a, b) => b.count - a.count || a.variant.localeCompare(b.variant))
+          .slice(0, Math.max(0, CONFIG.rotationsPerMarket - selected.length))
+          .forEach((rotationRow) => selected.push(rotationRow))
+        if (selected.length >= CONFIG.rotationsPerMarket) return selected
         continue
       }
-      return row
+      selected.push(row)
+      if (selected.length >= CONFIG.rotationsPerMarket) return selected
     }
+    if (selected.length) return selected
     const reason = lastOversized ? "oversized_after_tightening" : "empty"
     window.vbDmWebsiteListBuilder.skipped.push({
       city: market.city,
@@ -358,7 +416,7 @@ function makeBrowserPayload() {
       count: lastOversized?.count ?? lastZero?.count ?? null,
       variant: lastOversized?.variant ?? lastZero?.variant ?? null
     })
-    return null
+    return []
   }
 
   const buildSelected = async (row) => {
@@ -374,15 +432,15 @@ function makeBrowserPayload() {
       type: "build_list_v2",
       using_new_filters: 1,
       list_type: "build_list",
-      list_area_type: "city",
-      list_area: row.city,
+      list_area_type: row.locationType || "city",
+      list_area: row.locationType === "zip" ? row.zip : row.city,
       list_area_2: row.state,
       list_geo_fence: JSON.stringify([]),
       list_filters: JSON.stringify(row.filters),
-      location_type: "city",
+      location_type: row.locationType || "city",
       city: row.city,
       state: row.state,
-      zip: "",
+      zip: row.zip || "",
       fips: "",
       drawing_coordinates: JSON.stringify([]),
       estimated_count: row.count,
@@ -402,6 +460,8 @@ function makeBrowserPayload() {
       strategy: row.strategy,
       variant: row.variant,
       count: row.count,
+      locationType: row.locationType || "city",
+      zip: row.zip || "",
       title,
       status: response.status,
       error: response.data?.error || false,
@@ -427,16 +487,18 @@ function makeBrowserPayload() {
             window.vbDmWebsiteListBuilder.progress = "max builds reached"
             break marketLoop
           }
-          const selected = await chooseVariant(market, strategyKey)
-          if (!selected) continue
-          const selectedRow = { ...selected, filters: undefined }
-          window.vbDmWebsiteListBuilder.selected.push(selectedRow)
-          if (CONFIG.build && window.vbDmWebsiteListBuilder.built.length < CONFIG.maxBuilds) {
-            window.vbDmWebsiteListBuilder.progress = "building " + selected.market + " " + selected.strategyKey
-            await buildSelected(selected)
-            await sleep(CONFIG.pauseMs)
-          } else if (CONFIG.build) {
-            window.vbDmWebsiteListBuilder.skipped.push({ ...selectedRow, reason: "max_builds_reached" })
+          const selectedRows = await chooseVariants(market, strategyKey)
+          if (!selectedRows.length) continue
+          for (const selected of selectedRows) {
+            const selectedRow = { ...selected, filters: undefined }
+            window.vbDmWebsiteListBuilder.selected.push(selectedRow)
+            if (CONFIG.build && window.vbDmWebsiteListBuilder.built.length < CONFIG.maxBuilds) {
+              window.vbDmWebsiteListBuilder.progress = "building " + selected.market + " " + selected.strategyKey
+              await buildSelected(selected)
+              await sleep(CONFIG.pauseMs)
+            } else if (CONFIG.build) {
+              window.vbDmWebsiteListBuilder.skipped.push({ ...selectedRow, reason: "max_builds_reached" })
+            }
           }
         }
       }
@@ -574,6 +636,7 @@ async function main() {
   console.log(`Strategies:  ${USER_STRATEGIES.join(" | ")}`)
   console.log(`Count range: ${MIN_COUNT}-${MAX_COUNT}`)
   console.log(`Max builds:  ${MAX_BUILDS}`)
+  console.log(`Rotations:   ${ROTATIONS_PER_MARKET} per market/strategy`)
   console.log(`Runner:      ${EXPLICIT_TOKEN ? "direct API token" : "Chrome browser session"}`)
   console.log("")
   let results

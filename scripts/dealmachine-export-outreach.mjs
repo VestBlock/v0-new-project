@@ -41,6 +41,7 @@ const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getA
 const PORTFOLIO_STRATEGIES = new Set(["portfolio-landlord", "senior-landlord", "out-of-state-landlord", "landlord-portfolio"])
 const ON_MARKET_STRATEGIES = new Set(["on-market-lowball", "on-market-cash-sweep", "active-listing-cash-review", "dealmachine-on-market"])
 const TAX_CODE_STRATEGIES = new Set(["tax-code-stack", "tax-delinquent-code-violation", "code-tax-stack"])
+const REMOTE_TAX_EQUITY_STRATEGIES = new Set(["tax-remote-equity-rotation", "tax-remote-equity", "remote-tax-equity"])
 const BUILDER_INFILL_STRATEGIES = new Set(["builder-infill-teardown", "infill-builder-teardown", "builder-teardown", "lot-assembly-builder"])
 const LAND_WHOLESALE_STRATEGIES = new Set(["land-wholesale", "land-infill-lowball", "vacant-land-wholesale", "developer-land-arbitrage"])
 const SMALL_MULTIFAMILY_STRATEGIES = new Set(["small-multifamily-portfolio", "multifamily-portfolio", "portfolio-breakup", "2-20-unit-portfolio"])
@@ -431,6 +432,46 @@ function buildEmail(contact) {
     "(414) 687-6923",
     "",
     "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ]
+    .filter(Boolean)
+    .join("\n")
+  return { subject, body }
+}
+
+function buildRemoteTaxEquityEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "the area"
+  const taxLine = contact.past_due_amount
+    ? `I have a tax-delinquent signal with ${contact.past_due_amount} shown in the review queue; if that is outdated or already handled, no problem.`
+    : "I have a tax-delinquent signal on the review queue; if that is outdated or already handled, no problem."
+  const distanceLine = contact.out_of_state_mailing === "true"
+    ? "The owner mailing address also appears to be outside the property state, which is one reason this landed in a remote-owner review lane."
+    : "The file also landed in a remote-owner/high-equity review lane, so I wanted to ask directly instead of assuming anything."
+  const subject = `Question about ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    "",
+    taxLine,
+    distanceLine,
+    "",
+    `I am reviewing a small batch of ${market} properties where taxes, distance, equity, or timing may make a simple review useful. I am not assuming you want to sell and I am not sending a blind offer.`,
+    "",
+    "If the property is becoming a headache, I can look at a few realistic paths, including an as-is cash review, a creative structure, or passing quickly if it does not make sense.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, tax advisor, code-enforcement agency, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -838,6 +879,7 @@ function buildOnMarketCashReviewEmail(contact) {
 
 function buildStrategyEmail(contact) {
   if (ON_MARKET_STRATEGIES.has(STRATEGY)) return buildOnMarketCashReviewEmail(contact)
+  if (REMOTE_TAX_EQUITY_STRATEGIES.has(STRATEGY)) return buildRemoteTaxEquityEmail(contact)
   if (TAX_CODE_STRATEGIES.has(STRATEGY)) return buildTaxCodeStackEmail(contact)
   if (PORTFOLIO_STRATEGIES.has(STRATEGY)) return buildPortfolioLandlordEmail(contact)
   if (BUILDER_INFILL_STRATEGIES.has(STRATEGY)) return buildBuilderInfillEmail(contact)
@@ -1198,6 +1240,20 @@ function applyStrategyFilter(contacts) {
         ].filter(Boolean).join(" | "),
       }))
   }
+  if (REMOTE_TAX_EQUITY_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .map((contact) => ({
+        ...contact,
+        strategy_fit: "true",
+        strategy_reason: [
+          contact.strategy_reason,
+          "tax_delinquent_remote_owner_equity_rotation",
+          contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "remote_owner_lane",
+          contact.equity_percent ? `equity_${contact.equity_percent}` : "equity_filter_from_dealmachine_list",
+        ].filter(Boolean).join(" | "),
+      }))
+  }
   if (TAX_CODE_STRATEGIES.has(STRATEGY)) {
     return annotated
       .filter((contact) =>
@@ -1333,6 +1389,7 @@ function strategyLeadNiche(strategy) {
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "high_fee_commercial_distress"
   if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "high_fee_novation_retail_spread"
   if (PORTFOLIO_STRATEGIES.has(strategy)) return "dealmachine_portfolio_landlord"
+  if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "dealmachine_tax_remote_equity_rotation"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "dealmachine_tax_code_stack"
   return "dealmachine_owner_contact"
 }
@@ -1346,6 +1403,7 @@ function strategyOutreachAngle(strategy) {
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "Commercial, mixed-use, or small-bay distress review"
   if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "Disclosed novation or retail-spread seller review"
   if (PORTFOLIO_STRATEGIES.has(strategy)) return "Portfolio landlord simplification review"
+  if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "Tax delinquent remote-owner equity seller review"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "Tax delinquent and code-violation seller review"
   return "Seller options review from DealMachine owner-contact export"
 }
