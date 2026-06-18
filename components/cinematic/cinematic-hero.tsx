@@ -8,13 +8,13 @@ import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 const tickerItems = [
-  { label: "SELLERS", dot: "bg-cyan-300" },
-  { label: "BUYERS", dot: "bg-sky-300" },
-  { label: "LENDERS", dot: "bg-amber-300" },
-  { label: "DEVELOPERS", dot: "bg-violet-300" },
-  { label: "CONTRACTORS", dot: "bg-cyan-200" },
-  { label: "DEAL REVIEW", dot: "bg-emerald-300" },
-  { label: "DEALVAULT RECORDS", dot: "bg-amber-200" },
+  { label: "SELLER LEADS", dot: "bg-[#f6c860]" },
+  { label: "PROPERTY ANALYSIS", dot: "bg-[#4fcf9f]" },
+  { label: "BUYER MATCHING", dot: "bg-sky-300" },
+  { label: "LENDER ROUTING", dot: "bg-[#f6c860]" },
+  { label: "BUILDER DEMAND", dot: "bg-[#4fcf9f]" },
+  { label: "BUYER PACKETS", dot: "bg-slate-200" },
+  { label: "DEAL RECORDS", dot: "bg-[#f8e6b0]" },
 ]
 
 const floatingCards = [
@@ -45,14 +45,10 @@ const floatingCards = [
 ]
 
 const HEADLINE_WORDS: Array<{ text: string; gradient?: boolean; break?: boolean }> = [
-  { text: "Connect" },
-  { text: "real" },
-  { text: "estate", break: true },
-  { text: "opportunities" },
-  { text: "with" },
-  { text: "the", gradient: true },
-  { text: "right", gradient: true },
-  { text: "partners.", gradient: true },
+  { text: "VestBlock" },
+  { text: "deal-flow", break: true, gradient: true },
+  { text: "operating", gradient: true },
+  { text: "system.", gradient: true },
 ]
 
 export function CinematicHero() {
@@ -139,7 +135,7 @@ export function CinematicHero() {
   }, [reduceMotion])
 
   return (
-    <section ref={sectionRef} className="relative isolate min-h-[100svh] overflow-hidden">
+    <section ref={sectionRef} className="relative isolate min-h-[92svh] overflow-hidden md:min-h-[100svh]">
       {/* Cinematic city footage */}
       <div ref={videoWrapRef} className="absolute inset-0 -z-20 will-change-transform">
         {videoOk ? (
@@ -164,9 +160,8 @@ export function CinematicHero() {
 
       {/* Luxury grade + scrims for readability */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,15,0.72)_0%,rgba(3,6,15,0.45)_38%,rgba(3,6,15,0.72)_72%,rgba(3,6,15,0.97)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_0%,transparent_40%,rgba(3,6,15,0.6)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_46%,rgba(34,211,238,0.10),transparent_60%),radial-gradient(50%_40%_at_85%_75%,rgba(245,158,11,0.10),transparent_60%)] mix-blend-screen" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,15,0.84)_0%,rgba(3,6,15,0.58)_36%,rgba(3,6,15,0.80)_70%,rgba(3,6,15,0.98)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(246,200,96,0.12),transparent_30%,rgba(79,207,159,0.08)_70%,transparent)] mix-blend-screen" />
         <div className="vb-scan-grid absolute inset-0 opacity-30" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
       </div>
@@ -211,7 +206,7 @@ export function CinematicHero() {
       {/* Hero content */}
       <div
         ref={contentRef}
-        className="relative z-20 mx-auto flex min-h-[100svh] max-w-5xl flex-col items-center justify-center px-4 pb-24 pt-28 text-center will-change-transform"
+        className="relative z-20 mx-auto flex min-h-[92svh] max-w-5xl flex-col items-center justify-center px-4 pb-24 pt-28 text-center will-change-transform md:min-h-[100svh]"
       >
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -220,10 +215,10 @@ export function CinematicHero() {
           className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-slate-200 backdrop-blur-xl"
         >
           <Sparkles className="h-3.5 w-3.5 text-amber-200" />
-          Sell · Buy · Fund · Build
+          Analyze · Route · Package · Close
         </motion.div>
 
-        <h1 className="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-tight text-white sm:text-6xl md:text-7xl xl:text-[5.5rem]">
+        <h1 className="mt-6 text-balance text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-6xl md:text-7xl xl:text-[5.35rem]">
           {HEADLINE_WORDS.map((word, index) => (
             <span key={`${word.text}-${index}`}>
               <span className="vb-word-mask">
@@ -251,41 +246,33 @@ export function CinematicHero() {
         </h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.55 }}
-          className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-slate-300/90 md:text-lg md:leading-8"
+          initial={false}
+          className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-slate-200 md:text-lg md:leading-8"
         >
-          VestBlock connects property owners, buyers, lenders, developers, contractors, operators, and capital partners
-          around real estate opportunities. Share what you want to sell, buy, fund, or build, then we help organize the
-          next conversation and keep important deal records in DealVault.
+          Analyze seller leads, package real opportunities, and route them to the right buyers, lenders, builders, and capital partners.
+          Start with a property review, then VestBlock helps organize the buyer packet, funding path, outreach lane, and deal record.
         </motion.p>
 
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.68 }}
-          className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
+          initial={false}
+          className="mt-8 flex w-full max-w-2xl flex-col items-center gap-3 sm:flex-row sm:justify-center"
         >
-          <Link
-            href="/get-started"
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-7 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_18px_50px_rgba(34,211,238,0.35)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto"
-          >
-            Choose Your Path
+          <Link href="/sell" className="vb-primary-action group w-full sm:w-auto">
+            Start a Deal Review
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
-          <Link
-            href="/sell"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.05] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-xl transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:w-auto"
-          >
-            Submit a Property
+          <Link href="/get-started" className="vb-secondary-action w-full sm:w-auto">
+            Join Buyer / Partner Network
           </Link>
+        </motion.div>
+
+        <motion.div initial={false} className="mt-3">
           <Link
             href="/property-analyzer"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.08] px-7 py-3.5 text-sm font-semibold text-cyan-50 backdrop-blur-xl transition-colors hover:bg-cyan-300/[0.13] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:w-auto"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-[#f8e6b0] underline-offset-4 transition-colors hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6c860]"
           >
             <Calculator className="h-4 w-4" />
-            Analyze First
+            Run a property analysis first
           </Link>
         </motion.div>
 
@@ -295,7 +282,7 @@ export function CinematicHero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1.4 }}
-            className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2"
+            className="pointer-events-none absolute bottom-20 left-1/2 hidden -translate-x-1/2 md:block"
           >
             <div className="flex h-12 w-7 items-start justify-center rounded-full border border-white/20 bg-white/[0.03] p-1.5 backdrop-blur">
               <span className="animate-vb-scroll-cue block h-2 w-1 rounded-full bg-cyan-200/90" />

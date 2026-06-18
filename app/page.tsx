@@ -15,9 +15,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Connect Real Estate Opportunities With the Right Partners',
+  title: 'VestBlock | Real Estate Deal Flow Operating System',
   description:
-    'VestBlock helps sellers, buyers, lenders, developers, contractors, operators, and capital partners connect around real estate opportunities, DealVault records, and funding-ready next steps.',
+    'VestBlock helps property owners, buyers, lenders, builders, and investors analyze opportunities, route deals, create buyer packets, and move faster with cleaner deal records.',
   keywords: [
     'real estate partner network',
     'real estate opportunity network',
@@ -33,9 +33,9 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
+    title: 'VestBlock | Real Estate Deal Flow Operating System',
     description:
-      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners, with DealVault records and funding-ready next steps.',
+      'Analyze properties, route opportunities to the right buyers and capital partners, and keep deal records organized with VestBlock.',
     url: absoluteUrl('/'),
     images: [
       {
@@ -48,9 +48,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
+    title: 'VestBlock | Real Estate Deal Flow Operating System',
     description:
-      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners.',
+      'A real estate deal-flow operating system for property analysis, buyer matching, funding paths, and deal records.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
