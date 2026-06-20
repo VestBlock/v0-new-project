@@ -179,7 +179,6 @@
     "@ai-sdk/react": "1.2.12",
     "@emotion/is-prop-valid": "latest",
     "@hookform/resolvers": "^3.9.1",
-    "@paypal/paypal-server-sdk": "1.1.0",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
@@ -212,7 +211,7 @@
     "@supabase/supabase-js": "latest",
     "@types/pdf-parse": "^1.1.5",
     "autoprefixer": "^10.4.20",
-    "axios": "^1.15.2",
+    "axios": "^1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -220,18 +219,18 @@
     "embla-carousel-react": "latest",
     "framer-motion": "latest",
     "gsap": "^3.15.0",
-    "inngest": "^4.2.6",
+    "inngest": "^4.7.0",
     "input-otp": "latest",
     "lenis": "^1.3.23",
     "lucide-react": "^0.454.0",
-    "next": "15.5.15",
+    "next": "15.5.18",
     "next-themes": "latest",
     "openai": "latest",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "1.1.1",
     "pdf2json": "^3.2.0",
     "pdfjs-dist": "^5.4.54",
-    "posthog-js": "^1.372.8",
+    "posthog-js": "^1.391.2",
     "posthog-node": "^5.33.2",
     "qrcode.react": "latest",
     "raw-body": "^3.0.0",
@@ -254,7 +253,7 @@
     "three": "^0.184.0",
     "vaul": "latest",
     "viem": "^2.38.2",
-    "ws": "latest",
+    "ws": "8.21.0",
     "zod": "latest"
   },
   "devDependencies": {
@@ -313,7 +312,14 @@
       "@eslint/eslintrc>minimatch": "^3.1.5",
       "next>postcss": "^8.5.12",
       "picomatch": "^2.3.2",
-      "yaml": "^2.8.3"
+      "yaml": "^2.8.3",
+      "@grpc/grpc-js": "1.14.4",
+      "@grpc/proto-loader>protobufjs": "7.6.3",
+      "@opentelemetry/otlp-transformer>protobufjs": "8.6.0",
+      "@opentelemetry/core": "2.8.0",
+      "axios>form-data": "4.0.6",
+      "posthog-js>dompurify": "3.4.11",
+      "viem>ws": "8.21.0"
     }
   }
 }

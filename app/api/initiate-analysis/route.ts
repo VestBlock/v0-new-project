@@ -1,20 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import type { Database, FinancialGoal, AnalysisJob } from "@/types/supabase"
+import type { FinancialGoal, AnalysisJob } from "@/types/supabase"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 30 // Reduced duration as no external PDF processing
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const maxDuration = 30
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
+  const supabase = getSupabaseServer()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 })
+  }
+
+  const supabaseAdmin = createAdminClient()
 
   try {
     const formData = await request.formData()
@@ -26,8 +34,8 @@ export async function POST(request: NextRequest) {
     const extractedText = formData.get("extractedText") as string | null
     const isLikelyCreditReportString = formData.get("isLikelyCreditReport") as string | null
 
-    if (!clientUserId) {
-      return NextResponse.json({ success: false, message: "User ID is required." }, { status: 401 })
+    if (clientUserId && clientUserId !== user.id) {
+      return NextResponse.json({ success: false, message: "User mismatch." }, { status: 403 })
     }
     if (!financialGoalString) {
       return NextResponse.json({ success: false, message: "Financial goal is required." }, { status: 400 })
@@ -47,10 +55,14 @@ export async function POST(request: NextRequest) {
     }
 
     const fileSizeBytes = Number.parseInt(fileSizeBytesString, 10)
+    if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
+      return NextResponse.json({ success: false, message: "Invalid file size." }, { status: 400 })
+    }
+
     const isLikelyCreditReport = isLikelyCreditReportString === "true"
 
     const jobDataToInsert: Partial<AnalysisJob> & { user_id: string; status: string } = {
-      user_id: clientUserId,
+      user_id: user.id,
       original_file_name: originalFileName,
       file_type: fileType,
       file_size_bytes: fileSizeBytes,
@@ -58,18 +70,18 @@ export async function POST(request: NextRequest) {
       financial_goal_details: financialGoal as any,
       extracted_text: extractedText,
       is_likely_credit_report: isLikelyCreditReport,
-      status: "pending_ai_analysis", // Ready for AI analysis by the job-status poller
-      text_extraction_completed_at: new Date().toISOString(), // Text extraction happened client-side
+      status: "pending_ai_analysis",
+      text_extraction_completed_at: new Date().toISOString(),
     }
 
-    const { data: newJob, error: dbError } = await supabase
+    const { data: newJob, error: dbError } = await supabaseAdmin
       .from("analysis_jobs")
       .insert(jobDataToInsert as any)
       .select("id")
       .single()
 
     if (dbError) {
-      console.error("[API /initiate-analysis] Supabase DB error inserting job:", dbError)
+      console.error("[API /initiate-analysis] Supabase DB error inserting authorized job:", dbError)
       return NextResponse.json({ success: false, message: `Database error: ${dbError.message}` }, { status: 500 })
     }
 
