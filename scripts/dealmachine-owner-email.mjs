@@ -715,8 +715,20 @@ async function main() {
     if (contactsByEmail.has(exportContact.email)) continue
     const matchedRecord =
       recordIndex.byId.get(String(exportContact.dealmachine_id || "")) ||
-      recordIndex.byAddress.get(normalizeAddress(exportContact.full_address))
-    if (!matchedRecord) continue
+      recordIndex.byAddress.get(normalizeAddress(exportContact.full_address)) ||
+      {
+        dealmachine_id: exportContact.dealmachine_id || "",
+        full_address: exportContact.full_address || "",
+        property_address: exportContact.property_line || "the property",
+        city: exportContact.city_state.split(",")[0]?.trim() || "",
+        state: exportContact.city_state.split(",")[1]?.trim() || "",
+        owner_name: exportContact.owner_name || "",
+        market: exportContact.market || exportContact.city_state || "",
+        pushed_at: exportContact.pushed_at || "",
+        key: exportContact.source_key || normalizeAddress(exportContact.full_address),
+        distress_stack: exportContact.source_strategy || "",
+        delinquent_amount: "",
+      }
     contactsByEmail.set(exportContact.email, {
       ...exportContact,
       dealmachine_id: exportContact.dealmachine_id || matchedRecord?.dealmachine_id || "",
@@ -727,13 +739,13 @@ async function main() {
       market: exportContact.market || matchedRecord?.market || "",
       pushed_at: exportContact.pushed_at || matchedRecord?.pushed_at || "",
       source_key: exportContact.source_key || matchedRecord?.key || "",
-      distress_stack: matchedRecord?.distress_stack || "",
+      distress_stack: matchedRecord?.distress_stack || exportContact.source_strategy || "",
       delinquent_amount: matchedRecord?.delinquent_amount || "",
     })
     exportContactsAdded++
   }
 
-  const contacts = [...contactsByEmail.values()]
+  const contacts = [...contactsByEmail.values()].slice(0, LIMIT)
   const drafts = contacts.map((contact) => ({ ...contact, ...buildEmail(contact) }))
 
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
