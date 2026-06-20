@@ -319,7 +319,8 @@
       "@opentelemetry/core": "2.8.0",
       "axios>form-data": "4.0.6",
       "posthog-js>dompurify": "3.4.11",
-      "viem>ws": "8.21.0"
+      "viem>ws": "8.21.0",
+      "@babel/core": "7.29.6"
     }
   }
 }
