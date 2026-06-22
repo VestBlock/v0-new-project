@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs
- *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=150 --send
+ *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=30 --send
  */
 
 import { Resend } from "resend"
@@ -19,12 +19,15 @@ const args = process.argv.slice(2)
 const SEND = args.includes("--send")
 const STAGE_COMMAND_CENTER = args.includes("--stage-command-center") || args.includes("--queue-command-center")
 const SYNC_COMMAND_CENTER = !args.includes("--no-command-center-sync")
+const CONTROLLED_LANE_CAP = 30
+const ALLOW_HIGH_VOLUME = args.includes("--allow-high-volume")
 const getArg = (name) => {
   const hit = [...args].reverse().find((arg) => arg.startsWith(`--${name}=`))
   return hit ? hit.split("=").slice(1).join("=") : null
 }
 
-const LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : 150
+const REQUESTED_LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : CONTROLLED_LANE_CAP
+const LIMIT = ALLOW_HIGH_VOLUME ? REQUESTED_LIMIT : Math.min(REQUESTED_LIMIT, CONTROLLED_LANE_CAP)
 const THROTTLE_MS = getArg("throttle") ? Number.parseInt(getArg("throttle"), 10) : 1800
 const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
 const DM_EXPORT_DIR = path.join(process.cwd(), "data", "dm-exports")
@@ -65,7 +68,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Damage-event seller review for fire, storm, boarded, insurance, or heavy-repair signals",
     reason: "insurance_damage_event_lane",
     pattern: /fire|storm|damage|insurance|boarded|unsafe|condemned|shell|repair|rehab|vacant|code|violation|lien/i,
-    signal: "The file came through a damage-event review lane, so I am trying to verify the real condition instead of relying on public data.",
+    signal: "The file came through a condition-review lane, so I am trying to verify the real condition before making any assumptions.",
     ask: "If there are repairs, insurance delays, access issues, or cleanup decisions still hanging over the property, I can review it as-is before you spend more time managing the project."
   },
   "zombie-rehab": {
@@ -110,7 +113,7 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Short-term or midterm rental fatigue review for operators whose rental plan may have changed",
     reason: "tired_airbnb_midterm_lane",
     pattern: /airbnb|short term|str|midterm|furnished|rental|vacancy|booking|portfolio|absentee/i,
-    signal: "The property landed in a rental-operator review lane, where occupancy, operations, and market changes can matter more than the public value estimate.",
+    signal: "The property landed in a rental-operator review, where occupancy, operations, and market changes can matter more than a simple value estimate.",
     ask: "If the rental plan is not performing the way you expected, I can review whether a clean as-is exit or buyer-match path makes sense."
   },
   "utility-lien-water-shutoff": {
@@ -174,7 +177,7 @@ const EPIC_STRATEGY_CONFIG = {
     reason: "judgment_lien_pressure_lane",
     pattern: /judgment|lien|tax|delinquent|municipal|title|code|violation|nuisance|foreclosure/i,
     signal: "The file came through a title/timing review lane; if the signal is old or already handled, no problem.",
-    ask: "If title, lien, tax, or timing issues are making a normal sale difficult, I can review whether an as-is path still makes sense."
+    ask: "If title, carrying-cost, or timing issues are making a normal sale difficult, I can review whether an as-is path still makes sense."
   },
   "tax-assessment-shock": {
     label: "Tax assessment shock",
@@ -182,8 +185,8 @@ const EPIC_STRATEGY_CONFIG = {
     angle: "Tax burden or assessment-shock review for high-equity owners",
     reason: "tax_assessment_shock_lane",
     pattern: /assessment|tax|delinquent|high equity|equity|senior|absentee|out of state/i,
-    signal: "The property landed in a carrying-cost/high-equity review lane, so I wanted to ask directly instead of assuming the public data tells the whole story.",
-    ask: "If the tax burden or carrying cost has changed your plans, I can review a few options and only continue if the numbers are realistic."
+    signal: "The property landed in a carrying-cost/high-equity review, so I wanted to ask directly instead of assuming the data tells the whole story.",
+    ask: "If the carrying cost has changed your plans, I can review a few options and only continue if the numbers are realistic."
   }
 }
 const EPIC_STRATEGIES = new Set(Object.keys(EPIC_STRATEGY_CONFIG))
@@ -554,7 +557,7 @@ function buildEmail(contact) {
     "",
     `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
     "",
-    `I came across this property while reviewing local as-is opportunities in ${contact.market_label}.`,
+    `I am reviewing a small batch of local as-is opportunities in ${contact.market_label}.`,
     "The property came through my review list, so I wanted to ask directly instead of assuming anything.",
     "",
     "If it would help, I can review this specific property and walk through several options. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic for this property.",
@@ -581,10 +584,10 @@ function buildRemoteTaxEquityEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
   const market = contact.market_label || marketLabelFromAddress(property) || "the area"
-  const taxLine = "The property came through a local review lane where ownership distance, equity, timing, or carrying costs may matter, so I wanted to ask directly instead of assuming anything."
+  const taxLine = "The property came through a small owner-options review where timing, equity, distance, or carrying costs may matter, so I wanted to ask directly instead of assuming anything."
   const distanceLine = contact.out_of_state_mailing === "true"
-    ? "The owner mailing address appears to be outside the property state, which can make a simple review useful if the timing is right."
-    : "The file also landed in a remote-owner/high-equity review lane, so I wanted to ask directly instead of assuming anything."
+    ? "The mailing address and property address appear to be in different areas, which can make a simple review useful if the timing is right."
+    : "The file also landed in an owner-options review, so I wanted to ask directly instead of assuming anything."
   const subject = `Question about ${line}`
   const body = [
     `Hi ${contact.first_name},`,
@@ -594,9 +597,9 @@ function buildRemoteTaxEquityEmail(contact) {
     taxLine,
     distanceLine,
     "",
-    `I am reviewing a small batch of ${market} properties where taxes, distance, equity, or timing may make a simple review useful. I am not assuming you want to sell and I am not sending a blind offer.`,
+    `I am reviewing a small batch of ${market} properties where distance, equity, timing, or carrying costs may make a simple review useful. I am not assuming you want to sell and I am not sending a blind offer.`,
     "",
-    "If the property is becoming a headache, I can look at a few realistic paths, including an as-is cash review, a creative structure, or passing quickly if it does not make sense.",
+    "If the property is becoming harder to manage, I can look at a few realistic paths, including an as-is cash review, a creative structure, or passing quickly if it does not make sense.",
     "",
     `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
     "",
@@ -606,7 +609,7 @@ function buildRemoteTaxEquityEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, tax advisor, code-enforcement agency, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -618,8 +621,8 @@ function buildRemoteTaxEquityEmail(contact) {
 function buildTaxCodeStackEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
-  const codeLine = "The property came through a local review lane where condition, repairs, timing, or carrying costs may matter, so I wanted to ask directly instead of guessing about the situation."
-  const taxLine = "I am not assuming anything from public data; I only want to see whether a clean as-is review would be useful or whether I should close the file out."
+  const codeLine = "The property came through a local review where condition, repairs, timing, or carrying costs may matter, so I wanted to ask directly instead of guessing about the situation."
+  const taxLine = "I am not assuming anything from third-party data; I only want to see whether a clean as-is review would be useful or whether I should close the file out."
   const subject = `Question about ${line}`
   const body = [
     `Hi ${contact.first_name},`,
@@ -629,7 +632,7 @@ function buildTaxCodeStackEmail(contact) {
     taxLine,
     codeLine,
     "",
-    "I am not assuming you want to sell and I am not sending a blind offer. If the property is becoming a headache because of taxes, repairs, code items, tenants, or timing, I can review it and talk through realistic paths.",
+    "I am not assuming you want to sell and I am not sending a blind offer. If the property is becoming harder to manage because of repairs, tenants, carrying costs, or timing, I can review it and talk through realistic paths.",
     "",
     "Depending on the numbers and condition, that review could include an as-is cash path, a creative structure, or simply passing if it does not make sense.",
     "",
@@ -641,7 +644,7 @@ function buildTaxCodeStackEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, tax advisor, code-enforcement agency, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -938,7 +941,7 @@ function buildLandWholesaleEmail(contact) {
   const score = developerActivityScore(contact)
   const range = cashRangeFromContact(contact)
   const rangeLine = range.low && range.high
-    ? `For land and infill deals like this, my first-pass review usually starts around ${money(range.low)}-${money(range.high)} based on the public value signal I have. That is not a final offer; it depends on access, utilities, zoning, title, liens, survey, buildability, and whether a builder can actually use it.`
+    ? `For land and infill deals like this, my first-pass review usually starts around ${money(range.low)}-${money(range.high)} based on the property signal I have. That is not a final offer; it depends on access, utilities, zoning, title, liens, survey, buildability, and whether a builder can actually use it.`
     : "I would need the parcel details, access, utilities, zoning, title, lien status, survey, and buildability before putting a real number on it."
   const developerLine = score >= 75
     ? `The reason I am asking is that ${market} has enough builder/developer activity for land and infill opportunities to be worth a separate review.`
@@ -952,7 +955,7 @@ function buildLandWholesaleEmail(contact) {
     developerLine,
     rangeLine,
     "",
-    "If the property is more improved than the public data suggests, the review can move up after I see photos or details. If it is truly land, a vacant lot, or a teardown/infill situation, I can keep it simple and review it as-is.",
+    "If the property is more improved than the property data suggests, the review can move up after I see photos or details. If it is truly land, a vacant lot, or a teardown/infill situation, I can keep it simple and review it as-is.",
     "",
     `Would you be open to sending the best details you have on ${line}, or should I close this out?`,
     "",
@@ -985,10 +988,10 @@ function buildEpicStrategyEmail(contact) {
     "",
     config.signal,
     "",
-    `I am reviewing a small, separated batch of ${market} properties in our ${config.label.toLowerCase()} lane. I am not assuming you want to sell and I am not sending a blind offer.`,
+    `I am reviewing a small, separated batch of ${market} properties that may need a more flexible as-is review. I am not assuming you want to sell and I am not sending a blind offer.`,
     config.ask,
     "",
-    "Any number or path would depend on real condition, access, title, liens, occupancy, and timing. If the data is wrong or this is not relevant, I can close the file out.",
+    "Any number or path would depend on real condition, access, title, occupancy, and timing. If the data is wrong or this is not relevant, I can close the file out.",
     "",
     `Would you be open to a quick conversation about ${line}, or should I take it off my review list?`,
     "",
@@ -998,7 +1001,7 @@ function buildEpicStrategyEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, tax advisor, title company, contractor, developer, or closing agent. We do not guarantee offers, sale timelines, buyer demand, closing, tax outcomes, zoning outcomes, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, contractor, developer, or closing agent. We do not guarantee offers, sale timelines, buyer demand, closing, zoning outcomes, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -1014,13 +1017,13 @@ function buildOnMarketCashReviewEmail(contact) {
   const status = contact.market_status ? ` as ${String(contact.market_status).toLowerCase()}` : ""
   const range = cashRangeFromContact(contact)
   const rangeLine = range.low && range.high
-    ? `Based on the public value/listing signal I have, my first-pass as-is cash review would probably start around ${money(range.low)}-${money(range.high)}. That is not a final offer; it depends on photos, access, title, liens, tenant status, and the real condition.`
+    ? `Based on the value/listing signal I have, my first-pass as-is cash review would probably start around ${money(range.low)}-${money(range.high)}. That is not a final offer; it depends on photos, access, title, tenant status, and the real condition.`
     : "I would need photos, access, title, lien, tenant, and condition details before putting a real cash number on it."
   const subject = `Question about ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I am reviewing a few on-market and recently surfaced properties in ${market}, and ${line} came across my DealMachine board${status}.`,
+    `I'm Robert with VestBlock. I am reviewing a few on-market and recently surfaced properties in ${market}, and ${line} came across my review board${status}.`,
     "",
     rangeLine,
     "If the property is cleaner than the data suggests, I can sharpen the number upward after I see more detail. If it needs work or has timing pressure, I can keep the review simple and focus on an as-is path.",
@@ -1081,6 +1084,7 @@ function normalizeUsPhone(value) {
 function isTextablePhone(phone) {
   const type = String(phone?.type || "").trim().toLowerCase()
   const dnc = String(phone?.dnc || "").trim().toLowerCase()
+  if (!dnc) return false
   if (/do not call/.test(dnc)) return false
   if (type === "landline") return false
   if (!/(mobile|wireless|cell)/.test(type)) return false
@@ -2068,6 +2072,7 @@ async function main() {
   console.log(`Contacts phone: ${diagnostics.contactsWithTextablePhone}`)
   console.log(`Matched emails: ${emailDrafts.length}`)
   console.log(`Selected send:  ${selectedDrafts.length}`)
+  if (!ALLOW_HIGH_VOLUME && REQUESTED_LIMIT > CONTROLLED_LANE_CAP) console.log(`Controlled cap: ${REQUESTED_LIMIT} requested, capped to ${CONTROLLED_LANE_CAP}. Pass --allow-high-volume only after reply attribution is reviewed.`)
   console.log(`Phone queue:    ${phoneQueue.length}`)
   console.log(`Skip stats:     ${JSON.stringify({
     alreadyContactedProperty: diagnostics.skippedAlreadyContactedProperty,

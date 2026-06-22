@@ -6,7 +6,8 @@
  * Creates 30-lead DealMachine rotation plans across the seller strategies the
  * Boss can run multiple times per day. Optional count/build/export modes call
  * the existing DealMachine website list-builder and Contacts export request
- * scripts so each strategy stays separated.
+ * scripts so each strategy stays separated and every live wave has a single
+ * source, market, message family, cap, and reply-tracking lane.
  *
  * Usage:
  *   node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs
@@ -22,6 +23,7 @@ const args = process.argv.slice(2)
 const ROOT = process.cwd()
 const OUT_DIR = path.join(ROOT, "data", "operating-loops")
 const TMP_OUTREACH = path.join(ROOT, "tmp", "outreach")
+const CONTROLLED_LANE_CAP = 30
 
 function has(flag) {
   return args.includes(flag)
@@ -188,7 +190,7 @@ function buildPlan({ strategies, markets, dailyCap, maxBuilds, rotationsPerMarke
           "--max-builds=1",
         ].join(" "),
         exportCommand: "node --env-file=.env.local scripts/dealmachine-export-lists.mjs --lists-json=<builder-json> --send --emails=acquisitions@vestblock.io --wait-ms=60000 --request-timeout-ms=60000",
-        outreachCommand: `node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --strategy=${strategy} --market=${slug(market)} --export-csv=<downloaded-contacts.csv> --limit=${dailyCap} --send`,
+        outreachCommand: `node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --strategy=${strategy} --market=${slug(market)} --export-csv=<downloaded-contacts.csv> --limit=${dailyCap} --stage-command-center`,
       })
     }
   }
@@ -237,7 +239,9 @@ function writePlan(plan) {
       "",
       "## Operating Rule",
       "",
-      "Build one wave at a time, export Contacts with DNC fields, ingest/download the CSV, then send only through the matching strategy outreach command.",
+      "Build one wave at a time, export Contacts with DNC fields, ingest/download the CSV, then stage only through the matching strategy outreach command.",
+      "Live sends stay capped at 30 per lane unless --allow-high-volume is intentionally passed after reply attribution, bounce suppression, and DNC checks are reviewed.",
+      "Seller-facing copy should not name tax delinquency, preforeclosure, code violations, liens, or other distress labels. Those are internal routing signals only.",
       "",
     ].join("\n"),
     "utf8"
@@ -248,7 +252,9 @@ function writePlan(plan) {
 async function main() {
   const strategies = selectedStrategies()
   const markets = selectedMarkets()
-  const dailyCap = intArg("daily-cap", 30, 100)
+  const allowHighVolume = has("--allow-high-volume")
+  const requestedDailyCap = intArg("daily-cap", CONTROLLED_LANE_CAP, 100)
+  const dailyCap = allowHighVolume ? requestedDailyCap : Math.min(requestedDailyCap, CONTROLLED_LANE_CAP)
   const maxBuilds = intArg("max-builds", 4, 40)
   const rotationsPerMarket = intArg("rotations-per-market", 1, 10)
   const shouldCount = has("--count")
@@ -260,6 +266,7 @@ async function main() {
   console.log("=== VestBlock strategy rotation ===")
   console.log(`Mode:       ${shouldBuild ? "BUILD" : shouldCount ? "COUNT" : "PLAN"}`)
   console.log(`Daily cap:  ${dailyCap}`)
+  if (!allowHighVolume && requestedDailyCap > CONTROLLED_LANE_CAP) console.log(`Controlled cap: ${requestedDailyCap} requested, capped to ${CONTROLLED_LANE_CAP}. Pass --allow-high-volume only after reply attribution is reviewed.`)
   console.log(`Strategies: ${strategies.join(" | ")}`)
   console.log(`Markets:    ${markets.join(" | ")}`)
   console.log(`Waves:      ${Math.max(1, ...plan.waves.map((wave) => wave.wave))}`)

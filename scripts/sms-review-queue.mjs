@@ -161,7 +161,7 @@ function messageFor(row, lane) {
   const city = pick(row, ['property_city', 'city', 'market'])
   const suffix = city ? ` in ${city}` : ''
   if (lane === 'land-wholesale') return `Hi, this is Robert with VestBlock. I wanted to see if you'd consider a quick as-is cash offer for ${address}${suffix}. If not, no worries.`
-  if (lane === 'tax-code-stack') return `Hi, this is Robert with VestBlock. I came across ${address}${suffix} and wanted to see if selling as-is for cash would be worth discussing.`
+  if (lane === 'tax-code-stack') return `Hi, this is Robert with VestBlock. I'm reviewing a small batch of as-is opportunities and wanted to ask about ${address}${suffix}. Would selling be worth discussing?`
   if (lane === 'portfolio-landlord') return `Hi, this is Robert with VestBlock. Are you open to reviewing an as-is offer on ${address}${suffix}, or any other rentals you may be considering selling?`
   return `Hi, this is Robert with VestBlock. Would you consider an as-is cash offer for ${address}${suffix}?`
 }
@@ -172,6 +172,7 @@ function evaluate(row, file, suppressedPhones) {
   if (suppressedPhones.has(phone)) return { rejectedReason: 'suppressed_phone' }
 
   const dnc = pick(row, ['do_not_call', 'dnc', 'surfaced_phone_dnc'])
+  if (!dnc && !args.includes('--allow-missing-dnc')) return { rejectedReason: 'missing_dnc_status' }
   if (yes(dnc)) return { rejectedReason: 'dnc' }
   if (dnc && !no(dnc)) return { rejectedReason: 'uncertain_dnc_status' }
 
@@ -200,7 +201,9 @@ function evaluate(row, file, suppressedPhones) {
   }
 }
 
-const limit = intArg('limit', 100, 500)
+const allowHighVolume = args.includes('--allow-high-volume')
+const requestedLimit = intArg('limit', 30, 500)
+const limit = allowHighVolume ? requestedLimit : Math.min(requestedLimit, 30)
 const limitFiles = intArg('files', 40, 300)
 const suppressedPhones = loadSuppressions()
 const seenPhones = new Set()
@@ -243,6 +246,7 @@ fs.writeFileSync(jsonPath, `${JSON.stringify({
 
 console.log('=== VestBlock SMS review queue ===')
 console.log(`Accepted: ${accepted.length}/${limit}`)
+if (!allowHighVolume && requestedLimit > 30) console.log(`Controlled cap: ${requestedLimit} requested, capped to 30. Pass --allow-high-volume only after DNC and reply tracking are reviewed.`)
 console.log(`CSV:      ${csvPath}`)
 console.log(`JSON:     ${jsonPath}`)
 console.log(`Rejected: ${JSON.stringify(Object.fromEntries([...rejected.entries()].sort()))}`)
