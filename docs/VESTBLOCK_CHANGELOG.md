@@ -1,5 +1,20 @@
 # VestBlock Changelog
 
+## 2026-07-02 Lanes 2-4 Implemented + Strategy Lab (embedded weekly strategist)
+
+## Files Changed
+
+- `scripts/listing-postmortem-drafts.mjs` (new) — `npm run outreach:postmortem-drafts` (Lanes 2+4: transparent-underwriting teardown drafts from stale/expired listing data; 60 staged from real data on first run)
+- `app/backup-offer/page.tsx`, `components/partners/backup-offer-page.tsx`, `app/api/backup-offer/route.ts` (new) — Lane 3: /backup-offer agent registry page with guarded intake (zod, leads insert, after() alert email); NEEDS DEPLOY to go live
+- `docs/VESTBLOCK_STRATEGY_LAB.md` (new) — proposal log + lab rules
+- `package.json`
+- Scheduled task outside the repo: `vestblock-strategy-lab` (Sundays 5 PM — reads ledger/replies/outcomes/lane state, proposes exactly ONE grounded experiment with success metric and kill criterion, appends to the lab doc, asks Rob to approve/reject; never sends, never modifies code)
+
+## Notes
+
+- Lane 5 (Proof-Backed Credibility) stays intentionally gated until real DealVault close records exist.
+- Post-mortem drafts flow: outreach:postmortem-drafts → outreach:verify-emails --csv=... → guarded send of the -verified.csv.
+
 ## 2026-07-02 Game-Changer Lanes + Demand-Match Engine
 
 ## Files Changed

@@ -187,7 +187,8 @@
     "outreach:reply-sync": "node --env-file=.env.local scripts/gmail-reply-sync.mjs",
     "outreach:send-reactivation": "node --env-file=.env.local scripts/send-reactivation-batch.mjs",
     "outreach:send-reactivation:live": "node --env-file=.env.local scripts/send-reactivation-batch.mjs --live",
-    "outreach:demand-match": "node --env-file=.env.local scripts/demand-match-lane.mjs"
+    "outreach:demand-match": "node --env-file=.env.local scripts/demand-match-lane.mjs",
+    "outreach:postmortem-drafts": "node scripts/listing-postmortem-drafts.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",
