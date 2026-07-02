@@ -1,5 +1,18 @@
 # VestBlock Changelog
 
+## 2026-07-02 Game-Changer Lanes + Demand-Match Engine
+
+## Files Changed
+
+- `docs/VESTBLOCK_GAME_CHANGER_LANES.md` (new) — five differentiated lanes built on owned assets
+- `scripts/demand-match-lane.mjs` (new) — `npm run outreach:demand-match`
+- `package.json`
+
+## Features Added
+
+- Demand-Match lane (Lane 1, implemented): outreach only where an active buyer buy box (Supabase `buyer_buy_boxes`, or `--buy-boxes` offline) matches the export's market + asset profile; copy truthfully cites the anonymized demand (count, price band, close speed). Zero matching demand = zero drafts, by design. Review-first; output feeds verify-emails → guarded sender. Tested end-to-end with a sample buy box (10 Battle Creek owners staged with demand-citing drafts).
+- Lanes 2-5 documented with implementation notes: Transparent Underwriting (analyzer math in the email), Backup-Offer Registry (agent co-op standing product), Expired-Listing Post-Mortem (analyzer teardown for failed sales), Proof-Backed Credibility (DealVault records in outreach — gated until real closes exist).
+
 ## 2026-07-02 Sync Discipline + Agent Skills + Weekly Review Workflow
 
 ## Files Changed
