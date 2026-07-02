@@ -2632,7 +2632,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   })
 
   // ── Shared signals ─────────────────────────────────────────────────────────
-  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 100)
+  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 50)
   const revenueTarget = envInt('VESTBLOCK_MONTHLY_REVENUE_TARGET', 100000)
 
   const leadById = new Map(t.leads.map((lead) => [lead.id, lead]))
@@ -2989,7 +2989,21 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     ],
   }
 
+  // Reply-positive leads (any age) so campaign rollups can attribute replies to strategy lanes by recipient email.
+  const repliedLeadSignals = currentLeads
+    .filter(
+      (lead) =>
+        ['replied', 'interested', 'qualified', 'closed_won'].includes(lower(lead.status)) &&
+        String(lead.email || '').trim()
+    )
+    .map((lead) => ({
+      email: String(lead.email).trim().toLowerCase(),
+      status: lower(lead.status),
+      at: (lead.updated_at || lead.last_contacted_at || lead.created_at || null) as string | null,
+    }))
+
   const operatingLoops = loadOperatingLoopTelemetry({
+    repliedLeads: repliedLeadSignals,
     sentToday: strategyLab.sentToday,
     sent7d: sends7d,
     remainingToday: strategyLab.remainingToday,

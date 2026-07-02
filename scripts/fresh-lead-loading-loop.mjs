@@ -14,10 +14,11 @@ const ROOT = process.cwd()
 const DATE = new Date().toISOString().slice(0, 10)
 const OUT_DIR = path.join(ROOT, 'data', 'operating-loops')
 const DEFAULT_MARKETS = 'Tulsa,OK|Oklahoma City,OK|Wichita,KS|Omaha,NE|Des Moines,IA|Fort Wayne,IN|South Bend,IN|Peoria,IL|Springfield,MO|Evansville,IN'
-const DEFAULT_OUTSCRAPER_LANES = 'buyer-developer|land-developers|investor-network|lender-network|wholesaler-network|acquisition-manager-network|property-manager-network|fire-damage-builders|county-records'
+const DEFAULT_OUTSCRAPER_LANES = 'buyer-developer|land-developers|investor-network|lender-network|wholesaler-network|acquisition-manager-network|property-manager-network|county-records'
 const markets = getArg('markets', DEFAULT_MARKETS)
 const outscraperLanes = getArg('outscraper-lanes', DEFAULT_OUTSCRAPER_LANES).split('|').map((lane) => lane.trim()).filter(Boolean)
-const sellerLimit = getArg('seller-limit', '120')
+const sellerLimit = getArg('seller-limit', '500')
+const sellerWaves = getArg('seller-waves', '5')
 const runOutscraper = !hasFlag('skip-outscraper') && !hasFlag('verify-only')
 const runSellers = !hasFlag('skip-sellers') && !hasFlag('verify-only')
 const runDealMachine = hasFlag('dealmachine') && !hasFlag('verify-only')
@@ -75,22 +76,13 @@ async function main() {
   steps.push(ensureHomeHarvest())
 
   if (runSellers) {
-    steps.push(run('Fresh seller stale-listing harvest', 'node', [
+    steps.push(run('Fresh seller strict 500-queue loader', 'node', [
       '--env-file=.env.local',
-      'scripts/stale-listing-finder.mjs',
-      '--source=homeharvest',
-      '--offer-mode=lowball',
-      `--market=${markets}`,
+      'scripts/load-500-seller-queue.mjs',
+      `--waves=${sellerWaves}`,
+      `--wave-limit=${Math.max(1, Math.ceil(Number.parseInt(sellerLimit, 10) / Math.max(1, Number.parseInt(sellerWaves, 10))))}`,
       '--min-dom=30',
-      '--distress-threshold=8',
-      '--price-max=450000',
-      '--harvest-limit-per-market=80',
-      `--limit=${sellerLimit}`,
-      '--skip-analyzer',
     ]))
-    const draftJson = latestFile(path.join(ROOT, 'tmp', 'outreach'), /^stale-listing-drafts-.*\.json$/i)
-    if (draftJson) steps.push(run('Import stale-listing sellers to command center', 'node', ['--env-file=.env.local', 'scripts/import-stale-listing-seller-leads.mjs', `--input=${draftJson}`]))
-    else steps.push({ label: 'Import stale-listing sellers to command center', ok: false, error: 'No stale-listing draft JSON found.' })
   }
 
   if (runOutscraper) {

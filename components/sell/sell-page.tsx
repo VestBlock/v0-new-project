@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +29,9 @@ import {
 } from "lucide-react"
 import { BrandMark } from "@/components/brand-logo"
 import { useAuth } from "@/contexts/auth-context"
+import { analyticsEvents } from "@/lib/analytics/events"
+import { captureClientEvent } from "@/lib/analytics/client"
+import { sendGoogleAdsConversion } from "@/components/providers/google-ads-provider"
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
@@ -77,10 +81,22 @@ const QUERY_PREFILL_FIELDS = [
   "occupancyStatus",
 ] as const
 
+const TRACKING_PARAMS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "gclid",
+  "gbraid",
+  "wbraid",
+] as const
+
 type SellPageMarket = {
   city: string
   state: string
   stateName: string
+  regionLabel?: string
 }
 
 type SellPageProps = {
@@ -108,7 +124,8 @@ function getInitialFormData(market?: SellPageMarket) {
     bestTimeToCall: "",
     preferredSalePath: "not_sure",
     notes: "",
-    reasonForSelling: ""
+    reasonForSelling: "",
+    attribution: {} as Record<string, string>,
   }
 }
 
@@ -117,6 +134,7 @@ export function SellPage({ market }: SellPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState("")
+  const [showMoreDetails, setShowMoreDetails] = useState(false)
 
   const [formData, setFormData] = useState(() => getInitialFormData(market))
 
@@ -124,7 +142,17 @@ export function SellPage({ market }: SellPageProps) {
     if (typeof window === "undefined") return
 
     const params = new URLSearchParams(window.location.search)
-    if (!QUERY_PREFILL_FIELDS.some((field) => params.has(field))) return
+    if (
+      !QUERY_PREFILL_FIELDS.some((field) => params.has(field)) &&
+      !TRACKING_PARAMS.some((field) => params.has(field))
+    ) return
+
+    // If a link prefills detail fields, open the optional section so the values are visible.
+    const detailFields = [
+      "propertyType", "bedrooms", "bathrooms", "estimatedValue", "askingPrice",
+      "mortgageBalance", "liensOrTaxes", "occupancyStatus",
+    ]
+    if (detailFields.some((field) => params.get(field))) setShowMoreDetails(true)
 
     setFormData((current) => {
       const next = { ...current }
@@ -133,6 +161,13 @@ export function SellPage({ market }: SellPageProps) {
         const value = params.get(field)
         if (value && !next[field]) next[field] = value
       }
+
+      const attribution = { ...next.attribution }
+      for (const field of TRACKING_PARAMS) {
+        const value = params.get(field)
+        if (value) attribution[field] = value
+      }
+      next.attribution = attribution
 
       return next
     })
@@ -195,6 +230,24 @@ export function SellPage({ market }: SellPageProps) {
         throw new Error(result.error || "Failed to submit form")
       }
 
+      const marketLabel = market?.regionLabel || market?.city || formData.city || "unknown"
+      captureClientEvent(analyticsEvents.sellerLeadSubmitted, {
+        market: marketLabel,
+        city: formData.city,
+        state: formData.state,
+        propertyType: formData.propertyType,
+        timelineToSell: formData.timelineToSell,
+        preferredSalePath: formData.preferredSalePath,
+        source: formData.attribution.utm_source || "direct",
+        campaign: formData.attribution.utm_campaign || "unknown",
+      })
+      sendGoogleAdsConversion("sell_property_lead", undefined, {
+        market: marketLabel,
+        property_type: formData.propertyType,
+        timeline_to_sell: formData.timelineToSell,
+        preferred_sale_path: formData.preferredSalePath,
+      })
+
       setSubmitSuccess(true)
       setFormData(getInitialFormData(market))
     } catch (error) {
@@ -230,18 +283,18 @@ export function SellPage({ market }: SellPageProps) {
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-5 text-white">
                 <span className="text-cyan-200">
-                  {market ? `Sell a Property in ${market.city}?` : "Submit Your Property"}
+                  {market ? `Sell a Property in ${market.regionLabel || market.city}?` : "Submit Your Property"}
                 </span>
                 <br />
                 {" "}
                 <span className="text-white">
-                  {market ? "Compare Fast Cash, Creative, or Novation Paths" : "For Fast Cash, Creative, or Novation Review"}
+                  {market ? "Get a Clear Cash, Creative, or Partner Review" : "For Fast Cash, Creative, or Novation Review"}
                 </span>
               </h1>
 
               <p className="text-lg md:text-xl text-slate-200 mb-7 max-w-2xl mx-auto">
                 {market
-                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.city} property review. VestBlock routes the submission to our acquisitions review for fast cash, creative structure, novation, or another partner path.`
+                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.regionLabel || market.city} property review. VestBlock reviews the details for a practical next conversation: cash buyer, creative structure, novation, or another partner path.`
                   : "Share the property details, timeline, occupancy, and selling situation so VestBlock can route the submission to our acquisitions review for fast cash, creative structure, novation, or a partner path."}
               </p>
 
@@ -253,6 +306,9 @@ export function SellPage({ market }: SellPageProps) {
                 <Home className="mr-2 h-5 w-5" />
                 Review My Sale Options
               </Button>
+              <p className="mt-4 text-sm text-slate-300">
+                No upfront review fee. No promised offer. Just a clearer path before you commit to anything.
+              </p>
             </motion.div>
           </div>
         </section>
@@ -328,7 +384,22 @@ export function SellPage({ market }: SellPageProps) {
                         <p className="mt-2 text-sm text-muted-foreground">
                           The property details go to our acquisitions review first, then the follow-up is shaped around fast cash,
                           creative structure, novation, or another partner conversation based on the timeline and condition.
+                          Expect a follow-up within one business day.
                         </p>
+                      </div>
+                      <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-left">
+                        <p className="font-medium text-foreground">While you wait</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Want a rough read on your own numbers first? Run the free property analyzer — it estimates value ranges,
+                          repair impact, and likely sale paths in a couple of minutes.
+                        </p>
+                        <Link
+                          href="/property-analyzer"
+                          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/20"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          Run the property analyzer
+                        </Link>
                       </div>
                     </motion.div>
                   ) : (
@@ -460,6 +531,95 @@ export function SellPage({ market }: SellPageProps) {
                         </div>
                       </div>
 
+                      {/* Condition and timeline stay up front: they drive routing and cost two clicks */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="propertyCondition" className="text-sm font-medium">
+                            Property Condition
+                          </Label>
+                          <Select
+                            value={formData.propertyCondition}
+                            onValueChange={(value) => handleInputChange("propertyCondition", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Condition" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PROPERTY_CONDITIONS.map((condition) => (
+                                <SelectItem key={condition} value={condition}>
+                                  {condition}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="timelineToSell" className="text-sm font-medium">
+                            Timeline to Sell
+                          </Label>
+                          <Select
+                            value={formData.timelineToSell}
+                            onValueChange={(value) => handleInputChange("timelineToSell", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Timeline" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIMELINES.map((timeline) => (
+                                <SelectItem key={timeline} value={timeline}>
+                                  {timeline}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="preferredSalePath" className="text-sm font-medium">
+                          Preferred Sale Path
+                        </Label>
+                        <Select
+                          value={formData.preferredSalePath}
+                          onValueChange={(value) => handleInputChange("preferredSalePath", value)}
+                        >
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Select Sale Path" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SELLER_REVIEW_PATHS.map((path) => (
+                              <SelectItem key={path.value} value={path.value}>
+                                {path.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Choose what you want reviewed first. VestBlock may still recommend a different route after looking at the property, payoff, timing, and buyer interest.
+                        </p>
+                      </div>
+
+                      {/* Everything below is optional and collapsed so the form reads short */}
+                      <button
+                        type="button"
+                        onClick={() => setShowMoreDetails((current) => !current)}
+                        aria-expanded={showMoreDetails}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-left transition-colors hover:bg-cyan-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                      >
+                        <span>
+                          <span className="block text-sm font-medium text-cyan-100">
+                            {showMoreDetails ? "Hide extra property details" : "Add property & payoff details (optional)"}
+                          </span>
+                          <span className="mt-0.5 block text-xs font-normal text-slate-400">
+                            Beds, baths, value, payoff, and situation — speeds up your review, but you can skip it.
+                          </span>
+                        </span>
+                        <span className="text-lg font-semibold text-cyan-300">{showMoreDetails ? "−" : "+"}</span>
+                      </button>
+
+                      {showMoreDetails ? (
+                        <>
                       {/* Property Type and Occupancy */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -529,51 +689,6 @@ export function SellPage({ market }: SellPageProps) {
                             onChange={(e) => handleInputChange("bathrooms", e.target.value)}
                             className="bg-background/50"
                           />
-                        </div>
-                      </div>
-
-                      {/* Property Condition and Timeline */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="propertyCondition" className="text-sm font-medium">
-                            Property Condition
-                          </Label>
-                          <Select
-                            value={formData.propertyCondition}
-                            onValueChange={(value) => handleInputChange("propertyCondition", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Condition" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PROPERTY_CONDITIONS.map((condition) => (
-                                <SelectItem key={condition} value={condition}>
-                                  {condition}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="timelineToSell" className="text-sm font-medium">
-                            Timeline to Sell
-                          </Label>
-                          <Select
-                            value={formData.timelineToSell}
-                            onValueChange={(value) => handleInputChange("timelineToSell", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Timeline" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIMELINES.map((timeline) => (
-                                <SelectItem key={timeline} value={timeline}>
-                                  {timeline}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                         </div>
                       </div>
 
@@ -655,30 +770,6 @@ export function SellPage({ market }: SellPageProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="preferredSalePath" className="text-sm font-medium">
-                          Preferred Sale Path
-                        </Label>
-                        <Select
-                          value={formData.preferredSalePath}
-                          onValueChange={(value) => handleInputChange("preferredSalePath", value)}
-                        >
-                          <SelectTrigger className="bg-background/50">
-                            <SelectValue placeholder="Select Sale Path" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SELLER_REVIEW_PATHS.map((path) => (
-                              <SelectItem key={path.value} value={path.value}>
-                                {path.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Choose what you want reviewed first. VestBlock may still recommend a different route after looking at the property, payoff, timing, and buyer interest.
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
                         <Label htmlFor="notes" className="text-sm font-medium">
                           Anything Else We Should Know?
                         </Label>
@@ -690,6 +781,24 @@ export function SellPage({ market }: SellPageProps) {
                           className="bg-background/50"
                           rows={4}
                         />
+                      </div>
+                        </>
+                      ) : null}
+
+                      {/* Trust microcopy: answer the silent objections right before commitment */}
+                      <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 sm:grid-cols-3">
+                        <p className="flex items-center gap-2 text-xs text-slate-300">
+                          <Shield className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                          No fees, no obligation
+                        </p>
+                        <p className="flex items-center gap-2 text-xs text-slate-300">
+                          <Phone className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                          Follow-up within 1 business day
+                        </p>
+                        <p className="flex items-center gap-2 text-xs text-slate-300">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                          Your info is never sold
+                        </p>
                       </div>
 
                       {/* Submit Button */}

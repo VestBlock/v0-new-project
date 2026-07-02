@@ -1,0 +1,31 @@
+{
+  "out": "/Users/mrsanders/VestBlock Codex Sync/Codex Folder/data/dm-exports/2026-06-23/west-michigan-stacks/west-michigan-stacked-contacts-combined-2026-06-23.csv",
+  "sourceFiles": [
+    {
+      "file": "dealmachine-west-mi-export-1.csv",
+      "rows": 23
+    },
+    {
+      "file": "dealmachine-west-mi-export-2.csv",
+      "rows": 1
+    },
+    {
+      "file": "dealmachine-west-mi-export-3.csv",
+      "rows": 15
+    },
+    {
+      "file": "dealmachine-west-mi-export-5.csv",
+      "rows": 2
+    },
+    {
+      "file": "dealmachine-west-mi-export-6.csv",
+      "rows": 21
+    },
+    {
+      "file": "dealmachine-west-mi-export-7.csv",
+      "rows": 11
+    }
+  ],
+  "totalRows": 73,
+  "uniqueContactIds": 73
+}

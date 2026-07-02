@@ -196,7 +196,7 @@ function getLeadDailyTarget() {
   if (isOutreachV2Enabled()) {
     return getOutreachV2DailyTarget()
   }
-  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 100))
+  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 50))
 }
 
 async function getLeadEmailSentCountLast24h() {

@@ -13,6 +13,8 @@ tsconfig.tsbuildinfo
 /tmp/
 /test-results/
 /.playwright-cli/
+/reports/
+/$CODEX_HOME/
 
 # Internal planning/docs that are not needed by the web runtime
 /deliverables/
@@ -23,6 +25,8 @@ tsconfig.tsbuildinfo
 !/deployments/dealvault-demo-package.json
 
 # Lead lists, exports, trackers, and local data files
+/data/command-center/
+/data/property-portfolios/
 *.csv
 *.xlsx
 *.xls

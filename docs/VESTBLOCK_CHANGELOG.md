@@ -1,5 +1,202 @@
 # VestBlock Changelog
 
+## 2026-07-02 Reactivation Sender + Scheduled Morning Autopilot
+
+## Files Changed
+
+- `scripts/send-reactivation-batch.mjs` (new) — `npm run outreach:send-reactivation` / `:live`
+- `lib/admin/operatingLoops.ts` — ledger now parses `reactivation-results-*.json` (source `reactivation`), so second touches count in lane stats
+- `scripts/outreach-autopilot.mjs` — morning brief send command points at the reactivation sender when a verified batch exists
+- `package.json`
+- Scheduled task created outside the repo: `vestblock-outreach-morning-brief` (daily 7 AM, runs `outreach:autopilot`, reports the brief; hard-blocked from ever running live sends)
+
+## Features Added
+
+- Guarded sender for verified reactivation batches via Resend from acquisitions@: refuses unverified CSVs, re-checks suppressions + reply log at send time, skips prior second-touches, appends the CAN-SPAM footer (opt-out line + OUTREACH_MAILING_ADDRESS, required for --live), preview by default with a hard --limit cap (default 50), 400ms pacing.
+- Results write to tmp/outreach/reactivation-results-<stamp>.json and flow into the campaign ledger, command-center lanes, and the learning audit automatically.
+- Preview verified against the live 119-email batch (50 sendable at cap, 0 skipped).
+
+## 2026-07-02 Twilio Removal + Daily Target Alignment
+
+## Files Changed
+
+- `app/api/sell-lead/route.ts` — removed the Twilio sendSMS path entirely (no Twilio account exists; the email intake alert is the operator channel)
+- `.env.example` — dropped ADMIN_ALERT_PHONE / SELLER_LEAD_ALERT_PHONE; documented OUTREACH_DAILY_CAP=50, LEADS_TARGET_EMAILS_PER_DAY=50, OUTREACH_LANE_BUILDS_PER_DAY=2, OUTREACH_EXPORT_FRESH_DAYS=10
+- 7 call sites (commandCenter, growthScoreboard, dashboard route, outbound route, outreachV2, dailyAutomation, revenue-command-scorecard) — LEADS_TARGET_EMAILS_PER_DAY default aligned from 100 to 50 to match the review-first policy, so scoreboards stop reporting "behind" against an aspirational cap that policy forbids
+
+## 2026-07-02 Gmail Reply Sync (automatic reply attribution)
+
+## Files Changed
+
+- `scripts/gmail-reply-sync.mjs` (new) — `npm run outreach:reply-sync`
+- `scripts/outreach-autopilot.mjs` — reply sync now runs as Phase 0 before lane stats
+- `package.json`
+
+## Features Added
+
+- Inbox replies now flow into the attribution loop automatically: the sync matches inbox senders against campaign-ledger recipients, classifies opt-outs by keyword (unsubscribe/do-not-contact/wrong-owner), and writes the exact records the manual log-reply command produces — reply-log.jsonl + lead status 'replied' for positives (never downgrades progressed leads), suppression + do_not_contact for negatives. Report-only by default; --apply writes; processed message ids are remembered.
+- Autopilot runs the sync with --apply as Phase 0 (fails soft without the gmail.readonly scope), so lane reply counts are current before the morning brief is computed.
+- Requires the same one-time gmail.readonly grant as the export pipeline.
+
+## 2026-07-02 DealMachine Export Pipeline (hands-off contacts retrieval)
+
+## Files Changed
+
+- `scripts/dealmachine-export-pipeline.mjs` (new) — `npm run outreach:export-pipeline`
+- `package.json`
+
+## Features Added
+
+- One command now chains lane list-build → Contacts export request → Gmail watch → CSV download + ingest, using the three existing scripts (website-list-builder, export-lists --send, export-download --apply --ingest). Lanes come from the autopilot morning brief, so the daily flow is `outreach:autopilot` then `outreach:export-pipeline`.
+- Preflight verifies Gmail read access before spending a build; failure prints the one-time `--auth-url` / `--exchange-code --write-env` fix (GOOGLE_REFRESH_TOKEN needs gmail.readonly). `--skip-build` re-polls for late exports; `--dry-run` prints the plan.
+- After CSVs land, rerunning the autopilot marks the lanes fresh and updates the send plan automatically.
+
+## 2026-07-02 Outreach Autopilot (one-command daily loop)
+
+## Files Changed
+
+- `scripts/outreach-autopilot.mjs` (new) — `npm run outreach:autopilot`
+- `package.json`
+
+## Features Added
+
+- Single-command daily loop, review-first by policy: GATHER (per-lane stats from ledger + reply log + suppressions, sends-today vs OUTREACH_DAILY_CAP) → REACTIVATE (Mondays or --reactivation) → VERIFY (email preflight on newest staged batch) → PLAN (replies-first lane order, exact send command) → LEARN (computed audit) → BRIEF (morning-brief-latest.md with blockers and the one human decision).
+- Live sending intentionally stays out of the autopilot — the operator reviews and runs the send command, per the post-incident policy from 2026-05-19.
+- Freshness guards: warns when the campaign ledger is stale, when zero replies are logged, and when risky emails are held from a batch.
+- LANE FILL phase: matches every strategy-rotation lane (strategy × market) against data/dm-exports freshness and puts today's 2 lane-build commands in the brief (OUTREACH_LANE_BUILDS_PER_DAY, OUTREACH_EXPORT_FRESH_DAYS). First run: 1/144 lanes fresh — the pipeline was starving for exports, not sends.
+
+## 2026-07-02 Direct-Mail Lane + Reactivation Loop Card + Offer Calibration
+
+## Files Changed
+
+- `scripts/direct-mail-batch.mjs` (new) — `npm run outreach:direct-mail-batch`
+- `lib/admin/operatingLoopCore.ts`, `lib/admin/operatingLoops.ts` — new Second-Touch Reactivation loop card
+- `lib/property/offerOutcomeHistory.ts` (new), `lib/property/opportunityAnalysis.ts`, `app/api/property-analyzer/route.ts` — offer-outcome calibration
+- `scripts/reactivation-queue.mjs` — writes `eligible` count for the loop card
+- `scripts/test-property-opportunity-analysis.ts`, `package.json`
+
+## Features Added
+
+- Direct-mail batch builder: mines DealMachine Contacts exports for owners with a mailing address but NO usable email (unreachable by the email lanes), balanced per market, deduped against a local mail ledger (`--commit` locks a batch in). First run found 259 unreachable owners and staged 100 across 7 markets. Output CSV is ready for the DealMachine mail engine or any postcard vendor. Never sends.
+- Second-Touch Reactivation loop card in the command center: shows eligible one-touch contacts (currently 437), staged drafts, and last run; goes red past 100 eligible so aging paid-for contacts are impossible to miss. Renders automatically via the existing loops list.
+- Offer-outcome calibration: the analyzer now accepts logged outcome history (from `outreach:log-offer-outcome`) and computes market memory — median counter-over-MAO %, accepted/countered/rejected mix — surfacing it as a "Market memory" concession step and a `calibration` object on `offerStrategy`. City-first matching with state/global fallback. Walk-away stays the hard MAO cap by design; calibration teaches the anchor and expectations.
+- Tests assert calibration math (median counter ~12-15% over MAO on the fixture) and absence without history.
+
+## 2026-07-02 Buyer + Lender Intake Upgrade
+
+## Files Changed
+
+- `app/api/buyers/signup/route.ts`
+- `app/api/lenders/signup/route.ts`
+- `components/buyers/buyer-signup-page.tsx`
+- `components/lenders/lender-signup-page.tsx`
+
+## Features Added
+
+- Admin alert emails for buyer and lender network signups via `sendNewLeadAlertEmail` + `after()`. Buyer alerts include the full buy-box summary (markets, assets, price band, proof-of-funds, close speed); lender alerts include states, loan band, close speed, and requirements. Previously these high-value signups produced no notification at all.
+- Trust microcopy strips above both submit buttons: free to join / no obligation, criteria shared only for deal introductions, review within one business day.
+
+## 2026-07-02 Secret Exposure Sweep
+
+## Summary
+
+- Full scan for exposed API keys: tracked source, docs, scripts, db, public/, root configs, artifacts, tmp, and git index/history are clean. No secrets in code, no env files ever tracked by git, `.vercelignore` and `.gitignore` coverage confirmed, NEXT_PUBLIC_ vars all legitimately public.
+- Real exposure found and removed: the June 17 sync tarballs in the parent "VestBlock Codex Sync" folder — the FULL archive contained the live `.env.local` (Supabase service role, Google OAuth refresh token, Resend, DealMachine tokens) on a synced/external volume. Both tarballs and their report files were deleted; README-EXTRACT.txt now documents how to build future transfer archives with `--exclude=".env*"`.
+- Recommended: rotate the Supabase service role key and Google OAuth refresh token as a precaution, since the archive sat on an external volume for two weeks.
+
+## 2026-07-02 Intake Email Alerts Re-enabled (opt-in per route)
+
+## Files Changed
+
+- `lib/leads/leadAutomation.ts`
+- `lib/inngest/serviceRequestWorkflow.ts`
+- `app/api/sell-lead/route.ts`, `app/api/real-estate-lead/route.ts`, `app/api/funding-lead/route.ts`, `app/api/dealvault/pilot-interest/route.ts`
+
+## Features Added
+
+- Restored the admin intake alert email: `runNewLeadAutomation` had stubbed out `sendNewLeadAlertEmail` entirely, so no email fired for any new lead even though Resend + ADMIN_ALERT_EMAIL were configured. The alert is now opt-in via `sendIntakeAlert: true`, set only on real inbound-form paths (seller, real-estate funding, business funding, DealVault demo, service requests). Bulk import and scoring paths stay silent so batch runs never flood the inbox.
+- Combined with the `after()` fix below, every inbound form submission now reliably produces an email alert to ADMIN_ALERT_EMAIL, a follow-up task, and a lead_created event.
+
+## 2026-07-02 Lead Intake Reliability Fix (fire-and-forget on serverless)
+
+## Files Changed
+
+- `app/api/sell-lead/route.ts`
+- `app/api/real-estate-lead/route.ts`
+- `app/api/funding-lead/route.ts`
+- `app/api/dealvault/pilot-interest/route.ts`
+
+## Features Added
+
+- Fixed a serverless reliability bug in all four lead-intake routes: follow-up work (operator SMS alert, buyer matching, lead automation, funding deliverable save) ran as fire-and-forget promises after the HTTP response, so Vercel could freeze the lambda and silently drop them. All routes now use Next 15's `after()`, which keeps the function alive until the work completes with no added response latency.
+- Seller route now logs a clear warning when no `SELLER_LEAD_ALERT_PHONE` / `ADMIN_ALERT_PHONE` is configured, so a missing alert channel is visible in logs instead of silent.
+
+## 2026-07-02 Sell Page Conversion Restructure
+
+## Files Changed
+
+- `components/sell/sell-page.tsx`
+
+## Features Added
+
+- Progressive disclosure on the seller intake form: the form now shows only the 5 required fields plus three routing dropdowns (condition, timeline, preferred sale path) up front; the 10 detail fields (type, occupancy, beds/baths, value, asking, payoff, liens, reason, notes) collapse behind an "Add property & payoff details (optional)" expander. Prefill links that carry detail params auto-expand the section.
+- Trust microcopy strip above submit: no fees/no obligation, follow-up within 1 business day, info never sold.
+- Post-submit state now sets a follow-up expectation and routes sellers to the free property analyzer instead of dead-ending.
+
+## 2026-07-02 Analyzer Offer Strategy + Repair Stress Test + Ops Tooling
+
+## Files Changed
+
+- `lib/property/opportunityAnalysis.ts` — new `offerStrategy` and `repairSensitivity` outputs
+- `components/admin/command-center/command-center-analyzer-panel.tsx` — offer strategy + repair stress cards
+- `components/property/property-opportunity-analyzer.tsx` — same for the public analyzer
+- `scripts/test-property-opportunity-analysis.ts` — assertions for both new blocks
+- `scripts/log-offer-outcome.mjs` (new) — `npm run outreach:log-offer-outcome`
+- `scripts/verify-email-batch.mjs` (new) — `npm run outreach:verify-emails`
+- `package.json`
+
+## Features Added
+
+- Offer strategy: computed anchor / target / walk-away prices with approach classification (move_fast, price_negotiation, creative_first) and concession steps. Walk-away is the MAO-with-fee cap; anchor is 92% of target. Ask more than 20% above walk-away routes to creative-first.
+- Repair overrun stress test: as-scoped / +15% / +30% / +50% scenarios with per-scenario MAO, spread, and grade, plus break-even repair budget and cushion percent. Flags deals that flip RISKY on thin cushions.
+- Offer outcome logger: writes `lead_outcome` events to command_center_events (feeds the Outcome Learning panel) plus a local JSONL trail with ask/MAO/counter economics — closes the Offer Accuracy Loop.
+- Email verification preflight: layered local-quality → suppression → MX → optional ZeroBounce checks on any batch CSV; emits verified/risky CSVs. This is the scale gate before raising send volume.
+- Tests: property analysis suite asserts anchor ≤ target ≤ walk-away and monotonic MAO decline under repair overruns. Both math suites pass.
+
+## 2026-07-02 Reactivation Queue + Lead Strategy Memo
+
+## Files Changed
+
+- `scripts/reactivation-queue.mjs` (new) — `npm run outreach:reactivation-queue`
+- `docs/VESTBLOCK_LEAD_STRATEGY_2026-07.md` (new)
+- `package.json`
+
+## Features Added
+
+- Second-touch reactivation queue mined from the campaign ledger: recipients with exactly one sent email, no reply, no suppression, older than a configurable age (default 12d) are staged 30/lane (120 total) with review-first drafts to `data/operating-loops/reactivation/`. Never sends.
+- First run staged 120 of 437 eligible contacts and quantified lane concentration: 3,406 of 3,848 sends (88%) went to the two now-paused review-only lanes, meaning the high-intent priority rotation is undertested rather than failed.
+- Strategy memo ranks channels by reply-per-operator-hour (reactivation > agent-facing email > high-intent rotation at volume > DealMachine direct mail > reviewed SMS > buyer-first sourcing) and confirms the DealMachine public API stays out of the sourcing path per the 2026-06-08 research.
+
+## 2026-07-02 Reply Attribution Loop + Computed Learning Audit
+
+## Files Changed
+
+- `lib/admin/operatingLoops.ts`
+- `lib/admin/commandCenter.ts`
+- `scripts/log-reply.mjs` (new)
+- `scripts/outreach-learning-audit.mjs` (rewritten)
+- `package.json`
+- `docs/VESTBLOCK_REPLY_ATTRIBUTION_LOOP.md` (new)
+- Deleted dead components: `hero-section.tsx`, `how-it-works.tsx`, `metrics-section.tsx`, `cta-footer.tsx`, `property-cta-section.tsx`, `business-types-grid.tsx`, `service-cards.tsx`
+
+## Features Added
+
+- Per-strategy reply attribution in the command center: campaign rollups now join ledger recipients against reply-positive leads (Supabase statuses `replied`/`interested`/`qualified`/`closed_won`) plus the local reply log, replacing the hardcoded `replies: 0`.
+- Fixed opt-out counting: `loadSuppressionRows` now reads the production `{ emails: [...] }` suppression-file shape, so `optOuts` per lane is real instead of always 0.
+- New operator CLI `npm run outreach:log-reply` — one command turns an inbox reply into lead status update + local reply trail (positive) or suppression record + do_not_contact (negative). Works offline if Supabase creds are missing.
+- `npm run outreach:learning-audit` is now fully computed: auto-discovers the latest V4 scorecard (was hardcoded to 2026-06-22), derives winning/pause/keep/blocked lanes from replies, opt-outs, and send counts instead of hardcoded narrative.
+- Reply-producing lanes sort first in rollups; lane status turns green on attributed replies and next moves become follow-up-first.
+
 ## 2026-05-02 Buyer + Lender Partner Portals
 
 ## Files Changed

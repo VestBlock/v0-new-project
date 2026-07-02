@@ -50,7 +50,11 @@ const MARKETS = (getArg("market") || getArg("markets") || "Milwaukee, WI")
   .map((m) => m.trim())
   .filter(Boolean)
 const MIN_DOM = Number.parseInt(getArg("min-dom") || "90", 10)
-const LIMIT = Number.parseInt(getArg("limit") || "25", 10)
+const CONTROLLED_LANE_CAP = 30
+const ALLOW_HIGH_VOLUME = args.includes("--allow-high-volume")
+const ALLOW_ON_MARKET_LIVE = args.includes("--allow-on-market-lowball-live")
+const REQUESTED_LIMIT = Number.parseInt(getArg("limit") || "25", 10)
+const LIMIT = ALLOW_HIGH_VOLUME ? REQUESTED_LIMIT : Math.min(REQUESTED_LIMIT, CONTROLLED_LANE_CAP)
 const INPUT_CSV = getArg("input-csv")
 const THROTTLE_MS = Number.parseInt(getArg("throttle") || "2000", 10)
 const BCC = getArg("bcc") || ""
@@ -539,11 +543,11 @@ function buildLowballAgentEmail(listing) {
     "",
     `I came across your listing at ${listing.address}. I see it has been sitting at ${domLine}${listPriceLine}.`,
     "",
-    "I work with VestBlock on investor/builder style acquisitions. If the seller would consider a clean as-is path, I can review it quickly and give you a real written number after photos, access, title, and condition are checked.",
+    "I work with VestBlock on investor/builder style acquisitions. If the seller would consider a clean backup path, I can review it quickly and give you a real written number after photos, access, title, and condition are checked.",
     "",
-    `Before anyone spends time, the initial cash review would probably start around ${rangeLine}. That is not a final offer, and there may be room to improve if the condition, rent support, repairs, or seller timeline justify it.`,
+    `My internal backstop range for a property like this may start around ${rangeLine}, depending heavily on repairs, access, title, rent support, and seller timeline. I am sharing that only to avoid wasting your time if retail is the better path.`,
     "",
-    "I know that range is below list. I am not asking you to sell your client short. I am trying to see whether a fast as-is backstop is useful if the property needs work, the seller wants certainty, or the retail buyer pool is not responding.",
+    "I am not asking you to sell your client short. If the seller needs top retail, I am probably not the right fit. If certainty, condition, speed, or a backup buyer matters, I can be useful without disrupting your listing.",
     "",
     "If your seller is open to that kind of conversation, send over the best photos/condition notes and any known repair or access details. Your commission can be protected in any structure we seriously review.",
     "",
@@ -637,6 +641,9 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
 
+  if (SEND && LOWBALL_MODE && !ALLOW_ON_MARKET_LIVE) {
+    throw new Error("On-market lowball live sends are paused. Run dry/stage first or pass --allow-on-market-lowball-live after manual review.")
+  }
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY for --send.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS for --send (CAN-SPAM).")
 

@@ -337,6 +337,22 @@ export function BuyerSignupPage() {
               <Textarea id="referralNotes" value={form.referralNotes} onChange={(event) => updateField("referralNotes", event.target.value)} placeholder="How VestBlock should send opportunities, preferred contact method, referral expectations, docs needed, or whether you want fix-and-flip, bridge, DSCR, or ground-up funding review..." />
             </div>
 
+            {/* Trust microcopy: answer the silent objections right before commitment */}
+            <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 sm:grid-cols-3">
+              <p className="flex items-center gap-2 text-xs text-slate-300">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                Free to join, no obligation
+              </p>
+              <p className="flex items-center gap-2 text-xs text-slate-300">
+                <Network className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                Criteria shared only for deal intros
+              </p>
+              <p className="flex items-center gap-2 text-xs text-slate-300">
+                <Send className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                Review within 1 business day
+              </p>
+            </div>
+
             <Button type="submit" size="lg" disabled={submitting} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300">
               {submitting ? "Submitting..." : "Submit buy box"}
               <Send className="ml-2 h-4 w-4" />

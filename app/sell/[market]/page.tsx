@@ -29,6 +29,24 @@ const sellerMarkets = {
     description:
       'Memphis property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
   },
+  'west-michigan': {
+    city: 'Grand Rapids',
+    state: 'MI',
+    stateName: 'Michigan',
+    regionLabel: 'West Michigan',
+    title: 'Sell a Property in West Michigan - Cash, Creative, or Partner Review',
+    description:
+      'West Michigan property owners can submit address, condition, timeline, occupancy, and payoff context for a practical cash buyer, creative structure, novation, or partner sale review.',
+  },
+  'west-mi': {
+    city: 'Grand Rapids',
+    state: 'MI',
+    stateName: 'Michigan',
+    regionLabel: 'West Michigan',
+    title: 'Sell a Property in West Michigan - Cash, Creative, or Partner Review',
+    description:
+      'West Michigan property owners can submit address, condition, timeline, occupancy, and payoff context for a practical cash buyer, creative structure, novation, or partner sale review.',
+  },
 } as const
 
 type MarketSlug = keyof typeof sellerMarkets
@@ -39,6 +57,10 @@ type PageProps = {
 
 function getMarket(slug: string) {
   return sellerMarkets[slug as MarketSlug] || null
+}
+
+function getMarketLabel(market: (typeof sellerMarkets)[MarketSlug]) {
+  return 'regionLabel' in market ? market.regionLabel : market.city
 }
 
 export function generateStaticParams() {
@@ -56,12 +78,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const path = `/sell/${slug}`
+  const marketLabel = getMarketLabel(market)
 
   return {
     title: market.title,
     description: market.description,
     keywords: [
       `sell my house ${market.city}`,
+      `sell my house ${marketLabel}`,
       `sell house as-is ${market.city}`,
       `${market.city} property review`,
       `${market.city} investor property review`,
@@ -84,7 +108,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           url: absoluteUrl('/opengraph-image'),
           width: 1200,
           height: 630,
-          alt: `VestBlock ${market.city} property review`,
+          alt: `VestBlock ${marketLabel} property review`,
         },
       ],
     },

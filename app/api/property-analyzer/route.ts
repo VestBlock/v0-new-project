@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
+import { loadOfferOutcomeHistory } from '@/lib/property/offerOutcomeHistory'
 import { recordPropertyAnalysisRun } from '@/lib/admin/dealMemory'
 import { fetchAttomPropertyEnrichment, type AttomPropertyEnrichment } from '@/lib/property/attom'
 
@@ -205,6 +206,7 @@ export async function POST(request: NextRequest) {
         address,
         city: data.city || null,
         state: data.state || null,
+        offerOutcomeHistory: loadOfferOutcomeHistory({ city: data.city, state: data.state }),
         selectedComps: data.selectedComps,
         listingSourceUrl: data.listingSourceUrl || null,
         listingStatus: data.listingStatus || null,

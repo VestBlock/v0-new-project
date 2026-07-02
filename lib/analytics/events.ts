@@ -9,6 +9,7 @@ export const analyticsEvents = {
   chatMessageSubmitted: 'chat_message_submitted',
   creditReportUploaded: 'credit_report_uploaded',
   fundingLeadSubmitted: 'funding_lead_submitted',
+  sellerLeadSubmitted: 'seller_lead_submitted',
   growthServiceRequestSubmitted: 'growth_service_request_submitted',
   partnerReferralClicked: 'partner_referral_clicked',
   paymentCaptureCompleted: 'payment_capture_completed',

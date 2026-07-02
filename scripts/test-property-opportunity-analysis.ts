@@ -264,4 +264,53 @@ assert.ok(buyerIntelligence.buyerIntelligence.publicRecordIntelligence.buyerTalk
 assert.ok(buyerIntelligence.buyerIntelligence.publicRecordIntelligence.checks.some((check) => check.includes('City code enforcement')))
 assert.ok(buyerIntelligence.buyerIntelligence.dueDiligenceNeeds.some((item) => item.includes('rent roll')))
 
-console.log('property-opportunity-analysis: ok')
+// Offer strategy: anchor <= target <= walk-away, with concession steps when computed
+const offerStrategy = buyerIntelligence.offerStrategy
+assert.ok(offerStrategy.walkAwayPrice !== null, 'walk-away price should compute with ARV + repairs present')
+assert.ok(offerStrategy.targetOffer !== null && offerStrategy.anchorOffer !== null)
+assert.ok(offerStrategy.anchorOffer! <= offerStrategy.targetOffer!, 'anchor must not exceed target')
+assert.ok(offerStrategy.targetOffer! <= offerStrategy.walkAwayPrice!, 'target must not exceed walk-away')
+assert.ok(offerStrategy.approach !== 'needs_inputs')
+assert.ok(offerStrategy.concessionSteps.length >= 3)
+
+// Repair sensitivity: four scenarios, monotonic MAO decline as repairs rise
+const repairSensitivity = buyerIntelligence.repairSensitivity
+assert.equal(repairSensitivity.scenarios.length, 4)
+const scenarioMaos = repairSensitivity.scenarios.map((scenario) => scenario.mao)
+assert.ok(scenarioMaos.every((value) => value !== null))
+for (let i = 1; i < scenarioMaos.length; i += 1) {
+  assert.ok(scenarioMaos[i]! <= scenarioMaos[i - 1]!, 'MAO must fall as repair overrun rises')
+}
+assert.ok(repairSensitivity.breakevenRepairBudget !== null)
+assert.ok(repairSensitivity.summary.length > 0)
+
+// Offer calibration: logged outcomes produce a market-memory note
+const calibrated = buildPropertyOpportunityAnalysis(
+  {
+    address: '123 Signal St',
+    city: 'Milwaukee',
+    state: 'WI',
+    propertyType: 'Duplex',
+    askingPrice: 112000,
+    afterRepairValue: 190000,
+    repairBudget: 18000,
+    exitStrategy: 'rental',
+    offerOutcomeHistory: [
+      { status: 'countered', mao: 100000, counter: 115000 },
+      { status: 'countered', mao: 90000, counter: 101000 },
+      { status: 'countered', mao: 80000, counter: 92000 },
+      { status: 'rejected', mao: 70000, counter: null },
+    ],
+  },
+  { ...baseEstimate, askingPrice: 112000, rentEstimate: 1650, estimateValue: 180000 }
+)
+assert.ok(calibrated.offerStrategy.calibration !== null, 'calibration should exist with >=3 outcomes')
+assert.equal(calibrated.offerStrategy.calibration!.sampleCount, 4)
+assert.ok(
+  (calibrated.offerStrategy.calibration!.medianCounterOverMaoPercent ?? 0) > 10,
+  'median counter should read ~12-15% over MAO'
+)
+assert.ok(calibrated.offerStrategy.concessionSteps.some((step) => step.includes('Market memory')))
+assert.ok(buyerIntelligence.offerStrategy.calibration === null, 'no history means no calibration')
+
+console.log('property-opportunity-analysis: ok (incl. offer strategy + repair sensitivity)')

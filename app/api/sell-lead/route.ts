@@ -1,53 +1,11 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse, after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { persistPropertyBuyerMatches } from '@/lib/buyers/service';
 import { buildRoughPropertyEstimate, parseCurrencyAmount } from '@/lib/property/roughEstimate';
-
-// Twilio SMS function
-async function sendSMS(to: string, message: string): Promise<boolean> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-  if (!accountSid || !authToken || !fromNumber) {
-    console.warn('Twilio credentials not configured, skipping SMS');
-    return false;
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          To: to,
-          From: fromNumber,
-          Body: message,
-        }),
-      }
-    );
-
-    const result = await response.json();
-
-    if (response.ok) {
-      return true;
-    } else {
-      console.error('SMS send failed:', result);
-      return false;
-    }
-  } catch (error) {
-    console.error('SMS error:', error);
-    return false;
-  }
-}
 
 interface LeadFormData {
   propertyAddress: string;
@@ -70,6 +28,7 @@ interface LeadFormData {
   preferredSalePath?: string;
   notes?: string;
   reasonForSelling?: string;
+  attribution?: Record<string, string>;
 }
 
 const sellerSalePathLabels: Record<string, string> = {
@@ -200,6 +159,7 @@ export async function POST(request: NextRequest) {
           bestTimeToCall: data.bestTimeToCall,
           preferredSalePath: preferredSalePathKey,
           preferredSalePathLabel,
+          attribution: data.attribution || {},
           notes: data.notes,
           reasonForSelling: data.reasonForSelling,
           roughEstimate,
@@ -244,11 +204,11 @@ export async function POST(request: NextRequest) {
 
     const summary = `${normalizedPropertyAddress || 'Unknown property'}; path ${preferredSalePathLabel}; timeline ${data.timelineToSell || 'not specified'}; rough value ${roughEstimate.estimateValue ? `$${roughEstimate.estimateValue.toLocaleString()}` : data.estimatedValue || 'unknown'} (${roughEstimate.confidenceLabel}); mortgage ${data.mortgageBalance || 'unknown'}. ${roughEstimate.buyerPacketSummary}`;
 
-    const smsMessage = `New seller lead: ${data.name} - ${preferredSalePathLabel} - ${normalizedPropertyAddress || 'Unknown property'} - ${data.timelineToSell || 'Timeline not specified'} - Rough value: ${roughEstimate.estimateValue ? `$${roughEstimate.estimateValue.toLocaleString()}` : data.estimatedValue || 'unknown'}`;
-
-    const alertPhone = process.env.SELLER_LEAD_ALERT_PHONE || process.env.ADMIN_ALERT_PHONE || null;
+    // Operator notification is the email intake alert (sendIntakeAlert below);
+    // SMS/Twilio was removed 2026-07-02 — no Twilio account exists.
     const followUpTasks: Array<Promise<unknown>> = [
       runNewLeadAutomation({
+        sendIntakeAlert: true,
         leadId: unifiedLead.id,
         leadType: 'sell_house',
         name: data.name,
@@ -304,11 +264,11 @@ export async function POST(request: NextRequest) {
       }),
     ];
 
-    if (alertPhone) {
-      followUpTasks.push(sendSMS(alertPhone, smsMessage));
-    }
-
-    void Promise.allSettled(followUpTasks).then((results) => {
+    // after() keeps the serverless function alive until these finish. The previous
+    // fire-and-forget pattern let Vercel freeze the lambda after the response,
+    // silently dropping the operator alert, buyer matching, and lead automation.
+    after(async () => {
+      const results = await Promise.allSettled(followUpTasks);
       const rejected = results.filter((result) => result.status === 'rejected');
       if (rejected.length > 0) {
         console.error('Seller lead follow-up tasks failed:', rejected);

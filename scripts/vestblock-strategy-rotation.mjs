@@ -12,7 +12,7 @@
  * Usage:
  *   node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs
  *   node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --strategy=failed-landlord-exit --markets="Tulsa,OK|Dayton,OH" --count
- *   node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --strategy=epic --build --max-builds=8
+ *   node --env-file=.env.local scripts/vestblock-strategy-rotation.mjs --strategy=priority --build --max-builds=8
  */
 
 import fs from "node:fs"
@@ -89,6 +89,28 @@ const EPIC_STRATEGIES = [
   "tax-assessment-shock",
 ]
 
+const HIGH_INTENT_STRATEGIES = [
+  "tax-code-stack",
+  "portfolio-landlord",
+  "tax-remote-equity-rotation",
+  "vacant-equity",
+  "preforeclosure-equity",
+  "probate-vacant-equity",
+  "failed-landlord-exit",
+  "rent-gap-multifamily",
+  "portfolio-fragmentation",
+  "judgment-lien-pressure",
+  "utility-lien-water-shutoff",
+  "permit-spike-developer-land",
+]
+
+const PAUSED_LOW_SIGNAL_STRATEGIES = new Set([
+  "expired-lowball",
+  "active-stale-lowball",
+  "seller-options",
+  "dealmachine-seller-options",
+])
+
 const STRATEGY_LABELS = {
   "tax-code-stack": "Tax delinquent + code violation",
   "vacant-equity": "Vacant high-equity absentee",
@@ -132,8 +154,9 @@ const DEFAULT_MARKETS = [
 ]
 
 function selectedStrategies() {
-  const raw = getArg("strategies", getArg("strategy", "epic"))
+  const raw = getArg("strategies", getArg("strategy", "priority"))
   if (raw === "all") return [...CORE_STRATEGIES, ...EPIC_STRATEGIES]
+  if (["priority", "high-intent", "revenue"].includes(raw)) return HIGH_INTENT_STRATEGIES
   if (raw === "core") return CORE_STRATEGIES
   if (raw === "epic") return EPIC_STRATEGIES
   return parseList(raw).map(slug).filter(Boolean)
@@ -177,7 +200,7 @@ function buildPlan({ strategies, markets, dailyCap, maxBuilds, rotationsPerMarke
         market,
         targetLeadCount: dailyCap,
         rotationsPerMarket,
-        status: "ready_to_count_or_build",
+        status: PAUSED_LOW_SIGNAL_STRATEGIES.has(strategy) ? "review_only_low_signal" : "ready_to_count_or_build_high_intent",
         buildCommand: [
           "node --env-file=.env.local scripts/dealmachine-website-list-builder.mjs --build",
           `--strategies=${strategy}`,
@@ -239,6 +262,7 @@ function writePlan(plan) {
       "",
       "## Operating Rule",
       "",
+      "Default rotations now prioritize stacked, high-intent seller lanes. Generic seller-options and on-market lowball lanes are review-only until reply attribution and suppression signals are healthy.",
       "Build one wave at a time, export Contacts with DNC fields, ingest/download the CSV, then stage only through the matching strategy outreach command.",
       "Live sends stay capped at 30 per lane unless --allow-high-volume is intentionally passed after reply attribution, bounce suppression, and DNC checks are reviewed.",
       "Seller-facing copy should not name tax delinquency, preforeclosure, code violations, liens, or other distress labels. Those are internal routing signals only.",

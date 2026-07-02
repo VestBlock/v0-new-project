@@ -15,6 +15,9 @@ declare global {
 const googleAdsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
 
 const conversionLabels: Record<string, string | undefined> = {
+  sell_property_lead:
+    process.env.NEXT_PUBLIC_GOOGLE_ADS_SELL_LEAD_CONVERSION_LABEL ||
+    process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL,
   spanish_funding_cta:
     process.env.NEXT_PUBLIC_GOOGLE_ADS_SPANISH_FUNDING_CONVERSION_LABEL ||
     process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL,
@@ -23,19 +26,31 @@ const conversionLabels: Record<string, string | undefined> = {
     process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL,
 };
 
-function sendGoogleAdsConversion(action: string, value?: number) {
+export function sendGoogleAdsConversion(
+  action: string,
+  value?: number,
+  params?: Record<string, unknown>
+) {
   if (!googleAdsId || !window.gtag) return;
 
   const label = conversionLabels[action];
-  if (!label) return;
-
-  window.gtag('event', 'conversion', {
-    send_to: `${googleAdsId}/${label}`,
+  const baseParams = {
     value,
     currency: 'USD',
     event_category: 'Google Ads',
     event_label: action,
-  });
+    ...params,
+  };
+
+  if (label) {
+    window.gtag('event', 'conversion', {
+      send_to: `${googleAdsId}/${label}`,
+      ...baseParams,
+    });
+    return;
+  }
+
+  window.gtag('event', action, baseParams);
 }
 
 export function GoogleAdsProvider() {

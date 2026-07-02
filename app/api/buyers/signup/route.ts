@@ -1,7 +1,7 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextRequest, NextResponse, after } from 'next/server'
 import { z } from 'zod'
 import { BUYER_CATEGORY_TO_TYPE } from '@/lib/buyers/constants'
 import {
@@ -13,7 +13,7 @@ import {
   upsertBuyer,
 } from '@/lib/buyers/repository'
 import { ensureSignupGrowthSystem } from '@/lib/auth/signup-growth-system'
-import { sendUserSignupGrowthSystemReadyEmail } from '@/lib/email/sendEmail'
+import { sendNewLeadAlertEmail, sendUserSignupGrowthSystemReadyEmail } from '@/lib/email/sendEmail'
 import type { BuyerCategory } from '@/lib/buyers/types'
 
 const buyerSignupSchema = z.object({
@@ -233,6 +233,28 @@ export async function POST(request: NextRequest) {
     } catch (growthSystemError) {
       console.error('Buyer signup Growth System provisioning error:', growthSystemError)
     }
+
+    // Admin alert: a confirmed buy box is the input to the Buyer Demand Loop,
+    // so the operator should hear about it immediately. after() guarantees delivery.
+    after(() =>
+      sendNewLeadAlertEmail({
+        leadId: buyer.id,
+        leadType: `buyer_signup (${category})`,
+        name: `${data.companyName} — ${data.contactName}`,
+        email: data.email,
+        phone: data.phone || null,
+        city: marketParts.cities[0] || null,
+        state: marketParts.states[0] || null,
+        sourcePath: '/buyers',
+        summary: [
+          `Markets: ${marketsServed.join(', ') || 'n/a'}`,
+          `Assets: ${assetTypes.join(', ') || 'n/a'}`,
+          `Price band: ${priceMin ? `$${priceMin.toLocaleString()}` : '?'} – ${priceMax ? `$${priceMax.toLocaleString()}` : '?'}`,
+          `Proof of funds: ${data.proofOfFundsStatus || 'n/a'}`,
+          `Close speed: ${data.closingSpeed || 'n/a'}`,
+        ].join(' · '),
+      }).catch((alertError) => console.error('Buyer signup alert email failed:', alertError))
+    )
 
     return NextResponse.json({
       success: true,

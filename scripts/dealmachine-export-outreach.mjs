@@ -40,7 +40,7 @@ const QUEUE_CSV = getArg("queue-csv")
 const REQUIRE_QUEUE_MATCH = args.includes("--require-queue-match")
 const EXPORT_ONLY = args.includes("--export-only") || (Boolean(getArg("export-csv")) && !QUEUE_CSV && !REQUIRE_QUEUE_MATCH)
 const MARKET_ARG = (getArg("market") || getArg("markets") || "").trim()
-const STRATEGY = normalizeMarketSlug(getArg("strategy") || "seller-options")
+const STRATEGY = normalizeMarketSlug(getArg("strategy") || "portfolio-landlord")
 const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 7
 const PORTFOLIO_STRATEGIES = new Set(["portfolio-landlord", "senior-landlord", "out-of-state-landlord", "landlord-portfolio"])
 const ON_MARKET_STRATEGIES = new Set(["on-market-lowball", "on-market-cash-sweep", "active-listing-cash-review", "dealmachine-on-market"])
@@ -52,6 +52,9 @@ const SMALL_MULTIFAMILY_STRATEGIES = new Set(["small-multifamily-portfolio", "mu
 const INSTITUTIONAL_BTR_STRATEGIES = new Set(["institutional-btr-buybox", "btr-buybox", "sfr-aggregator-buybox", "institutional-sfr"])
 const COMMERCIAL_DISTRESS_STRATEGIES = new Set(["commercial-small-bay-distress", "small-bay-distress", "commercial-distress", "mixed-use-distress"])
 const NOVATION_RETAIL_STRATEGIES = new Set(["novation-retail-spread", "retail-spread-novation", "novation"])
+const GENERIC_SELLER_STRATEGIES = new Set(["seller-options", "dealmachine-seller-options", "owner-options"])
+const ALLOW_GENERIC_SELLER_OPTIONS = args.includes("--allow-generic-seller-options")
+const ALLOW_ON_MARKET_LIVE = args.includes("--allow-on-market-lowball-live")
 const EPIC_STRATEGY_CONFIG = {
   "failed-landlord-exit": {
     label: "Failed landlord exit",
@@ -550,20 +553,20 @@ function sellerPathList(value) {
 
 function buildEmail(contact) {
   const property = contact.property_address_full
-  const pathLine = pathLabelList(contact.suggested_exit_paths)
-  const subject = `Question about ${property.split(",")[0]}`
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "the area"
+  const subject = `Question about ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
     `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
     "",
-    `I am reviewing a small batch of local as-is opportunities in ${contact.market_label}.`,
-    "The property came through my review list, so I wanted to ask directly instead of assuming anything.",
+    `I am reviewing a small batch of ${market} properties where owners may want a simple as-is review, a creative structure, or a quick pass if the numbers do not work.`,
+    "I am not assuming you want to sell and I am not sending a blind offer. I am trying to verify whether there is a real reason to talk before either of us wastes time.",
     "",
-    "If it would help, I can review this specific property and walk through several options. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic for this property.",
-    pathLine ? `For this address, the review may include ${pathLine}.` : "",
+    "If there is nothing to discuss, no problem. If timing, repairs, tenants, distance, or carrying costs are making the property less simple than it should be, I can review the realistic paths and tell you quickly if VestBlock is not a fit.",
     "",
-    `Would you be open to a quick conversation about ${property.split(",")[0]}, or is this not something you want to discuss right now?`,
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
     "",
     "Best,",
     "Robert Sanders",
@@ -571,7 +574,7 @@ function buildEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -1658,7 +1661,7 @@ async function upsertCommandCenterLead(admin, draft, result) {
     outreach_angle: strategyOutreachAngle(strategy),
     notes: draft.buyer_packet_summary || (onMarketStrategy
       ? "DealMachine active/pending owner-contact export queued for conditional as-is cash-review outreach."
-      : "DealMachine owner-contact export queued for seller-options outreach."),
+      : "DealMachine owner-contact export queued for high-intent seller-options review."),
     contact_info: {
       source: "dealmachine_contacts_export",
       ownerName: draft.owner_name || null,
@@ -1757,7 +1760,7 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
     body: draft.body,
     cta: "Reply if you are open to a quick conversation, or reply unsubscribe/do not contact to opt out.",
     language: "en",
-    compliance_note: "Includes seller-options disclosure, opt-out language, and mailing address.",
+    compliance_note: "Includes seller disclosure, opt-out language, and mailing address.",
     generated_with: "dealmachine_export_outreach",
     status: sentOk ? "sent" : staged ? "needs_review" : "failed",
     approved_at: sentOk ? now : null,
@@ -1836,6 +1839,12 @@ async function syncCommandCenterSend(admin, draft, result) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function main() {
+  if (SEND && GENERIC_SELLER_STRATEGIES.has(STRATEGY) && !ALLOW_GENERIC_SELLER_OPTIONS) {
+    throw new Error("Generic seller-options live sends are paused. Use a high-intent strategy, stage for review, or pass --allow-generic-seller-options after reply attribution and suppressions are reviewed.")
+  }
+  if (SEND && ON_MARKET_STRATEGIES.has(STRATEGY) && !ALLOW_ON_MARKET_LIVE) {
+    throw new Error("On-market lowball live sends are paused. Stage this lane or pass --allow-on-market-lowball-live after manual review.")
+  }
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
   const commandCenterAdmin = (SEND || STAGE_COMMAND_CENTER) && SYNC_COMMAND_CENTER ? supabaseAdmin() : null

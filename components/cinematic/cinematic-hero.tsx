@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Building2, Calculator, ShieldCheck, Sparkles, TrendingUp } from "lucide-react"
+import { ArrowRight, Calculator, Sparkles } from "lucide-react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
@@ -15,33 +15,6 @@ const tickerItems = [
   { label: "BUILDER DEMAND", dot: "bg-[#4fcf9f]" },
   { label: "BUYER PACKETS", dot: "bg-slate-200" },
   { label: "DEAL RECORDS", dot: "bg-[#f8e6b0]" },
-]
-
-const floatingCards = [
-  {
-    title: "Start with your role",
-    meta: "Seller · Buyer · Lender · Builder",
-    icon: Building2,
-    className: "hidden md:block md:left-8 md:top-[22%] lg:left-16",
-    delay: 0,
-    depth: 18,
-  },
-  {
-    title: "Find the right match",
-    meta: "Buyers · Capital · Operators",
-    icon: TrendingUp,
-    className: "hidden md:block md:right-8 md:top-[26%] lg:right-20",
-    delay: 0.6,
-    depth: -24,
-  },
-  {
-    title: "Keep the record clean",
-    meta: "Terms · milestones · proof",
-    icon: ShieldCheck,
-    className: "hidden md:block md:bottom-[24%] md:right-16 lg:right-40",
-    delay: 1.1,
-    depth: 12,
-  },
 ]
 
 const HEADLINE_WORDS: Array<{ text: string; gradient?: boolean; break?: boolean }> = [
@@ -97,32 +70,6 @@ export function CinematicHero() {
     return () => ctx.revert()
   }, [reduceMotion])
 
-  // Pointer-depth parallax on the floating cards (single listener, CSS vars)
-  useEffect(() => {
-    if (reduceMotion) return
-    const section = sectionRef.current
-    if (!section) return
-
-    let raf = 0
-    const handlePointerMove = (event: PointerEvent) => {
-      if (raf) return
-      raf = window.requestAnimationFrame(() => {
-        raf = 0
-        const rect = section.getBoundingClientRect()
-        const x = ((event.clientX - rect.left) / rect.width - 0.5) * 2
-        const y = ((event.clientY - rect.top) / rect.height - 0.5) * 2
-        section.style.setProperty("--hero-px", x.toFixed(3))
-        section.style.setProperty("--hero-py", y.toFixed(3))
-      })
-    }
-
-    section.addEventListener("pointermove", handlePointerMove)
-    return () => {
-      section.removeEventListener("pointermove", handlePointerMove)
-      if (raf) window.cancelAnimationFrame(raf)
-    }
-  }, [reduceMotion])
-
   // Respect reduced motion for the video itself
   useEffect(() => {
     const video = videoRef.current
@@ -165,43 +112,6 @@ export function CinematicHero() {
         <div className="vb-scan-grid absolute inset-0 opacity-30" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
       </div>
-
-      {/* Floating glass data cards with pointer depth */}
-      {!reduceMotion &&
-        floatingCards.map((card) => {
-          const Icon = card.icon
-          return (
-            <div
-              key={card.title}
-              className={`pointer-events-none absolute z-10 ${card.className}`}
-              style={{
-                transform: `translate3d(calc(var(--hero-px, 0) * ${card.depth}px), calc(var(--hero-py, 0) * ${card.depth * 0.7}px), 0)`,
-                transition: "transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: [0, -10, 0] }}
-                transition={{
-                  opacity: { duration: 0.8, delay: 0.6 + card.delay },
-                  y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: card.delay },
-                }}
-              >
-                <div className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-3 shadow-[0_20px_60px_rgba(2,6,23,0.5)] backdrop-blur-2xl">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] text-cyan-200">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-semibold leading-4 text-white">{card.title}</span>
-                    <span className="mt-0.5 block font-mono text-[0.65rem] uppercase tracking-[0.14em] text-slate-400">
-                      {card.meta}
-                    </span>
-                  </span>
-                </div>
-              </motion.div>
-            </div>
-          )
-        })}
 
       {/* Hero content */}
       <div

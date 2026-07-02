@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Home } from "lucide-react"
+import { ArrowRight, Calculator, Home, Users } from "lucide-react"
 
 export function CinematicCta() {
   const reduce = useReducedMotion()
@@ -30,27 +30,35 @@ export function CinematicCta() {
         transition={{ duration: 0.6 }}
         className="relative z-10 mx-auto max-w-3xl text-center"
       >
-        <p className="vb-mono text-xs uppercase tracking-[0.28em] text-amber-200/80">Start here</p>
+        <p className="vb-mono text-xs uppercase tracking-[0.28em] text-amber-200/80">Pick the next move</p>
         <h2 className="mx-auto mt-5 max-w-2xl text-balance text-4xl font-semibold tracking-tight text-white md:text-6xl">
-          Move the next deal through a cleaner path.
+          Turn interest into a real deal path.
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-slate-300/85">
-          Submit a property, share your buy box, or join as a funding or builder partner. VestBlock keeps the analysis, routing, buyer packet, and deal record moving in one direction.
+          Sellers can submit a property. Buyers can share their criteria. Operators can run the numbers before the next call.
         </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-10 grid gap-3 sm:grid-cols-3">
           <Link
-            href="/get-started"
-            className="vb-primary-action group w-full sm:w-auto"
+            href="/sell"
+            className="vb-primary-action group w-full"
           >
-            Start a Deal Review
+            <Home className="h-4 w-4" />
+            Submit Property
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
           <Link
-            href="/sell"
-            className="vb-secondary-action w-full sm:w-auto"
+            href="/buyers"
+            className="vb-secondary-action w-full"
           >
-            <Home className="h-4 w-4" />
-            Submit a Property
+            <Users className="h-4 w-4" />
+            Join Buyers
+          </Link>
+          <Link
+            href="/property-analyzer"
+            className="vb-secondary-action w-full"
+          >
+            <Calculator className="h-4 w-4" />
+            Run Numbers
           </Link>
         </div>
       </motion.div>

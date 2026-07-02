@@ -6,7 +6,7 @@ import path from 'node:path'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const dailyTarget = Number.parseInt(process.env.LEADS_TARGET_EMAILS_PER_DAY || '100', 10)
+const dailyTarget = Number.parseInt(process.env.LEADS_TARGET_EMAILS_PER_DAY || '50', 10)
 const monthlyRevenueTarget = Number.parseInt(process.env.VESTBLOCK_MONTHLY_REVENUE_TARGET || '100000', 10)
 const now = Date.now()
 

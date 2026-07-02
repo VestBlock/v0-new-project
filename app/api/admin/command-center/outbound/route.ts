@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const dailyTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 100))
+  const dailyTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 50))
   const maxPerRun = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(dailyTarget, 100))
   const target = Math.min(parsed.data.target || maxPerRun, maxPerRun)
   const budgetMs = envMs('LEADS_COMMAND_CENTER_OUTBOUND_BUDGET_MS', 90000)

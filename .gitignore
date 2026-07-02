@@ -44,7 +44,10 @@ spy_swing_strategy.pine
 /data/stale-listings/
 /data/operating-loops/
 /data/outreach-suppressions.json
+/data/dm-exports/**/*.csv
 /data/dm-exports/*.csv
+/data/direct-seller-batches/
+/.npm-cache/
 /data/buffer/*results-*.json
 /data/buffer/vestblock-facebook-90-day-calendar.*
 /data/partnership-targets*.csv

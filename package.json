@@ -173,7 +173,19 @@
     "leads:fresh-loop:verify": "node --env-file=.env.local scripts/fresh-lead-loading-loop.mjs --verify-only",
     "leads:fresh-loop:with-dealmachine": "node --env-file=.env.local scripts/fresh-lead-loading-loop.mjs --dealmachine",
     "distress:dealmachine:direct-contact-extract": "node scripts/dealmachine-direct-contact-extract.mjs",
-    "distress:dealmachine:direct-contact-extract:stage": "node scripts/dealmachine-direct-contact-extract.mjs --stage-command-center"
+    "distress:dealmachine:direct-contact-extract:stage": "node scripts/dealmachine-direct-contact-extract.mjs --stage-command-center",
+    "leads:seller-queue-500": "node --env-file=.env.local scripts/load-500-seller-queue.mjs",
+    "outreach:learning-audit": "node scripts/outreach-learning-audit.mjs",
+    "outreach:log-reply": "node --env-file=.env.local scripts/log-reply.mjs",
+    "outreach:reactivation-queue": "node scripts/reactivation-queue.mjs",
+    "outreach:log-offer-outcome": "node --env-file=.env.local scripts/log-offer-outcome.mjs",
+    "outreach:verify-emails": "node --env-file=.env.local scripts/verify-email-batch.mjs",
+    "outreach:direct-mail-batch": "node scripts/direct-mail-batch.mjs",
+    "outreach:autopilot": "node --env-file=.env.local scripts/outreach-autopilot.mjs",
+    "outreach:export-pipeline": "node --env-file=.env.local scripts/dealmachine-export-pipeline.mjs",
+    "outreach:reply-sync": "node --env-file=.env.local scripts/gmail-reply-sync.mjs",
+    "outreach:send-reactivation": "node --env-file=.env.local scripts/send-reactivation-batch.mjs",
+    "outreach:send-reactivation:live": "node --env-file=.env.local scripts/send-reactivation-batch.mjs --live"
   },
   "dependencies": {
     "@ai-sdk/react": "1.2.12",

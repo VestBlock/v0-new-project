@@ -39,7 +39,18 @@ import {
 
 export const MIN_CASH_ON_CASH_RETURN_PERCENT = 13
 
+/** Logged negotiation outcomes (see scripts/log-offer-outcome.mjs) used to calibrate offer strategy. */
+export type OfferOutcomeSignal = {
+  status: string
+  mao: number | null
+  counter: number | null
+  sellerAsk?: number | null
+  cashOffer?: number | null
+}
+
 export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
+  /** Optional market outcome history; when present, offerStrategy gains calibration. */
+  offerOutcomeHistory?: OfferOutcomeSignal[]
   selectedComps?: Array<{
     address?: string | null
     salePrice?: string | number | null
@@ -147,6 +158,38 @@ export type PropertyOpportunityAnalysis = {
     spread: number | null
     endBuyerProfit: number | null
     grade: 'RISKY' | 'GOOD' | null
+  }
+  offerStrategy: {
+    anchorOffer: number | null
+    targetOffer: number | null
+    walkAwayPrice: number | null
+    negotiationRoom: number | null
+    askGapToWalkAway: number | null
+    askGapPercent: number | null
+    approach: 'move_fast' | 'price_negotiation' | 'creative_first' | 'needs_inputs'
+    summary: string
+    concessionSteps: string[]
+    calibration: {
+      sampleCount: number
+      acceptedCount: number
+      counteredCount: number
+      rejectedCount: number
+      medianCounterOverMaoPercent: number | null
+      note: string
+    } | null
+  }
+  repairSensitivity: {
+    breakevenRepairBudget: number | null
+    cushionPercent: number | null
+    summary: string
+    scenarios: Array<{
+      label: string
+      repairBudget: number | null
+      mao: number | null
+      spread: number | null
+      flipProfit: number | null
+      grade: 'RISKY' | 'GOOD' | null
+    }>
   }
   comparables: {
     usedCount: number
@@ -1777,6 +1820,146 @@ export function buildPropertyOpportunityAnalysis(
   })
   const dealGrade = gradeDeal({ spread: assignmentSpread })
 
+  // ---- Offer strategy: anchor / target / walk-away so the operator negotiates
+  // from computed numbers instead of vibes. Walk-away is the hard MAO cap.
+  const walkAwayPrice = maoWithFee ?? mao70 ?? balancedCashReview
+  const offerTargetRaw = conservativeCashReview ?? (walkAwayPrice !== null ? walkAwayPrice * 0.95 : null)
+  const targetOffer =
+    offerTargetRaw !== null && walkAwayPrice !== null
+      ? roundToNearest(Math.min(offerTargetRaw, walkAwayPrice), 1000)
+      : roundToNearest(offerTargetRaw, 1000)
+  const anchorOffer = targetOffer !== null ? roundToNearest(targetOffer * 0.92, 1000) : null
+  const negotiationRoom =
+    walkAwayPrice !== null && anchorOffer !== null ? Math.max(0, Math.round(walkAwayPrice - anchorOffer)) : null
+  const askGapToWalkAway =
+    askingPrice !== null && walkAwayPrice !== null ? Math.round(askingPrice - walkAwayPrice) : null
+  const askGapPercent =
+    askGapToWalkAway !== null && askingPrice !== null && askingPrice > 0
+      ? Math.round((askGapToWalkAway / askingPrice) * 1000) / 10
+      : null
+  const offerApproach: PropertyOpportunityAnalysis['offerStrategy']['approach'] =
+    walkAwayPrice === null || anchorOffer === null
+      ? 'needs_inputs'
+      : askGapToWalkAway !== null && askGapToWalkAway <= 0
+        ? 'move_fast'
+        : askGapPercent !== null && askGapPercent > 20
+          ? 'creative_first'
+          : 'price_negotiation'
+  // Calibration from logged outcomes: real counters teach where sellers actually land.
+  // Walk-away stays the hard MAO cap; calibration informs the anchor and expectations.
+  const outcomeHistory = input.offerOutcomeHistory || []
+  const counterRatios = outcomeHistory
+    .filter((row) => row.counter !== null && row.mao !== null && Number(row.mao) > 0)
+    .map((row) => (Number(row.counter) - Number(row.mao)) / Number(row.mao))
+    .sort((a, b) => a - b)
+  const medianCounterOverMao =
+    counterRatios.length >= 3 ? counterRatios[Math.floor(counterRatios.length / 2)] : null
+  const acceptedCount = outcomeHistory.filter((row) => row.status === 'accepted').length
+  const counteredCount = outcomeHistory.filter((row) => row.status === 'countered').length
+  const rejectedCount = outcomeHistory.filter((row) => row.status === 'rejected').length
+  const offerCalibration: PropertyOpportunityAnalysis['offerStrategy']['calibration'] =
+    outcomeHistory.length >= 3
+      ? {
+          sampleCount: outcomeHistory.length,
+          acceptedCount,
+          counteredCount,
+          rejectedCount,
+          medianCounterOverMaoPercent:
+            medianCounterOverMao !== null ? Math.round(medianCounterOverMao * 1000) / 10 : null,
+          note:
+            medianCounterOverMao !== null && medianCounterOverMao > 0.05
+              ? `Across ${counterRatios.length} logged counters, sellers typically counter ~${Math.round(medianCounterOverMao * 100)}% above MAO — expect the first counter to land high and hold the walk-away.`
+              : acceptedCount > 0 && acceptedCount >= rejectedCount
+                ? `${acceptedCount} of ${outcomeHistory.length} logged outcomes were accepted — current anchoring is landing; keep the same posture.`
+                : rejectedCount > counteredCount + acceptedCount
+                  ? `Most logged outcomes were flat rejections (${rejectedCount}/${outcomeHistory.length}) — consider opening closer to target or leading with creative terms.`
+                  : `${outcomeHistory.length} logged outcomes available; log more counters with prices to sharpen anchoring.`,
+        }
+      : null
+
+  const offerStrategy: PropertyOpportunityAnalysis['offerStrategy'] = {
+    anchorOffer,
+    targetOffer,
+    walkAwayPrice: roundToNearest(walkAwayPrice, 1000),
+    negotiationRoom,
+    askGapToWalkAway,
+    askGapPercent,
+    approach: offerApproach,
+    calibration: offerCalibration,
+    summary:
+      offerApproach === 'needs_inputs'
+        ? 'Add ARV and repair inputs to unlock computed anchor, target, and walk-away numbers.'
+        : offerApproach === 'move_fast'
+          ? 'The ask is at or under the walk-away cap. Verify condition and title fast — this is a speed race, not a negotiation.'
+          : offerApproach === 'creative_first'
+            ? `The ask sits ${askGapPercent}% above the cash walk-away. Lead with a creative structure (terms, price later) instead of a price fight.`
+            : 'The gap is workable. Open at the anchor, concede in planned steps, and never cross the walk-away cap.',
+    concessionSteps:
+      offerApproach === 'needs_inputs' || anchorOffer === null || walkAwayPrice === null
+        ? []
+        : [
+            `Open at ${Math.round(anchorOffer).toLocaleString()} with the repair story attached.`,
+            `If countered, move to ${Math.round(targetOffer ?? anchorOffer).toLocaleString()} in exchange for speed (as-is, flexible close date).`,
+            `Final number is ${Math.round(walkAwayPrice).toLocaleString()}. Past that, switch to creative terms or log the outcome and exit.`,
+            ...(offerCalibration ? [`Market memory: ${offerCalibration.note}`] : []),
+            'Whatever happens, record it with outreach:log-offer-outcome so the next offer in this market is smarter.',
+          ],
+  }
+
+  // ---- Repair sensitivity: stress the budget because overruns kill more deals
+  // than bad ARVs. Break-even repair = the budget where assignment spread hits 0.
+  const breakevenRepairBudget =
+    arv !== null && askingPrice !== null
+      ? Math.max(0, Math.round(arv * dealRulePercent - (effectiveAssignmentFee || 0) - askingPrice))
+      : null
+  const repairCushionPercent =
+    breakevenRepairBudget !== null && repairBudget !== null && repairBudget > 0
+      ? Math.round(((breakevenRepairBudget - repairBudget) / repairBudget) * 1000) / 10
+      : null
+  const repairScenarios = [
+    { label: 'As scoped', factor: 1 },
+    { label: '+15% overrun', factor: 1.15 },
+    { label: '+30% overrun', factor: 1.3 },
+    { label: '+50% overrun', factor: 1.5 },
+  ].map(({ label, factor }) => {
+    const scenarioRepair = repairBudget !== null ? Math.round(repairBudget * factor) : null
+    const scenarioMao = computeMao({
+      arv: scorecardArv,
+      rulePct: dealRulePercent,
+      repairCost: scenarioRepair,
+      assignmentFee: effectiveAssignmentFee,
+    })
+    const scenarioSpread = computeSpread({ mao: scenarioMao, sellerAsk: askingPrice })
+    const scenarioFlipProfit =
+      flipProfit !== null && scenarioRepair !== null && repairBudget !== null
+        ? Math.round(flipProfit - (scenarioRepair - repairBudget))
+        : null
+    return {
+      label,
+      repairBudget: scenarioRepair,
+      mao: scenarioMao,
+      spread: scenarioSpread,
+      flipProfit: scenarioFlipProfit,
+      grade: gradeDeal({ spread: scenarioSpread }),
+    }
+  })
+  const firstRiskyScenario = repairScenarios.find((scenario) => scenario.grade === 'RISKY')
+  const repairSensitivity: PropertyOpportunityAnalysis['repairSensitivity'] = {
+    breakevenRepairBudget,
+    cushionPercent: repairCushionPercent,
+    summary:
+      repairBudget === null || arv === null
+        ? 'Add a repair budget and ARV to stress-test overrun risk.'
+        : !firstRiskyScenario
+          ? repairCushionPercent !== null && repairCushionPercent >= 50
+            ? `Repair cushion is strong: the budget can run ${repairCushionPercent}% over before the spread breaks even.`
+            : 'The deal stays GOOD through a 50% repair overrun at the current ask.'
+          : firstRiskyScenario.label === 'As scoped'
+            ? 'The deal is already RISKY at the scoped repair budget — renegotiate price or walk.'
+            : `The deal flips RISKY at ${firstRiskyScenario.label.toLowerCase()}. Verify scope hard before contract; thin cushion.`,
+    scenarios: repairScenarios,
+  }
+
   const routeFit = [
     {
       key: 'fast_cash' as const,
@@ -2321,6 +2504,8 @@ export function buildPropertyOpportunityAnalysis(
       endBuyerProfit,
       grade: dealGrade,
     },
+    offerStrategy,
+    repairSensitivity,
     comparables: {
       usedCount: usableComps.length,
       averageSalePrice: compAverageSalePrice !== null ? Math.round(compAverageSalePrice) : null,
