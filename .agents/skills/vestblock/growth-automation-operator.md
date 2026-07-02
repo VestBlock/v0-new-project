@@ -15,14 +15,17 @@ Keep VestBlock's lead machine running every day across:
 
 ## Daily Loop
 
-Run and verify:
+> RETIRED 2026-07-02: the cron routes previously listed here (`leads-source-refill`,
+> `leads-score`, `leads-outreach`, `send-outreach`, `leads-throughput`, `leads-followup`) were
+> removed from the app and must NOT be recreated.
 
-1. `/api/cron/leads-source-refill`
-2. `/api/cron/leads-score`
-3. `/api/cron/leads-outreach`
-4. `/api/cron/send-outreach`
-5. `/api/cron/leads-throughput`
-6. `/api/cron/leads-followup`
+The current daily loop is the autopilot chain — see
+`.agents/skills/vestblock/outreach-autopilot-operator.md`:
+
+1. `npm run outreach:autopilot`
+2. `npm run outreach:export-pipeline`
+3. Operator-reviewed send (never autonomous)
+4. Replies/outcomes logged via `outreach:log-reply` / `outreach:log-offer-outcome`
 
 Confirm:
 

@@ -1,5 +1,21 @@
 # VestBlock Changelog
 
+## 2026-07-02 Sync Discipline + Agent Skills + Weekly Review Workflow
+
+## Files Changed
+
+- `scripts/sync-check.mjs` (new) — `npm run sync:check`; wired as the first step of `deploy:web:prod`
+- `docs/VESTBLOCK_SYNC_DISCIPLINE.md` (new) — the rules, written after the 2026-07-02 two-agent divergence near-miss
+- `.agents/skills/vestblock/sync-discipline-operator.md` (new), `.agents/skills/vestblock/outreach-autopilot-operator.md` (new)
+- `.agents/skills/vestblock/growth-automation-operator.md` — retired-cron daily loop replaced with the autopilot chain (the stale skill was steering agents at deleted routes)
+- `package.json`
+- Scheduled task outside the repo: `vestblock-friday-lane-review` (Fridays 4 PM — learning audit, promote/pause recommendations, lane-fill + reactivation progress, learning-log append; read-only, never sends)
+
+## Features Added
+
+- Deploy gate: refuses deploys from non-main branches, dirty trees, or while behind origin/main; surfaces unmerged codex/*/claude/* agent branches so parallel agent work is visible before it collides. Escape hatches exist but are loud.
+- Operator skills now route every agent to the current loop (autopilot chain, review-first sending, cap rules) and the session protocol (pull main, read fast context + changelog, branch discipline, changelog on exit).
+
 ## 2026-07-02 Reactivation Sender + Scheduled Morning Autopilot
 
 ## Files Changed
