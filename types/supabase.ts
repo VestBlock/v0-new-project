@@ -93,6 +93,16 @@ export interface Database {
           business_ein: string | null
           country: string | null
           financial_goal: Json | null // Stores the *primary* financial goal {id, title, description, customDetails}
+          address_street: string | null
+          address_city: string | null
+          address_state: string | null
+          address_zip: string | null
+          phone_number: string | null
+          date_of_birth: string | null
+          ssn: string | null
+          role: string | null
+          is_subscribed: boolean | null
+          paypal_order_product: string | null
           created_at: string
           updated_at: string
           // New fields for storing AI recommendations if not in analysis_jobs
@@ -110,6 +120,16 @@ export interface Database {
           business_ein?: string | null
           country?: string | null
           financial_goal?: Json | null
+          address_street?: string | null
+          address_city?: string | null
+          address_state?: string | null
+          address_zip?: string | null
+          phone_number?: string | null
+          date_of_birth?: string | null
+          ssn?: string | null
+          role?: string | null
+          is_subscribed?: boolean | null
+          paypal_order_product?: string | null
           created_at?: string
           updated_at?: string
           ai_side_hustle_recommendations?: Json | null
@@ -126,11 +146,61 @@ export interface Database {
           business_ein?: string | null
           country?: string | null
           financial_goal?: Json | null
+          address_street?: string | null
+          address_city?: string | null
+          address_state?: string | null
+          address_zip?: string | null
+          phone_number?: string | null
+          date_of_birth?: string | null
+          ssn?: string | null
+          role?: string | null
+          is_subscribed?: boolean | null
+          paypal_order_product?: string | null
           created_at?: string
           updated_at?: string
           ai_side_hustle_recommendations?: Json | null
           ai_credit_card_recommendations?: Json | null
         }
+        Relationships: []
+      }
+      user_grant_profile: {
+        Row: {
+          user_id: string
+          state: string | null
+          business_status: string | null
+          industry: string | null
+          revenue_range: string | null
+          founder_attributes: string[] | null
+          has_ein: boolean | null
+          business_name: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          user_id: string
+          state?: string | null
+          business_status?: string | null
+          industry?: string | null
+          revenue_range?: string | null
+          founder_attributes?: string[] | null
+          has_ein?: boolean | null
+          business_name?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          state?: string | null
+          business_status?: string | null
+          industry?: string | null
+          revenue_range?: string | null
+          founder_attributes?: string[] | null
+          has_ein?: boolean | null
+          business_name?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       chat_history: {
         Row: {
@@ -160,6 +230,7 @@ export interface Database {
           title?: string | null
           assistant_type?: string
         }
+        Relationships: []
       }
       user_documents: {
         Row: {
@@ -204,6 +275,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       credit_reports: {
         Row: {
@@ -244,6 +316,7 @@ export interface Database {
           public_records?: Json | null // Corrected from string
           created_at?: string
         }
+        Relationships: []
       }
       dispute_letters: {
         Row: {
@@ -282,6 +355,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       // This table stores the generated roadmaps for users, potentially multiple per user if they explore different goals.
       user_roadmaps: {
@@ -318,6 +392,7 @@ export interface Database {
           generated_at?: string
           is_primary?: boolean
         }
+        Relationships: []
       }
       analysis_jobs: {
         Row: {
@@ -436,13 +511,104 @@ export interface Database {
           side_hustle_recommendations_json?: string | null
           created_at?: string
         }
+        Relationships: []
+      }
+      credit_improvement_roadmaps: {
+        Row: {
+          id: string
+          user_id: string
+          credit_report_id: string
+          roadmap_data: RoadmapData
+          generated_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          credit_report_id: string
+          roadmap_data: RoadmapData
+          generated_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          credit_report_id?: string
+          roadmap_data?: RoadmapData
+          generated_at?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      business_roadmaps: {
+        Row: {
+          id: string
+          user_id: string
+          html: string | null
+          pdf_path: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          html?: string | null
+          pdf_path?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          html?: string | null
+          pdf_path?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_tool_answers: {
+        Row: {
+          id: string
+          user_id: string
+          tool: string
+          answers: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tool: string
+          answers?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tool?: string
+          answers?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_public_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: { tablename: string }[]
+      }
+      pgclient: {
+        Args: {
+          query: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

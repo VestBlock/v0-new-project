@@ -1,0 +1,6 @@
+{
+  "primaryHostname": "MacBookPro.lan",
+  "commandCenterHostname": "MacBookAir.lan",
+  "freshExportMaxAgeDays": 2,
+  "notes": "Primary machine handles live export ingestion, lead generation, and outreach. Command center machine should monitor and review only."
+}

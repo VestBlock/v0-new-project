@@ -24,6 +24,7 @@ import {
   Star,
   UploadCloud,
   Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { InteractiveRoadmap } from '@/components/interactive-roadmap';
 import { CreditCardsTab } from '@/components/credit-cards-tab';
@@ -219,12 +220,13 @@ function DashboardPageContent() {
   }
 
   return (
-    <main className="flex-1 p-4 md:p-8 space-y-8">
+    <main className="vb-page flex-1 space-y-8 p-4 md:p-8">
       <div className="flex items-center justify-between space-y-2">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Welcome back!</h2>
+          <p className="vb-eyebrow">Overview</p>
+          <h2 className="mt-2 text-3xl font-medium tracking-tight">What needs attention next?</h2>
           <p className="text-muted-foreground">
-            Here is your VestBlock workspace for partner paths, funding, DealVault records, and prepared growth support.
+            Continue a capital request, deal workflow, opportunity, or saved account task.
           </p>
         </div>
         {isProMember && (
@@ -244,16 +246,34 @@ function DashboardPageContent() {
         description="Your current VestBlock access tier, including paid and admin permissions."
       />
 
+      <section aria-labelledby="dashboard-paths-title">
+        <div className="mb-4">
+          <h3 id="dashboard-paths-title" className="text-xl font-medium">Choose a path</h3>
+          <p className="text-sm text-muted-foreground">Go straight to the outcome you are working on.</p>
+        </div>
+        <div className="divide-y divide-white/10 border-y border-white/10">
+          {[
+            { href: '/capital', label: 'Capital', body: 'Funding, financing, lender matching, and readiness.' },
+            { href: '/deals', label: 'Deals', body: 'Property sourcing, analysis, buyer fit, and DealVault.' },
+            { href: '/opportunities', label: 'Opportunities', body: 'Business resources, grants, education, and partner services.' },
+          ].map((path) => (
+            <Link key={path.href} href={path.href} className="group grid gap-2 py-5 sm:grid-cols-[10rem_1fr_auto] sm:items-center">
+              <span className="font-medium text-foreground">{path.label}</span>
+              <span className="text-sm text-muted-foreground">{path.body}</span>
+              <ArrowRight className="h-4 w-4 text-[#b7ff3c] transition-transform group-hover:translate-x-1" />
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <NetworkIntakePanel />
 
       {!isProMember && (
         <Alert>
           <Rocket className="h-4 w-4" />
-          <AlertTitle>Unlock Your Full Potential!</AlertTitle>
+          <AlertTitle>Pro tools are not active on this account.</AlertTitle>
           <AlertDescription>
-            Upgrade to Pro to access our full suite of AI-powered tools,
-            including the advanced dispute draft builder and personalized
-            financial roadmaps.
+            Pro adds the dispute draft builder and expanded financial roadmaps.
           </AlertDescription>
           <div className="mt-4">
             <Button
@@ -275,30 +295,30 @@ function DashboardPageContent() {
         </Alert>
       )}
 
-      <Card className="border-cyan-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.15),_transparent_45%),rgba(15,23,42,0.92)] text-white">
+      <Card className="border-white/10 bg-[#0e1114] text-white shadow-none">
         <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-cyan-200">
+            <div className="flex items-center gap-2 text-[#d7ff99]">
               <Sparkles className="h-4 w-4" />
               <span className="text-sm font-medium">VestBlock Network Workspace</span>
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Start with the right real estate partner path.</h3>
+              <h3 className="text-xl font-semibold">Continue your active workspace.</h3>
               <p className="mt-1 text-sm text-slate-300">
                 Review seller or buyer criteria, lender notes, DealVault records, and partner follow-up in one place.
               </p>
             </div>
           </div>
-          <Button asChild className="bg-cyan-500 text-slate-950 hover:bg-cyan-400">
+          <Button asChild>
             <Link href="/dashboard/services">Open Workspace</Link>
           </Button>
         </CardContent>
       </Card>
 
-      <Card className="border-cyan-500/20">
+      <Card className="border-white/10 bg-[#0e1114] shadow-none">
         <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-cyan-600">
+            <div className="flex items-center gap-2 text-[#b7ff3c]">
               <FileText className="h-4 w-4" />
               <span className="text-sm font-medium">Funding & Deal Prep</span>
             </div>
@@ -443,7 +463,7 @@ const ProFeatureLock = ({ onClick, disabled }: any) => (
         This is a Pro Feature
       </CardTitle>
       <CardDescription>
-        Upgrade your account to access this powerful tool and much more.
+        Upgrade to use this tool and the other Pro account features.
       </CardDescription>
     </CardHeader>
     <CardContent>

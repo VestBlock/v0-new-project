@@ -20,6 +20,16 @@ type ExistingAffiliate = {
   status: string | null
 }
 
+type AffiliateInsert = {
+  user_id: string
+  full_name: string
+  email: string
+  website_url: string | null
+  paypal_email: string | null
+  notes: string
+  affiliate_code: string
+}
+
 export default function AffiliateRegisterPage()
 
 {
@@ -68,8 +78,8 @@ export default function AffiliateRegisterPage()
     setIsSubmitting(true)
 
     try {
-      const { data: existingAffiliateResult, error: fetchError } = await supabase
-        .from("affiliates")
+      const affiliatesTable = (supabase as any).from("affiliates")
+      const { data: existingAffiliateResult, error: fetchError } = await affiliatesTable
         .select("id, status")
         .eq("user_id", user.id)
         .maybeSingle()
@@ -89,18 +99,18 @@ export default function AffiliateRegisterPage()
         return
       }
       const tempAffiliateCode = `${fullName.replace(/\s+/g, "").toUpperCase().substring(0, 5)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+      const affiliateInsert: AffiliateInsert = {
+        user_id: user.id,
+        full_name: fullName,
+        email: email,
+        website_url: websiteUrl || null,
+        paypal_email: paypalEmail || null,
+        notes: `Promotion methods: ${promotionMethods}`,
+        affiliate_code: tempAffiliateCode,
+      }
 
-      const { data, error } = await supabase
-        .from("affiliates")
-        .insert({
-          user_id: user.id,
-          full_name: fullName,
-          email: email,
-          website_url: websiteUrl || null,
-          paypal_email: paypalEmail || null,
-          notes: `Promotion methods: ${promotionMethods}`,
-          affiliate_code: tempAffiliateCode,
-        })
+      const { data, error } = await affiliatesTable
+        .insert(affiliateInsert)
         .select()
         .single()
 

@@ -93,13 +93,12 @@ const expectedKeys: OperatingLoopKey[] = [
   "offer_accuracy",
   "suppression_compliance",
   "buyer_demand",
-  "reactivation",
   "agent_performance",
   "dead_code_dirty_system",
   "daily_war_room",
 ]
 
-assert.equal(loops.length, 11, "Boss operating surface should expose exactly eleven loops")
+assert.equal(loops.length, 10, "Boss operating surface should expose exactly ten loops")
 assert.deepEqual(
   loops.map((loop) => loop.key),
   expectedKeys,
@@ -132,11 +131,6 @@ assert.equal(
   loops.find((loop) => loop.key === "buyer_demand")?.status,
   "green",
   "Confirmed buy boxes should make buyer demand actionable"
-)
-assert.equal(
-  loops.find((loop) => loop.key === "reactivation")?.status,
-  "green",
-  "No eligible second-touch contacts should leave the reactivation loop green"
 )
 
 console.log("operating-loops: ok")

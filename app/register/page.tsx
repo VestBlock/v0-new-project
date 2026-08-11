@@ -17,6 +17,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
+function getSafeRedirectTarget(value: string | null, fallback: string) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return fallback;
+  }
+
+  return value;
+}
+
 function RegisterPageContent() {
   const defaultRedirectTarget = '/dashboard/services';
   const searchParams = useSearchParams();
@@ -26,13 +34,7 @@ function RegisterPageContent() {
   const [fullName, setFullName] = useState('');
   const { signUp, isLoading, authError, isAuthenticated } = useAuth();
   const router = useRouter();
-  const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
-
-  useEffect(() => {
-    if (prefilledEmail) {
-      setEmail((current) => current || prefilledEmail);
-    }
-  }, [prefilledEmail]);
+  const redirectTarget = getSafeRedirectTarget(searchParams.get('redirect'), defaultRedirectTarget);
 
   useEffect(() => {
     // Redirect if the user is already authenticated
@@ -51,12 +53,13 @@ function RegisterPageContent() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="mx-auto max-w-sm">
+    <div className="vb-page flex min-h-screen items-center justify-center px-4 py-24">
+      <Card className="mx-auto w-full max-w-md border-white/10 bg-[#0e1114] shadow-none">
         <CardHeader>
-          <CardTitle className="text-xl">Create your VestBlock account</CardTitle>
+          <p className="vb-eyebrow">Start your VestBlock workspace</p>
+          <CardTitle className="text-3xl font-medium tracking-tight">Keep your next move in one place.</CardTitle>
           <CardDescription>
-            Your VestBlock workspace will be ready after signup.
+            Save capital requests, deal work, opportunities, and DealVault activity.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -65,7 +68,9 @@ function RegisterPageContent() {
               <Label htmlFor="full-name">Full name</Label>
               <Input
                 id="full-name"
-                placeholder="John Doe"
+                placeholder="Your name"
+                autoComplete="name"
+                className="border-white/15 bg-[#090a08]"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -77,7 +82,9 @@ function RegisterPageContent() {
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="border-white/15 bg-[#090a08]"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -89,6 +96,8 @@ function RegisterPageContent() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="new-password"
+                className="border-white/15 bg-[#090a08]"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -133,7 +142,7 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="vb-page flex min-h-screen items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       }

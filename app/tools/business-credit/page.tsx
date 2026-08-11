@@ -63,7 +63,7 @@ type RunResponse = {
   runId: string;
 };
 
-type RoadmapRow = { pdf_path: any };
+type RoadmapRow = { id: string; pdf_path: string | null; created_at?: string | null };
 
 /* ---------------- Helpers ---------------- */
 
@@ -361,6 +361,8 @@ export default function BusinessCreditPage() {
   };
 
   const handleRegenerate = async (id: string) => {
+    if (!user?.id) return;
+
     try {
       //   setIsRunning(true);
       setRegenId(id);
@@ -385,7 +387,7 @@ export default function BusinessCreditPage() {
       const { data: rows } = await supabase
         .from('business_roadmaps')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setHistory(rows || []);
 

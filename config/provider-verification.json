@@ -1,0 +1,35 @@
+{
+  "checkedAt": "2026-08-11T05:12:36.000Z",
+  "providers": {
+    "openai": {
+      "status": "verified",
+      "check": "One-token live Chat Completions proof",
+      "detail": "The configured key authenticated and completed a minimal generation request with HTTP 200. No generated output was exposed."
+    },
+    "buffer": {
+      "status": "verified",
+      "check": "Live account and selected-channel GraphQL proof",
+      "detail": "The vestblock socials key authenticated and the selected VestBlock Facebook channel is visible. No post was scheduled or published."
+    },
+    "chatgpt_ads": {
+      "status": "verified",
+      "check": "Live read-only Ads API account proof",
+      "detail": "The account-scoped reporting key authenticated to active advertiser account adacct_6a7aa3b07c819cb32b76dc60a2233e for Vestblock LLC. The restricted financial-services review is rejected and remains a launch blocker; no campaign, billing method, or spend was authorized."
+    },
+    "n8n": {
+      "status": "verified",
+      "check": "Published Header Auth workflow and live signed preview proof",
+      "detail": "Workflow wyi6LMTPGkhZCYYa is published with x-vestblock-secret Header Auth. A signed production-webhook request from the Mac Pro returned HTTP 202 with mode preview and a matching request ID. The workflow has no downstream write nodes."
+    },
+    "google_ads": {
+      "status": "blocked",
+      "check": "Credential inventory",
+      "detail": "No Google Ads customer/developer credential is configured. The report-only script passes a local controlled test only."
+    },
+    "search_console": {
+      "status": "verified",
+      "check": "Live OAuth property-list proof",
+      "detail": "OAuth succeeded; one Search Console property is visible and it matches the configured VestBlock property."
+    }
+  }
+}

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 
-export type CommandRole = "seller" | "buyer" | "lender" | "builder"
+export type CommandRole = "capital" | "deals" | "opportunity"
 
 type RouteObject = {
   material: THREE.MeshBasicMaterial
@@ -21,17 +21,15 @@ type NodeObject = {
 }
 
 const roleColors: Record<CommandRole, number> = {
-  seller: 0x22d3ee,
-  buyer: 0x60a5fa,
-  lender: 0xfacc15,
-  builder: 0xa855f7,
+  capital: 0xb7ff3c,
+  deals: 0xf3efe6,
+  opportunity: 0x78906f,
 }
 
 const rolePositions: Record<CommandRole, THREE.Vector3> = {
-  seller: new THREE.Vector3(-4.1, 0.18, 1.6),
-  buyer: new THREE.Vector3(-1.6, 0.18, -2.3),
-  lender: new THREE.Vector3(2.15, 0.18, -2.0),
-  builder: new THREE.Vector3(4.1, 0.18, 1.25),
+  capital: new THREE.Vector3(-3.7, 0.18, 1.25),
+  deals: new THREE.Vector3(0, 0.18, -2.45),
+  opportunity: new THREE.Vector3(3.7, 0.18, 1.25),
 }
 
 function makeRoute(start: THREE.Vector3, end: THREE.Vector3) {
@@ -88,15 +86,15 @@ function makeHouse(color: number) {
 function makeCoinStack() {
   const group = new THREE.Group()
   const material = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    emissive: 0xf59e0b,
+    color: 0xb7ff3c,
+    emissive: 0x6aa12a,
     emissiveIntensity: 0.46,
     metalness: 0.82,
     roughness: 0.2,
   })
 
   for (let index = 0; index < 9; index += 1) {
-    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.075, 56), material)
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.075, 32), material)
     coin.position.y = 0.08 + index * 0.075
     coin.rotation.y = index * 0.22
     group.add(coin)
@@ -157,7 +155,7 @@ function makeRoleNode(role: CommandRole) {
   group.position.copy(rolePositions[role])
 
   const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.72, 0.88, 0.1, 72),
+    new THREE.CylinderGeometry(0.72, 0.88, 0.1, 40),
     new THREE.MeshBasicMaterial({
       color,
       opacity: 0.16,
@@ -170,7 +168,7 @@ function makeRoleNode(role: CommandRole) {
   group.add(base)
 
   const halo = new THREE.Mesh(
-    new THREE.TorusGeometry(0.86, 0.022, 10, 96),
+    new THREE.TorusGeometry(0.86, 0.022, 8, 64),
     new THREE.MeshBasicMaterial({
       color,
       opacity: 0.72,
@@ -183,11 +181,11 @@ function makeRoleNode(role: CommandRole) {
   halo.position.y = 0.11
   group.add(halo)
 
-  if (role === "lender") {
+  if (role === "capital") {
     const stack = makeCoinStack()
     stack.position.y = 0.1
     group.add(stack)
-  } else if (role === "builder") {
+  } else if (role === "opportunity") {
     const blocks = makeBuilderBlocks(color)
     blocks.position.y = 0.08
     group.add(blocks)
@@ -237,27 +235,27 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
       powerPreference: "high-performance",
     })
     renderer.setClearColor(0x000000, 0)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7))
+    renderer.setPixelRatio(1)
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100)
     camera.position.set(0.1, 3.45, 8.5)
     camera.lookAt(0, 1.15, 0)
 
-    const ambient = new THREE.AmbientLight(0x9bdcff, 1.2)
+    const ambient = new THREE.AmbientLight(0xf3efe6, 1.05)
     scene.add(ambient)
 
-    const cyanLight = new THREE.PointLight(0x22d3ee, 8.5, 18)
-    cyanLight.position.set(-3.8, 4.2, 4.1)
-    scene.add(cyanLight)
+    const limeLight = new THREE.PointLight(0xb7ff3c, 7.5, 18)
+    limeLight.position.set(-3.8, 4.2, 4.1)
+    scene.add(limeLight)
 
-    const violetLight = new THREE.PointLight(0xa855f7, 7, 18)
-    violetLight.position.set(3.8, 4.6, 3.4)
-    scene.add(violetLight)
+    const opportunityLight = new THREE.PointLight(0x78906f, 5.5, 18)
+    opportunityLight.position.set(3.8, 4.6, 3.4)
+    scene.add(opportunityLight)
 
-    const goldLight = new THREE.PointLight(0xfacc15, 3.8, 14)
-    goldLight.position.set(1.8, 2.8, -2.8)
-    scene.add(goldLight)
+    const ivoryLight = new THREE.PointLight(0xf3efe6, 3.2, 14)
+    ivoryLight.position.set(1.8, 2.8, -2.8)
+    scene.add(ivoryLight)
 
     const rig = new THREE.Group()
     rig.rotation.x = -0.18
@@ -268,14 +266,14 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     floor.rotation.x = -Math.PI / 2
     rig.add(floor)
 
-    const grid = new THREE.GridHelper(11, 34, 0x22d3ee, 0x1d4ed8)
+    const grid = new THREE.GridHelper(11, 28, 0xb7ff3c, 0x263128)
     const gridMaterial = grid.material as THREE.Material
     gridMaterial.transparent = true
     gridMaterial.opacity = 0.22
     rig.add(grid)
 
     const platform = new THREE.Mesh(
-      new THREE.CircleGeometry(4.25, 128),
+      new THREE.CircleGeometry(4.25, 72),
       new THREE.MeshBasicMaterial({
         color: 0x0f172a,
         opacity: 0.3,
@@ -303,7 +301,7 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     commandCore.add(logo)
 
     const loader = new THREE.TextureLoader()
-    const logoTexture = loader.load("/vestblock-mark-transparent.png", (texture) => {
+    const logoTexture = loader.load("/brand/vestblock-monogram.png", (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
       texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
       logoMaterial.map = texture
@@ -312,9 +310,9 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     })
 
     const backGlow = new THREE.Mesh(
-      new THREE.SphereGeometry(1.95, 48, 32),
+      new THREE.SphereGeometry(1.95, 28, 20),
       new THREE.MeshBasicMaterial({
-        color: 0x22d3ee,
+        color: 0xb7ff3c,
         opacity: 0.09,
         transparent: true,
         blending: THREE.AdditiveBlending,
@@ -328,8 +326,8 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     const proofCore = new THREE.Mesh(
       new THREE.DodecahedronGeometry(0.62, 0),
       new THREE.MeshPhysicalMaterial({
-        color: 0x67e8f9,
-        emissive: 0x0891b2,
+        color: 0xf3efe6,
+        emissive: 0x6aa12a,
         emissiveIntensity: 0.55,
         metalness: 0.36,
         opacity: 0.66,
@@ -344,7 +342,7 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     const proofEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(proofCore.geometry),
       new THREE.LineBasicMaterial({
-        color: 0xfacc15,
+        color: 0xb7ff3c,
         opacity: 0.82,
         transparent: true,
       }),
@@ -353,21 +351,21 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     commandCore.add(proofEdges)
 
     const orbitMaterial = new THREE.MeshBasicMaterial({
-      color: 0x67e8f9,
+      color: 0xb7ff3c,
       opacity: 0.42,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
-    const orbitOne = new THREE.Mesh(new THREE.TorusGeometry(2.38, 0.018, 10, 160), orbitMaterial)
+    const orbitOne = new THREE.Mesh(new THREE.TorusGeometry(2.38, 0.018, 8, 96), orbitMaterial)
     orbitOne.rotation.x = Math.PI / 2.65
     orbitOne.rotation.z = -0.12
     commandCore.add(orbitOne)
 
     const orbitTwo = new THREE.Mesh(
-      new THREE.TorusGeometry(1.72, 0.014, 10, 160),
+      new THREE.TorusGeometry(1.72, 0.014, 8, 80),
       new THREE.MeshBasicMaterial({
-        color: 0xa855f7,
+        color: 0x78906f,
         opacity: 0.38,
         transparent: true,
         blending: THREE.AdditiveBlending,
@@ -389,8 +387,8 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     ;(Object.keys(rolePositions) as CommandRole[]).forEach((role, index) => {
       const color = roleColors[role]
       const start = rolePositions[role].clone()
-      start.y += role === "lender" ? 1.35 : role === "builder" ? 1.55 : 1.18
-      const end = new THREE.Vector3(role === "builder" ? 1.15 : role === "seller" ? -1.1 : 0, 2.15, 0.04)
+      start.y += role === "capital" ? 1.35 : role === "opportunity" ? 1.55 : 1.18
+      const end = new THREE.Vector3(role === "opportunity" ? 1.1 : role === "capital" ? -1.1 : 0, 2.15, 0.04)
       const curve = makeRoute(start, end)
 
       const material = new THREE.MeshBasicMaterial({
@@ -400,7 +398,7 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 96, 0.023, 10, false), material)
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.023, 8, false), material)
       rig.add(tube)
 
       const particleMaterial = new THREE.MeshBasicMaterial({
@@ -410,7 +408,7 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
-      const particle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 24), particleMaterial)
+      const particle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 14), particleMaterial)
       rig.add(particle)
       routes.push({
         curve,
@@ -424,7 +422,7 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     })
 
     const parcelMaterial = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: 0x78906f,
       opacity: 0.12,
       transparent: true,
     })
@@ -440,16 +438,17 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     let pointerX = 0
     let pointerY = 0
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    let isInView = true
 
     const resize = () => {
       const width = container.clientWidth
       const height = container.clientHeight
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, width < 768 ? 1.1 : 1.45))
       renderer.setSize(width, height, false)
       const aspect = width / Math.max(height, 1)
       camera.aspect = aspect
-      // Pull the camera back / raise it on tall or narrow viewports so the
-      // full Seller→Buyer→Lender→Operator spread stays framed as a background.
-      const distance = aspect < 0.7 ? 13 : aspect < 1 ? 11 : aspect < 1.5 ? 9.4 : 8.5
+      // Pull the camera back on narrow viewports so the three network lanes stay framed.
+      const distance = aspect < 0.7 ? 12 : aspect < 1 ? 10.5 : aspect < 1.5 ? 9.2 : 8.5
       const heightY = aspect < 1 ? 4.3 : 3.45
       camera.position.set(0.1, heightY, distance)
       camera.lookAt(0, 1.15, 0)
@@ -463,6 +462,10 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     }
 
     const renderScene = () => {
+      if (!isInView || document.hidden) {
+        animationId = 0
+        return
+      }
       frame += 0.016
       const active = activeRoleRef.current
 
@@ -499,13 +502,41 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
       animationId = window.requestAnimationFrame(renderScene)
     }
 
+    const startRendering = () => {
+      if (!prefersReducedMotion && !animationId && isInView && !document.hidden) {
+        animationId = window.requestAnimationFrame(renderScene)
+      }
+    }
+
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        isInView = entry.isIntersecting
+        if (!isInView && animationId) {
+          window.cancelAnimationFrame(animationId)
+          animationId = 0
+        }
+        startRendering()
+      },
+      { rootMargin: "120px" },
+    )
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && animationId) {
+        window.cancelAnimationFrame(animationId)
+        animationId = 0
+      }
+      startRendering()
+    }
+
     const observer = new ResizeObserver(resize)
     observer.observe(container)
+    visibilityObserver.observe(container)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
     resize()
 
     if (!prefersReducedMotion) {
       container.addEventListener("pointermove", handlePointerMove)
-      renderScene()
+      startRendering()
     } else {
       renderer.render(scene, camera)
     }
@@ -513,6 +544,8 @@ export function VestBlockCommandScene({ activeRole }: { activeRole: CommandRole 
     return () => {
       window.cancelAnimationFrame(animationId)
       observer.disconnect()
+      visibilityObserver.disconnect()
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       if (!prefersReducedMotion) {
         container.removeEventListener("pointermove", handlePointerMove)
       }

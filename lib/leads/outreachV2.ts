@@ -275,7 +275,7 @@ export function isOutreachV2Enabled() {
 }
 
 export function getOutreachV2DailyTarget() {
-  return envInt('OUTREACH_V2_DAILY_QUALITY_TARGET', envInt('LEADS_TARGET_EMAILS_PER_DAY', 50))
+  return envInt('OUTREACH_V2_DAILY_QUALITY_TARGET', envInt('LEADS_TARGET_EMAILS_PER_DAY', 500))
 }
 
 function textFromUnknown(value: unknown) {

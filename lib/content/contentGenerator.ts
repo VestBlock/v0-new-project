@@ -20,12 +20,19 @@ export type ContentGenerationInput = {
 
 export type GeneratedContentAsset = {
   title: string;
+  headline?: string;
   slug: string;
   seoTitle?: string;
   metaDescription?: string;
   excerpt?: string;
   bodyMarkdown: string;
   socialCaption?: string;
+  shortVersion?: string;
+  longVersion?: string;
+  platformVariants?: Record<string, string>;
+  graphicPrompt?: string;
+  videoScript?: string;
+  shotList?: string[];
   hashtags?: string[];
   ctaLabel?: string;
   ctaUrl?: string;
@@ -70,6 +77,21 @@ function normalizeHashtags(value: unknown) {
     .slice(0, 12);
 }
 
+function normalizeStringArray(value: unknown, limit: number) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean).slice(0, limit);
+}
+
+function normalizePlatformVariants(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, copy]) => [key.trim().toLowerCase(), String(copy || '').trim()])
+      .filter(([key, copy]) => key && copy)
+      .slice(0, 8)
+  );
+}
+
 export async function generateMarketingContent(
   input: ContentGenerationInput
 ): Promise<GeneratedContentAsset> {
@@ -95,7 +117,7 @@ Available VestBlock services:
 ${serviceListForPrompt()}
 
 Return ONLY valid JSON with these keys:
-title, slug, seoTitle, metaDescription, excerpt, bodyMarkdown, socialCaption, hashtags, ctaLabel, ctaUrl, metadata.
+title, headline, slug, seoTitle, metaDescription, excerpt, bodyMarkdown, socialCaption, shortVersion, longVersion, platformVariants, graphicPrompt, videoScript, shotList, hashtags, ctaLabel, ctaUrl, metadata.
 bodyMarkdown must be ready for manual publishing.`;
 
   const user = `Create one ${input.contentType} content asset.
@@ -122,6 +144,9 @@ Content requirements:
 - If content_type is seo_page: include an H1, short intro, sections, bullet checklist, FAQ, and a clear CTA back to ${service.offerPath}.
 - If content_type is social_post: include one polished caption, a short hook, 3-7 hashtags, and a CTA.
 - If content_type is campaign: include a campaign theme, 5 post ideas, 2 email ideas, and a landing-page CTA.
+- platformVariants should adapt one core idea for LinkedIn, Facebook, Instagram, and X without inventing different claims.
+- graphicPrompt should describe a premium black, metal, and electric-lime VestBlock visual with useful subject matter, clean negative space, and no generated logo or baked-in text.
+- videoScript and shotList should describe a concise approved-media production plan. Do not claim a finished video exists.
 - Keep it specific to VestBlock and the selected service.
 - Do not include markdown code fences.`;
 
@@ -146,6 +171,7 @@ Content requirements:
 
   return {
     title,
+    headline: parsed.headline ? String(parsed.headline).trim() : title,
     slug: uniqueSlug(String(parsed.slug || title || service.label)),
     seoTitle: parsed.seoTitle ? String(parsed.seoTitle).trim() : title,
     metaDescription: parsed.metaDescription
@@ -154,6 +180,12 @@ Content requirements:
     excerpt: parsed.excerpt ? String(parsed.excerpt).trim() : undefined,
     bodyMarkdown: String(parsed.bodyMarkdown || parsed.socialCaption || '').trim(),
     socialCaption: parsed.socialCaption ? String(parsed.socialCaption).trim() : undefined,
+    shortVersion: parsed.shortVersion ? String(parsed.shortVersion).trim() : undefined,
+    longVersion: parsed.longVersion ? String(parsed.longVersion).trim() : undefined,
+    platformVariants: normalizePlatformVariants(parsed.platformVariants),
+    graphicPrompt: parsed.graphicPrompt ? String(parsed.graphicPrompt).trim() : undefined,
+    videoScript: parsed.videoScript ? String(parsed.videoScript).trim() : undefined,
+    shotList: normalizeStringArray(parsed.shotList, 12),
     hashtags: normalizeHashtags(parsed.hashtags),
     ctaLabel: parsed.ctaLabel ? String(parsed.ctaLabel).trim() : 'Start with VestBlock',
     ctaUrl: parsed.ctaUrl ? String(parsed.ctaUrl).trim() : service.offerPath,
@@ -164,6 +196,13 @@ Content requirements:
       platform,
       postType,
       language,
+      headline: parsed.headline ? String(parsed.headline).trim() : title,
+      shortVersion: parsed.shortVersion ? String(parsed.shortVersion).trim() : null,
+      longVersion: parsed.longVersion ? String(parsed.longVersion).trim() : null,
+      platformVariants: normalizePlatformVariants(parsed.platformVariants),
+      graphicPrompt: parsed.graphicPrompt ? String(parsed.graphicPrompt).trim() : null,
+      videoScript: parsed.videoScript ? String(parsed.videoScript).trim() : null,
+      shotList: normalizeStringArray(parsed.shotList, 12),
     },
   };
 }

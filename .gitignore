@@ -33,11 +33,11 @@ spy_daily_signal.pine
 spy_swing_conservative_strategy.pine
 spy_swing_strategy.pine
 
-
 # local command-center runtime memory and generated buyer packets
 /data/command-center/
 /data/property-portfolios/
 /reports/
+/logs/
 # local revenue/outreach operating data; keep scripts and docs tracked, not raw exports
 /data/distress-leads/
 /data/distress-sources/
@@ -47,6 +47,11 @@ spy_swing_strategy.pine
 /data/dm-exports/**/*.csv
 /data/dm-exports/*.csv
 /data/direct-seller-batches/
+/data/preforeclosure-county/raw/
+/data/preforeclosure-county/normalized/
+/data/preforeclosure-county/osint-enriched/
+/data/preforeclosure-county/review/
+/data/preforeclosure-county/dealmachine-import/
 /.npm-cache/
 /data/buffer/*results-*.json
 /data/buffer/vestblock-facebook-90-day-calendar.*

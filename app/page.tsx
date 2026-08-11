@@ -1,61 +1,43 @@
-import type { Metadata } from 'next';
-import { LenisProvider } from '@/components/cinematic/lenis-provider';
-import { CinematicHero } from '@/components/cinematic/cinematic-hero';
-import { DealflowOperatingSection } from '@/components/home/dealflow-operating-section';
-import { DealVaultProofSection } from '@/components/home/dealvault-proof-section';
-import { CinematicCta } from '@/components/cinematic/cinematic-cta';
-import { absoluteUrl } from '@/lib/seo/site';
+import type { Metadata } from "next"
+
+import { HeroSection } from "@/components/hero-section"
 import {
-  organizationJsonLd,
-  websiteJsonLd,
+  CorePathsSection,
+  DealVaultTrustSection,
+  HomeFinalCta,
+  NetworkWorkflowSection,
+  ProductProofSection,
+} from "@/components/home/rebrand-home-sections"
+import { absoluteUrl } from "@/lib/seo/site"
+import {
   homepageFaqJsonLd,
+  organizationJsonLd,
   realEstatePartnerServiceJsonLd,
-} from '@/lib/seo/structuredData';
+  websiteJsonLd,
+} from "@/lib/seo/structuredData"
 
 export const metadata: Metadata = {
-  title: 'VestBlock | Real Estate Deal Flow Operating System',
+  title: "Find Capital, Deals, and Opportunities",
   description:
-    'VestBlock helps property owners, buyers, lenders, builders, and investors analyze opportunities, route deals, create buyer packets, and move faster with cleaner deal records.',
-  keywords: [
-    'real estate partner network',
-    'real estate opportunity network',
-    'seller property review',
-    'buyer buy box network',
-    'private lender network',
-    'developer contractor partner network',
-    'DealVault records',
-    'real estate funding review',
-    'cash buyer network',
-  ],
-  alternates: {
-    canonical: '/',
-  },
+    "VestBlock brings business funding, investment-property financing, real-estate deals, property analysis, DealVault, and practical business opportunities into one network.",
+  alternates: { canonical: "/" },
   openGraph: {
-    title: 'VestBlock | Real Estate Deal Flow Operating System',
-    description:
-      'Analyze properties, route opportunities to the right buyers and capital partners, and keep deal records organized with VestBlock.',
-    url: absoluteUrl('/'),
-    images: [
-      {
-        url: absoluteUrl('/opengraph-image'),
-        width: 1200,
-        height: 630,
-        alt: 'VestBlock social preview with logo and real estate partner network message',
-      },
-    ],
+    title: "Find Your Next Move | VestBlock",
+    description: "Capital, deals, and opportunities brought together in one network.",
+    url: absoluteUrl("/"),
+    images: [{ url: absoluteUrl("/opengraph-image"), width: 1200, height: 630, alt: "VestBlock — find your next move" }],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'VestBlock | Real Estate Deal Flow Operating System',
-    description:
-      'A real estate deal-flow operating system for property analysis, buyer matching, funding paths, and deal records.',
-    images: [absoluteUrl('/opengraph-image')],
+    card: "summary_large_image",
+    title: "Find Your Next Move | VestBlock",
+    description: "Capital, deals, and opportunities brought together in one network.",
+    images: [absoluteUrl("/opengraph-image")],
   },
-};
+}
 
 export default function HomePage() {
   return (
-    <div className="premium-page">
+    <div className="vb-page">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -67,11 +49,12 @@ export default function HomePage() {
           ]),
         }}
       />
-      <LenisProvider />
-      <CinematicHero />
-      <DealflowOperatingSection />
-      <DealVaultProofSection />
-      <CinematicCta />
+      <HeroSection />
+      <CorePathsSection />
+      <NetworkWorkflowSection />
+      <ProductProofSection />
+      <DealVaultTrustSection />
+      <HomeFinalCta />
     </div>
-  );
+  )
 }

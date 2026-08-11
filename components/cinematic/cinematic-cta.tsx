@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Calculator, Home, Users } from "lucide-react"
+import { ArrowRight, Home } from "lucide-react"
 
 export function CinematicCta() {
   const reduce = useReducedMotion()
@@ -30,35 +30,28 @@ export function CinematicCta() {
         transition={{ duration: 0.6 }}
         className="relative z-10 mx-auto max-w-3xl text-center"
       >
-        <p className="vb-mono text-xs uppercase tracking-[0.28em] text-amber-200/80">Pick the next move</p>
+        <p className="vb-mono text-xs uppercase tracking-[0.28em] text-amber-200/80">Start here</p>
         <h2 className="mx-auto mt-5 max-w-2xl text-balance text-4xl font-semibold tracking-tight text-white md:text-6xl">
-          Turn interest into a real deal path.
+          Bring the next opportunity to the right partners.
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-slate-300/85">
-          Sellers can submit a property. Buyers can share their criteria. Operators can run the numbers before the next call.
+          Start as a seller, buyer, lender, developer, contractor, operator, or capital partner. VestBlock helps organize
+          the next conversation, then adds DealVault records and cleaner follow-through when the relationship calls for it.
         </p>
-        <div className="mt-10 grid gap-3 sm:grid-cols-3">
+        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="/sell"
-            className="vb-primary-action group w-full"
+            href="/get-started"
+            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-7 py-4 text-sm font-semibold text-slate-950 shadow-[0_18px_50px_rgba(34,211,238,0.35)] transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto"
           >
-            <Home className="h-4 w-4" />
-            Submit Property
+            Choose My Path
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
           <Link
-            href="/buyers"
-            className="vb-secondary-action w-full"
+            href="/sell"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.05] px-7 py-4 text-sm font-semibold text-white backdrop-blur-xl transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:w-auto"
           >
-            <Users className="h-4 w-4" />
-            Join Buyers
-          </Link>
-          <Link
-            href="/property-analyzer"
-            className="vb-secondary-action w-full"
-          >
-            <Calculator className="h-4 w-4" />
-            Run Numbers
+            <Home className="h-4 w-4" />
+            Submit a Property
           </Link>
         </div>
       </motion.div>

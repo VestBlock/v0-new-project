@@ -21,6 +21,9 @@ function getSiteUrl() {
 
 const publicRoutes = [
   { path: '/', priority: 1, changeFrequency: 'weekly' },
+  { path: '/capital', priority: 0.96, changeFrequency: 'weekly' },
+  { path: '/deals', priority: 0.96, changeFrequency: 'weekly' },
+  { path: '/opportunities', priority: 0.94, changeFrequency: 'weekly' },
   { path: '/llms.txt', priority: 0.4, changeFrequency: 'weekly' },
   { path: '/services', priority: 0.92, changeFrequency: 'weekly' },
   { path: '/dealvault', priority: 0.9, changeFrequency: 'weekly' },

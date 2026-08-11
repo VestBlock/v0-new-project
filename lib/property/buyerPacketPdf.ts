@@ -63,35 +63,12 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
   const lines: string[] = []
   let current = ''
 
-  const pushLongWord = (word: string) => {
-    let chunk = ''
-    for (const char of word) {
-      const next = `${chunk}${char}`
-      if (!chunk || font.widthOfTextAtSize(next, size) <= maxWidth) {
-        chunk = next
-      } else {
-        lines.push(chunk)
-        chunk = char
-      }
-    }
-    current = chunk
-  }
-
   for (const word of words) {
     const next = current ? `${current} ${word}` : word
     if (font.widthOfTextAtSize(next, size) <= maxWidth) {
       current = next
-      continue
-    }
-
-    if (current) {
-      lines.push(current)
-      current = ''
-    }
-
-    if (font.widthOfTextAtSize(word, size) > maxWidth) {
-      pushLongWord(word)
     } else {
+      if (current) lines.push(current)
       current = word
     }
   }
@@ -169,38 +146,6 @@ function addPage(doc: PDFDocument) {
   page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 84, width: PAGE_WIDTH, height: 84, color: rgb(0.04, 0.11, 0.18) })
   page.drawRectangle({ x: MARGIN, y: 40, width: PAGE_WIDTH - MARGIN * 2, height: PAGE_HEIGHT - 106, color: PANEL, opacity: 0.22 })
   return page
-}
-
-
-function rangeText(low: unknown, base: unknown, high: unknown, formatter = money) {
-  const lowText = formatter(low)
-  const baseText = formatter(base)
-  const highText = formatter(high)
-  if (lowText === 'Needs review' && baseText === 'Needs review' && highText === 'Needs review') return 'Needs review'
-  return `${lowText} - ${highText} | base ${baseText}`
-}
-
-function drawBullets(
-  page: PDFPage,
-  items: string[],
-  x: number,
-  y: number,
-  options: { font: PDFFont; size: number; color?: ReturnType<typeof rgb>; maxWidth: number; lineHeight?: number; limit?: number }
-) {
-  let nextY = y
-  const limit = options.limit ?? items.length
-  for (const item of items.map(safeText).filter(Boolean).slice(0, limit)) {
-    page.drawCircle({ x: x + 4, y: nextY + 3, size: 2.2, color: CYAN })
-    nextY = drawWrapped(page, item, x + 14, nextY, {
-      font: options.font,
-      size: options.size,
-      color: options.color ?? INK,
-      maxWidth: options.maxWidth - 14,
-      lineHeight: options.lineHeight ?? options.size + 4,
-    })
-    nextY -= 4
-  }
-  return nextY
 }
 
 function bestRoute(opportunity: any) {
@@ -308,7 +253,7 @@ export async function buildPremiumBuyerPacketPdf(input: BuyerPacketPdfInput): Pr
     { label: 'Occupancy', value: safeText(form.occupancyStatus || 'Needs review') },
     { label: 'Seller timeline', value: safeText(form.timelineToSell || 'Needs review') },
     { label: 'Asking price', value: money(estimate.askingPrice ?? opportunity?.dealMath?.sellerAsk) },
-    { label: 'Rent range', value: rangeText(opportunity?.buyerIntelligence?.rentMarketRange?.low, opportunity?.buyerIntelligence?.rentMarketRange?.base ?? estimate.rentEstimate, opportunity?.buyerIntelligence?.rentMarketRange?.high) },
+    { label: 'Rent hint', value: money(estimate.rentEstimate) },
     { label: 'Cash review', value: `${money(opportunity?.metrics?.conservativeCashReview)} to ${money(opportunity?.metrics?.balancedCashReview)}` },
     { label: 'DSCR', value: percent(opportunity?.metrics?.dscr, 'x') },
     { label: 'Cap rate', value: percent(opportunity?.metrics?.capRatePercent) },
@@ -364,164 +309,6 @@ export async function buildPremiumBuyerPacketPdf(input: BuyerPacketPdfInput): Pr
     color: MUTED,
     maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
     lineHeight: 15,
-  })
-
-
-
-  const intel = opportunity?.buyerIntelligence || {}
-  const pageIntel = addPage(doc)
-  pageIntel.drawText('VESTBLOCK', { x: MARGIN, y: PAGE_HEIGHT - 56, size: 14, font: bold, color: CYAN })
-  drawSectionTitle(pageIntel, 'Buyer range intelligence', MARGIN, PAGE_HEIGHT - 120, bold)
-  const intelMetrics = [
-    { label: 'Rent market range', value: rangeText(intel?.rentMarketRange?.low, intel?.rentMarketRange?.base, intel?.rentMarketRange?.high), color: GREEN },
-    { label: 'Neighborhood score', value: intel?.neighborhoodScore?.score !== undefined ? `${safeText(intel.neighborhoodScore.label)} (${intel.neighborhoodScore.score}/100)` : 'Needs review', color: CYAN },
-    { label: 'Value range', value: rangeText(intel?.valueRange?.low, intel?.valueRange?.base, intel?.valueRange?.high), color: INK },
-    { label: 'Repair range', value: rangeText(intel?.repairRange?.low, intel?.repairRange?.base, intel?.repairRange?.high), color: AMBER },
-    { label: 'Buyer offer band', value: rangeText(intel?.offerRange?.low, intel?.offerRange?.base, intel?.offerRange?.high), color: CYAN },
-    { label: 'Range confidence', value: `${safeText(intel?.rentMarketRange?.confidence || 'Needs rent')} / ${safeText(intel?.valueRange?.confidence || 'Needs value')}`, color: MUTED },
-  ]
-  intelMetrics.forEach((metric, index) => {
-    const row = Math.floor(index / 3)
-    const col = index % 3
-    drawMetric(pageIntel, {
-      ...metric,
-      x: MARGIN + col * (metricWidth + 12),
-      y: PAGE_HEIGHT - 150 - row * 72,
-      width: metricWidth,
-      font: regular,
-      bold,
-    })
-  })
-
-  drawSectionTitle(pageIntel, 'DealMachine, OSINT, and data date', MARGIN, 500, bold)
-  let dataY = 472
-  dataY = drawBullets(pageIntel, Array.isArray(intel?.dataSources) ? intel.dataSources : [], MARGIN + 4, dataY, {
-    font: regular,
-    size: 8.5,
-    color: rgb(0.78, 0.86, 0.94),
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
-    lineHeight: 11,
-    limit: 6,
-  })
-  if (!Array.isArray(intel?.dataSources) || !intel.dataSources.length) {
-    dataY = drawWrapped(pageIntel, 'No DealMachine or OSINT source metadata was attached to this analysis.', MARGIN + 10, dataY, {
-      font: regular,
-      size: 9,
-      color: MUTED,
-      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
-    })
-  }
-
-  drawSectionTitle(pageIntel, 'Rent sensitivity', MARGIN, 374, bold)
-  let sensitivityY = 346
-  const rentRows = Array.isArray(intel?.rentalSensitivity) ? intel.rentalSensitivity.slice(0, 3) : []
-  if (rentRows.length) {
-    for (const row of rentRows) {
-      const line = `${safeText(row.label)} | Rent ${money(row.monthlyRent)} | NOI ${money(row.noiAnnual)} | Cash flow ${money(row.monthlyCashFlow)} | DSCR ${percent(row.dscr, 'x')} | Cap ${percent(row.capRatePercent)}`
-      sensitivityY = drawWrapped(pageIntel, line, MARGIN + 10, sensitivityY, {
-        font: regular,
-        size: 8.5,
-        color: rgb(0.78, 0.86, 0.94),
-        maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
-        lineHeight: 12,
-      })
-      sensitivityY -= 5
-    }
-  } else {
-    sensitivityY = drawWrapped(pageIntel, 'Rent sensitivity needs a rent input or verified lease data.', MARGIN + 10, sensitivityY, {
-      font: regular,
-      size: 10,
-      color: MUTED,
-      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
-    })
-  }
-
-  drawSectionTitle(pageIntel, 'Price sensitivity', MARGIN, 236, bold)
-  let priceY = 208
-  const priceRows = Array.isArray(intel?.priceSensitivity) ? intel.priceSensitivity.slice(0, 3) : []
-  for (const row of priceRows) {
-    const line = `${safeText(row.label)} | Price ${money(row.purchasePrice)} | Cap ${percent(row.capRatePercent)} | DSCR ${percent(row.dscr, 'x')} | Cash flow ${money(row.monthlyCashFlow)} | CoC ${percent(row.cashOnCashReturnPercent)}`
-    priceY = drawWrapped(pageIntel, line, MARGIN + 10, priceY, {
-      font: regular,
-      size: 8.5,
-      color: rgb(0.78, 0.86, 0.94),
-      maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
-      lineHeight: 12,
-    })
-    priceY -= 5
-  }
-
-  drawSectionTitle(pageIntel, 'OSINT checks to run', MARGIN, 116, bold)
-  drawBullets(pageIntel, Array.isArray(intel?.osintChecks) ? intel.osintChecks : [], MARGIN + 4, 92, {
-    font: regular,
-    size: 7.3,
-    color: MUTED,
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
-    lineHeight: 9,
-    limit: 6,
-  })
-
-  const publicRecord = intel?.publicRecordIntelligence || {}
-  const pagePublic = addPage(doc)
-  pagePublic.drawText('VESTBLOCK', { x: MARGIN, y: PAGE_HEIGHT - 56, size: 14, font: bold, color: CYAN })
-  drawSectionTitle(pagePublic, 'Public record intelligence', MARGIN, PAGE_HEIGHT - 120, bold)
-  const publicMetrics = [
-    { label: 'Public record score', value: publicRecord?.score !== undefined ? `${safeText(publicRecord.label)} (${publicRecord.score}/100)` : 'Needs review', color: CYAN },
-    { label: 'Source freshness', value: safeText(publicRecord?.sourceFreshness || 'Needs review'), color: GREEN },
-    { label: 'Signals attached', value: Array.isArray(publicRecord?.signals) ? String(publicRecord.signals.length) : 'Needs review', color: INK },
-    { label: 'DealMachine list', value: safeText(intel?.dataSources?.find?.((source: string) => /DealMachine list:/i.test(source))?.replace(/^DealMachine list: /i, '') || 'Needs review'), color: CYAN },
-    { label: 'Data date', value: safeText(intel?.dataSources?.find?.((source: string) => /Data date:/i.test(source))?.replace(/^Data date: /i, '') || 'Needs refresh'), color: MUTED },
-    { label: 'Checks queued', value: Array.isArray(publicRecord?.checks) ? String(publicRecord.checks.length) : 'Needs review', color: AMBER },
-  ]
-  publicMetrics.forEach((metric, index) => {
-    const row = Math.floor(index / 3)
-    const col = index % 3
-    drawMetric(pagePublic, {
-      ...metric,
-      x: MARGIN + col * (metricWidth + 12),
-      y: PAGE_HEIGHT - 150 - row * 72,
-      width: metricWidth,
-      font: regular,
-      bold,
-    })
-  })
-
-  drawSectionTitle(pagePublic, 'Buyer-facing read', MARGIN, 500, bold)
-  let publicY = drawWrapped(pagePublic, publicRecord?.summary || 'Public-record intelligence needs DealMachine, county, and OSINT source data before buyer distribution.', MARGIN + 10, 472, {
-    font: regular,
-    size: 10,
-    color: rgb(0.78, 0.86, 0.94),
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 20,
-    lineHeight: 14,
-  })
-  publicY -= 8
-  publicY = drawBullets(pagePublic, Array.isArray(publicRecord?.buyerTalkingPoints) ? publicRecord.buyerTalkingPoints : [], MARGIN + 4, publicY, {
-    font: regular,
-    size: 8.7,
-    color: INK,
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
-    lineHeight: 11,
-    limit: 7,
-  })
-
-  drawSectionTitle(pagePublic, 'Attached public-record signals', MARGIN, 286, bold)
-  drawBullets(pagePublic, Array.isArray(publicRecord?.signals) ? publicRecord.signals : [], MARGIN + 4, 258, {
-    font: regular,
-    size: 8.8,
-    color: rgb(0.78, 0.86, 0.94),
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
-    lineHeight: 12,
-    limit: 8,
-  })
-
-  drawSectionTitle(pagePublic, 'Verification checklist', MARGIN, 138, bold)
-  drawBullets(pagePublic, Array.isArray(publicRecord?.checks) ? publicRecord.checks : [], MARGIN + 4, 110, {
-    font: regular,
-    size: 7.4,
-    color: MUTED,
-    maxWidth: PAGE_WIDTH - MARGIN * 2 - 8,
-    lineHeight: 9,
-    limit: 6,
   })
 
   const page3 = addPage(doc)

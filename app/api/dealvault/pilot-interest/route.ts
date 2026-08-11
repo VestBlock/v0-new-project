@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
@@ -70,28 +70,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to submit demo request.' }, { status: 500 });
     }
 
-    // after() keeps the serverless function alive until the automation finishes.
-    after(() =>
-      runNewLeadAutomation({
-        sendIntakeAlert: true,
-        leadId: lead.id,
-        leadType: 'real_estate',
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        sourcePath,
-        summary,
-        metadata: {
-          companyName: data.companyName || null,
-          role: data.role || null,
-          useCase: data.useCase || null,
-          demoWindow: data.pilotWindow || null,
-          serviceCategory: 'dealvault_demo',
-        },
-      }).catch((automationError) => {
-        console.error('[dealvault-pilot-interest] automation failed:', automationError);
-      })
-    );
+    void runNewLeadAutomation({
+      leadId: lead.id,
+      leadType: 'real_estate',
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      sourcePath,
+      summary,
+      metadata: {
+        companyName: data.companyName || null,
+        role: data.role || null,
+        useCase: data.useCase || null,
+        demoWindow: data.pilotWindow || null,
+        serviceCategory: 'dealvault_demo',
+      },
+    }).catch((automationError) => {
+      console.error('[dealvault-pilot-interest] automation failed:', automationError);
+    });
 
     return NextResponse.json({ success: true, leadId: lead.id });
   } catch (error) {

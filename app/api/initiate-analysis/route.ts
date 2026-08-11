@@ -1,28 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
-import type { FinancialGoal, AnalysisJob } from "@/types/supabase"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { getSupabaseServer } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
+import type { Database, FinancialGoal, AnalysisJob } from "@/types/supabase"
+import { getServerUser } from "@/lib/auth/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 30
+export const maxDuration = 30 // Reduced duration as no external PDF processing
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = getSupabaseServer()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 })
+  const user = await getServerUser()
+  if (!user) {
+    return NextResponse.json({ success: false, message: "Authentication required." }, { status: 401 })
   }
 
-  const supabaseAdmin = createAdminClient()
+  const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
   try {
     const formData = await request.formData()
@@ -34,8 +32,8 @@ export async function POST(request: NextRequest) {
     const extractedText = formData.get("extractedText") as string | null
     const isLikelyCreditReportString = formData.get("isLikelyCreditReport") as string | null
 
-    if (clientUserId && clientUserId !== user.id) {
-      return NextResponse.json({ success: false, message: "User mismatch." }, { status: 403 })
+    if (!clientUserId || clientUserId !== user.id) {
+      return NextResponse.json({ success: false, message: "User ID is required." }, { status: 401 })
     }
     if (!financialGoalString) {
       return NextResponse.json({ success: false, message: "Financial goal is required." }, { status: 400 })
@@ -55,14 +53,10 @@ export async function POST(request: NextRequest) {
     }
 
     const fileSizeBytes = Number.parseInt(fileSizeBytesString, 10)
-    if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
-      return NextResponse.json({ success: false, message: "Invalid file size." }, { status: 400 })
-    }
-
     const isLikelyCreditReport = isLikelyCreditReportString === "true"
 
     const jobDataToInsert: Partial<AnalysisJob> & { user_id: string; status: string } = {
-      user_id: user.id,
+      user_id: clientUserId,
       original_file_name: originalFileName,
       file_type: fileType,
       file_size_bytes: fileSizeBytes,
@@ -70,19 +64,26 @@ export async function POST(request: NextRequest) {
       financial_goal_details: financialGoal as any,
       extracted_text: extractedText,
       is_likely_credit_report: isLikelyCreditReport,
-      status: "pending_ai_analysis",
-      text_extraction_completed_at: new Date().toISOString(),
+      status: "pending_ai_analysis", // Ready for AI analysis by the job-status poller
+      text_extraction_completed_at: new Date().toISOString(), // Text extraction happened client-side
     }
 
-    const { data: newJob, error: dbError } = await supabaseAdmin
+    const { data: newJob, error: dbError } = await supabase
       .from("analysis_jobs")
       .insert(jobDataToInsert as any)
       .select("id")
       .single()
 
     if (dbError) {
-      console.error("[API /initiate-analysis] Supabase DB error inserting authorized job:", dbError)
+      console.error("[API /initiate-analysis] Supabase DB error inserting job:", dbError)
       return NextResponse.json({ success: false, message: `Database error: ${dbError.message}` }, { status: 500 })
+    }
+
+    if (!newJob?.id) {
+      return NextResponse.json(
+        { success: false, message: "Analysis job was created without a valid ID." },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({

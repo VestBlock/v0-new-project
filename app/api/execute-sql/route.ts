@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const supabase = getSupabaseServer()
 
     // Execute the SQL directly
-    const { data, error } = await supabase.rpc("pgclient", { query: sql })
+    const { data, error } = await (supabase as any).rpc("pgclient", { query: sql })
 
     if (error) {
       console.error("SQL execution error:", error)

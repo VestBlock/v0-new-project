@@ -15,6 +15,7 @@
 
 import fs from "node:fs"
 import path from "node:path"
+import { syncExportJobsFromRequestSummary } from "./lib/dealmachine-export-jobs.mjs"
 
 const args = process.argv.slice(2)
 const getArg = (name) => {
@@ -31,6 +32,150 @@ const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
 const OUTREACH_DIR = path.join(process.cwd(), "tmp", "outreach")
 
 const STRATEGY_DEFINITIONS = [
+  {
+    key: "divorce-separation",
+    aliases: ["divorce", "separation", "marital-split"],
+    label: "Divorce / separation",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasDivorceSignal(row),
+    reason: "divorce-separation lane needs exact Contacts export before discreet seller outreach",
+  },
+  {
+    key: "relocation-job-transfer",
+    aliases: ["relocation", "job-transfer", "military-pcs"],
+    label: "Relocation / job transfer",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|ready-now|atlas-export-needed)\.csv$/i.test(name),
+    fit: (row) => hasRelocationSignal(row),
+    reason: "relocation lane needs exact Contacts export before timing-based seller outreach",
+  },
+  {
+    key: "out-of-state-heir",
+    aliases: ["long-distance-owner", "out-of-state-owner", "heir-distance"],
+    label: "Out-of-state heir / long-distance owner",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isOutOfStateHeirCandidate(row),
+    reason: "out-of-state heir lane needs Contacts export before remote-owner outreach",
+  },
+  {
+    key: "senior-downsizing-medical",
+    aliases: ["senior-downsizing", "medical-hardship", "accessibility-hardship"],
+    label: "Senior downsizing / medical hardship",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|ready-now|atlas-export-needed)\.csv$/i.test(name),
+    fit: (row) => isSeniorDownsizingCandidate(row),
+    reason: "senior-downsizing lane needs exact Contacts export before softer seller outreach",
+  },
+  {
+    key: "fire-storm-damage",
+    aliases: ["fire-damage", "storm-damage", "insurance-damage"],
+    label: "Fire / storm / insurance damage",
+    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isFireDamageCandidate(row),
+    reason: "damage-property lane needs Contacts export before as-is seller outreach",
+  },
+  {
+    key: "problem-tenant-eviction",
+    aliases: ["problem-tenant", "eviction-landlord", "occupied-distress"],
+    label: "Problem tenant / eviction",
+    fileTest: (name) => /^dealmachine-api-.*-(absentee-problem-stack|contactable-nurture-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isProblemTenantCandidate(row),
+    reason: "tenant-distress lane needs Contacts export before landlord outreach",
+  },
+  {
+    key: "seller-finance-equity",
+    aliases: ["seller-finance", "owner-carry", "creative-equity", "carry-back"],
+    label: "Seller finance / owner-carry equity",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|vacant-equity-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isSellerFinanceCandidate(row),
+    reason: "high-equity owner-carry review needs exact Contacts export before creative-term outreach",
+  },
+  {
+    key: "tired-landlord",
+    aliases: ["burned-out-landlord", "absentee-rental", "rental-fatigue"],
+    label: "Tired landlord / rental fatigue",
+    fileTest: (name) => /^dealmachine-api-.*-(absentee-problem-stack|contactable-nurture-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isTiredLandlordCandidate(row),
+    reason: "landlord-fatigue lane needs Contacts export with DNC columns before outreach",
+  },
+  {
+    key: "probate-inheritance",
+    aliases: ["probate", "inheritance", "estate-property", "heir-property"],
+    label: "Probate / inheritance soft-touch",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasProbateSignal(row),
+    reason: "probate or inheritance review needs Contacts export before empathetic seller outreach",
+  },
+  {
+    key: "vacant-property-refresh",
+    aliases: ["vacant-property", "vacant-home", "vacant-refresh"],
+    label: "Vacant property refresh",
+    fileTest: (name) => /^dealmachine-api-.*-(vacant-equity-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isVacantPropertyCandidate(row),
+    reason: "vacant-property lane needs Contacts export before soft-touch owner outreach",
+  },
+  {
+    key: "code-violation-distress",
+    aliases: ["code-violation", "city-pressure", "nuisance-property"],
+    label: "Code violation / city-pressure",
+    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|tax-due-now-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasCodeDistressSignal(row),
+    reason: "code-pressure lane needs Contacts export before owner outreach",
+  },
+  {
+    key: "tax-delinquent-cure",
+    aliases: ["tax-delinquent", "tax-cure", "back-taxes"],
+    label: "Tax delinquent cure path",
+    fileTest: (name) => /^dealmachine-tax-code-stack-.*\.csv$/i.test(name) || /^dealmachine-api-.*-(tax-due-now-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasTaxOnlySignal(row),
+    reason: "tax-delinquent lane needs Contacts export before owner outreach",
+  },
+  {
+    key: "fsbo-conversion",
+    aliases: ["fsbo", "for-sale-by-owner", "owner-listed"],
+    label: "FSBO conversion",
+    fileTest: (name) => /^dealmachine-api-.*-(ready-now|contactable-nurture-stack|atlas-export-needed)\.csv$/i.test(name),
+    fit: (row) => isFsboCandidate(row),
+    reason: "FSBO lane needs exact Contacts export before as-is conversion outreach",
+  },
+  {
+    key: "failed-flipper-stuck-rehab",
+    aliases: ["failed-flipper", "stuck-rehab", "hard-money-maturity"],
+    label: "Failed flipper / stuck rehab",
+    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isFailedFlipperCandidate(row),
+    reason: "stuck-rehab lane needs Contacts export before investor-to-investor outreach",
+  },
+  {
+    key: "hoa-delinquent",
+    aliases: ["hoa-lien", "association-lien", "hoa-pressure"],
+    label: "HOA delinquent / association lien",
+    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|tax-due-now-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasHoaSignal(row),
+    reason: "hoa-lien lane needs exact Contacts export before owner outreach",
+  },
+  {
+    key: "reverse-mortgage-exit",
+    aliases: ["reverse-mortgage", "hecm-exit", "senior-hecm"],
+    label: "Reverse mortgage exit",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isReverseMortgageCandidate(row),
+    reason: "reverse-mortgage lane needs Contacts export before owner or heir outreach",
+  },
+  {
+    key: "title-issue-cloud",
+    aliases: ["title-issue", "cloud-on-title", "quiet-title"],
+    label: "Title issue / cloud on title",
+    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => hasTitleIssueSignal(row),
+    reason: "title-issue lane needs exact Contacts export before specialty seller outreach",
+  },
+  {
+    key: "post-auction-backup-buyer",
+    aliases: ["post-auction", "backup-buyer", "redemption-window"],
+    label: "Post-auction / backup buyer",
+    fileTest: (name) => /^dealmachine-api-.*-(preforeclosure-saveable-stack|live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
+    fit: (row) => isPostAuctionCandidate(row),
+    reason: "post-auction lane needs exact Contacts export before time-sensitive outreach",
+  },
   {
     key: "tax-code-stack",
     aliases: ["tax-delinquent-code-violation", "code-tax-stack"],
@@ -96,126 +241,6 @@ const STRATEGY_DEFINITIONS = [
     fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed)\.csv$/i.test(name),
     fit: (row) => /active|listed|for sale|pending|retail|vacant|repair|rehab|distress|code/i.test(rowText(row)),
     reason: "novation/retail-spread candidate needs owner contact export first",
-  },
-  {
-    key: "failed-landlord-exit",
-    aliases: ["landlord-pain-exit", "failed-landlord"],
-    label: "Failed landlord exit",
-    fileTest: (name) => /^dealmachine-api-.*-(absentee-problem-stack|contactable-nurture-stack|atlas-export-needed|live-problem-stack)\.csv$/i.test(name),
-    fit: (row) => /landlord|rental|portfolio|multi|absentee|out of state|tax|delinquent|lien|vacant|eviction|code|violation/i.test(rowText(row)),
-    reason: "failed landlord exit signal needs Contacts export with DNC columns",
-  },
-  {
-    key: "insurance-damage-event",
-    aliases: ["damage-event", "fire-storm-damage"],
-    label: "Insurance / damage event",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /fire|storm|damage|insurance|boarded|unsafe|condemned|shell|repair|rehab|vacant|code|violation|lien/i.test(rowText(row)),
-    reason: "damage event or heavy-repair signal needs contact export",
-  },
-  {
-    key: "zombie-rehab",
-    aliases: ["stalled-rehab", "zombie-project"],
-    label: "Zombie rehab / stalled project",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /rehab|unfinished|vacant|permit|lien|tax|delinquent|code|violation|repair|demo|shell|boarded/i.test(rowText(row)),
-    reason: "stalled rehab signal needs exact Contacts export",
-  },
-  {
-    key: "senior-downsizer",
-    aliases: ["equity-rich-downsizer", "downsizer"],
-    label: "Equity-rich downsizer",
-    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
-    fit: (row) => /equity|owner occupied|long term|senior|tax|free and clear|absentee/i.test(rowText(row)) || numberish(pick(row, ["equity_percent"])) >= 80,
-    reason: "high-equity simplify/downsize signal needs Contacts export",
-  },
-  {
-    key: "rent-gap-multifamily",
-    aliases: ["small-multifamily-rent-gap", "rent-gap"],
-    label: "Small multifamily rent gap",
-    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|absentee-problem-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /duplex|triplex|fourplex|multi|multifamily|apartment|units|rent|rental|portfolio|landlord/i.test(rowText(row)),
-    reason: "small multifamily rent-gap signal needs Contacts export",
-  },
-  {
-    key: "probate-vacant-equity",
-    aliases: ["probate-vacant", "estate-vacant-equity"],
-    label: "Probate + vacant + equity",
-    fileTest: (name) => /^dealmachine-api-.*-(vacant-equity-stack|atlas-export-needed|live-problem-stack)\.csv$/i.test(name),
-    fit: (row) => /probate|estate|heir|vacant|inherited|cleanout|equity|tax|delinquent/i.test(rowText(row)),
-    reason: "probate/vacant/equity signal needs Contacts export",
-  },
-  {
-    key: "tired-airbnb-midterm",
-    aliases: ["tired-airbnb", "str-midterm-rental"],
-    label: "Tired Airbnb / midterm rental",
-    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
-    fit: (row) => /airbnb|short term|str|midterm|furnished|rental|vacancy|booking|portfolio|absentee/i.test(rowText(row)),
-    reason: "rental-operator fatigue signal needs Contacts export",
-  },
-  {
-    key: "utility-lien-water-shutoff",
-    aliases: ["utility-lien", "water-lien"],
-    label: "Utility / water lien pressure",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|tax-due-now-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /water|utility|nuisance|lien|tax|delinquent|municipal|code|violation|vacant/i.test(rowText(row)),
-    reason: "utility/water lien or municipal-pressure signal needs Contacts export",
-  },
-  {
-    key: "contractor-distress-flip",
-    aliases: ["contractor-distress", "heavy-rehab-buyer-seller"],
-    label: "Contractor distress buyer-seller flip",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|vacant-equity-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /contractor|fire|structural|rehab|repair|damage|vacant|code|violation|demo|shell|boarded/i.test(rowText(row)),
-    reason: "contractor-heavy distress signal needs Contacts export",
-  },
-  {
-    key: "small-commercial-owner-exit",
-    aliases: ["small-commercial-exit", "mixed-use-owner-exit"],
-    label: "Small commercial owner exit",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
-    fit: (row) => /commercial|mixed use|retail|office|warehouse|industrial|small bay|shop|storage|zoning|vacant|lease/i.test(rowText(row)),
-    reason: "small commercial owner-exit signal needs Contacts export",
-  },
-  {
-    key: "portfolio-fragmentation",
-    aliases: ["portfolio-breakoff", "one-door-portfolio"],
-    label: "Portfolio fragmentation",
-    fileTest: (name) => /^dealmachine-api-.*-(absentee-problem-stack|contactable-nurture-stack|atlas-export-needed|live-problem-stack)\.csv$/i.test(name),
-    fit: (row) => /portfolio|multiple properties|multi|landlord|rental|tax|lien|vacant|code|violation|absentee/i.test(rowText(row)),
-    reason: "portfolio-fragmentation candidate needs Contacts export",
-  },
-  {
-    key: "buyer-reverse-engineering",
-    aliases: ["reverse-engineered-buyer-demand", "buyer-pattern-seller"],
-    label: "Buyer reverse-engineering",
-    fileTest: (name) => /^dealmachine-api-.*-(contactable-nurture-stack|vacant-equity-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
-    fit: (row) => /buyer|buy box|cash buyer|rental|portfolio|duplex|land|builder|vacant|equity|absentee/i.test(rowText(row)) || hasDistressSignal(row),
-    reason: "buyer-pattern candidate needs Contacts export",
-  },
-  {
-    key: "permit-spike-developer-land",
-    aliases: ["permit-spike", "developer-land-spike"],
-    label: "Permit spike developer / land",
-    fileTest: (name) => /^dealmachine-api-.*-(vacant-equity-stack|atlas-export-needed|live-problem-stack)\.csv$/i.test(name),
-    fit: (row) => /permit|new construction|developer|infill|land|lot|vacant|zoning|assemblage|teardown|demo/i.test(rowText(row)) || isLandWholesaleCandidate(row),
-    reason: "developer/permit-spike land candidate needs Contacts export",
-  },
-  {
-    key: "judgment-lien-pressure",
-    aliases: ["judgment-lien", "lien-pressure"],
-    label: "Judgment / lien pressure",
-    fileTest: (name) => /^dealmachine-api-.*-(live-problem-stack|tax-due-now-stack|atlas-export-needed)\.csv$/i.test(name),
-    fit: (row) => /judgment|lien|tax|delinquent|municipal|title|code|violation|nuisance|foreclosure/i.test(rowText(row)),
-    reason: "judgment/lien pressure signal needs Contacts export",
-  },
-  {
-    key: "tax-assessment-shock",
-    aliases: ["assessment-shock", "tax-burden"],
-    label: "Tax assessment shock",
-    fileTest: (name) => /^dealmachine-api-.*-(tax-due-now-stack|contactable-nurture-stack|atlas-export-needed|ready-now)\.csv$/i.test(name),
-    fit: (row) => /assessment|tax|delinquent|high equity|equity|senior|absentee|out of state/i.test(rowText(row)) || hasTaxSignal(row),
-    reason: "tax-burden or assessment-shock signal needs Contacts export",
   },
 ]
 
@@ -320,8 +345,107 @@ function hasCodeSignal(row) {
   return boolish(pick(row, ["code_violation_hit"])) || Boolean(pick(row, ["code_violation", "violation", "stack_method"]))
 }
 
+function hasProbateSignal(row) {
+  return /\b(probate|estate|heir|inherited|inheritance|executor|executrix|personal representative|deceased)\b/i.test(rowText(row))
+}
+
+function hasDivorceSignal(row) {
+  return /\b(divorce|separation|marital|family court|dissolution|split)\b/i.test(rowText(row))
+}
+
+function hasRelocationSignal(row) {
+  return /\b(relocation|job transfer|transferred|pcs|military move|corporate move|moving out of state)\b/i.test(rowText(row))
+}
+
 function hasDistressSignal(row) {
   return numberish(pick(row, ["distress_score", "priority_score"])) >= 70 || /vacant|unsafe|lien|preforeclosure|code|violation|tax|delinquent|repair|rehab|distress/i.test(rowText(row))
+}
+
+function isOutOfStateHeirCandidate(row) {
+  const text = rowText(row)
+  return isOutOfState(row) && (hasProbateSignal(row) || /trust|estate|heir|inherit/.test(text.toLowerCase()))
+}
+
+function isSeniorDownsizingCandidate(row) {
+  const text = rowText(row).toLowerCase()
+  return /senior|retired|medical|assisted living|downsizing|accessibility|wheelchair/.test(text) || boolish(pick(row, ["senior_owner", "senior_landlord_signal"]))
+}
+
+function isFireDamageCandidate(row) {
+  return /\b(fire|storm|insurance claim|smoke damage|water damage|hail|wind damage|burned|damaged roof)\b/i.test(rowText(row))
+}
+
+function isProblemTenantCandidate(row) {
+  return /\b(eviction|tenant|occupied distress|nonpaying tenant|squatter|lease issue)\b/i.test(rowText(row)) && (
+    isOutOfState(row) || /landlord|rental|portfolio|absentee/i.test(rowText(row))
+  )
+}
+
+function isSellerFinanceCandidate(row) {
+  const text = rowText(row).toLowerCase()
+  const equityPercent = numberish(pick(row, ["equity_percent"]))
+  const equityAmount = numberish(pick(row, ["equity_amount"]))
+  const value = numberish(pick(row, ["estimated_value", "estimated_value_value", "current_listing_price", "list_price"]))
+  const landlordSignal = /rental|tenant|leased|landlord|portfolio|absentee/.test(text)
+  const vacant = boolish(pick(row, ["is_vacant", "vacant"]))
+  const outOfState = isOutOfState(row)
+  return !hasProbateSignal(row) && !/preforeclosure|foreclosure|auction/.test(text) && (
+    equityPercent >= 45 ||
+    equityAmount >= 90000 ||
+    (value >= 150000 && equityPercent >= 30)
+  ) && (landlordSignal || vacant || outOfState || /seller finance|carry|owner carry|owner financing|creative/.test(text))
+}
+
+function isTiredLandlordCandidate(row) {
+  const text = rowText(row).toLowerCase()
+  return (
+    isOutOfState(row) ||
+    /landlord|rental|tenant|lease|portfolio|absentee/.test(text) ||
+    boolish(pick(row, ["absentee_owner"]))
+  ) && (
+    hasDistressSignal(row) ||
+    boolish(pick(row, ["is_vacant", "vacant"])) ||
+    numberish(pick(row, ["equity_percent"])) >= 25
+  )
+}
+
+function isVacantPropertyCandidate(row) {
+  const text = rowText(row).toLowerCase()
+  const vacant = boolish(pick(row, ["is_vacant", "vacant"])) || /\bvacant|boarded|empty|unoccupied\b/.test(text)
+  const commercialHeavy = /\b(commercial|industrial|warehouse|mixed use|office)\b/.test(text)
+  return vacant && !commercialHeavy
+}
+
+function isFsboCandidate(row) {
+  return /\b(fsbo|for sale by owner|owner listed|zillow fsbo|craigslist|facebook marketplace|yard sign)\b/i.test(rowText(row))
+}
+
+function isFailedFlipperCandidate(row) {
+  return /\b(flip|flipper|rehab|construction|open permit|stalled construction|hard money|maturity)\b/i.test(rowText(row)) && hasDistressSignal(row)
+}
+
+function hasCodeDistressSignal(row) {
+  return hasCodeSignal(row) && !hasTaxSignal(row)
+}
+
+function hasTaxOnlySignal(row) {
+  return hasTaxSignal(row) && !hasCodeSignal(row)
+}
+
+function hasHoaSignal(row) {
+  return /\b(hoa|association lien|condo dues|dues judgment|homeowners association)\b/i.test(rowText(row))
+}
+
+function isReverseMortgageCandidate(row) {
+  return /\b(reverse mortgage|hecm|hud reverse)\b/i.test(rowText(row))
+}
+
+function hasTitleIssueSignal(row) {
+  return /\b(title issue|cloud on title|quiet title|heirship issue|missing deed|unrecorded transfer)\b/i.test(rowText(row))
+}
+
+function isPostAuctionCandidate(row) {
+  return /\b(post auction|cancelled sale|failed auction|redemption|auction postponed|auction fell through)\b/i.test(rowText(row))
 }
 
 function isLandWholesaleCandidate(row) {
@@ -610,6 +734,10 @@ function writeOutputs(requests, summaryByStrategy) {
     ],
   }
   fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2))
+  syncExportJobsFromRequestSummary(summary, {
+    summaryFile: path.relative(process.cwd(), summaryPath),
+    requestRunId: runStamp,
+  })
 
   const guide = [
     "# DealMachine Contact Export Request",

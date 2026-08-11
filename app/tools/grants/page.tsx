@@ -35,7 +35,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
-type GrantProfileRow = {};
+type GrantProfileRow = {
+  user_id: string;
+  state: string | null;
+  business_status: string | null;
+  industry: string | null;
+  revenue_range: string | null;
+  founder_attributes: string[] | null;
+  has_ein: boolean | null;
+  business_name: string | null;
+  updated_at: string | null;
+};
 
 type Answers = {
   state: string;
@@ -232,7 +242,7 @@ export default function GrantsPage() {
 
   async function upsertProfile(next: Answers) {
     if (!user) return;
-    const payload: Partial<GrantProfileRow> = {
+    const payload: GrantProfileRow = {
       user_id: user.id,
       state: next.state,
       business_status: next.business_status,

@@ -207,7 +207,7 @@ function ChatPageContent() {
           .single();
 
         if (error && error.code !== 'PGRST116') throw error;
-        setUserProfileData(data as UserProfileData);
+        setUserProfileData(data ? (data as UserProfileData) : null);
       } catch (err: any) {
         console.error('Error fetching user profile for chat:', err);
         setProfileError(err.message || 'Could not load your profile data for the chat.');

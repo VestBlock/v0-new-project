@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { runNewLeadAutomation } from "@/lib/leads/leadAutomation"
 import { persistPropertyBuyerMatches } from "@/lib/buyers/service"
@@ -203,10 +203,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     } else {
-      // after() keeps the function alive until follow-up work finishes (see sell-lead route).
-      after(async () => Promise.allSettled([
+      void Promise.allSettled([
         runNewLeadAutomation({
-          sendIntakeAlert: true,
           leadId: lead.id,
           leadType: 'real_estate',
           name: fullName,
@@ -252,7 +250,7 @@ export async function POST(request: NextRequest) {
         if (rejected.length > 0) {
           console.error('Real estate lead follow-up tasks failed:', rejected)
         }
-      }))
+      })
     }
 
     return NextResponse.json({ success: true, leadId: lead.id })

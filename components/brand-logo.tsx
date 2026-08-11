@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 type BrandMarkProps = {
@@ -14,15 +15,17 @@ export function BrandMark({ className }: BrandMarkProps) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-[0_0_26px_rgba(34,211,238,0.22)]',
+        'inline-flex shrink-0 items-center justify-center',
         className
       )}
     >
-      <img
-        src="/vestblock-mark.png"
+      <Image
+        src="/brand/vestblock-monogram.png"
         alt=""
         aria-hidden="true"
-        className="h-full w-full object-cover"
+        width={96}
+        height={96}
+        className="h-full w-full object-contain"
       />
     </span>
   );
@@ -31,14 +34,14 @@ export function BrandMark({ className }: BrandMarkProps) {
 export function BrandLogo({ className, markClassName, showTagline = false }: BrandLogoProps) {
   return (
     <span className={cn('flex items-center gap-2.5', className)}>
-      <BrandMark className={cn('h-8 w-8', markClassName)} />
+      <BrandMark className={cn('h-9 w-9', markClassName)} />
       <span className="min-w-0">
-        <span className="block text-base font-bold leading-none tracking-tight text-white transition-colors group-hover:text-cyan-100">
+        <span className="block text-base font-bold leading-none tracking-[-0.03em] text-[#f3efe6] transition-colors group-hover:text-[#b7ff3c]">
           VestBlock
         </span>
         {showTagline ? (
-          <span className="mt-1 hidden text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-cyan-200/75 xl:block">
-            Real estate partner network
+          <span className="mt-1 hidden text-[9px] font-medium uppercase leading-none tracking-[0.18em] text-[#8f9189] xl:block">
+            Capital · Deals · Opportunity
           </span>
         ) : null}
       </span>

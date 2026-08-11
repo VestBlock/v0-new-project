@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { AgentKey, CommandCenterData } from '@/lib/admin/commandCenter'
+import { recommendCityScenarioStrategies } from '@/lib/admin/cityScenarioStrategyCatalog'
 import { HIGH_VALUE_BUYER_LANES } from '@/lib/investors/builderStrategy'
 
 /**
@@ -80,6 +81,8 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
   const openChecklists = queueByLabel.get('Research checklists open') ?? 0
   const topMarkets = data.marketHeat.slice(0, 3)
   const topMarketNames = topMarkets.map((m) => m.market).join(', ') || 'active markets'
+  const topMarketList = topMarkets.map((m) => m.market)
+  const recommendedCityScenarios = recommendCityScenarioStrategies(topMarketList, 4)
   const staleExports = data.localSignals.dmExports.filter((e) => e.ageDays > 7)
   const freshExports = data.localSignals.dmExports.filter((e) => e.ageDays <= 7)
   const authorityAgent = data.agents.find((a) => a.key === 'authority')
@@ -151,6 +154,65 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     ],
     complianceNote:
       'The daily lab may execute configured email sends, but it cannot ignore opt-outs, send SMS, send contracts, spend money, or make guaranteed offer/funding claims without explicit human approval.',
+  })
+
+  plays.push({
+    key: 'city-scenario-strategy-rotation',
+    name: 'City / Scenario Strategy Rotation',
+    category: 'acquisition',
+    thesis:
+      'We should not blast the same seller script into every city. Each market should rotate through the best-fit distress lane based on local archetype: tax/code cities, cash-flow landlord cities, Sun Belt equity cities, or infill redevelopment pockets.',
+    whyNow: [
+      topMarketList.length
+        ? `Top active markets right now are ${topMarketNames}, so lane choice should reflect how those cities actually behave.`
+        : 'No dominant markets are visible yet, so use the city/scenario board to choose the next test instead of defaulting to generic seller copy.',
+      recommendedCityScenarios.length
+        ? `Best-fit challenger lanes right now: ${recommendedCityScenarios.map((item) => item.label).join('; ')}.`
+        : 'No city/scenario recommendations are visible yet; refresh the market board and source telemetry first.',
+      `${s.newLeads24h} new leads in 24h and ${s.replySignals7d} reply signals in 7d means we have enough live pressure to test scenario-specific copy instead of another broad send.`,
+    ],
+    score: clampScore(64 + (topMarketList.length ? 8 : 0) + (recommendedCityScenarios.length ? 10 : 0) + (s.replySignals7d < 5 ? 6 : 0)),
+    effort: 'medium',
+    expectedOutcome:
+      'A tighter outbound mix where each city runs the scenario most likely to convert there instead of treating Milwaukee, Kansas City, Phoenix, and Memphis like the same market.',
+    directives: [
+      {
+        agent: 'operator',
+        action: 'Choose one city-specific focus lane and one challenger lane',
+        detail: recommendedCityScenarios.length
+          ? `Use the top markets and pick from: ${recommendedCityScenarios.map((item) => `${item.label} (${item.scenario})`).join('; ')}.`
+          : 'Use the top market board plus source telemetry to select the next city/scenario lane pair.',
+        priority: 'urgent',
+      },
+      {
+        agent: 'acquisition',
+        action: 'Load the correct source stack for each chosen lane',
+        detail:
+          'Use county/preforeclosure data for foreclosure lanes, DealMachine contact exports for landlord/tax/code lanes, and listing/public inventory for stale DOM or price-cut lanes.',
+        priority: 'high',
+      },
+      {
+        agent: 'outreach',
+        action: 'Match copy to scenario instead of using one generic seller ask',
+        detail:
+          'Preforeclosure should be relief/option framing, landlord should be fatigue/timing framing, probate should be empathetic simplicity, and city/code lanes should be pressure-reduction framing.',
+        priority: 'high',
+      },
+      {
+        agent: 'qa',
+        action: 'Log which city/scenario pair wins replies',
+        detail:
+          'Track replies, suppressions, and route outcomes by city plus scenario so tomorrow’s ranking can promote the actual winner.',
+        priority: 'normal',
+      },
+    ],
+    steps: [
+      { label: 'Open command center', href: '/admin/command-center' },
+      { label: 'Run DealMachine export outreach dry run', command: 'npm run distress:dealmachine:export-outreach -- --strategy=<strategy-key> --market=<city-state>' },
+      { label: 'Run county preforeclosure public OSINT lane', command: 'npm run distress:preforeclosure:county-public' },
+    ],
+    complianceNote:
+      'Scenario-specific copy must still respect opt-outs, avoid foreclosure-stop promises, and avoid legal/tax guarantees or owner-occupant pressure tactics.',
   })
 
   // ── 1. Stale-listing creative finance (the realtor play) ──────────────────
@@ -347,7 +409,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'outreach',
         action: 'Preview seller-options outreach for the double-stack only',
         detail:
-          'Use the tax-code-stack strategy internally, but first-touch copy should not name tax delinquency, preforeclosure, code violations, liens, or dollar amounts. Keep public-record pressure as scoring/context only, avoid threats, honor suppressions, and never send SMS automatically.',
+          'Use the tax-code-stack strategy so copy references public-record pressure carefully, avoids threats, honors suppressions, and never sends SMS automatically.',
         priority: 'normal',
       },
       {
@@ -376,7 +438,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     complianceNote:
-      'Use public-record signals internally only on first touch. Do not name tax delinquency, preforeclosure, code violations, liens, or dollar amounts unless a human approves that context for a reply. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
+      'Use public-record language carefully. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
   })
 
   // ── 3B. Pre-auction distress routing ───────────────────────────────────────
@@ -410,7 +472,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'acquisition',
         action: 'Run the county source checklist before outreach',
         detail:
-          'Prioritize Milwaukee, Toledo, Cleveland, Detroit, and Waukesha. Attach foreclosure/tax/code/vacancy/auction evidence to the lead record for scoring and routing, but keep that evidence out of first-touch copy unless a human approves it.',
+          'Prioritize Milwaukee, Toledo, Cleveland, Detroit, and Waukesha. Attach foreclosure/tax/code/vacancy/auction evidence to the lead record before it enters copy generation.',
         priority: 'high',
       },
       {
@@ -424,7 +486,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'outreach',
         action: 'Keep distress copy separated by exit bucket',
         detail:
-          'Do not mix foreclosure, tax-code, on-market, portfolio landlord, buyer-match, or referral language. Each lane needs its own subject line, ask, and compliance footer, and sensitive source signals stay internal on first touch.',
+          'Do not mix foreclosure, tax-code, on-market, portfolio landlord, buyer-match, or referral language. Each lane needs its own subject line, ask, and compliance footer.',
         priority: 'high',
       },
       {

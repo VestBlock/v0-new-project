@@ -39,18 +39,7 @@ import {
 
 export const MIN_CASH_ON_CASH_RETURN_PERCENT = 13
 
-/** Logged negotiation outcomes (see scripts/log-offer-outcome.mjs) used to calibrate offer strategy. */
-export type OfferOutcomeSignal = {
-  status: string
-  mao: number | null
-  counter: number | null
-  sellerAsk?: number | null
-  cashOffer?: number | null
-}
-
 export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
-  /** Optional market outcome history; when present, offerStrategy gains calibration. */
-  offerOutcomeHistory?: OfferOutcomeSignal[]
   selectedComps?: Array<{
     address?: string | null
     salePrice?: string | number | null
@@ -103,19 +92,6 @@ export type PropertyOpportunityInput = RoughPropertyEstimateInput & {
   creativeBalloonYears?: string | number | null
   existingLoanInterestRate?: string | number | null
   existingLoanRemainingTermYears?: string | number | null
-  sourceSystem?: string | null
-  sourceDate?: string | null
-  dealMachineListName?: string | null
-  dealMachineListId?: string | number | null
-  dealMachineExportDate?: string | null
-  dealMachineLeadId?: string | number | null
-  osintSignals?: string | string[] | null
-  taxDelinquent?: string | boolean | null
-  codeViolation?: string | boolean | null
-  activeLien?: string | boolean | null
-  vacancySignal?: string | boolean | null
-  ownerType?: string | null
-  absenteeOwner?: string | boolean | null
 }
 
 export type CreativeOfferKey = 'seller_finance' | 'subject_to' | 'wrap_mortgage' | 'hybrid_morby'
@@ -158,38 +134,6 @@ export type PropertyOpportunityAnalysis = {
     spread: number | null
     endBuyerProfit: number | null
     grade: 'RISKY' | 'GOOD' | null
-  }
-  offerStrategy: {
-    anchorOffer: number | null
-    targetOffer: number | null
-    walkAwayPrice: number | null
-    negotiationRoom: number | null
-    askGapToWalkAway: number | null
-    askGapPercent: number | null
-    approach: 'move_fast' | 'price_negotiation' | 'creative_first' | 'needs_inputs'
-    summary: string
-    concessionSteps: string[]
-    calibration: {
-      sampleCount: number
-      acceptedCount: number
-      counteredCount: number
-      rejectedCount: number
-      medianCounterOverMaoPercent: number | null
-      note: string
-    } | null
-  }
-  repairSensitivity: {
-    breakevenRepairBudget: number | null
-    cushionPercent: number | null
-    summary: string
-    scenarios: Array<{
-      label: string
-      repairBudget: number | null
-      mao: number | null
-      spread: number | null
-      flipProfit: number | null
-      grade: 'RISKY' | 'GOOD' | null
-    }>
   }
   comparables: {
     usedCount: number
@@ -314,69 +258,6 @@ export type PropertyOpportunityAnalysis = {
     score: number
     summary: string
   }
-  buyerIntelligence: {
-    rentMarketRange: {
-      low: number | null
-      base: number | null
-      high: number | null
-      confidence: 'Verified lease needed' | 'Screening range' | 'Market-supported range'
-      summary: string
-    }
-    neighborhoodScore: {
-      score: number
-      label: 'Needs local verification' | 'Thin neighborhood signal' | 'Watchlist neighborhood' | 'Buyer-friendly signal'
-      summary: string
-      factors: string[]
-    }
-    valueRange: {
-      low: number | null
-      base: number | null
-      high: number | null
-      confidence: 'Low' | 'Medium' | 'High'
-      summary: string
-    }
-    repairRange: {
-      low: number | null
-      base: number | null
-      high: number | null
-      confidence: 'Scope needed' | 'Screening range' | 'Seller-supported range'
-      summary: string
-    }
-    offerRange: {
-      low: number | null
-      base: number | null
-      high: number | null
-      summary: string
-    }
-    rentalSensitivity: Array<{
-      label: string
-      monthlyRent: number | null
-      noiAnnual: number | null
-      monthlyCashFlow: number | null
-      dscr: number | null
-      capRatePercent: number | null
-    }>
-    priceSensitivity: Array<{
-      label: string
-      purchasePrice: number | null
-      capRatePercent: number | null
-      dscr: number | null
-      monthlyCashFlow: number | null
-      cashOnCashReturnPercent: number | null
-    }>
-    dataSources: string[]
-    osintChecks: string[]
-    publicRecordIntelligence: {
-      score: number
-      label: 'Source gap' | 'Needs public-record check' | 'Public-record leads present' | 'Stacked public-record lead'
-      summary: string
-      sourceFreshness: 'Current source date' | 'Dated source date' | 'Missing source date'
-      signals: string[]
-      buyerTalkingPoints: string[]
-      checks: string[]
-    }
-    dueDiligenceNeeds: string[]
-  }
   nextSteps: string[]
   disclaimer: string
 }
@@ -393,53 +274,6 @@ function percent(numerator: number | null, denominator: number | null) {
 
 function bounded(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)))
-}
-
-function buyerNeighborhoodLabel(score: number): PropertyOpportunityAnalysis['buyerIntelligence']['neighborhoodScore']['label'] {
-  if (score >= 72) return 'Buyer-friendly signal'
-  if (score >= 55) return 'Watchlist neighborhood'
-  if (score >= 38) return 'Thin neighborhood signal'
-  return 'Needs local verification'
-}
-
-function publicRecordLabel(score: number): PropertyOpportunityAnalysis['buyerIntelligence']['publicRecordIntelligence']['label'] {
-  if (score >= 72) return 'Stacked public-record lead'
-  if (score >= 52) return 'Public-record leads present'
-  if (score >= 28) return 'Needs public-record check'
-  return 'Source gap'
-}
-
-function sourceFreshnessLabel(sourceDate: string | null): PropertyOpportunityAnalysis['buyerIntelligence']['publicRecordIntelligence']['sourceFreshness'] {
-  if (!sourceDate) return 'Missing source date'
-
-  const parsed = new Date(sourceDate)
-  if (Number.isNaN(parsed.getTime())) return 'Dated source date'
-
-  const ageDays = (Date.now() - parsed.getTime()) / 86400000
-  if (ageDays >= -1 && ageDays <= 45) return 'Current source date'
-  return 'Dated source date'
-}
-
-function rangeAround(value: number | null, lowFactor: number, highFactor: number, nearest = 50) {
-  if (!Number.isFinite(value)) return { low: null, base: null, high: null }
-  return {
-    low: roundToNearest(Number(value) * lowFactor, nearest),
-    base: roundToNearest(Number(value), nearest),
-    high: roundToNearest(Number(value) * highFactor, nearest),
-  }
-}
-
-function truthySignal(value: unknown) {
-  if (typeof value === 'boolean') return value
-  return /yes|true|y|1|hit|active|open|delinquent|violation|vacant|absentee/i.test(String(value || ''))
-}
-
-function splitSignals(value: unknown) {
-  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean)
-  return String(value || '')
-    .split(/[|;,\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
 }
 
 function conditionScore(condition?: string | null) {
@@ -838,240 +672,6 @@ function fundingReadinessLabel(score: number): PropertyOpportunityAnalysis['fund
   if (score >= 58) return 'Needs more file prep'
   if (score >= 40) return 'Needs borrower cleanup'
   return 'Manual review'
-}
-
-
-function buildBuyerIntelligence(inputs: {
-  input: PropertyOpportunityInput
-  estimate: RoughPropertyEstimate
-  monthlyRent: number | null
-  purchasePrice: number | null
-  arv: number | null
-  repairBudget: number | null
-  conservativeCashReview: number | null
-  balancedCashReview: number | null
-  mao70: number | null
-  operatingExpenses: ReturnType<typeof calculateOperatingExpenses>
-  monthlyDebtService: number | null
-  annualDebtService: number | null
-  totalCashNeeded: number | null
-  usableComps: PropertyOpportunityAnalysis['comparables']['selected']
-  listingPressurePoints: number
-  hasListingContext: boolean
-  rentToPriceRatioPercent: number | null
-  dscr: number | null
-  estimatedMonthlyCashFlow: number | null
-  riskFlags: string[]
-  missingItems: string[]
-}): PropertyOpportunityAnalysis['buyerIntelligence'] {
-  const rentRange = rangeAround(inputs.monthlyRent, 0.9, 1.12, 25)
-  const rentConfidence: PropertyOpportunityAnalysis['buyerIntelligence']['rentMarketRange']['confidence'] =
-    inputs.monthlyRent === null
-      ? 'Verified lease needed'
-      : inputs.usableComps.length >= 2 || inputs.estimate.confidence >= 70
-        ? 'Market-supported range'
-        : 'Screening range'
-
-  const compSales = inputs.usableComps.map((comp) => Number(comp.salePrice || 0)).filter((value) => Number.isFinite(value) && value > 0)
-  const lowCandidates = [inputs.estimate.lowEstimate, compSales.length ? Math.min(...compSales) : null].filter((value): value is number => Number.isFinite(value))
-  const highCandidates = [inputs.estimate.highEstimate, inputs.arv, compSales.length ? Math.max(...compSales) : null].filter((value): value is number => Number.isFinite(value))
-  const valueBase = inputs.arv ?? inputs.estimate.estimateValue
-  const fallbackValueRange = rangeAround(valueBase, inputs.usableComps.length ? 0.93 : 0.88, inputs.usableComps.length ? 1.07 : 1.15, 1000)
-  const valueRange = {
-    low: lowCandidates.length ? roundToNearest(Math.min(...lowCandidates), 1000) : fallbackValueRange.low,
-    base: roundToNearest(valueBase, 1000),
-    high: highCandidates.length ? roundToNearest(Math.max(...highCandidates), 1000) : fallbackValueRange.high,
-  }
-  const valueConfidence: PropertyOpportunityAnalysis['buyerIntelligence']['valueRange']['confidence'] =
-    inputs.usableComps.length >= 3 ? 'High' : inputs.usableComps.length >= 1 || inputs.estimate.confidence >= 60 ? 'Medium' : 'Low'
-
-  const repairRange = rangeAround(inputs.repairBudget, 0.8, 1.3, 500)
-  const repairConfidence: PropertyOpportunityAnalysis['buyerIntelligence']['repairRange']['confidence'] =
-    inputs.repairBudget === null
-      ? 'Scope needed'
-      : /seller|contractor|inspection|bid|scope/i.test(String(inputs.input.documentsAvailable || inputs.input.propertyCondition || ''))
-        ? 'Seller-supported range'
-        : 'Screening range'
-
-  const offerValues = [inputs.conservativeCashReview, inputs.mao70, inputs.balancedCashReview].filter((value): value is number => Number.isFinite(value))
-  const sourceDate = cleanOptionalString(inputs.input.dealMachineExportDate || inputs.input.sourceDate || inputs.estimate.generatedAt)
-  const dataSources = [
-    inputs.input.sourceSystem ? 'Source system: ' + inputs.input.sourceSystem : null,
-    inputs.input.dealMachineListName ? 'DealMachine list: ' + inputs.input.dealMachineListName : null,
-    inputs.input.dealMachineListId ? 'DealMachine list ID: ' + inputs.input.dealMachineListId : null,
-    inputs.input.dealMachineLeadId ? 'DealMachine lead ID: ' + inputs.input.dealMachineLeadId : null,
-    sourceDate ? 'Data date: ' + sourceDate : 'Data date missing - refresh DealMachine/OSINT source before marketing as current.',
-    inputs.estimate.sourceLabel ? 'Estimate source: ' + inputs.estimate.sourceLabel : null,
-  ].filter(Boolean) as string[]
-
-  const osintSignals = splitSignals(inputs.input.osintSignals)
-  if (truthySignal(inputs.input.taxDelinquent)) osintSignals.push('Tax delinquency signal')
-  if (truthySignal(inputs.input.codeViolation)) osintSignals.push('Code violation signal')
-  if (truthySignal(inputs.input.activeLien)) osintSignals.push('Lien signal')
-  if (truthySignal(inputs.input.vacancySignal)) osintSignals.push('Vacancy signal')
-  if (truthySignal(inputs.input.absenteeOwner)) osintSignals.push('Absentee/out-of-state owner signal')
-  if (inputs.input.ownerType) osintSignals.push('Owner type: ' + inputs.input.ownerType)
-
-  const neighborhoodFactors = [
-    inputs.input.city && inputs.input.state ? 'Market identified: ' + inputs.input.city + ', ' + inputs.input.state : null,
-    inputs.hasListingContext ? 'Public listing context present' : 'Missing listing/source context',
-    inputs.usableComps.length ? inputs.usableComps.length + ' sold comp' + (inputs.usableComps.length === 1 ? '' : 's') + ' attached' : 'No sold comps attached',
-    inputs.rentToPriceRatioPercent !== null ? 'Rent-to-price ratio ' + inputs.rentToPriceRatioPercent + '%' : 'Rent-to-price ratio needs rent/value verification',
-    ...osintSignals.slice(0, 5),
-  ].filter(Boolean) as string[]
-  const neighborhoodScore = bounded(
-    (inputs.input.city && inputs.input.state ? 18 : 5) +
-      Math.min(24, inputs.usableComps.length * 8) +
-      (inputs.hasListingContext ? 14 : 2) +
-      Math.min(12, inputs.listingPressurePoints / 2) +
-      (inputs.rentToPriceRatioPercent !== null ? Math.min(16, Math.max(0, inputs.rentToPriceRatioPercent * 10)) : 4) +
-      (inputs.estimate.confidence >= 70 ? 10 : inputs.estimate.confidence >= 45 ? 6 : 2) +
-      Math.min(12, osintSignals.length * 3) -
-      Math.min(18, inputs.riskFlags.length * 3)
-  )
-
-  const rentCases = [
-    { label: 'Low rent case', rent: rentRange.low },
-    { label: 'Base rent case', rent: rentRange.base },
-    { label: 'High rent case', rent: rentRange.high },
-  ]
-  const rentalSensitivity = rentCases.map((item) => {
-    const noiAnnual = calculateNetOperatingIncome(item.rent, inputs.operatingExpenses.total)
-    const monthlyCashFlow = calculateCashFlow(item.rent, (inputs.operatingExpenses.total || 0) + (inputs.monthlyDebtService || 0))
-    return {
-      label: item.label,
-      monthlyRent: item.rent,
-      noiAnnual,
-      monthlyCashFlow,
-      dscr: calculateDscr(noiAnnual, inputs.annualDebtService),
-      capRatePercent: calculateCapRate(noiAnnual, inputs.purchasePrice ?? inputs.arv ?? inputs.estimate.estimateValue),
-    }
-  })
-
-  const priceCases = [
-    { label: 'Seller ask / base', price: inputs.purchasePrice },
-    { label: '5% lower', price: Number.isFinite(inputs.purchasePrice) ? Math.round(Number(inputs.purchasePrice) * 0.95) : null },
-    { label: '10% lower', price: Number.isFinite(inputs.purchasePrice) ? Math.round(Number(inputs.purchasePrice) * 0.9) : null },
-  ]
-  const baseNoi = calculateNetOperatingIncome(inputs.monthlyRent, inputs.operatingExpenses.total)
-  const priceSensitivity = priceCases.map((item) => {
-    const priceDrop = inputs.purchasePrice !== null && item.price !== null ? inputs.purchasePrice - item.price : 0
-    const cashNeeded = inputs.totalCashNeeded !== null ? Math.max(0, inputs.totalCashNeeded - priceDrop) : inputs.totalCashNeeded
-    return {
-      label: item.label,
-      purchasePrice: item.price,
-      capRatePercent: calculateCapRate(baseNoi, item.price),
-      dscr: inputs.dscr,
-      monthlyCashFlow: inputs.estimatedMonthlyCashFlow,
-      cashOnCashReturnPercent: calculateCashOnCashReturn(inputs.estimatedMonthlyCashFlow !== null ? inputs.estimatedMonthlyCashFlow * 12 : null, cashNeeded),
-    }
-  })
-
-  const osintChecks = [
-    'County tax portal: confirm delinquency, assessed value, owner mailing address, exemptions, and tax sale status.',
-    'County recorder/court: check liens, mortgages, judgments, probate, foreclosure, and transfer history.',
-    'City code enforcement: check open violations, permits, condemnations, vacant registry, and rental license status.',
-    'GIS/parcel map: verify lot size, zoning, floodplain, utilities, adjacent parcels, and redevelopment constraints.',
-    'Rental market scan: verify active rent comps, lease-up velocity, payment-standard fit, and vacancy risk.',
-    'Buyer demand scan: compare investor activity, recent cash sales, builder permits, and nearby rehab/resale velocity.',
-  ]
-
-  const uniqueOsintSignals = [...new Set(osintSignals.map((signal) => cleanOptionalString(String(signal))).filter((signal): signal is string => Boolean(signal)))]
-  const publicRecordScore = bounded(
-    (sourceDate ? 16 : 0) +
-      Math.min(30, uniqueOsintSignals.length * 6) +
-      (truthySignal(inputs.input.taxDelinquent) ? 12 : 0) +
-      (truthySignal(inputs.input.codeViolation) ? 12 : 0) +
-      (truthySignal(inputs.input.activeLien) ? 10 : 0) +
-      (truthySignal(inputs.input.vacancySignal) ? 8 : 0) +
-      (truthySignal(inputs.input.absenteeOwner) ? 8 : 0) +
-      (inputs.input.ownerType ? 4 : 0) +
-      (inputs.input.dealMachineListName || inputs.input.sourceSystem ? 8 : 0)
-  )
-  const sourceFreshness = sourceFreshnessLabel(sourceDate)
-  const publicRecordSignals = uniqueOsintSignals.length
-    ? uniqueOsintSignals
-    : ['No public-record distress signals were attached to this analysis.']
-  const publicRecordTalkingPoints = [
-    sourceDate ? `Source date attached: ${sourceDate}.` : 'No source date was attached; refresh DealMachine and county records before buyer marketing.',
-    uniqueOsintSignals.length
-      ? `${uniqueOsintSignals.length} public-record or OSINT signal${uniqueOsintSignals.length === 1 ? '' : 's'} attached for buyer screening.`
-      : 'Public-record evidence needs to be added before this reads like a stacked lead.',
-    truthySignal(inputs.input.taxDelinquent) ? 'Tax delinquency should be verified because it can explain seller pressure and title cleanup needs.' : null,
-    truthySignal(inputs.input.codeViolation) ? 'Code violation signal should be verified because it can affect repair budget, permits, and buyer appetite.' : null,
-    truthySignal(inputs.input.activeLien) ? 'Lien signal should be verified before pricing because it can change payoff and assignment room.' : null,
-    truthySignal(inputs.input.vacancySignal) ? 'Vacancy signal should be verified because it can improve access but increase security and condition risk.' : null,
-    truthySignal(inputs.input.absenteeOwner) ? 'Absentee ownership should be verified because it can support remote-seller motivation and mailer/outreach context.' : null,
-  ].filter(Boolean) as string[]
-
-  const publicRecordIntelligence = {
-    score: publicRecordScore,
-    label: publicRecordLabel(publicRecordScore),
-    summary:
-      publicRecordScore >= 72
-        ? 'The file has multiple stacked public-record signals and is ready for focused verification before buyer distribution.'
-        : publicRecordScore >= 52
-          ? 'The file has useful public-record leads, but buyer-facing claims still need source screenshots or county links.'
-          : publicRecordScore >= 28
-            ? 'The file has light source context. Run the county and OSINT checklist before treating motivation as verified.'
-            : 'The file is thin on public-record evidence. Do not market distress, taxes, liens, or violations until sources are attached.',
-    sourceFreshness,
-    signals: publicRecordSignals.slice(0, 8),
-    buyerTalkingPoints: publicRecordTalkingPoints.slice(0, 8),
-    checks: osintChecks,
-  }
-
-  const dueDiligenceNeeds = [
-    'Verify actual rent roll, leases, deposits, tenant balances, and utility responsibility.',
-    'Verify neighborhood demand with active rentals, vacancy, days-on-market, and buyer feedback.',
-    'Check municipal code violations, permits, taxes, liens, title, and occupancy status.',
-    'Confirm photos, access, roof/HVAC/plumbing/electrical condition, and repair scope.',
-    inputs.usableComps.length < 2 ? 'Add at least two recent sold comps before treating value as firm.' : null,
-    sourceDate ? null : 'Refresh source data date before sending externally.',
-    ...inputs.missingItems,
-  ].filter(Boolean) as string[]
-
-  return {
-    rentMarketRange: {
-      ...rentRange,
-      confidence: rentConfidence,
-      summary: inputs.monthlyRent === null
-        ? 'No rent input was provided. Buyer should treat rental performance as unverified until leases or market rent comps are added.'
-        : 'Range is a screening band around the current rent input. Replace it with leases and active rental comps before final buyer pricing.',
-    },
-    neighborhoodScore: {
-      score: neighborhoodScore,
-      label: buyerNeighborhoodLabel(neighborhoodScore),
-      summary: 'Screening score based on available file, DealMachine, and OSINT signals only; it is not a crime, school, appraisal, or block-level desirability rating.',
-      factors: [...new Set(neighborhoodFactors)].slice(0, 9),
-    },
-    valueRange: {
-      ...valueRange,
-      confidence: valueConfidence,
-      summary: 'Value band blends seller/input estimate, ARV, and available comp anchors. Treat as a range until sold comps and condition are verified.',
-    },
-    repairRange: {
-      ...repairRange,
-      confidence: repairConfidence,
-      summary: inputs.repairBudget === null
-        ? 'Repair range is unavailable until photos, access, or contractor scope is added.'
-        : 'Repair range is a stress band around the current repair budget and should be tightened with photos or a contractor walk-through.',
-    },
-    offerRange: {
-      low: offerValues.length ? roundToNearest(Math.min(...offerValues), 1000) : null,
-      base: roundToNearest(inputs.mao70 ?? inputs.conservativeCashReview ?? inputs.balancedCashReview, 1000),
-      high: offerValues.length ? roundToNearest(Math.max(...offerValues), 1000) : null,
-      summary: offerValues.length
-        ? 'Use this as a buyer-facing screening band; tighten it after photos, access, title, taxes, occupancy, and repair scope are verified.'
-        : 'Offer range needs ARV, repair, and seller price inputs before it can be trusted.',
-    },
-    rentalSensitivity,
-    priceSensitivity,
-    dataSources: [...new Set(dataSources)],
-    osintChecks,
-    publicRecordIntelligence,
-    dueDiligenceNeeds: [...new Set(dueDiligenceNeeds)].slice(0, 10),
-  }
 }
 
 export function buildPropertyOpportunityAnalysis(
@@ -1820,146 +1420,6 @@ export function buildPropertyOpportunityAnalysis(
   })
   const dealGrade = gradeDeal({ spread: assignmentSpread })
 
-  // ---- Offer strategy: anchor / target / walk-away so the operator negotiates
-  // from computed numbers instead of vibes. Walk-away is the hard MAO cap.
-  const walkAwayPrice = maoWithFee ?? mao70 ?? balancedCashReview
-  const offerTargetRaw = conservativeCashReview ?? (walkAwayPrice !== null ? walkAwayPrice * 0.95 : null)
-  const targetOffer =
-    offerTargetRaw !== null && walkAwayPrice !== null
-      ? roundToNearest(Math.min(offerTargetRaw, walkAwayPrice), 1000)
-      : roundToNearest(offerTargetRaw, 1000)
-  const anchorOffer = targetOffer !== null ? roundToNearest(targetOffer * 0.92, 1000) : null
-  const negotiationRoom =
-    walkAwayPrice !== null && anchorOffer !== null ? Math.max(0, Math.round(walkAwayPrice - anchorOffer)) : null
-  const askGapToWalkAway =
-    askingPrice !== null && walkAwayPrice !== null ? Math.round(askingPrice - walkAwayPrice) : null
-  const askGapPercent =
-    askGapToWalkAway !== null && askingPrice !== null && askingPrice > 0
-      ? Math.round((askGapToWalkAway / askingPrice) * 1000) / 10
-      : null
-  const offerApproach: PropertyOpportunityAnalysis['offerStrategy']['approach'] =
-    walkAwayPrice === null || anchorOffer === null
-      ? 'needs_inputs'
-      : askGapToWalkAway !== null && askGapToWalkAway <= 0
-        ? 'move_fast'
-        : askGapPercent !== null && askGapPercent > 20
-          ? 'creative_first'
-          : 'price_negotiation'
-  // Calibration from logged outcomes: real counters teach where sellers actually land.
-  // Walk-away stays the hard MAO cap; calibration informs the anchor and expectations.
-  const outcomeHistory = input.offerOutcomeHistory || []
-  const counterRatios = outcomeHistory
-    .filter((row) => row.counter !== null && row.mao !== null && Number(row.mao) > 0)
-    .map((row) => (Number(row.counter) - Number(row.mao)) / Number(row.mao))
-    .sort((a, b) => a - b)
-  const medianCounterOverMao =
-    counterRatios.length >= 3 ? counterRatios[Math.floor(counterRatios.length / 2)] : null
-  const acceptedCount = outcomeHistory.filter((row) => row.status === 'accepted').length
-  const counteredCount = outcomeHistory.filter((row) => row.status === 'countered').length
-  const rejectedCount = outcomeHistory.filter((row) => row.status === 'rejected').length
-  const offerCalibration: PropertyOpportunityAnalysis['offerStrategy']['calibration'] =
-    outcomeHistory.length >= 3
-      ? {
-          sampleCount: outcomeHistory.length,
-          acceptedCount,
-          counteredCount,
-          rejectedCount,
-          medianCounterOverMaoPercent:
-            medianCounterOverMao !== null ? Math.round(medianCounterOverMao * 1000) / 10 : null,
-          note:
-            medianCounterOverMao !== null && medianCounterOverMao > 0.05
-              ? `Across ${counterRatios.length} logged counters, sellers typically counter ~${Math.round(medianCounterOverMao * 100)}% above MAO — expect the first counter to land high and hold the walk-away.`
-              : acceptedCount > 0 && acceptedCount >= rejectedCount
-                ? `${acceptedCount} of ${outcomeHistory.length} logged outcomes were accepted — current anchoring is landing; keep the same posture.`
-                : rejectedCount > counteredCount + acceptedCount
-                  ? `Most logged outcomes were flat rejections (${rejectedCount}/${outcomeHistory.length}) — consider opening closer to target or leading with creative terms.`
-                  : `${outcomeHistory.length} logged outcomes available; log more counters with prices to sharpen anchoring.`,
-        }
-      : null
-
-  const offerStrategy: PropertyOpportunityAnalysis['offerStrategy'] = {
-    anchorOffer,
-    targetOffer,
-    walkAwayPrice: roundToNearest(walkAwayPrice, 1000),
-    negotiationRoom,
-    askGapToWalkAway,
-    askGapPercent,
-    approach: offerApproach,
-    calibration: offerCalibration,
-    summary:
-      offerApproach === 'needs_inputs'
-        ? 'Add ARV and repair inputs to unlock computed anchor, target, and walk-away numbers.'
-        : offerApproach === 'move_fast'
-          ? 'The ask is at or under the walk-away cap. Verify condition and title fast — this is a speed race, not a negotiation.'
-          : offerApproach === 'creative_first'
-            ? `The ask sits ${askGapPercent}% above the cash walk-away. Lead with a creative structure (terms, price later) instead of a price fight.`
-            : 'The gap is workable. Open at the anchor, concede in planned steps, and never cross the walk-away cap.',
-    concessionSteps:
-      offerApproach === 'needs_inputs' || anchorOffer === null || walkAwayPrice === null
-        ? []
-        : [
-            `Open at ${Math.round(anchorOffer).toLocaleString()} with the repair story attached.`,
-            `If countered, move to ${Math.round(targetOffer ?? anchorOffer).toLocaleString()} in exchange for speed (as-is, flexible close date).`,
-            `Final number is ${Math.round(walkAwayPrice).toLocaleString()}. Past that, switch to creative terms or log the outcome and exit.`,
-            ...(offerCalibration ? [`Market memory: ${offerCalibration.note}`] : []),
-            'Whatever happens, record it with outreach:log-offer-outcome so the next offer in this market is smarter.',
-          ],
-  }
-
-  // ---- Repair sensitivity: stress the budget because overruns kill more deals
-  // than bad ARVs. Break-even repair = the budget where assignment spread hits 0.
-  const breakevenRepairBudget =
-    arv !== null && askingPrice !== null
-      ? Math.max(0, Math.round(arv * dealRulePercent - (effectiveAssignmentFee || 0) - askingPrice))
-      : null
-  const repairCushionPercent =
-    breakevenRepairBudget !== null && repairBudget !== null && repairBudget > 0
-      ? Math.round(((breakevenRepairBudget - repairBudget) / repairBudget) * 1000) / 10
-      : null
-  const repairScenarios = [
-    { label: 'As scoped', factor: 1 },
-    { label: '+15% overrun', factor: 1.15 },
-    { label: '+30% overrun', factor: 1.3 },
-    { label: '+50% overrun', factor: 1.5 },
-  ].map(({ label, factor }) => {
-    const scenarioRepair = repairBudget !== null ? Math.round(repairBudget * factor) : null
-    const scenarioMao = computeMao({
-      arv: scorecardArv,
-      rulePct: dealRulePercent,
-      repairCost: scenarioRepair,
-      assignmentFee: effectiveAssignmentFee,
-    })
-    const scenarioSpread = computeSpread({ mao: scenarioMao, sellerAsk: askingPrice })
-    const scenarioFlipProfit =
-      flipProfit !== null && scenarioRepair !== null && repairBudget !== null
-        ? Math.round(flipProfit - (scenarioRepair - repairBudget))
-        : null
-    return {
-      label,
-      repairBudget: scenarioRepair,
-      mao: scenarioMao,
-      spread: scenarioSpread,
-      flipProfit: scenarioFlipProfit,
-      grade: gradeDeal({ spread: scenarioSpread }),
-    }
-  })
-  const firstRiskyScenario = repairScenarios.find((scenario) => scenario.grade === 'RISKY')
-  const repairSensitivity: PropertyOpportunityAnalysis['repairSensitivity'] = {
-    breakevenRepairBudget,
-    cushionPercent: repairCushionPercent,
-    summary:
-      repairBudget === null || arv === null
-        ? 'Add a repair budget and ARV to stress-test overrun risk.'
-        : !firstRiskyScenario
-          ? repairCushionPercent !== null && repairCushionPercent >= 50
-            ? `Repair cushion is strong: the budget can run ${repairCushionPercent}% over before the spread breaks even.`
-            : 'The deal stays GOOD through a 50% repair overrun at the current ask.'
-          : firstRiskyScenario.label === 'As scoped'
-            ? 'The deal is already RISKY at the scoped repair budget — renegotiate price or walk.'
-            : `The deal flips RISKY at ${firstRiskyScenario.label.toLowerCase()}. Verify scope hard before contract; thin cushion.`,
-    scenarios: repairScenarios,
-  }
-
   const routeFit = [
     {
       key: 'fast_cash' as const,
@@ -2371,30 +1831,6 @@ export function buildPropertyOpportunityAnalysis(
         : 'The property needs more detail before it should be sent to buyers or lenders.',
   } satisfies PropertyOpportunityAnalysis['buyerInterest']
 
-  const buyerIntelligence = buildBuyerIntelligence({
-    input,
-    estimate,
-    monthlyRent,
-    purchasePrice,
-    arv,
-    repairBudget,
-    conservativeCashReview,
-    balancedCashReview,
-    mao70,
-    operatingExpenses,
-    monthlyDebtService,
-    annualDebtService,
-    totalCashNeeded,
-    usableComps,
-    listingPressurePoints,
-    hasListingContext,
-    rentToPriceRatioPercent,
-    dscr,
-    estimatedMonthlyCashFlow,
-    riskFlags,
-    missingItems,
-  })
-
   const rawDealStrengthScore = bounded(
     (Math.min(20, Math.max(0, ((discountToValuePercent ?? equityPercent ?? 0) / 20) * 20))) +
       (estimatedMonthlyCashFlow !== null
@@ -2504,8 +1940,6 @@ export function buildPropertyOpportunityAnalysis(
       endBuyerProfit,
       grade: dealGrade,
     },
-    offerStrategy,
-    repairSensitivity,
     comparables: {
       usedCount: usableComps.length,
       averageSalePrice: compAverageSalePrice !== null ? Math.round(compAverageSalePrice) : null,
@@ -2579,7 +2013,6 @@ export function buildPropertyOpportunityAnalysis(
     routeFit,
     builderDisposition,
     buyerInterest,
-    buyerIntelligence,
     nextSteps,
     disclaimer:
       'VestBlock provides informational analysis, deal estimates, funding readiness guidance, and referral routing support. VestBlock does not guarantee funding, approval, property value, rental income, profit, or investment performance. All property data, valuations, rents, comps, and projections must be independently verified before making financial decisions.',

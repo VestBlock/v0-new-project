@@ -1,0 +1,58 @@
+[
+  {
+    "key": "content_generation",
+    "label": "Content generation",
+    "mode": "auto",
+    "risk": "low",
+    "guardrail": "Creates drafts only. Publishing and distribution remain separate actions."
+  },
+  {
+    "key": "social_scheduling",
+    "label": "Social scheduling",
+    "mode": "approve",
+    "risk": "medium",
+    "guardrail": "A founder must approve the asset, destinations, and scheduled time."
+  },
+  {
+    "key": "seo_technical_fixes",
+    "label": "SEO technical fixes",
+    "mode": "approve",
+    "risk": "medium",
+    "guardrail": "Codex may prepare a change; release follows code review and deployment approval."
+  },
+  {
+    "key": "approved_email_followup",
+    "label": "Approved email follow-up",
+    "mode": "auto",
+    "risk": "low",
+    "guardrail": "Only enrolled campaigns may send. Replies, STOP, bounce, and complaints pause or suppress immediately."
+  },
+  {
+    "key": "pr_outreach",
+    "label": "PR outreach",
+    "mode": "approve",
+    "risk": "medium",
+    "guardrail": "Drafting and target research are automatic; journalist contact requires relevance review and approval."
+  },
+  {
+    "key": "ad_changes",
+    "label": "Advertising changes",
+    "mode": "approve",
+    "risk": "high",
+    "guardrail": "Monitoring may run automatically. Launches, pauses, budget changes, and spend require founder approval."
+  },
+  {
+    "key": "lead_classification",
+    "label": "Lead and reply classification",
+    "mode": "auto",
+    "risk": "low",
+    "guardrail": "Unmatched or ambiguous conversational replies create human-review work and cannot mutate customer state."
+  },
+  {
+    "key": "production_deployment",
+    "label": "Production deployment",
+    "mode": "approve",
+    "risk": "high",
+    "guardrail": "A human approves every production release after the release preflight passes."
+  }
+]

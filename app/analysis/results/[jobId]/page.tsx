@@ -24,11 +24,11 @@ import { useCallback, useEffect, useState } from 'react';
 interface AnalysisJob {
   id: string;
   status: string;
-  original_file_name: string;
+  original_file_name?: string | null;
   created_at: string;
-  uploaded_at: string;
-  financial_goal_title: string;
-  financial_goal_details: any;
+  uploaded_at?: string | null;
+  financial_goal_title?: string | null;
+  financial_goal_details?: any;
 }
 
 export default function AnalysisResultsPage() {
@@ -44,12 +44,18 @@ export default function AnalysisResultsPage() {
   const jobId = params.jobId as string;
 
   const fetchAnalysisJob = useCallback(async () => {
+    if (!user?.id) {
+      setError('Please log in to view this analysis.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data: jobData, error: jobError } = await supabase
         .from('analysis_jobs')
         .select('*')
         .eq('id', jobId)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (jobError) throw new Error('Analysis not found');

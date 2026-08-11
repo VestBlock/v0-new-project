@@ -5,7 +5,7 @@ function isVercelAuthUrl(url: string) {
 }
 
 async function expectGuestGate(page: Page, path: string, appLoginPattern: RegExp) {
-  await page.goto(path);
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
 
   if (isVercelAuthUrl(page.url())) {
     await expect(page.getByRole('heading', { name: /log in to vercel/i })).toBeVisible();
@@ -16,32 +16,33 @@ async function expectGuestGate(page: Page, path: string, appLoginPattern: RegExp
 }
 
 test.describe('VestBlock smoke coverage', () => {
-  test('public growth pages render', async ({ page }) => {
-    await page.goto('/visibility-expansion');
+  const publicPages = [
+    {
+      path: '/visibility-expansion',
+      heading: /boost how your business gets found and trusted/i,
+    },
+    {
+      path: '/ai-assistant',
+      heading: /ai receptionist, booking, and website improvements for service businesses/i,
+    },
+    {
+      path: '/funding',
+      heading: /check business funding eligibility for free/i,
+    },
+  ];
 
-    if (isVercelAuthUrl(page.url())) {
-      await expect(page.getByRole('heading', { name: /log in to vercel/i })).toBeVisible();
-      return;
-    }
+  for (const publicPage of publicPages) {
+    test(`public page renders: ${publicPage.path}`, async ({ page }) => {
+      await page.goto(publicPage.path, { waitUntil: 'domcontentloaded' });
 
-    await expect(
-      page.getByRole('heading', {
-        name: /show up in more places when people search for what you sell/i,
-      })
-    ).toBeVisible();
+      if (isVercelAuthUrl(page.url())) {
+        await expect(page.getByRole('heading', { name: /log in to vercel/i })).toBeVisible();
+        return;
+      }
 
-    await page.goto('/ai-assistant');
-    await expect(
-      page.getByRole('heading', {
-        name: /ai receptionist, booking, and website improvements for service businesses/i,
-      })
-    ).toBeVisible();
-
-    await page.goto('/funding');
-    await expect(
-      page.getByRole('heading', { name: /check business funding eligibility free/i })
-    ).toBeVisible();
-  });
+      await expect(page.getByRole('heading', { name: publicPage.heading })).toBeVisible();
+    });
+  }
 
   test('protected flows redirect guests', async ({ page }) => {
     await expectGuestGate(page, '/chat', /\/login\?redirect=%2Fchat$/);

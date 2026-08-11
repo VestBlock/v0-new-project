@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import {
-  ArrowRight,
   Building2,
   CircleDollarSign,
   Hammer,
@@ -15,7 +14,6 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/auth-context';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -142,30 +140,30 @@ export function GetStartedPage() {
   const { isAuthenticated, user } = useAuth();
 
   return (
-    <main className="premium-page px-4 py-24">
+    <main className="vb-page px-4 py-24">
       <div className="container mx-auto max-w-7xl space-y-10">
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-5">
-            <Badge className="w-fit bg-cyan-600 text-white">Start Here</Badge>
-            <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-5xl">
-              Choose the VestBlock path that matches your role in the deal.
+            <p className="vb-eyebrow">Start with the outcome</p>
+            <h1 className="max-w-4xl text-4xl font-medium tracking-tight md:text-6xl">
+              Tell us where you&apos;re trying to go.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              Start as a seller, buyer, lender, developer, contractor, operator, capital partner, or DealVault team. Once fit is clear, VestBlock can support cleaner intake, funding prep, partner accountability, and follow-through.
+              Choose capital, deals, or opportunities first. VestBlock will route you into the relevant funding, property, partner, or business workflow already built for that job.
             </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
-                <a href="#paths">
-                  Choose a path below
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </a>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Button asChild size="lg">
+                <Link href="/capital">Find capital</Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/pricing">Compare Pricing</Link>
+                <Link href="/deals">Find deals</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/opportunities">Explore opportunities</Link>
               </Button>
             </div>
             {isAuthenticated ? (
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
+              <div className="border-y border-[#b7ff3c]/20 py-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">Signed in account</p>
                 <p className="mt-1">
                   You are signed in as {user?.email || 'your account'}. Use the same email on
@@ -173,7 +171,7 @@ export function GetStartedPage() {
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">
+              <div className="border-y border-white/10 py-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">No account needed to start</p>
                 <p className="mt-1">
                   Submit the property, buy box, lender profile, deal review, or demo request first. Create an account later only when you want saved activity and dashboard access.
@@ -182,30 +180,30 @@ export function GetStartedPage() {
             )}
           </div>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="border-white/10 bg-[#0e1114] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-cyan-600" />
-                What opens right away
+                <Sparkles className="h-5 w-5 text-[#b7ff3c]" />
+                Start before you sign up
               </CardTitle>
               <CardDescription>
                 Each option gives a serious network member a clear next step before account creation or payment.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
+                <div className="border-t border-white/10 pt-4">
                 <p className="font-medium text-foreground">Network-first entry</p>
                 <p className="mt-1">
                   Seller, buyer, lender, project partner, funding, and DealVault paths all open before account creation.
                 </p>
               </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
+                <div className="border-t border-white/10 pt-4">
                 <p className="font-medium text-foreground">Support path</p>
                 <p className="mt-1">
                   Qualified members can add more support when they need stronger intake, partner materials, or funding prep.
                 </p>
               </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/30">
+                <div className="border-t border-white/10 pt-4">
                 <p className="font-medium text-foreground">Clear role paths</p>
                 <p className="mt-1">
                   Buyer, lender, operator, and partner criteria stay separate, which makes introductions cleaner when a real opportunity appears.
@@ -215,14 +213,19 @@ export function GetStartedPage() {
           </Card>
         </section>
 
-        <section id="paths" className="grid gap-6 scroll-mt-24 xl:grid-cols-2">
+        <section id="paths" className="scroll-mt-24 space-y-6">
+          <div>
+            <p className="vb-eyebrow">Or start with your role</p>
+            <h2 className="mt-3 text-3xl font-medium tracking-tight">Choose the workflow that fits.</h2>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-2">
           {workspaceCards.map((card) => {
             const Icon = card.icon;
 
             return (
-              <Card key={card.title} className="premium-card border-cyan-500/20">
+              <Card key={card.title} className="border-white/10 bg-[#0e1114] shadow-none">
                 <CardHeader>
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-600">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-[#b7ff3c]/10 text-[#b7ff3c]">
                     <Icon className="h-5 w-5" />
                   </div>
                   <CardTitle>{card.title}</CardTitle>
@@ -232,7 +235,7 @@ export function GetStartedPage() {
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     {card.bullets.map((item) => (
                       <li key={item} className="flex gap-2">
-                        <span className="mt-1 h-2 w-2 rounded-full bg-cyan-600" />
+                        <span className="mt-1 h-2 w-2 rounded-full bg-[#b7ff3c]" />
                         <span>{item}</span>
                       </li>
                     ))}
@@ -253,34 +256,9 @@ export function GetStartedPage() {
               </Card>
             );
           })}
+          </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3">
-          <Card className="premium-card">
-            <CardHeader>
-              <CardTitle className="text-lg">For deal-driven teams</CardTitle>
-              <CardDescription>
-                DealVault is the clearest first path when record proof, payout visibility, and milestones matter.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="premium-card">
-            <CardHeader>
-              <CardTitle className="text-lg">For funding prep</CardTitle>
-              <CardDescription>
-                Start with the free funding check, then move into paid prep or credit support only when the business needs cleanup or sequencing help.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="premium-card">
-            <CardHeader>
-              <CardTitle className="text-lg">For added support</CardTitle>
-              <CardDescription>
-                Intake assets, partner materials, and funding prep can be added when a qualified member needs more support.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </section>
       </div>
     </main>
   );

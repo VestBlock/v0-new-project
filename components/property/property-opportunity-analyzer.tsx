@@ -190,30 +190,6 @@ type AnalyzerResult = {
       endBuyerProfit: number | null
       grade: "RISKY" | "GOOD" | null
     }
-    offerStrategy?: {
-      anchorOffer: number | null
-      targetOffer: number | null
-      walkAwayPrice: number | null
-      negotiationRoom: number | null
-      askGapToWalkAway: number | null
-      askGapPercent: number | null
-      approach: "move_fast" | "price_negotiation" | "creative_first" | "needs_inputs"
-      summary: string
-      concessionSteps: string[]
-    }
-    repairSensitivity?: {
-      breakevenRepairBudget: number | null
-      cushionPercent: number | null
-      summary: string
-      scenarios: Array<{
-        label: string
-        repairBudget: number | null
-        mao: number | null
-        spread: number | null
-        flipProfit: number | null
-        grade: "RISKY" | "GOOD" | null
-      }>
-    }
     comparables: {
       usedCount: number
       averageSalePrice: number | null
@@ -1225,51 +1201,6 @@ export function PropertyOpportunityAnalyzer({ calculatorOnly = false }: { calcul
                         </div>
                       </div>
                     </div>
-
-                    {result.opportunity.offerStrategy ? (
-                      <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-sm font-medium text-white">Offer strategy</p>
-                          <Badge className="border-amber-300/30 bg-amber-300/10 text-amber-100">
-                            {result.opportunity.offerStrategy.approach.replace(/_/g, " ")}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">{result.opportunity.offerStrategy.summary}</p>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Anchor</p>
-                            <p className="mt-1 text-sm font-semibold text-amber-100">{formatMoney(result.opportunity.offerStrategy.anchorOffer)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Target</p>
-                            <p className="mt-1 text-sm font-semibold text-amber-100">{formatMoney(result.opportunity.offerStrategy.targetOffer)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Walk-away</p>
-                            <p className="mt-1 text-sm font-semibold text-amber-100">{formatMoney(result.opportunity.offerStrategy.walkAwayPrice)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {result.opportunity.repairSensitivity ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                        <p className="text-sm font-medium text-white">Repair overrun stress test</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">{result.opportunity.repairSensitivity.summary}</p>
-                        <div className="mt-3 grid gap-3 md:grid-cols-4">
-                          {result.opportunity.repairSensitivity.scenarios.map((scenario) => (
-                            <div key={scenario.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{scenario.label}</p>
-                                <Badge className={dealGradeTone(scenario.grade)}>{scenario.grade ?? "—"}</Badge>
-                              </div>
-                              <p className="mt-2 text-sm font-semibold text-white">{formatMoney(scenario.mao)}</p>
-                              <p className="text-xs text-slate-500">spread {formatMoney(scenario.spread)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">

@@ -61,7 +61,7 @@ interface UserRoadmap {
   user_id: string
   financial_goal_id?: string
   roadmap_data: { steps: RoadmapStepData[] }
-  created_at: string
+  created_at?: string | null
 }
 
 export default function UserHubPage() {

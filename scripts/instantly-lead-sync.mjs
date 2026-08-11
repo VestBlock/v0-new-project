@@ -137,23 +137,13 @@ function toCsv(rows, columns) {
 }
 
 function normalizeEmail(value) {
-  let email = String(value || '')
+  return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/^mailto:/, '')
     .split(/[?;\s,]+/)[0]
     .replace(/^[("'`<>]+/, '')
     .replace(/[)"'`<>.,]+$/, '')
-
-  try {
-    email = decodeURIComponent(email)
-  } catch {}
-
-  return email
-    .trim()
-    .replace(/^mailto:/, '')
-    .replace(/^[\s\u00a0%]+/, '')
-    .replace(/[\s\u00a0%]+$/, '')
 }
 
 function getEmailIssue(value) {

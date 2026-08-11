@@ -108,9 +108,9 @@ function normalizeOutscraperRows(response: unknown, niches: string[], queries: s
 
 export async function searchOutscraperGoogleMaps(input: SearchOutscraperGoogleMapsInput) {
   assertOutscraperApproved()
-  const apiKey = sanitizeHeaderToken(process.env.OUTSCRAPER_API_KEY || process.env.DATAPIPE_API_KEY)
+  const apiKey = sanitizeHeaderToken(process.env.OUTSCRAPER_API_KEY)
   if (!apiKey) {
-    throw new Error('OUTSCRAPER_API_KEY or DATAPIPE_API_KEY is required.')
+    throw new Error('OUTSCRAPER_API_KEY is required.')
   }
 
   const normalizedLeads: NormalizedLeadInput[] = []

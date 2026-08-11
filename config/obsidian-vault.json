@@ -1,0 +1,15 @@
+{
+  "name": "VestBlock Strategy Vault",
+  "defaultPath": "~/Documents/VestBlock Strategy Vault",
+  "mode": "derived_read_only",
+  "sourceOfTruth": "Supabase strategy_updates, experiment_results, and command_center_strategy_runs",
+  "sensitiveDataPolicy": "Export strategy and aggregate performance records only. Never export lead, customer, email, phone, address, or credential data.",
+  "githubSource": "https://github.com/kepano/obsidian-skills",
+  "githubCommit": "a1dc48e68138490d522c04cbf5822214c6eb1202",
+  "installedSkills": [
+    "obsidian-markdown",
+    "obsidian-bases",
+    "json-canvas",
+    "obsidian-cli"
+  ]
+}

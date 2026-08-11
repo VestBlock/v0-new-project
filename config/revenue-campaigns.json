@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "default_sending_policy": {
+    "daily_cap": 50,
+    "minimum_hours_between_messages": 72,
+    "require_verified_email": true,
+    "require_suppression_check": true,
+    "require_human_approval_for_initial_launch": true,
+    "auto_negotiation_allowed": false
+  },
+  "campaigns": [
+    {
+      "id": "motivated-seller-conversation",
+      "name": "Motivated seller conversation",
+      "lane": "real_estate",
+      "enabled": false,
+      "purpose": "Start a direct conversation with a verified property owner who may want to discuss a sale.",
+      "audience": "Verified owners of vacant, distressed, inherited, tired-landlord, or otherwise qualified properties in active VestBlock markets.",
+      "eligibility": [
+        "verified owner/contact match",
+        "valid email with acceptable bounce risk",
+        "property is in an active market",
+        "lead has not received this campaign"
+      ],
+      "exclusions": [
+        "active suppression or opt-out",
+        "wrong-owner record",
+        "property already sold",
+        "active human conversation",
+        "legal, bankruptcy, or sensitive status that has not been reviewed"
+      ],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "seller-initial",
+          "subject": "Question about {{property_address}}",
+          "body": "Hi {{first_name}},\n\nI’m reaching out from VestBlock about {{property_address}}. Would you be open to a brief conversation about the property? If I have the wrong person, please let me know and I’ll correct our records.\n\nBest,\nVestBlock"
+        },
+        {
+          "id": "seller-followup-value",
+          "subject": "Re: {{property_address}}",
+          "body": "Hi {{first_name}},\n\nFollowing up once in case a property conversation would be useful. We can work around your timing, and there is no obligation to continue.\n\nBest,\nVestBlock"
+        },
+        {
+          "id": "seller-final",
+          "subject": "Closing the loop on {{property_address}}",
+          "body": "Hi {{first_name}},\n\nI’ll close the loop after this note. If you want to discuss {{property_address}} later, you can reply here.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [
+        { "day": 0, "template": "seller-initial" },
+        { "day": 5, "template": "seller-followup-value" },
+        { "day": 14, "template": "seller-final" }
+      ],
+      "stop_conditions": [
+        "any reply",
+        "unsubscribe or stop request",
+        "bounce or complaint",
+        "wrong person",
+        "property sold",
+        "lead converted",
+        "human pause",
+        "campaign disabled"
+      ],
+      "success_condition": "Qualified seller conversation or a clearly recorded disposition.",
+      "conversion_goal": "Seller discovery call or reviewed property opportunity.",
+      "owner": "Acquisitions Director",
+      "metrics": ["delivered", "bounce_rate", "reply_rate", "positive_reply_rate", "qualified_conversations", "opportunities"]
+    },
+    {
+      "id": "portfolio-owner-conversation",
+      "name": "Portfolio owner conversation",
+      "lane": "real_estate",
+      "enabled": false,
+      "purpose": "Open a respectful conversation with verified rental portfolio owners about current disposition or capital plans.",
+      "audience": "Verified owners with two or more properties or a documented small-multifamily portfolio.",
+      "eligibility": ["verified contact", "verified portfolio signal", "valid email", "active target market"],
+      "exclusions": ["suppressed contact", "unverified portfolio inference", "active conversation", "frequency cap reached"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "portfolio-initial",
+          "subject": "A question about your {{market}} portfolio",
+          "body": "Hi {{first_name}},\n\nI’m with VestBlock. We work with real-estate owners and capital partners, and I wanted to ask whether a conversation about your {{market}} portfolio would be useful this year.\n\nBest,\nVestBlock"
+        },
+        {
+          "id": "portfolio-followup",
+          "subject": "Re: your {{market}} portfolio",
+          "body": "Hi {{first_name}},\n\nOne brief follow-up: if you are considering a sale, refinance, or partner introduction, reply with the direction that is most relevant. If not, I’ll close the loop.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [
+        { "day": 0, "template": "portfolio-initial" },
+        { "day": 7, "template": "portfolio-followup" }
+      ],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "wrong person", "human pause", "campaign disabled"],
+      "success_condition": "Portfolio owner identifies a real sale, capital, or partnership need.",
+      "conversion_goal": "Qualified portfolio conversation.",
+      "owner": "Acquisitions Director",
+      "metrics": ["delivered", "reply_rate", "positive_reply_rate", "qualified_conversations"]
+    },
+    {
+      "id": "seller-lead-reactivation",
+      "name": "Old seller lead reactivation",
+      "lane": "real_estate",
+      "enabled": false,
+      "purpose": "Recheck a prior seller lead once without treating old contact data as unlimited permission.",
+      "audience": "Prior VestBlock seller leads with a legitimate relationship and no contact in at least 90 days.",
+      "eligibility": ["prior first-party lead", "last contact at least 90 days ago", "valid email", "no unresolved reply"],
+      "exclusions": ["suppression or opt-out", "prior not-interested disposition", "property sold", "active conversation", "more than one reactivation in 12 months"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "seller-reactivation",
+          "subject": "Still relevant?",
+          "body": "Hi {{first_name}},\n\nYou previously connected with VestBlock about {{property_address}}. Is that conversation still relevant, or should we close the record? A short reply either way is helpful.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [{ "day": 0, "template": "seller-reactivation" }],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "property sold", "campaign disabled"],
+      "success_condition": "Current interest or a clean disposition is recorded.",
+      "conversion_goal": "Requalified seller conversation.",
+      "owner": "Acquisitions Director",
+      "metrics": ["delivered", "reply_rate", "requalified", "closed_records"]
+    },
+    {
+      "id": "buyer-network-qualification",
+      "name": "Buyer network qualification",
+      "lane": "real_estate",
+      "enabled": false,
+      "purpose": "Confirm a buyer's current markets, asset types, price range, and proof-of-funds process.",
+      "audience": "Investors and buyers with a legitimate VestBlock connection or verified business contact context.",
+      "eligibility": ["verified business identity", "valid email", "missing or stale buy box", "no active conversation"],
+      "exclusions": ["suppressed contact", "unrelated scraped consumer address", "complete current buy box", "frequency cap reached"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "buyer-criteria",
+          "subject": "Your current acquisition criteria",
+          "body": "Hi {{first_name}},\n\nVestBlock routes reviewed property opportunities to buyers with clear criteria. Are you actively buying in {{market}}? If so, please share your property types, price range, and preferred closing profile.\n\nBest,\nVestBlock"
+        },
+        {
+          "id": "buyer-final",
+          "subject": "Re: acquisition criteria",
+          "body": "Hi {{first_name}},\n\nClosing the loop on your current buy box. Reply whenever your criteria are ready to update.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [
+        { "day": 0, "template": "buyer-criteria" },
+        { "day": 10, "template": "buyer-final" }
+      ],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "criteria completed", "human pause", "campaign disabled"],
+      "success_condition": "A complete, current buy box is confirmed.",
+      "conversion_goal": "Buyer qualified for relevant deal matching.",
+      "owner": "Revenue Director",
+      "metrics": ["delivered", "reply_rate", "buy_boxes_completed", "matches_created"]
+    },
+    {
+      "id": "business-funding-followup",
+      "name": "Business funding follow-up",
+      "lane": "capital",
+      "enabled": false,
+      "purpose": "Help a first-party funding lead complete missing readiness information or understand the next reviewed step.",
+      "audience": "Business owners who submitted a VestBlock funding inquiry or profile.",
+      "eligibility": ["first-party funding inquiry", "valid email", "documented funding goal", "missing next-step information"],
+      "exclusions": ["suppression or opt-out", "already funded", "active human conversation", "application under manual review", "frequency cap reached"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "funding-next-step",
+          "subject": "Your VestBlock funding next step",
+          "body": "Hi {{first_name}},\n\nWe received your VestBlock funding information. The next useful step is to complete the missing profile details so the available paths can be reviewed accurately. No approval or funding outcome is guaranteed.\n\nBest,\nVestBlock"
+        },
+        {
+          "id": "funding-close-loop",
+          "subject": "Should we close your funding request?",
+          "body": "Hi {{first_name}},\n\nIs your {{funding_goal}} request still active? Reply yes, not now, or already funded so we can keep the record accurate.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [
+        { "day": 0, "template": "funding-next-step" },
+        { "day": 7, "template": "funding-close-loop" }
+      ],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "already funded", "profile completed", "human pause", "campaign disabled"],
+      "success_condition": "The funding profile is completed or cleanly dispositioned.",
+      "conversion_goal": "Reviewed funding profile or lender match.",
+      "owner": "Capital Director",
+      "metrics": ["delivered", "reply_rate", "profiles_completed", "matches_created", "funded_outcomes"]
+    },
+    {
+      "id": "dscr-investor-financing",
+      "name": "DSCR and investor financing follow-up",
+      "lane": "capital",
+      "enabled": false,
+      "purpose": "Collect the property and borrower facts required to review potential investor-financing paths.",
+      "audience": "First-party real-estate investors who requested DSCR or investor-financing help.",
+      "eligibility": ["first-party DSCR or investor-financing inquiry", "valid email", "property or acquisition context", "missing required facts"],
+      "exclusions": ["suppression", "already funded", "no property context", "active underwriting conversation", "frequency cap reached"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "dscr-details",
+          "subject": "Details needed for your investor-financing review",
+          "body": "Hi {{first_name}},\n\nTo review possible investor-financing paths, VestBlock needs the property type, location, purchase or estimated value, expected rent, and requested loan amount. This is an information request, not a credit decision or approval.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [{ "day": 0, "template": "dscr-details" }],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "already funded", "details completed", "human pause", "campaign disabled"],
+      "success_condition": "The required DSCR review facts are complete.",
+      "conversion_goal": "Review-ready investor-financing profile.",
+      "owner": "Capital Director",
+      "metrics": ["delivered", "reply_rate", "profiles_completed", "lender_matches"]
+    },
+    {
+      "id": "lender-partner-qualification",
+      "name": "Lender partner qualification",
+      "lane": "partners",
+      "enabled": false,
+      "purpose": "Confirm a lender's current products, geography, borrower criteria, and submission process.",
+      "audience": "Verified lender, broker, and capital-provider business contacts relevant to VestBlock demand.",
+      "eligibility": ["verified organization and role", "valid business email", "relevant product fit", "missing or stale lender criteria"],
+      "exclusions": ["suppression", "unverified identity", "irrelevant product", "complete current profile", "active conversation"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "lender-criteria",
+          "subject": "Current lending criteria for VestBlock opportunities",
+          "body": "Hi {{first_name}},\n\nVestBlock helps organize capital and real-estate opportunities before routing them to relevant partners. Could you share your current products, markets, minimums, and preferred submission process? We only want to send opportunities that fit.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [{ "day": 0, "template": "lender-criteria" }],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "criteria completed", "human pause", "campaign disabled"],
+      "success_condition": "A current lender profile and submission process are confirmed.",
+      "conversion_goal": "Qualified lender relationship and relevant future matches.",
+      "owner": "Capital Director",
+      "metrics": ["delivered", "reply_rate", "lender_profiles_completed", "matches_created", "partner_conversions"]
+    },
+    {
+      "id": "referral-partner-introduction",
+      "name": "Referral partner introduction",
+      "lane": "partners",
+      "enabled": false,
+      "purpose": "Explore a specific, relevant referral relationship without promising economics or volume.",
+      "audience": "Verified real-estate professionals, brokers, service providers, and strategic partners with a documented fit.",
+      "eligibility": ["verified business identity", "specific overlap with a VestBlock lane", "valid business email", "human-reviewed personalization"],
+      "exclusions": ["suppression", "generic scraped list", "no documented mutual fit", "unapproved economics", "active conversation"],
+      "channels": ["email"],
+      "message_templates": [
+        {
+          "id": "partner-introduction",
+          "subject": "A possible VestBlock partnership",
+          "body": "Hi {{first_name}},\n\nI’m reaching out from VestBlock because your work in {{market}} may overlap with our capital and real-estate opportunity lanes. If a brief introduction would be useful, I’d like to learn where referrals or shared resources could genuinely fit.\n\nBest,\nVestBlock"
+        }
+      ],
+      "sequence": [{ "day": 0, "template": "partner-introduction" }],
+      "stop_conditions": ["any reply", "unsubscribe", "bounce", "no fit", "human pause", "campaign disabled"],
+      "success_condition": "A real collaboration path or a clear no-fit disposition is recorded.",
+      "conversion_goal": "Qualified referral or strategic partner conversation.",
+      "owner": "Growth Director",
+      "metrics": ["delivered", "reply_rate", "qualified_partner_conversations", "referrals", "partner_conversions"]
+    }
+  ]
+}

@@ -140,6 +140,16 @@ function StreamItemCard({
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-300">{item.detail}</p>
           {item.hint ? <p className="mt-1 text-[0.68rem] text-slate-500">{item.hint}</p> : null}
+          {item.suggestedReply ? (
+            <details className="mt-2 rounded-xl border border-cyan-300/10 bg-slate-950/50 px-3 py-2">
+              <summary className="cursor-pointer text-[0.68rem] font-medium text-cyan-200">
+                Suggested reply — approval required
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-[0.68rem] leading-5 text-slate-300">
+                {item.suggestedReply}
+              </p>
+            </details>
+          ) : null}
         </div>
         <span className="vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">
           {timeAgo(item.at) || "queued"}

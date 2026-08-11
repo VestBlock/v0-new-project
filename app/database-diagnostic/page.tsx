@@ -37,7 +37,7 @@ export default function DatabaseDiagnosticPage()
         console.error("RPC error fetching tables:", rpcError)
         throw new Error("Could not fetch table list. Check Supabase connection and permissions.")
       }
-      const existingTables = tableList.map((t: any) => t.tablename)
+      const existingTables = (tableList || []).map((t: { tablename: string }) => t.tablename)
 
       const tableChecks = await Promise.all(
         EXPECTED_TABLES.map(async (tableName) => {
@@ -45,7 +45,7 @@ export default function DatabaseDiagnosticPage()
           let count = 0
           if (exists) {
             const { count: rowCount, error: countError } = await supabase
-              .from(tableName)
+              .from(tableName as any)
               .select("*", { count: "exact", head: true })
             if (!countError) {
               count = rowCount || 0

@@ -192,7 +192,7 @@ export default function DealVaultLandingPage() {
   ]);
 
   return (
-    <main className="premium-page px-4 py-24">
+    <main className="vb-page px-4 py-24">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -203,14 +203,10 @@ export default function DealVaultLandingPage() {
       <div className="container mx-auto max-w-6xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.08fr_.92fr] lg:items-start">
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-cyan-600 text-white">Private demos open</Badge>
-              <Badge variant="outline">Live on {dealVaultPublicDemo.network}</Badge>
-              <Badge variant="outline">Built for serious teams</Badge>
-            </div>
+            <p className="vb-eyebrow">DealVault · live on {dealVaultPublicDemo.network}</p>
 
             <div className="space-y-4">
-              <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+              <h1 className="max-w-4xl text-4xl font-medium tracking-tight md:text-6xl">
                 Cleaner records for deals, payouts, and milestones.
               </h1>
               <p className="max-w-3xl text-lg text-muted-foreground">
@@ -222,7 +218,7 @@ export default function DealVaultLandingPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
+              <Button asChild size="lg" className="bg-[#b7ff3c] hover:bg-[#a8f52a]">
                     <Link href="/dealvault/demo">
                       Request Private Demo
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -242,11 +238,11 @@ export default function DealVaultLandingPage() {
               </Link>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="divide-y divide-white/10 border-y border-white/10">
               {trustPoints.map((item) => (
-                <div key={item} className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04] p-4">
+                <div key={item} className="py-4">
                   <div className="flex items-start gap-2">
-                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b7ff3c]" />
                     <p className="text-sm text-muted-foreground">{item}</p>
                   </div>
                 </div>
@@ -260,36 +256,36 @@ export default function DealVaultLandingPage() {
             </p>
           </div>
 
-          <Card className="premium-card overflow-hidden border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.06] to-background">
+          <Card className="overflow-hidden border-white/10 bg-[#0e1114] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-cyan-600" />
-                What makes this premium
+                <ShieldCheck className="h-5 w-5 text-[#b7ff3c]" />
+                Built for operating records
               </CardTitle>
               <CardDescription>
-                This is not a crypto toy. It is a serious record and accountability product built for real deals, teams, and partner approvals.
+                DealVault keeps agreement, payout, and milestone history verifiable without putting private documents on-chain.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Agreement tracking</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Create a tamper-evident proof trail without exposing private deal documents.
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Transparent payout records</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Lock and review partner splits in a cleaner ledger before friction turns expensive.
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <p className="text-sm font-semibold text-foreground">Project accountability</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                   Keep proof-backed milestone history visible for project, service, and approval-based work.
                   </p>
                 </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40">
+              <div className="rounded-xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/[0.05] p-4 transition-colors duration-200 hover:border-[#b7ff3c]/40">
                 <p className="text-sm font-semibold text-foreground">Best match</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Real estate teams first, plus lenders, contractors, agencies, staffing teams,
@@ -302,11 +298,11 @@ export default function DealVaultLandingPage() {
 
         <section
           id="live-contracts"
-          className="premium-section grid gap-8 p-6 lg:grid-cols-[1.02fr_.98fr]"
+          className="border-y border-white/10 grid gap-8 p-6 lg:grid-cols-[1.02fr_.98fr]"
         >
           <div className="space-y-5">
             <div className="flex items-center gap-2">
-              <Badge className="bg-cyan-600 text-white">Live contract layer</Badge>
+              <Badge className="bg-[#b7ff3c] text-white">Live contract layer</Badge>
               <Badge variant="outline">Chain ID {dealVaultPublicDemo.chainId}</Badge>
             </div>
             <div>
@@ -317,13 +313,13 @@ export default function DealVaultLandingPage() {
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Mainnet deployment</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Live since {new Date(dealVaultPublicDemo.liveSince).toLocaleString()}.
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Verified smoke run</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Verified on {new Date(dealVaultPublicDemo.smokeVerifiedAt).toLocaleString()} with
@@ -332,18 +328,18 @@ export default function DealVaultLandingPage() {
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <FileCheck className="h-4 w-4 text-cyan-600" />
+                  <FileCheck className="h-4 w-4 text-[#b7ff3c]" />
                   Sample proof ID
                 </div>
                 <p className="break-all font-mono text-xs text-muted-foreground">
                   {dealVaultPublicDemo.sampleProofId}
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Blocks className="h-4 w-4 text-cyan-600" />
+                  <Blocks className="h-4 w-4 text-[#b7ff3c]" />
                   Sample project ID
                 </div>
                 <p className="break-all font-mono text-xs text-muted-foreground">
@@ -353,10 +349,10 @@ export default function DealVaultLandingPage() {
             </div>
           </div>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Network className="h-5 w-5 text-cyan-600" />
+                <Network className="h-5 w-5 text-[#b7ff3c]" />
                 Live contract cards
               </CardTitle>
               <CardDescription>
@@ -365,7 +361,7 @@ export default function DealVaultLandingPage() {
             </CardHeader>
             <CardContent className="grid gap-3">
               {dealVaultPublicContracts.map((contract) => (
-                <div key={contract.key} className="group rounded-xl border p-4 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-cyan-400/30 hover:shadow-[0_20px_44px_rgba(8,145,178,0.1)]">
+                <div key={contract.key} className="group rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{contract.label}</p>
@@ -390,9 +386,9 @@ export default function DealVaultLandingPage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           {primaryModules.map((module) => (
-            <Card key={module.title} className="premium-card h-full border-cyan-500/10">
+            <Card key={module.title} className="border-white/10 bg-[#0e1114] shadow-none h-full border-[#b7ff3c]/10">
               <CardHeader>
-                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-600">
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-[#b7ff3c]/10 text-[#b7ff3c]">
                   <module.icon className="h-5 w-5" />
                 </div>
                 <CardTitle>{module.title}</CardTitle>
@@ -404,7 +400,7 @@ export default function DealVaultLandingPage() {
 
         <section id="pricing" className="space-y-5">
           <div className="space-y-2">
-            <Badge className="bg-cyan-600 text-white">Premium pricing</Badge>
+            <Badge className="bg-[#b7ff3c] text-white">Premium pricing</Badge>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
               Premium pricing for teams that need stronger accountability.
             </h2>
@@ -417,17 +413,17 @@ export default function DealVaultLandingPage() {
             {pricingTiers.map((tier) => (
               <Card
                 key={tier.title}
-                className={`premium-card ${
+                className={`border-white/10 bg-[#0e1114] shadow-none ${
                   tier.emphasis
-                    ? 'border-cyan-500/40 shadow-lg shadow-cyan-500/10'
-                    : 'border-cyan-500/20'
+                    ? 'border-[#b7ff3c]/40'
+                    : 'border-[#b7ff3c]/20'
                 }`}
               >
                 <CardHeader>
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <Badge variant="outline">{tier.title}</Badge>
                     {tier.emphasis && (
-                      <Badge className="bg-cyan-600 text-white">
+                      <Badge className="bg-[#b7ff3c] text-white">
                         Recommended
                       </Badge>
                     )}
@@ -439,14 +435,14 @@ export default function DealVaultLandingPage() {
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     {tier.bullets.map((item) => (
                       <li key={item} className="flex gap-2">
-                        <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                        <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b7ff3c]" />
                         <span>{item}</span>
                       </li>
                     ))}
                   </ul>
                   <Button
                     asChild
-                    className={tier.emphasis ? 'w-full bg-cyan-600 hover:bg-cyan-700' : 'w-full'}
+                    className={tier.emphasis ? 'w-full bg-[#b7ff3c] hover:bg-[#a8f52a]' : 'w-full'}
                     variant={tier.emphasis ? 'default' : 'outline'}
                   >
                     <Link href="/dealvault/demo">Request Private Demo</Link>
@@ -457,10 +453,10 @@ export default function DealVaultLandingPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[1fr_.95fr]">
-            <Card className="premium-card border-cyan-500/20">
+            <Card className="border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <CircleDollarSign className="h-5 w-5 text-cyan-600" />
+                  <CircleDollarSign className="h-5 w-5 text-[#b7ff3c]" />
                   Premium rollout economics
                 </CardTitle>
                 <CardDescription>
@@ -468,25 +464,25 @@ export default function DealVaultLandingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+                <div className="rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <p className="font-medium text-foreground">Setup / custom configuration</p>
                   <p className="mt-1">$997-$5,000 depending on rollout depth and team complexity.</p>
                 </div>
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+                <div className="rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <p className="font-medium text-foreground">Proof certificate pricing</p>
                   <p className="mt-1">$25 per certificate for teams that want a polished proof document for counterparties or audit support.</p>
                 </div>
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+                <div className="rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <p className="font-medium text-foreground">Future premium option</p>
                   <p className="mt-1">Potential payout tracking fee band of 0.5%-1% once the product moves beyond the current early-access phase.</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="premium-card border-cyan-500/20">
+            <Card className="border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
               <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-cyan-600" />
+                <Sparkles className="h-5 w-5 text-[#b7ff3c]" />
                   Best match
               </CardTitle>
               <CardDescription>
@@ -497,7 +493,7 @@ export default function DealVaultLandingPage() {
                 <ul className="space-y-3 text-sm text-muted-foreground">
                   {useCases.map((item) => (
                     <li key={item} className="flex items-start gap-2">
-                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b7ff3c]" />
                       <span>{item}</span>
                     </li>
                   ))}
@@ -508,7 +504,7 @@ export default function DealVaultLandingPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[1fr_.95fr]">
-          <Card className="premium-card">
+          <Card className="border-white/10 bg-[#0e1114] shadow-none">
             <CardHeader>
               <CardTitle>How it works</CardTitle>
               <CardDescription>
@@ -517,8 +513,8 @@ export default function DealVaultLandingPage() {
             </CardHeader>
             <CardContent className="grid gap-4">
               {processSteps.map((step, index) => (
-                <div key={step.title} className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="text-sm font-semibold text-cyan-600">Step {index + 1}</p>
+                <div key={step.title} className="rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+                  <p className="text-sm font-semibold text-[#b7ff3c]">Step {index + 1}</p>
                   <p className="mt-1 font-medium text-foreground">{step.title}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
                 </div>
@@ -526,10 +522,10 @@ export default function DealVaultLandingPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card">
+          <Card className="border-white/10 bg-[#0e1114] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Landmark className="h-5 w-5 text-cyan-600" />
+                <Landmark className="h-5 w-5 text-[#b7ff3c]" />
                 Buyer-ready answers
               </CardTitle>
               <CardDescription>
@@ -538,7 +534,7 @@ export default function DealVaultLandingPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {faqItems.map((item) => (
-                <div key={item.question} className="rounded-md border p-3 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
+                <div key={item.question} className="rounded-md border p-3 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                   <p className="font-medium text-foreground">{item.question}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{item.answer}</p>
                 </div>
@@ -548,10 +544,10 @@ export default function DealVaultLandingPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[1fr_.95fr]">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Presentation className="h-5 w-5 text-cyan-600" />
+                <Presentation className="h-5 w-5 text-[#b7ff3c]" />
                 Sample certificate showcase
               </CardTitle>
               <CardDescription>
@@ -569,7 +565,7 @@ export default function DealVaultLandingPage() {
                 />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
+                <Button asChild className="bg-[#b7ff3c] hover:bg-[#a8f52a]">
                   <a href={dealVaultPublicDemo.certificatePdfPath} target="_blank" rel="noopener noreferrer">
                     View Sample Certificate
                   </a>

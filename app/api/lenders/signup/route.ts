@@ -1,11 +1,10 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-import { type NextRequest, NextResponse, after } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { LENDER_CATEGORY_TO_TYPE } from '@/lib/lenders/constants'
 import { upsertLender, updateLenderRecord } from '@/lib/lenders/repository'
-import { sendNewLeadAlertEmail } from '@/lib/email/sendEmail'
 import type { LenderCategory } from '@/lib/lenders/types'
 
 const lenderSignupSchema = z.object({
@@ -117,25 +116,6 @@ export async function POST(request: NextRequest) {
       relationship_stage: 'reviewing',
       outreach_status: 'responded',
     })
-
-    // Admin alert: new lender criteria feed the capital-routing side of the loop.
-    after(() =>
-      sendNewLeadAlertEmail({
-        leadId: lender.id,
-        leadType: `lender_signup (${category})`,
-        name: `${data.companyName} — ${data.contactName}`,
-        email: data.email,
-        phone: data.phone || null,
-        state: statesServed[0] || null,
-        sourcePath: '/lenders',
-        summary: [
-          `States: ${statesServed.join(', ') || 'n/a'}`,
-          `Loan band: ${loanAmountMin ? `$${loanAmountMin.toLocaleString()}` : '?'} – ${loanAmountMax ? `$${loanAmountMax.toLocaleString()}` : '?'}`,
-          `Close speed: ${data.speedToClose || 'n/a'}`,
-          data.minCreditScore ? `Requirements: ${data.minCreditScore}` : null,
-        ].filter(Boolean).join(' · '),
-      }).catch((alertError) => console.error('Lender signup alert email failed:', alertError))
-    )
 
     return NextResponse.json({ success: true, lenderId: lender.id })
   } catch (error) {

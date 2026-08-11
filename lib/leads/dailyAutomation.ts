@@ -196,7 +196,7 @@ function getLeadDailyTarget() {
   if (isOutreachV2Enabled()) {
     return getOutreachV2DailyTarget()
   }
-  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 50))
+  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 500))
 }
 
 async function getLeadEmailSentCountLast24h() {
@@ -1407,7 +1407,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const startedAtMs = options.startedAtMs || Date.now()
   const budgetMs = options.budgetMs || envMs('LEADS_CRON_BUDGET_MS', 45000)
   const dailyTarget = getLeadDailyTarget()
-  const requestedSendLimit = options.sendLimit || (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 100))
+  const requestedSendLimit = options.sendLimit || (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 500))
   const sentLast24h = isOutreachV2Enabled() ? await getLeadEmailSentCountLast24h() : 0
   const targetGap24h = isOutreachV2Enabled() ? Math.max(0, dailyTarget - sentLast24h) : requestedSendLimit
   const sendLimit = isOutreachV2Enabled() ? Math.min(requestedSendLimit, targetGap24h) : requestedSendLimit
