@@ -16,6 +16,22 @@ export default function OpportunitiesPage() {
       title="Useful options beyond the obvious path."
       body="VestBlock keeps grants, business-credit tools, education, and selected business-building resources in one curated lane—not a wall of unrelated tools."
       event={analyticsEvents.opportunityFlowStarted}
+      outcome="A shorter list of resources tied to a real business need."
+      whatYouProvide={[
+        "The goal you are working toward",
+        "Basic eligibility, timing, and location details when relevant",
+        "The kind of help or information you need next",
+      ]}
+      whatHappensNext={[
+        "VestBlock narrows the options to the stated need.",
+        "You review eligibility, limitations, and the original source.",
+        "You choose whether to apply, learn, prepare, or request support.",
+      ]}
+      proofPoints={[
+        "Original program terms take priority",
+        "Availability and eligibility can change",
+        "No grant, credit, or business outcome is guaranteed",
+      ]}
       primary={{
         eyebrow: "Grants",
         title: "Look for programs worth reviewing.",

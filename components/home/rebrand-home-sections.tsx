@@ -35,9 +35,9 @@ const paths = [
 ] as const
 
 const workflow = [
-  { number: "01", title: "Tell us the move", body: "Choose a path and share only the information needed to start." },
-  { number: "02", title: "Use the right engine", body: "VestBlock routes you into the funding, property, partner, or resource workflow already built for the job." },
-  { number: "03", title: "See the next step", body: "Review an analysis, funding path, matched criteria, useful resource, or active deal record." },
+  { number: "01", title: "Choose the outcome", body: "Start with capital, a property decision, or a practical business opportunity." },
+  { number: "02", title: "Share the essentials", body: "Answer the questions that matter for that request, without repeating the same intake across VestBlock." },
+  { number: "03", title: "Get a clear next step", body: "Review an analysis, funding direction, matched criteria, useful resource, or active deal record." },
 ]
 
 export function CorePathsSection() {
@@ -50,7 +50,7 @@ export function CorePathsSection() {
             <h2 className="vb-section-title mt-4">Three doors. One platform.</h2>
           </div>
           <p className="max-w-2xl text-lg leading-8 text-[#aaa9a2] lg:justify-self-end">
-            VestBlock keeps the machinery behind the scenes. Start with the outcome you need, and the platform takes you to the right existing workflow.
+            Start with the outcome you need. VestBlock will show what to provide, what can be reviewed, and what happens next.
           </p>
         </div>
 
@@ -88,7 +88,7 @@ export function NetworkWorkflowSection() {
           <p className="vb-eyebrow">How VestBlock works</p>
           <h2 className="vb-section-title mt-4 max-w-[12ch]">Less searching. A clearer next step.</h2>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[#aaa9a2]">
-            The platform brings existing capital, property, partner, and business-building systems into one understandable route.
+            Capital, property, partner, and business resources share one clear starting point, so you can move forward without searching across separate tools.
           </p>
           <Link href="/get-started" className="vb-text-link mt-8 inline-flex">
             Tell us where you’re going
@@ -147,10 +147,10 @@ export function ProductProofSection() {
         </div>
 
         <div>
-          <p className="vb-eyebrow">Built systems, one direction</p>
-          <h2 className="vb-section-title mt-4">The network is more than a landing page.</h2>
+          <p className="vb-eyebrow">One connected network</p>
+          <h2 className="vb-section-title mt-4">Useful information stays with the opportunity.</h2>
           <p className="mt-6 text-lg leading-8 text-[#aaa9a2]">
-            VestBlock already contains the workflows that move an opportunity forward. The rebrand makes them easier to find without hiding the substance behind the interface.
+            Move from a first review to the right capital, buyer, lender, partner, or DealVault record while keeping the important context visible.
           </p>
           <ul className="mt-8 space-y-4">
             {capabilities.map((item) => (

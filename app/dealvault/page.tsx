@@ -192,7 +192,7 @@ export default function DealVaultLandingPage() {
   ]);
 
   return (
-    <main className="vb-page px-4 py-24">
+    <main className="vb-page overflow-x-clip px-4 py-24">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -200,7 +200,7 @@ export default function DealVaultLandingPage() {
         }}
       />
 
-      <div className="container mx-auto max-w-6xl space-y-12">
+      <div className="container mx-auto min-w-0 max-w-6xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[1.08fr_.92fr] lg:items-start">
           <div className="space-y-6">
             <p className="vb-eyebrow">DealVault · live on {dealVaultPublicDemo.network}</p>
@@ -298,11 +298,11 @@ export default function DealVaultLandingPage() {
 
         <section
           id="live-contracts"
-          className="border-y border-white/10 grid gap-8 p-6 lg:grid-cols-[1.02fr_.98fr]"
+          className="grid min-w-0 gap-8 border-y border-white/10 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)]"
         >
-          <div className="space-y-5">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-[#b7ff3c] text-white">Live contract layer</Badge>
+          <div className="min-w-0 space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-[#b7ff3c] text-[#11130f]">Live contract layer</Badge>
               <Badge variant="outline">Chain ID {dealVaultPublicDemo.chainId}</Badge>
             </div>
             <div>
@@ -313,13 +313,13 @@ export default function DealVaultLandingPage() {
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+              <div className="min-w-0 rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Mainnet deployment</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Live since {new Date(dealVaultPublicDemo.liveSince).toLocaleString()}.
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+              <div className="min-w-0 rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <p className="text-sm font-semibold text-foreground">Verified smoke run</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Verified on {new Date(dealVaultPublicDemo.smokeVerifiedAt).toLocaleString()} with
@@ -328,7 +328,7 @@ export default function DealVaultLandingPage() {
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+              <div className="min-w-0 rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <FileCheck className="h-4 w-4 text-[#b7ff3c]" />
                   Sample proof ID
@@ -337,7 +337,7 @@ export default function DealVaultLandingPage() {
                   {dealVaultPublicDemo.sampleProofId}
                 </p>
               </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+              <div className="min-w-0 rounded-xl border bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
                 <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Blocks className="h-4 w-4 text-[#b7ff3c]" />
                   Sample project ID
@@ -349,7 +349,7 @@ export default function DealVaultLandingPage() {
             </div>
           </div>
 
-          <Card className="border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
+          <Card className="min-w-0 border-white/10 bg-[#0e1114] shadow-none border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Network className="h-5 w-5 text-[#b7ff3c]" />
@@ -361,9 +361,9 @@ export default function DealVaultLandingPage() {
             </CardHeader>
             <CardContent className="grid gap-3">
               {dealVaultPublicContracts.map((contract) => (
-                <div key={contract.key} className="group rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                <div key={contract.key} className="group min-w-0 rounded-xl border p-4 transition-colors duration-200 hover:border-[#b7ff3c]/30">
+                  <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{contract.label}</p>
                       <p className="text-base font-medium">{contract.title}</p>
                     </div>
@@ -400,7 +400,7 @@ export default function DealVaultLandingPage() {
 
         <section id="pricing" className="space-y-5">
           <div className="space-y-2">
-            <Badge className="bg-[#b7ff3c] text-white">Premium pricing</Badge>
+            <Badge className="bg-[#b7ff3c] text-[#11130f]">Pricing</Badge>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
               Premium pricing for teams that need stronger accountability.
             </h2>

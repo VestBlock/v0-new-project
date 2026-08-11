@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import posthog from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
+import { getPublicPosthogToken } from '@/lib/analytics/config';
 
 let initialized = false;
 
@@ -11,7 +12,7 @@ export function PosthogProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const key = getPublicPosthogToken();
   const host =
     process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
@@ -35,4 +36,3 @@ export function PosthogProvider({
 
   return <PostHogProvider client={posthog}>{children}</PostHogProvider>;
 }
-

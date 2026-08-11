@@ -1,180 +1,150 @@
-import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { NextResponse } from 'next/server';
+
+import { analyticsEvents } from '@/lib/analytics/events';
+import { captureServerEvent } from '@/lib/analytics/server';
+import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
+import { getServerUser } from '@/lib/auth/admin';
 import { generatePaypalAccessToken } from '@/lib/paypal/accessToken';
 import { getPaypalApiUrl } from '@/lib/paypal/config';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createFundingStrategyReviewTask } from '@/lib/admin/tasks';
 import {
-  getDefaultVestBlockProduct,
-  getVestBlockProduct,
-  isVestBlockProductType,
-} from '@/lib/payments/products';
+  verifyPaypalCapture,
+  verifyPaypalOrderBinding,
+} from '@/lib/payments/paypalOrderBinding';
 import {
   runPaymentCompletedAutomation,
   runPaymentFailedAutomation,
 } from '@/lib/payments/paymentAutomation';
+import { isSameOriginMutation } from '@/lib/security/request';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
-import { captureServerEvent } from '@/lib/analytics/server';
-import { analyticsEvents } from '@/lib/analytics/events';
+
+function isPaypalOrderId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Z0-9-]{5,64}$/i.test(value);
+}
 
 export async function POST(req: Request) {
   let orderID: string | null = null;
   let userId: string | null = null;
-  let requestId: string | null = null;
-  let requestedProductType: string | null = null;
+  let boundProductType: string | null = null;
+  let boundRequestId: string | null = null;
 
   try {
-    const body = await req.json();
-    orderID = body.orderID;
-    userId = body.userId;
-    requestId = body.requestId || null;
-    requestedProductType = body.productType || null;
-
-    if (!orderID || !userId) {
-      return NextResponse.json(
-        { success: false, error: 'Missing orderID or userId' },
-        { status: 400 }
-      );
+    if (!isSameOriginMutation(req)) {
+      return NextResponse.json({ success: false, error: 'Cross-site payment requests are not allowed.' }, { status: 403 });
     }
 
-    if (requestedProductType && !isVestBlockProductType(requestedProductType)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid product type for this checkout.' },
-        { status: 400 }
-      );
+    const user = await getServerUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Sign in before completing checkout.' }, { status: 401 });
+    }
+    userId = user.id;
+
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || !isPaypalOrderId(body.orderID)) {
+      return NextResponse.json({ success: false, error: 'A valid PayPal order is required.' }, { status: 400 });
+    }
+    const verifiedOrderId = body.orderID;
+    orderID = verifiedOrderId;
+
+    if (body.userId && body.userId !== user.id) {
+      return NextResponse.json({ success: false, error: 'Payment account does not match the signed-in user.' }, { status: 403 });
     }
 
-    const validRequestedProductType = isVestBlockProductType(requestedProductType)
-      ? requestedProductType
-      : null;
-
-    // 1) Capture payment
     const token = await generatePaypalAccessToken();
-    const { data: capture } = await axios.post(
-      getPaypalApiUrl(`/v2/checkout/orders/${orderID}/capture`),
-      {},
-      { headers: { Authorization: `Bearer ${token?.access_token}` } }
-    );
+    const authorization = { Authorization: `Bearer ${token.access_token}` };
+    const orderUrl = getPaypalApiUrl(`/v2/checkout/orders/${encodeURIComponent(verifiedOrderId)}`);
+    const { data: paypalOrder } = await axios.get(orderUrl, {
+      headers: authorization,
+      timeout: 15_000,
+    });
+    const { binding, product } = verifyPaypalOrderBinding(paypalOrder, user.id);
+    boundProductType = product.type;
+    boundRequestId = binding.requestId;
 
-    // 2) Update Supabase immediately
-    const status = capture.purchase_units?.[0]?.payments?.captures?.[0]?.status;
-    const amount =
-      capture.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '75';
-    const transactionId =
-      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
+    if (body.productType && body.productType !== product.type) {
+      return NextResponse.json({ success: false, error: 'Payment product does not match the original PayPal order.' }, { status: 409 });
+    }
+    if (body.requestId && body.requestId !== binding.requestId) {
+      return NextResponse.json({ success: false, error: 'Payment request does not match the original PayPal order.' }, { status: 409 });
+    }
+
     const supabase = createAdminClient();
-
-    const { data: fundingRequest } = await supabase
-      .from('funding_strategy_requests')
-      .select(
-        'id,user_id,user_email,business_name,readiness_score,readiness_tier,paypal_order_id'
-      )
-      .or(
-        requestId
-          ? `id.eq.${requestId},paypal_order_id.eq.${orderID}`
-          : `paypal_order_id.eq.${orderID}`
-      )
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id,paypal_order_id,paypal_order_product')
+      .or(`id.eq.${user.id},user_id.eq.${user.id}`)
       .maybeSingle();
-    const product =
-      fundingRequest?.id || validRequestedProductType === 'funding_strategy_review'
-        ? getVestBlockProduct('funding_strategy_review')
-        : validRequestedProductType
-          ? getVestBlockProduct(validRequestedProductType)
-          : getDefaultVestBlockProduct();
-    requestId = requestId || fundingRequest?.id || null;
-
-    if (status !== 'COMPLETED') {
-      void captureServerEvent({
-        distinctId: userId,
-        event: analyticsEvents.paymentCaptureFailed,
-        properties: {
-          amount: Number.parseFloat(amount),
-          provider: 'PayPal',
-          status: status || 'unknown',
-          orderID,
-          productType: product.type,
-          requestId,
-        },
-      });
-
-      await runPaymentFailedAutomation({
-        userId,
-        amount,
-        provider: 'PayPal',
-        transactionId,
-        source: 'capture-order',
-        errorMessage: `PayPal capture status was ${status || 'unknown'}.`,
-        metadata: { orderID, productType: product.type, requestId },
-      });
-
-      return NextResponse.json(
-        { success: false, error: 'Payment was not completed.', capture },
-        { status: 402 }
-      );
+    if (
+      profileError ||
+      !profile ||
+      profile.paypal_order_id !== orderID ||
+      profile.paypal_order_product !== product.type
+    ) {
+      return NextResponse.json({ success: false, error: 'PayPal order is not bound to this VestBlock account.' }, { status: 409 });
     }
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const userEmail = authUser?.user?.email;
+    let fundingRequest: {
+      id: string;
+      user_id: string;
+      user_email: string | null;
+      business_name: string | null;
+      readiness_score: number | null;
+      readiness_tier: string | null;
+      paypal_order_id: string | null;
+    } | null = null;
 
-    if (product.type === 'vestblock_pro') {
-      const { error: subscriptionError } = await supabase
-        .from('user_profiles')
-        .update({ is_subscribed: true, paypal_order_product: product.type })
-        .or(`id.eq.${userId},user_id.eq.${userId}`);
-
-      if (subscriptionError) {
-        await runPaymentFailedAutomation({
-          userId,
-          userEmail,
-          amount,
-          provider: 'PayPal',
-          transactionId,
-          source: 'capture-order',
-          errorMessage:
-            subscriptionError.message ||
-            'Unable to update VestBlock subscription status.',
-          metadata: { orderID, productType: product.type, requestId },
-        });
-
-        return NextResponse.json(
-          { success: false, error: 'Payment captured, but subscription update failed.' },
-          { status: 500 }
-        );
+    if (product.type === 'funding_strategy_review' && binding.requestId) {
+      const { data, error } = await supabase
+        .from('funding_strategy_requests')
+        .select('id,user_id,user_email,business_name,readiness_score,readiness_tier,paypal_order_id')
+        .eq('id', binding.requestId)
+        .eq('user_id', user.id)
+        .eq('paypal_order_id', orderID)
+        .maybeSingle();
+      if (error || !data) {
+        return NextResponse.json({ success: false, error: 'Funding review payment is not bound to this request.' }, { status: 409 });
       }
+      fundingRequest = data;
     }
+
+    const capturePayload = paypalOrder.status === 'COMPLETED'
+      ? paypalOrder
+      : (
+          await axios.post(
+            `${orderUrl}/capture`,
+            {},
+            { headers: authorization, timeout: 20_000 }
+          )
+        ).data;
+    const verifiedCapture = verifyPaypalCapture(capturePayload, product);
+    const transactionId = verifiedCapture.transactionId || orderID;
+    const amount = verifiedCapture.amount;
+
+    const { data: authUser } = await supabase.auth.admin.getUserById(user.id);
+    const userEmail = authUser?.user?.email || fundingRequest?.user_email || null;
 
     const { data: existingPayment, error: existingPaymentError } = await supabase
       .from('payments')
-      .select('id')
+      .select('id,user_id,product_type')
       .eq('paypal_transaction_id', transactionId)
       .maybeSingle();
-
-    if (existingPaymentError) {
-      await runPaymentFailedAutomation({
-        userId,
-        userEmail,
-        amount,
-        provider: 'PayPal',
-        transactionId,
-        source: 'capture-order',
-        errorMessage:
-          existingPaymentError.message || 'Unable to check existing PayPal payment.',
-        metadata: { orderID, productType: product.type, requestId },
-      });
-
-      return NextResponse.json(
-        { success: false, error: 'Payment captured, but payment lookup failed.' },
-        { status: 500 }
-      );
+    if (existingPaymentError) throw new Error('Unable to verify payment idempotency.');
+    if (
+      existingPayment &&
+      (existingPayment.user_id !== user.id || existingPayment.product_type !== product.type)
+    ) {
+      throw new Error('Existing payment record does not match the verified PayPal binding.');
     }
 
     let paymentId = existingPayment?.id || null;
+    const duplicate = Boolean(paymentId);
 
     if (!paymentId) {
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .insert({
-          user_id: userId,
+          user_id: user.id,
           amount: Number.parseFloat(amount),
           status: 'completed',
           payment_method: 'paypal',
@@ -182,163 +152,134 @@ export async function POST(req: Request) {
           product_type: product.type,
           metadata_json: {
             orderID,
-            requestId,
+            requestId: binding.requestId,
             productType: product.type,
             productLabel: product.label,
+            currency: 'USD',
+            bindingVersion: binding.version,
           },
         })
         .select('id')
         .single();
-
-      if (paymentError) {
-        await runPaymentFailedAutomation({
-          userId,
-          userEmail,
-          amount,
-          provider: 'PayPal',
-          transactionId,
-          source: 'capture-order',
-          errorMessage: paymentError.message || 'Unable to record PayPal payment.',
-          metadata: { orderID, productType: product.type, requestId },
-        });
-
-        return NextResponse.json(
-          { success: false, error: 'Payment captured, but payment record failed.' },
-          { status: 500 }
-        );
-      }
-
-      paymentId = payment?.id || transactionId;
-
-      await runPaymentCompletedAutomation({
-        paymentId,
-        userId,
-        userEmail,
-        amount,
-        provider: 'PayPal',
-        transactionId,
-        source: 'capture-order',
-        metadata: { orderID, productType: product.type, requestId },
-      });
-
-      void captureServerEvent({
-        distinctId: userId,
-        event: analyticsEvents.paymentCaptureCompleted,
-        properties: {
-          paymentId,
-          amount: Number.parseFloat(amount),
-          provider: 'PayPal',
-          transactionId,
-          orderID,
-          productType: product.type,
-          requestId,
-          duplicate: false,
-        },
-      });
-    } else {
-      void captureServerEvent({
-        distinctId: userId,
-        event: analyticsEvents.paymentCaptureCompleted,
-        properties: {
-          paymentId,
-          amount: Number.parseFloat(amount),
-          provider: 'PayPal',
-          transactionId,
-          orderID,
-          productType: product.type,
-          requestId,
-          duplicate: true,
-        },
-      });
+      if (paymentError || !payment) throw new Error('Payment captured, but the payment record could not be created.');
+      paymentId = payment.id;
     }
 
-    if (product.type === 'funding_strategy_review' && requestId) {
+    if (product.type === 'vestblock_pro') {
+      const { error: subscriptionError } = await supabase
+        .from('user_profiles')
+        .update({ is_subscribed: true, paypal_order_product: product.type })
+        .or(`id.eq.${user.id},user_id.eq.${user.id}`);
+      if (subscriptionError) throw new Error('Payment captured, but credit tools access could not be granted.');
+    }
+
+    if (product.type === 'funding_strategy_review' && binding.requestId) {
       const { data: updatedRequest, error: requestUpdateError } = await supabase
         .from('funding_strategy_requests')
         .update({
           payment_status: 'paid',
           status: 'paid',
           payment_id: paymentId,
-          paypal_order_id: orderID,
           paid_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', requestId)
-        .eq('user_id', userId)
-        .select(
-          'id,user_id,user_email,business_name,readiness_score,readiness_tier'
-        )
+        .eq('id', binding.requestId)
+        .eq('user_id', user.id)
+        .eq('paypal_order_id', orderID)
+        .select('id,user_id,user_email,business_name,readiness_score,readiness_tier')
         .maybeSingle();
+      if (requestUpdateError || !updatedRequest) throw new Error('Payment captured, but the funding review request could not be updated.');
 
-      if (requestUpdateError) {
-        await runPaymentFailedAutomation({
-          userId,
-          userEmail,
+      if (!duplicate) {
+        await Promise.allSettled([
+          createFundingStrategyReviewTask({
+            requestId: binding.requestId,
+            userId: user.id,
+            userEmail: updatedRequest.user_email || userEmail || undefined,
+            businessName: updatedRequest.business_name,
+            readinessScore: updatedRequest.readiness_score,
+            readinessTier: updatedRequest.readiness_tier,
+            paid: true,
+          }),
+          logEvent({
+            eventType: 'funding_strategy_paid',
+            actorUserId: user.id,
+            entityType: 'funding_strategy_request',
+            entityId: binding.requestId,
+            metadata: { paymentId, transactionId, orderID, amount, productType: product.type },
+          }),
+        ]);
+      }
+    }
+
+    if (!duplicate) {
+      await runPaymentCompletedAutomation({
+          paymentId,
+          userId: user.id,
+          userEmail: userEmail || undefined,
           amount,
           provider: 'PayPal',
           transactionId,
           source: 'capture-order',
-          errorMessage:
-            requestUpdateError.message ||
-            'Unable to update funding strategy payment status.',
-          metadata: { orderID, productType: product.type, requestId, paymentId },
+          metadata: { orderID, productType: product.type, requestId: binding.requestId },
+        })
+        .catch((automationError) => {
+          console.error('Payment completed but follow-up automation failed:', automationError);
         });
-
-        return NextResponse.json(
-          { success: false, error: 'Payment captured, but strategy request update failed.' },
-          { status: 500 }
-        );
-      }
-
-      await Promise.allSettled([
-        createFundingStrategyReviewTask({
-          requestId,
-          userId,
-          userEmail: updatedRequest?.user_email || userEmail,
-          businessName: updatedRequest?.business_name,
-          readinessScore: updatedRequest?.readiness_score,
-          readinessTier: updatedRequest?.readiness_tier,
-          paid: true,
-        }),
-        logEvent({
-          eventType: 'funding_strategy_paid',
-          actorUserId: userId,
-          entityType: 'funding_strategy_request',
-          entityId: requestId,
-          metadata: {
-            paymentId,
-            transactionId,
-            orderID,
-            amount,
-            productType: product.type,
-          },
-        }),
-      ]);
     }
+
+    void captureServerEvent({
+      distinctId: user.id,
+      event: analyticsEvents.paymentCaptureCompleted,
+      properties: {
+        paymentId,
+        amount: Number.parseFloat(amount),
+        provider: 'PayPal',
+        transactionId,
+        orderID,
+        productType: product.type,
+        requestId: binding.requestId,
+        duplicate,
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      duplicate: Boolean(existingPayment?.id),
+      duplicate,
+      paymentId,
       productType: product.type,
-      requestId,
-      capture,
+      requestId: binding.requestId,
+      status: 'COMPLETED',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('PayPal capture error:', error);
 
     await runPaymentFailedAutomation({
-      userId,
-      provider: 'PayPal',
-      transactionId: orderID,
-      source: 'capture-order',
-      errorMessage: message,
-      metadata: { orderID, productType: requestedProductType, requestId },
-    });
+        userId,
+        provider: 'PayPal',
+        transactionId: orderID,
+        source: 'capture-order',
+        errorMessage: message,
+        metadata: { orderID, productType: boundProductType, requestId: boundRequestId },
+      })
+      .catch((automationError) => {
+        console.error('Payment failure automation also failed:', automationError);
+      });
 
-    return NextResponse.json(
-      { success: false, error: 'Payment capture failed.' },
-      { status: 500 }
-    );
+    if (userId) {
+      void captureServerEvent({
+        distinctId: userId,
+        event: analyticsEvents.paymentCaptureFailed,
+        properties: {
+          provider: 'PayPal',
+          orderID,
+          productType: boundProductType,
+          requestId: boundRequestId,
+        },
+      });
+    }
+
+    return NextResponse.json({ success: false, error: 'Payment capture failed.' }, { status: 502 });
   }
 }

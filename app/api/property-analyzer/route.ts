@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
 import { recordPropertyAnalysisRun } from '@/lib/admin/dealMemory'
+import { checkAdminAccess } from '@/lib/auth/admin'
 
 const compFieldSchema = z.union([z.string(), z.number()]).optional().transform((value) => {
   if (value === undefined || value === null) return ''
@@ -197,7 +198,18 @@ export async function POST(request: NextRequest) {
       },
       estimate
     )
-    const shouldPersist = data.persistToCommandCenter || envBool('PROPERTY_ANALYZER_AUTO_MEMORY', false)
+    const persistenceRequested =
+      data.persistToCommandCenter || envBool('PROPERTY_ANALYZER_AUTO_MEMORY', false)
+    const adminCheck = persistenceRequested ? await checkAdminAccess() : null
+
+    if (persistenceRequested && !adminCheck?.isAdmin) {
+      return NextResponse.json(
+        { error: 'Operator access is required to save analysis to Command Center.' },
+        { status: 403 }
+      )
+    }
+
+    const shouldPersist = Boolean(persistenceRequested && adminCheck?.isAdmin)
     const memory = shouldPersist
       ? await recordPropertyAnalysisRun({
           address,

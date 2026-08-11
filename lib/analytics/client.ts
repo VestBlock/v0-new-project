@@ -2,11 +2,12 @@
 
 import posthog from 'posthog-js';
 import type { AnalyticsEventName } from '@/lib/analytics/events';
+import { getPublicPosthogToken } from '@/lib/analytics/config';
 
 type AnalyticsProperties = Record<string, string | number | boolean | null | undefined>;
 
 function isAnalyticsEnabled() {
-  return Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY);
+  return Boolean(getPublicPosthogToken());
 }
 
 export function identifyClientUser(
@@ -48,4 +49,3 @@ export function resetClientAnalytics() {
     console.error('[analytics] reset failed:', error);
   }
 }
-

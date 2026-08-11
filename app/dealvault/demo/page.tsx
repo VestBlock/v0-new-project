@@ -140,7 +140,7 @@ export default function DealVaultDemoPage() {
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
-              <Badge className="bg-cyan-600 text-white">Demo path</Badge>
+              <Badge className="bg-[#b7ff3c] text-[#11130f]">Demo path</Badge>
               <Badge variant="outline">Live on {dealVaultPublicDemo.network}</Badge>
               <Badge variant="outline">No wallet required</Badge>
             </div>
@@ -157,7 +157,7 @@ export default function DealVaultDemoPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
+              <Button asChild size="lg" className="bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                 <Link href="#dealvault-demo">
                   Request This Demo
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -184,10 +184,10 @@ export default function DealVaultDemoPage() {
             </p>
           </div>
 
-          <Card className="premium-card overflow-hidden border-cyan-500/20 bg-cyan-500/5">
+          <Card className="premium-card min-w-0 overflow-hidden border-[#b7ff3c]/20 bg-[#b7ff3c]/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-cyan-600" />
+                <ShieldCheck className="h-5 w-5 text-[#b7ff3c]" />
                 What the demo proves
               </CardTitle>
               <CardDescription>
@@ -198,9 +198,9 @@ export default function DealVaultDemoPage() {
               {buyerProofQuestions.map((question) => (
                 <div
                   key={question}
-                  className="flex items-start gap-3 rounded-xl border border-white/10 bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40"
+                  className="flex items-start gap-3 rounded-xl border border-white/10 bg-background/70 p-4 transition-colors duration-200 hover:border-[#b7ff3c]/40"
                 >
-                  <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                  <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b7ff3c]" />
                   <p className="text-sm text-muted-foreground">{question}</p>
                 </div>
               ))}
@@ -213,12 +213,12 @@ export default function DealVaultDemoPage() {
             const Icon = step.icon;
 
             return (
-              <Card key={step.title} className="premium-card border-cyan-500/15">
+              <Card key={step.title} className="premium-card border-[#b7ff3c]/15">
                 <CardHeader>
-                  <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600">
+                  <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-[#b7ff3c]/10 text-[#b7ff3c]">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-600">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#b7ff3c]">
                     Step {index + 1}
                   </p>
                   <CardTitle className="text-lg">{step.title}</CardTitle>
@@ -230,10 +230,10 @@ export default function DealVaultDemoPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr]">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-cyan-600" />
+                <FileText className="h-5 w-5 text-[#b7ff3c]" />
                 Demo agreement package
               </CardTitle>
               <CardDescription>
@@ -251,15 +251,15 @@ export default function DealVaultDemoPage() {
                 ))}
               </div>
 
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-600">SHA-256 document hash</p>
+              <div className="min-w-0 rounded-xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/[0.05] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[#b7ff3c]">SHA-256 document hash</p>
                 <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
                   {demoPackage.proof.documentHash}
                 </p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
+                <Button asChild className="bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                   <a href={demoPackage.pdf.publicPath} target="_blank" rel="noopener noreferrer">
                     Download Sample Demo Agreement
                     <Download className="ml-2 h-4 w-4" />
@@ -277,7 +277,7 @@ export default function DealVaultDemoPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle>How the demo moves through DealVault</CardTitle>
               <CardDescription>
@@ -289,10 +289,10 @@ export default function DealVaultDemoPage() {
               <div className="space-y-3">
                 {demoAgreementFlow.map((step, index) => (
                   <div key={step} className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-sm font-semibold text-cyan-600">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#b7ff3c]/30 bg-[#b7ff3c]/10 text-sm font-semibold text-[#b7ff3c]">
                       {index + 1}
                     </div>
-                    <div className="flex-1 rounded-xl border border-white/10 bg-background/70 p-3 text-sm font-medium transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40">
+                    <div className="min-w-0 flex-1 rounded-xl border border-white/10 bg-background/70 p-3 text-sm font-medium transition-colors duration-200 hover:border-[#b7ff3c]/40">
                       {step}
                     </div>
                   </div>
@@ -308,10 +308,10 @@ export default function DealVaultDemoPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[.95fr_1.05fr]">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <LockKeyhole className="h-5 w-5 text-cyan-600" />
+                <LockKeyhole className="h-5 w-5 text-[#b7ff3c]" />
                 Sample record, safe by design
               </CardTitle>
               <CardDescription>
@@ -325,14 +325,14 @@ export default function DealVaultDemoPage() {
                   <p className="mt-2 break-words font-medium text-foreground">{value}</p>
                 </div>
               ))}
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-600">Sample proof ID</p>
+              <div className="min-w-0 rounded-xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/[0.05] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[#b7ff3c]">Sample proof ID</p>
                 <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
                   {dealVaultPublicDemo.sampleProofId}
                 </p>
               </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-600">Sample milestone project ID</p>
+              <div className="min-w-0 rounded-xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/[0.05] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[#b7ff3c]">Sample milestone project ID</p>
                 <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
                   {dealVaultPublicDemo.sampleProjectId}
                 </p>
@@ -340,7 +340,7 @@ export default function DealVaultDemoPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle>Certificate-ready proof output</CardTitle>
               <CardDescription>
@@ -358,7 +358,7 @@ export default function DealVaultDemoPage() {
                 />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
+                <Button asChild className="bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                   <a href={dealVaultPublicDemo.certificatePdfPath} target="_blank" rel="noopener noreferrer">
                     Open Sample Certificate
                   </a>
@@ -390,7 +390,7 @@ export default function DealVaultDemoPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {dealVaultPublicContracts.map((contract) => (
-              <Card key={contract.key} className="premium-card border-white/10 hover:border-cyan-500/40">
+              <Card key={contract.key} className="premium-card min-w-0 border-white/10 hover:border-[#b7ff3c]/40">
                 <CardHeader>
                   <Badge variant="outline" className="w-fit">
                     {contract.label}
@@ -418,7 +418,7 @@ export default function DealVaultDemoPage() {
           id="dealvault-demo"
           className="grid gap-8 lg:grid-cols-[.92fr_1.08fr] lg:items-start"
         >
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle>Best-fit demo prospects</CardTitle>
               <CardDescription>

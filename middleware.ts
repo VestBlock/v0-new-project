@@ -12,6 +12,16 @@ const protectedAdminApis = [
   '/api/admin',
 ];
 
+const protectedAuthenticatedApis = [
+  '/api/biz-credit',
+  '/api/capture-order',
+  '/api/create-order',
+  '/api/generate-letter',
+  '/api/generate-pdf',
+  '/api/generate-roadmap',
+  '/api/side-hustle-chat',
+];
+
 const protectedAuthenticatedPages = [
   '/analysis/results',
   '/chat',
@@ -49,6 +59,7 @@ function diagnosticsEnabled() {
 type SupabaseUser = {
   id: string;
   email?: string | null;
+  app_metadata?: { role?: string | null } | null;
 };
 
 function matchProtectedPath(pathname: string, paths: string[]) {
@@ -59,6 +70,7 @@ function matchesProtectedPath(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
     matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedAuthenticatedApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
     matchProtectedPath(pathname, protectedDiagnostics) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
@@ -68,6 +80,7 @@ function matchesProtectedPath(pathname: string) {
 function isProtectedApi(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedAuthenticatedApis) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
   );
 }
@@ -92,6 +105,7 @@ function shouldNoIndex(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
     matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedAuthenticatedApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
     matchProtectedPath(pathname, protectedDiagnostics) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
@@ -228,43 +242,22 @@ async function getUserFromToken(
   const user = await response.json().catch(() => null);
   if (!user?.id) return null;
 
-  return { id: user.id, email: user.email };
-}
-
-async function getUserProfileRole(input: {
-  supabaseUrl: string;
-  anonKey: string;
-  accessToken: string;
-  user: SupabaseUser;
-}) {
-  const filters = [
-    `id.eq.${input.user.id}`,
-    `user_id.eq.${input.user.id}`,
-    input.user.email && `email.eq.${input.user.email}`,
-  ]
-    .filter(Boolean)
-    .join(',');
-
-  const url = new URL('/rest/v1/user_profiles', input.supabaseUrl);
-  url.searchParams.set('select', 'role');
-  url.searchParams.set('or', `(${filters})`);
-  url.searchParams.set('limit', '1');
-
-  const response = await fetch(url, {
-    headers: {
-      apikey: input.anonKey,
-      Authorization: `Bearer ${input.accessToken}`,
-    },
-  });
-
-  if (!response.ok) return null;
-
-  const rows = await response.json().catch(() => []);
-  return Array.isArray(rows) ? rows[0]?.role ?? null : null;
+  return { id: user.id, email: user.email, app_metadata: user.app_metadata };
 }
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    request.nextUrl.hostname === 'vestblock.io'
+  ) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.hostname = 'www.vestblock.io';
+    canonicalUrl.protocol = 'https:';
+    canonicalUrl.port = '';
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
 
   const localDevelopmentPreview =
     process.env.NODE_ENV !== 'production' &&
@@ -327,17 +320,8 @@ export async function middleware(request: NextRequest) {
   }
 
   const email = user.email?.toLowerCase();
-  let isAdmin = isConfiguredAdminEmail(email);
-
-  if (!isAdmin && config && accessToken) {
-    const role = await getUserProfileRole({
-      supabaseUrl: config.supabaseUrl,
-      anonKey: config.anonKey,
-      accessToken,
-      user,
-    });
-    isAdmin = role === 'admin';
-  }
+  const isAdmin =
+    isConfiguredAdminEmail(email) || user.app_metadata?.role === 'admin';
 
   if (!isAdmin) {
     if (apiRequest) {
@@ -365,31 +349,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/analysis/results/:path*',
-    '/admin/:path*',
-    '/admin-panel/:path*',
-    '/admin/test/:path*',
-    '/dev/command-center-preview/:path*',
-    '/auth-debug/:path*',
-    '/chat/:path*',
-    '/credit-dashboard/:path*',
-    '/credit-report-diagnostic/:path*',
-    '/credit-upload/:path*',
-    '/database-diagnostic/:path*',
-    '/dashboard/:path*',
-    '/profile/:path*',
-    '/roadmap/:path*',
-    '/setup-database/:path*',
-    '/super-dispute/:path*',
-    '/tools/business-credit/:path*',
-    '/tools/dispute-letters/:path*',
-    '/tools/grants/:path*',
-    '/tools/my-dispute-letters/:path*',
-    '/user-hub/:path*',
-    '/api/admin/:path*',
-    '/api/execute-sql/:path*',
-    '/api/run-db-setup/:path*',
-    '/api/setup-database/:path*',
-    '/api/test-openai-connection/:path*',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

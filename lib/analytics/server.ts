@@ -1,5 +1,9 @@
 import { PostHog } from 'posthog-node';
 import type { AnalyticsEventName } from '@/lib/analytics/events';
+import {
+  getPosthogConfigurationStatus,
+  getServerPosthogToken,
+} from '@/lib/analytics/config';
 
 type AnalyticsProperties = Record<string, unknown>;
 
@@ -8,11 +12,7 @@ declare global {
 }
 
 function getPosthogKey() {
-  return (
-    process.env.POSTHOG_API_KEY ||
-    process.env.NEXT_PUBLIC_POSTHOG_KEY ||
-    ''
-  ).trim();
+  return getServerPosthogToken();
 }
 
 function getPosthogHost() {
@@ -68,3 +68,6 @@ export function analyticsServerEnabled() {
   return Boolean(getPosthogKey());
 }
 
+export function analyticsServerStatus() {
+  return getPosthogConfigurationStatus();
+}

@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
+import { checkAdminAccess } from '@/lib/auth/admin'
 
 import {
   persistDealMachineWebhookEvent,
@@ -10,11 +11,22 @@ import {
 } from '@/lib/dealmachine/webhooks'
 
 export async function GET() {
+  const admin = await checkAdminAccess()
+  if (!admin.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required.' }, { status: admin.user ? 403 : 401 })
+  }
+
   const summary = readDealMachineWebhookSummary()
   return NextResponse.json({
     ok: true,
     provider: 'dealmachine',
-    summary,
+    summary: summary
+      ? {
+          updatedAt: summary.updatedAt || null,
+          totalEvents: Number(summary.totalEvents || 0),
+          byType: summary.byType || {},
+        }
+      : null,
   })
 }
 

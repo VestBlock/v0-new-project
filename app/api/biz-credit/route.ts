@@ -7,6 +7,7 @@ import { buildRoadmap } from '@/lib/bizcredit/match';
 import { roadmapHtml } from '@/lib/bizcredit/letter';
 import catalog from '@/data/biz_credit_catalog.json';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getServerUser } from '@/lib/auth/admin';
 // lazy pdf (same renderer you already use)
 const toPdf = async (html: string) => {
   try {
@@ -19,13 +20,15 @@ const toPdf = async (html: string) => {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+
     const supabaseAdmin = createAdminClient();
-    const a = (await req.json()) as BizAnswers;
-    if (!a?.user_id)
-      return NextResponse.json({ error: 'user_id required' }, { status: 400 });
+    const submitted = (await req.json()) as BizAnswers;
+    const a = { ...submitted, user_id: user.id } as BizAnswers;
 
     const roadmap = buildRoadmap(a, catalog as any);
-    let html = roadmapHtml({ a, r: roadmap });
+    const html = roadmapHtml({ a, r: roadmap });
 
     // optional polish (keeps HTML, edits tone only). If you don’t want AI here, delete.
     // try {
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
       pdfUrl: string | undefined;
     const pdf = await toPdf(html);
     if (pdf) {
-      pdfPath = `user_${a.user_id}/${Date.now()}_biz_roadmap.pdf`;
+      pdfPath = `user_${user.id}/${Date.now()}_biz_roadmap.pdf`;
       const up = await supabaseAdmin.storage
         .from('biz-roadmaps')
         .upload(pdfPath, pdf, {
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
     const { data: row, error: insErr } = await supabaseAdmin
       .from('business_roadmaps')
       .insert({
-        user_id: a.user_id,
+        user_id: user.id,
         answers: a,
         steps: roadmap.steps,
         html,
@@ -70,9 +73,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ roadmap, html, pdfUrl, runId: row?.id });
   } catch (e: any) {
     console.error('biz-credit/run error', e);
-    return NextResponse.json(
-      { error: e?.message || 'Failed to generate roadmap' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate roadmap' }, { status: 500 });
   }
 }

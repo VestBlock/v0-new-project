@@ -1,6 +1,5 @@
 "use client"
 
-import dynamic from "next/dynamic"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowDown, ArrowRight } from "lucide-react"
@@ -9,38 +8,27 @@ import { useState } from "react"
 import { captureClientEvent } from "@/lib/analytics/client"
 import { analyticsEvents } from "@/lib/analytics/events"
 
-import type { CommandRole } from "@/components/vestblock-command-scene"
+type LaneKey = "capital" | "deals" | "opportunity"
 
-const VestBlockCommandScene = dynamic(
-  () => import("@/components/vestblock-command-scene").then((module) => module.VestBlockCommandScene),
-  {
-    ssr: false,
-    loading: () => <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_45%,rgba(183,255,60,0.08),transparent_34%)]" />,
-  },
-)
-
-const lanes: Array<{ key: CommandRole; label: string }> = [
-  { key: "capital", label: "Capital" },
-  { key: "deals", label: "Deals" },
-  { key: "opportunity", label: "Opportunity" },
+const lanes: Array<{ key: LaneKey; label: string; detail: string }> = [
+  { key: "capital", label: "Capital", detail: "Funding paths and capital partners" },
+  { key: "deals", label: "Deals", detail: "Property discovery, analysis, and records" },
+  { key: "opportunity", label: "Opportunity", detail: "Grants, resources, and growth support" },
 ]
 
 export function HeroSection() {
-  const [activeLane, setActiveLane] = useState<CommandRole>("deals")
+  const [activeLane, setActiveLane] = useState<LaneKey>("deals")
+  const selectedLane = lanes.find((lane) => lane.key === activeLane) || lanes[1]
 
   const track = (event: (typeof analyticsEvents)[keyof typeof analyticsEvents], destination: string, placement: string) => {
     captureClientEvent(event, { destination, placement })
   }
 
   return (
-    <section className="vb-hero relative isolate min-h-[calc(100svh-4rem)] overflow-hidden border-b border-white/10">
-      <div className="pointer-events-none absolute inset-0 -z-20">
-        <VestBlockCommandScene activeRole={activeLane} />
-      </div>
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(90deg,#090a08_0%,rgba(9,10,8,0.97)_34%,rgba(9,10,8,0.62)_62%,rgba(9,10,8,0.86)_100%)] lg:bg-[linear-gradient(90deg,#090a08_0%,rgba(9,10,8,0.96)_28%,rgba(9,10,8,0.34)_67%,rgba(9,10,8,0.72)_100%)]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-48 bg-gradient-to-t from-[#090a08] to-transparent" />
+    <section className="vb-hero relative isolate overflow-hidden border-b border-white/10 bg-[#090a08]">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_38%,rgba(183,255,60,0.12),transparent_25%),linear-gradient(135deg,rgba(255,255,255,0.025),transparent_42%)]" />
 
-      <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1440px] items-center px-5 py-16 sm:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)] lg:px-12 lg:py-20">
+      <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(26rem,0.8fr)] lg:gap-16 lg:px-12 lg:py-20">
         <div className="relative z-10 max-w-3xl">
           <div className="vb-enter flex items-center gap-3.5">
             <Image
@@ -121,7 +109,34 @@ export function HeroSection() {
           </div>
         </div>
 
-        <div className="pointer-events-none min-h-[20rem] lg:min-h-[42rem]" aria-hidden="true" />
+        <div className="relative mx-auto flex w-full max-w-[34rem] flex-col items-center lg:justify-self-end" aria-label={`VestBlock ${selectedLane.label} lane: ${selectedLane.detail}`}>
+          <div className="relative flex aspect-square w-full max-w-[27rem] items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle,rgba(183,255,60,0.12),rgba(14,17,13,0.72)_52%,rgba(9,10,8,0)_72%)]">
+            <div className="absolute inset-[12%] rounded-full border border-[#b7ff3c]/15" />
+            <div className="absolute inset-[23%] rounded-full border border-white/10" />
+            <Image
+              src="/brand/vestblock-monogram.png"
+              alt="VestBlock VB monogram"
+              width={720}
+              height={720}
+              priority
+              className="relative z-10 h-auto w-[68%] object-contain drop-shadow-[0_22px_42px_rgba(0,0,0,0.65)]"
+            />
+          </div>
+
+          <div className="-mt-[9%] w-[78%]" aria-hidden="true">
+            <div className="h-2 rounded-[50%] border border-[#b7ff3c]/40 bg-[#b7ff3c]/15 shadow-[0_0_34px_rgba(183,255,60,0.28)]" />
+            <div className="mx-auto h-10 w-[68%] bg-gradient-to-b from-[#11140f] to-transparent [clip-path:polygon(8%_0,92%_0,100%_100%,0_100%)]" />
+          </div>
+
+          <div className="mt-2 grid w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-y border-white/10 py-4 text-center">
+            <span className="h-px bg-gradient-to-r from-transparent to-[#b7ff3c]/60" />
+            <div className="min-w-0 px-2">
+              <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#b7ff3c]">{selectedLane.label}</p>
+              <p className="mt-1 text-xs text-[#aaa9a2]">{selectedLane.detail}</p>
+            </div>
+            <span className="h-px bg-gradient-to-l from-transparent to-[#b7ff3c]/60" />
+          </div>
+        </div>
       </div>
     </section>
   )

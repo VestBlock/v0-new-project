@@ -3,12 +3,18 @@ import { createClient } from '@supabase/supabase-js'
 import {
   createStrategyObject,
   scoreStrategy,
+  selectStrategyPortfolio,
   strategyTargetKey,
 } from '../lib/autopilot/strategyEngine'
+import {
+  ACQUISITION_CHANNELS,
+  BUSINESS_VERTICALS,
+  VERTICAL_REGISTRY,
+} from '../lib/autopilot/verticalRegistry'
 
 const candidate = {
   name: 'Controlled strategy attribution test',
-  vertical: 'email_outreach' as const,
+  vertical: 'business_capital' as const,
   hypothesis: 'Correlated positive replies should be worked before a new volume batch.',
   targetAudience: 'Existing tagged test conversations',
   problem: 'A controlled reply is waiting for an operator decision.',
@@ -37,10 +43,41 @@ assert.match(scored.formula, /impact × 30%/)
 
 const strategy = createStrategyObject(candidate, '2026-08-10T00:00:00.000Z')
 assert.equal(strategy.status, 'candidate')
+assert.equal(strategy.schemaVersion, 2)
 assert.equal(strategy.result, null)
 assert.equal(strategy.score.total, 83)
 assert.equal(strategy.evidence.length, 1)
-assert.match(strategyTargetKey(strategy, 'controlled-test'), /^autopilot:controlled-test:email_outreach:/)
+assert.equal(strategy.approval.launch, false)
+assert.equal(strategy.outreachPlan.launchAuthority, 'not_granted')
+assert.match(strategyTargetKey(strategy, 'controlled-test'), /^autopilot:controlled-test:business_capital:/)
+
+assert.equal(BUSINESS_VERTICALS.length, 9)
+assert.deepEqual(Object.keys(VERTICAL_REGISTRY).sort(), [...BUSINESS_VERTICALS].sort())
+for (const vertical of BUSINESS_VERTICALS) {
+  assert.equal(ACQUISITION_CHANNELS.includes(vertical as any), false)
+  assert.equal(VERTICAL_REGISTRY[vertical].approvalMode, 'human_required')
+  assert.ok(VERTICAL_REGISTRY[vertical].lawfulLeadSources.every((source) => source.lineageRequired))
+}
+
+const research = createStrategyObject({
+  ...candidate,
+  name: 'Research missing baseline',
+  vertical: 'real_estate_capital',
+  evidence: [],
+})
+assert.equal(research.status, 'research_required')
+assert.equal(research.portfolioRole, 'research')
+
+const portfolio = selectStrategyPortfolio([
+  strategy,
+  createStrategyObject({ ...candidate, name: 'Capital partner challenger', vertical: 'capital_partners' }),
+  createStrategyObject({ ...candidate, name: 'Buyer backlog', vertical: 'buyers_investors' }),
+  research,
+])
+assert.equal(portfolio.filter((item) => item.portfolioRole === 'focus').length, 1)
+assert.equal(portfolio.filter((item) => item.portfolioRole === 'challenger').length, 1)
+assert.equal(portfolio.filter((item) => item.portfolioRole === 'research').length, 1)
+assert.equal(portfolio.filter((item) => item.approval.launch).length, 0)
 
 async function livePersistenceTest() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

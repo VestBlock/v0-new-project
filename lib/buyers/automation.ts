@@ -107,7 +107,7 @@ export async function runDailyBuyerDiscovery(options: { dryRun?: boolean } = {})
 }
 
 export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean } = {}) {
-  const autoSend = envBool('BUYER_AUTO_SEND_ENABLED', true)
+  const autoSend = envBool('BUYER_AUTO_SEND_ENABLED', false)
   const approved = await listApprovedBuyerEmailOutreach(limit)
   const results: Array<{ buyerId: string; name: string; status: string }> = []
 

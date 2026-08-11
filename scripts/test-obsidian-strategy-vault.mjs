@@ -48,6 +48,19 @@ try {
     throw new Error('Safety boundaries are missing from the manifest.')
   }
 
+  const strategyFiles = fs
+    .readdirSync(path.join(vaultPath, 'Strategies'))
+    .map((name) => `Strategies/${name}`)
+  const generatedText = [...required.filter((relative) => !relative.endsWith('.canvas')), ...strategyFiles]
+    .map((relative) => fs.readFileSync(path.join(vaultPath, relative), 'utf8'))
+    .join('\n')
+  if (/jane@example\.com|123 Main Street/i.test(generatedText)) {
+    throw new Error('Fixture PII was exported into the generated vault.')
+  }
+  if (!/\[REDACTED EMAIL\]|\[REDACTED STREET ADDRESS\]/.test(generatedText)) {
+    throw new Error('Value-level PII redaction was not demonstrated.')
+  }
+
   const founderFile = path.join(vaultPath, 'Notes', 'Founder Notes.md')
   fs.appendFileSync(founderFile, '\nPersistent founder thought.\n')
   exportFixture()

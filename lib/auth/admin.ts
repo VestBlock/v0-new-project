@@ -1,7 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import type { User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { isConfiguredAdminEmail } from '@/lib/auth/admin-emails';
 
 export type AdminCheck = {
@@ -61,23 +60,9 @@ export async function checkAdminAccess(): Promise<AdminCheck> {
   }
 
   const email = user.email?.toLowerCase();
-  if (isConfiguredAdminEmail(email)) {
+  const trustedRole = user.app_metadata?.role;
+  if (isConfiguredAdminEmail(email) || trustedRole === 'admin') {
     return { isAdmin: true, user };
-  }
-
-  try {
-    const admin = createAdminClient();
-    const { data: profile } = await admin
-      .from('user_profiles')
-      .select('id,user_id,email,role')
-      .or(`id.eq.${user.id},user_id.eq.${user.id},email.eq.${user.email}`)
-      .maybeSingle();
-
-    if (profile?.role === 'admin') {
-      return { isAdmin: true, user };
-    }
-  } catch (error) {
-    console.error('[admin-rbac] Unable to verify profile role:', error);
   }
 
   return { isAdmin: false, user, reason: 'not_admin' };
