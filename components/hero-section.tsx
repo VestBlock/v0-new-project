@@ -2,153 +2,177 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowDown, ArrowRight } from "lucide-react"
-import { useState } from "react"
+import { ArrowRight, MoveDown, Orbit } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 import { captureClientEvent } from "@/lib/analytics/client"
 import { analyticsEvents } from "@/lib/analytics/events"
 
 type LaneKey = "capital" | "deals" | "opportunity"
 
-const lanes: Array<{ key: LaneKey; label: string; detail: string }> = [
-  { key: "capital", label: "Capital", detail: "Funding paths and capital partners" },
-  { key: "deals", label: "Deals", detail: "Property discovery, analysis, and records" },
-  { key: "opportunity", label: "Opportunity", detail: "Grants, resources, and growth support" },
+const lanes: Array<{ key: LaneKey; label: string; descriptor: string; index: string }> = [
+  { key: "capital", label: "Capital", descriptor: "Funding paths", index: "01" },
+  { key: "deals", label: "Deals", descriptor: "Property intelligence", index: "02" },
+  { key: "opportunity", label: "Opportunity", descriptor: "Growth resources", index: "03" },
 ]
 
-export function HeroSection() {
-  const [activeLane, setActiveLane] = useState<LaneKey>("deals")
-  const selectedLane = lanes.find((lane) => lane.key === activeLane) || lanes[1]
+const laneEvents = {
+  capital: analyticsEvents.capitalFlowStarted,
+  deals: analyticsEvents.dealFlowStarted,
+  opportunity: analyticsEvents.opportunityFlowStarted,
+} as const
 
+export function HeroSection() {
+  const stageRef = useRef<HTMLElement>(null)
+  const [activeLane, setActiveLane] = useState<LaneKey>("deals")
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+
+    let frame = 0
+    const updateProgress = () => {
+      frame = 0
+      const bounds = stage.getBoundingClientRect()
+      const travel = Math.max(1, bounds.height - window.innerHeight)
+      const progress = Math.min(1, Math.max(0, -bounds.top / travel))
+      stage.style.setProperty("--hero-progress", progress.toFixed(4))
+      stage.style.setProperty("--hero-tilt", `${(progress * 8 - 2).toFixed(2)}deg`)
+      stage.style.setProperty("--hero-depth", `${(progress * -34).toFixed(2)}px`)
+    }
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateProgress)
+    }
+    updateProgress()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", onScroll)
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
+
+  const selectedLane = lanes.find((lane) => lane.key === activeLane) || lanes[1]
   const track = (event: (typeof analyticsEvents)[keyof typeof analyticsEvents], destination: string, placement: string) => {
     captureClientEvent(event, { destination, placement })
   }
 
-  return (
-    <section className="vb-hero relative isolate overflow-hidden border-b border-white/10 bg-[#090a08]">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_38%,rgba(183,255,60,0.12),transparent_25%),linear-gradient(135deg,rgba(255,255,255,0.025),transparent_42%)]" />
+  const selectLane = (lane: LaneKey) => {
+    setActiveLane(lane)
+    track(laneEvents[lane], `/${lane === "opportunity" ? "opportunities" : lane}`, "hero_lane_selector")
+  }
 
-      <div className="relative mx-auto grid w-full max-w-[1440px] items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 lg:grid-cols-[minmax(0,0.96fr)_minmax(24rem,0.72fr)] lg:gap-12 lg:px-12 lg:py-10">
-        <div className="relative z-10 max-w-3xl">
-          <div className="vb-enter flex items-center gap-3.5">
-            <Image
-              src="/brand/vestblock-monogram.png"
-              alt=""
-              aria-hidden="true"
-              width={72}
-              height={72}
-              priority
-              className="h-14 w-14 object-contain sm:h-16 sm:w-16"
-            />
-            <div>
-              <p className="vb-eyebrow">VestBlock</p>
-              <p className="mt-1 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-[#8f9189]">
-                Capital · Deals · Opportunity
-              </p>
-            </div>
+  return (
+    <section ref={stageRef} className="vb-hero-stage relative isolate overflow-hidden border-b border-white/10" aria-labelledby="hero-title">
+      <div className="vb-hero-aurora" aria-hidden="true" />
+      <div className="vb-hero-grid" aria-hidden="true" />
+
+      <div className="vb-hero-inner mx-auto grid w-full max-w-[1520px] items-center gap-12 px-5 pb-14 pt-12 sm:px-8 sm:pb-16 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,0.86fr)_minmax(32rem,1.14fr)] lg:gap-8 lg:px-14 lg:py-16">
+        <div className="relative z-10 max-w-2xl">
+          <div className="vb-hero-kicker vb-reveal flex items-center gap-3">
+            <span className="vb-kicker-mark"><span /></span>
+            <span>VestBlock / operating network</span>
+            <span className="hidden text-[#60645a] sm:inline">2026</span>
           </div>
-          <h1 className="vb-display vb-enter vb-enter-delay-1 mt-4 max-w-[11ch] text-[clamp(3.3rem,7vw,6.8rem)] font-semibold leading-[0.88] tracking-[-0.06em] text-[#f3efe6]">
-            Find your next move.
+
+          <h1 id="hero-title" className="vb-hero-title vb-reveal vb-reveal-1 mt-8 max-w-[8.5ch]">
+            Find the move before it becomes obvious.
           </h1>
-          <p className="vb-enter vb-enter-delay-2 mt-5 max-w-xl text-lg leading-8 text-[#c7c5bd] sm:text-xl sm:leading-8">
-            Capital, deals, and opportunities brought together in one network.
+          <p className="vb-hero-lede vb-reveal vb-reveal-2 mt-7 max-w-xl">
+            Capital, property intelligence, and practical opportunity paths connected around the decision in front of you.
           </p>
 
-          <div className="vb-enter vb-enter-delay-3 mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="vb-reveal vb-reveal-3 mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
             <a
               href="#paths"
-              onMouseEnter={() => setActiveLane("opportunity")}
-              onFocus={() => setActiveLane("opportunity")}
               onClick={() => track(analyticsEvents.homepageCtaClicked, "#paths", "hero_primary")}
-              className="vb-button vb-button-primary"
+              className="vb-button vb-button-primary vb-button-command"
             >
-              Explore VestBlock
-              <ArrowDown className="h-4 w-4" />
+              Choose a direction
+              <ArrowRight className="h-4 w-4" />
             </a>
-            <Link
-              href="/capital"
-              onMouseEnter={() => setActiveLane("capital")}
-              onFocus={() => setActiveLane("capital")}
-              onClick={() => track(analyticsEvents.capitalFlowStarted, "/capital", "hero_secondary")}
-              className="vb-button vb-button-secondary"
-            >
-              Find capital
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/deals"
-              onMouseEnter={() => setActiveLane("deals")}
-              onFocus={() => setActiveLane("deals")}
-              onClick={() => track(analyticsEvents.dealFlowStarted, "/deals", "hero_text")}
-              className="vb-text-link sm:ml-2"
-            >
-              Find deals
+            <Link href="/get-started" className="vb-text-link">
+              Start with your situation
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div
-            role="group"
-            aria-label="VestBlock network lanes"
-            className="vb-enter vb-enter-delay-4 mt-8 flex flex-wrap gap-x-6 gap-y-3 border-t border-white/10 pt-4"
-          >
-            {lanes.map((lane) => (
-              <button
-                key={lane.key}
-                type="button"
-                onMouseEnter={() => setActiveLane(lane.key)}
-                onFocus={() => setActiveLane(lane.key)}
-                onClick={() => setActiveLane(lane.key)}
-                aria-pressed={activeLane === lane.key}
-                className="group inline-flex min-h-11 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#8f9189] transition-colors hover:text-[#f3efe6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b7ff3c] focus-visible:ring-offset-4 focus-visible:ring-offset-[#090a08]"
-              >
-                <span className={`h-1.5 w-1.5 rounded-full transition-all ${activeLane === lane.key ? "scale-125 bg-[#b7ff3c]" : "bg-[#555850] group-hover:bg-[#8f9189]"}`} />
-                {lane.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div
-          data-active={activeLane}
-          className="vb-hero-visual relative mx-auto flex w-full max-w-[30rem] flex-col items-center lg:justify-self-end"
-          aria-label={`VestBlock ${selectedLane.label} lane: ${selectedLane.detail}`}
-        >
-          <div className="vb-orb-shell relative flex aspect-square w-full max-w-[23rem] items-center justify-center rounded-full">
-            <div className="vb-orb-surface absolute inset-[8%] rounded-full" aria-hidden="true" />
-            <div className="absolute inset-[16%] rounded-full border border-[#b7ff3c]/20 shadow-[inset_0_0_28px_rgba(183,255,60,0.05)]" />
-            <div className="absolute inset-[26%] rounded-full border border-white/10" />
-            <div className="vb-orb-connector vb-orb-connector-capital" aria-hidden="true"><span /></div>
-            <div className="vb-orb-connector vb-orb-connector-deals" aria-hidden="true"><span /></div>
-            <div className="vb-orb-connector vb-orb-connector-opportunity" aria-hidden="true"><span /></div>
-            <Image
-              src="/brand/vestblock-monogram.png"
-              alt="VestBlock VB monogram"
-              width={720}
-              height={720}
-              priority
-              className="relative z-10 h-auto w-[62%] translate-y-[3%] object-contain drop-shadow-[0_18px_34px_rgba(0,0,0,0.72)]"
-            />
-          </div>
-
-          <div className="-mt-[5%] w-[74%]" aria-hidden="true">
-            <div className="h-2 rounded-[50%] border border-[#b7ff3c]/35 bg-[linear-gradient(90deg,transparent,rgba(183,255,60,0.4),transparent)] shadow-[0_0_26px_rgba(183,255,60,0.2)]" />
-            <div className="mx-auto h-7 w-[66%] bg-gradient-to-b from-[#151914] to-transparent [clip-path:polygon(8%_0,92%_0,100%_100%,0_100%)]" />
-          </div>
-
-          <div className="mt-1 grid w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-y border-white/10 py-3 text-center">
-            <span className="h-px bg-gradient-to-r from-transparent to-[#b7ff3c]/60" />
-            <div className="min-w-0 px-2">
-              <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#b7ff3c]">{selectedLane.label}</p>
-              <p className="mt-1 text-xs text-[#aaa9a2]">{selectedLane.detail}</p>
+          <div className="vb-reveal vb-reveal-4 mt-12 border-t border-white/10 pt-5">
+            <div className="flex items-center justify-between gap-4">
+              <p className="vb-hero-microcopy">Three lanes / one connected decision system</p>
+              <span className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-[#666b60]">Scroll to inspect</span>
             </div>
-            <span className="h-px bg-gradient-to-l from-transparent to-[#b7ff3c]/60" />
+            <div role="group" aria-label="VestBlock lanes" className="mt-4 grid grid-cols-3 gap-2">
+              {lanes.map((lane) => (
+                <button
+                  key={lane.key}
+                  type="button"
+                  onMouseEnter={() => setActiveLane(lane.key)}
+                  onFocus={() => setActiveLane(lane.key)}
+                  onClick={() => selectLane(lane.key)}
+                  aria-pressed={activeLane === lane.key}
+                  className={`vb-lane-tab ${activeLane === lane.key ? "is-active" : ""}`}
+                >
+                  <span>{lane.index}</span>
+                  <strong>{lane.label}</strong>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <a href="#paths" className="vb-scroll-indicator" aria-label="Scroll to choose a VestBlock direction">
-          <span className="animate-vb-scroll-cue" aria-hidden="true" />
-          Explore
+        <div className="vb-hero-object-wrap relative mx-auto w-full max-w-[44rem]" data-active-lane={activeLane}>
+          <div className="vb-hero-object-meta vb-hero-object-meta-top" aria-hidden="true">
+            <span>VB / SYSTEM CORE</span>
+            <span>01 — 03</span>
+          </div>
+
+          <div className="vb-hero-object-stage" aria-label={`VestBlock ${selectedLane.label}: ${selectedLane.descriptor}`} role="img">
+            <div className="vb-object-backdrop" aria-hidden="true" />
+            <div className="vb-object-grid" aria-hidden="true" />
+            <div className="vb-object-rings" aria-hidden="true">
+              <span /><span /><span /><span />
+            </div>
+            <div className="vb-object-axis vb-object-axis-x" aria-hidden="true" />
+            <div className="vb-object-axis vb-object-axis-y" aria-hidden="true" />
+
+            <div className="vb-monogram-object" aria-hidden="true">
+              <div className="vb-monogram-depth vb-monogram-depth-3"><Image src="/brand/vestblock-monogram.png" alt="" fill sizes="28rem" /></div>
+              <div className="vb-monogram-depth vb-monogram-depth-2"><Image src="/brand/vestblock-monogram.png" alt="" fill sizes="28rem" /></div>
+              <div className="vb-monogram-depth vb-monogram-depth-1"><Image src="/brand/vestblock-monogram.png" alt="" fill sizes="28rem" /></div>
+              <div className="vb-monogram-face"><Image src="/brand/vestblock-monogram.png" alt="VestBlock VB monogram" fill sizes="28rem" priority /></div>
+              <div className="vb-monogram-sheen" />
+            </div>
+
+            <div className="vb-object-callout vb-object-callout-capital"><span className="vb-callout-line" /><span>01 / CAPITAL</span><small>Access</small></div>
+            <div className="vb-object-callout vb-object-callout-deals"><span className="vb-callout-line" /><span>02 / DEALS</span><small>Analyze</small></div>
+            <div className="vb-object-callout vb-object-callout-opportunity"><span className="vb-callout-line" /><span>03 / OPPORTUNITY</span><small>Advance</small></div>
+
+            <div className="vb-object-readout" aria-hidden="true">
+              <Orbit className="h-3.5 w-3.5 text-[#b7ff3c]" />
+              <span>{selectedLane.label} lane active</span>
+              <i />
+            </div>
+          </div>
+
+          <div className="vb-hero-object-caption">
+            <div>
+              <span className="vb-hero-caption-index">{selectedLane.index}</span>
+              <strong>{selectedLane.label}</strong>
+            </div>
+            <p>{selectedLane.descriptor} / selected</p>
+            <MoveDown className="h-4 w-4 text-[#b7ff3c]" />
+          </div>
+          <div className="vb-hero-object-meta vb-hero-object-meta-bottom" aria-hidden="true">
+            <span>Depth / material / signal</span>
+            <span>VestBlock LLC</span>
+          </div>
+        </div>
+
+        <a href="#paths" className="vb-hero-scroll-cue" aria-label="Scroll to choose a VestBlock direction">
+          <span className="vb-scroll-cue-ring"><i /></span>
+          <span>Scroll to enter</span>
         </a>
       </div>
     </section>
