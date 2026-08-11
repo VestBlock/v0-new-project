@@ -21,6 +21,21 @@ Production promotion: not authorized
 - Binds PayPal create/capture to authenticated user, product, request, USD amount, provider transaction, and idempotent payment record.
 - Adds an exact nine-vertical Strategy Brain with structured evidence, research-required behavior, focus/challenger selection, cost/compliance gates, attribution, and PII-safe Obsidian projection.
 
+## Verification evidence
+
+Verified on the authoritative Mac Pro checkout at commit `d2e651b` with its local environment configuration:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm run typecheck`
+- changed-file ESLint with zero warnings (run before push)
+- `pnpm run test:autopilot-strategy`
+- `pnpm run test:payment-order-binding`
+- `pnpm run test:obsidian-vault`
+- `pnpm run build` (246 static pages generated)
+- six Playwright release-candidate checks against the local production server, including desktop/mobile hero, Capital, Deals, Opportunities, Get Started, DealVault, login semantics, and 390-pixel overflow assertions
+
+The final desktop home, mobile home, and mobile DealVault captures were inspected after the tests. This proves the committed build on the Mac Pro; it does not substitute for provider sandbox checks or a hosted preview review.
+
 ## Production blockers requiring separate approval
 
 1. Revoke the exposed PostHog `phx_` personal key and configure a project token.
