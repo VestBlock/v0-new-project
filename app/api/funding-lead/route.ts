@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { saveServiceDeliverable } from '@/lib/services/aiServiceDeliverables';
@@ -110,55 +110,48 @@ export async function POST(req: Request) {
     );
   }
 
-  // after() keeps the serverless function alive until follow-up work finishes;
-  // fire-and-forget here previously let Vercel freeze the lambda and drop these.
-  after(async () => {
-    await Promise.allSettled([
-      runNewLeadAutomation({
-        sendIntakeAlert: true,
-        leadId: lead.id,
-        leadType: 'business_funding',
-        name: data.name,
-        email: data.email,
-        phone: leadPhone,
-        sourcePath: '/funding',
-        summary,
-        metadata: {
-          businessType: data.business_type,
-          fundingAmount: data.funding_amount,
-          creditScore: data.credit_score,
-        },
-      }).catch((automationError) => {
-        console.error('[funding-lead] follow-up automation failed:', automationError);
-      }),
-      saveServiceDeliverable({
-        leadId: lead.id,
-        packageKey: 'funding_readiness_snapshot',
-        status: 'ready_for_review',
-        title: fundingPlan.deliverable.title,
-        summary: fundingPlan.deliverable.summary,
-        previewText: fundingPlan.strategy.strategySummary,
-        deliverableJson: fundingPlan.deliverable,
-        deliverableMarkdown: null,
-        generatedAt: new Date().toISOString(),
-      }).catch((deliverableError) => {
-        console.error('[funding-lead] deliverable save failed:', deliverableError);
-      }),
-      Promise.resolve(
-        captureServerEvent({
-          distinctId: data.email,
-          event: analyticsEvents.fundingLeadSubmitted,
-          properties: {
-            leadId: lead.id,
-            businessType: data.business_type,
-            fundingAmount: data.funding_amount,
-            creditScore: data.credit_score,
-            hasEligibilitySnapshot: Boolean(data.eligibilitySnapshot),
-            sourcePath: '/funding',
-          },
-        })
-      ),
-    ]);
+  void runNewLeadAutomation({
+    leadId: lead.id,
+    leadType: 'business_funding',
+    name: data.name,
+    email: data.email,
+    phone: leadPhone,
+    sourcePath: '/funding',
+    summary,
+    metadata: {
+      businessType: data.business_type,
+      fundingAmount: data.funding_amount,
+      creditScore: data.credit_score,
+    },
+  }).catch((automationError) => {
+    console.error('[funding-lead] follow-up automation failed:', automationError);
+  });
+
+  void saveServiceDeliverable({
+    leadId: lead.id,
+    packageKey: 'funding_readiness_snapshot',
+    status: 'ready_for_review',
+    title: fundingPlan.deliverable.title,
+    summary: fundingPlan.deliverable.summary,
+    previewText: fundingPlan.strategy.strategySummary,
+    deliverableJson: fundingPlan.deliverable,
+    deliverableMarkdown: null,
+    generatedAt: new Date().toISOString(),
+  }).catch((deliverableError) => {
+    console.error('[funding-lead] deliverable save failed:', deliverableError);
+  });
+
+  void captureServerEvent({
+    distinctId: data.email,
+    event: analyticsEvents.fundingLeadSubmitted,
+    properties: {
+      leadId: lead.id,
+      businessType: data.business_type,
+      fundingAmount: data.funding_amount,
+      creditScore: data.credit_score,
+      hasEligibilitySnapshot: Boolean(data.eligibilitySnapshot),
+      sourcePath: '/funding',
+    },
   });
 
   return NextResponse.json({

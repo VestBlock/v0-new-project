@@ -17,7 +17,7 @@ export type CampaignLedgerEvent = {
   id: string
   strategyKey: string
   strategyName: string
-  source: 'dealmachine_export' | 'public_listing' | 'reactivation' | 'manual' | 'system'
+  source: 'dealmachine_export' | 'public_listing' | 'manual' | 'system'
   channel: 'email' | 'sms' | 'task'
   status: 'sent' | 'failed' | 'drafted' | 'blocked'
   recipient: string | null
@@ -31,12 +31,6 @@ export type CampaignLedgerEvent = {
 
 export type { OperatingLoopCard, StrategyCampaignRollup } from '@/lib/admin/operatingLoopCore'
 
-export type RepliedLeadSignal = {
-  email: string
-  status: string
-  at: string | null
-}
-
 export type OperatingLoopTelemetry = {
   generatedAt: string
   ledgerPath: string
@@ -48,43 +42,35 @@ export type OperatingLoopTelemetry = {
   blockedSources: string[]
 }
 
-export type LoadOperatingLoopTelemetryInput = Omit<
-  OperatingLoopBuilderInput,
-  'campaigns' | 'blockedSources' | 'ledgerEventCount' | 'lastEventAt'
-> & {
-  /** Leads with reply-positive statuses so campaign rollups can attribute replies per strategy lane. */
-  repliedLeads?: RepliedLeadSignal[]
-}
-
 const LEDGER_DIR = path.join(process.cwd(), 'data', 'operating-loops')
 const LEDGER_PATH = path.join(LEDGER_DIR, 'campaign-ledger.jsonl')
 const SUMMARY_PATH = path.join(LEDGER_DIR, 'campaign-summary.json')
-const SUPPRESSION_PATH = path.join(process.cwd(), 'data', 'outreach-suppressions.json')
-const REPLY_LOG_PATH = path.join(LEDGER_DIR, 'reply-log.jsonl')
-
-const REPLY_POSITIVE_STATUSES = new Set(['replied', 'interested', 'qualified', 'closed_won'])
 
 const STRATEGY_LABELS: Record<string, string> = {
   'dealmachine-seller-options': 'DealMachine owner seller-options',
+  'divorce-separation': 'Divorce / separation quiet exit',
+  'relocation-job-transfer': 'Relocation / job-transfer timing',
+  'out-of-state-heir': 'Out-of-state heir / remote relief',
+  'senior-downsizing-medical': 'Senior downsizing / medical hardship',
+  'fire-storm-damage': 'Fire / storm / insurance damage',
+  'problem-tenant-eviction': 'Problem tenant / eviction relief',
+  'seller-finance-equity': 'Seller finance / owner-carry equity',
   'portfolio-landlord': 'Portfolio / senior landlord',
+  'tired-landlord': 'Tired landlord / rental fatigue',
+  'probate-inheritance': 'Probate / inheritance soft-touch',
+  'vacant-property-refresh': 'Vacant property refresh',
+  'code-violation-distress': 'Code violation / city-pressure',
+  'tax-delinquent-cure': 'Tax delinquent cure path',
+  'fsbo-conversion': 'FSBO conversion',
+  'failed-flipper-stuck-rehab': 'Failed flipper / stuck rehab',
+  'hoa-delinquent': 'HOA delinquent / association pressure',
+  'reverse-mortgage-exit': 'Reverse mortgage exit',
+  'title-issue-cloud': 'Title issue / cloud on title',
+  'post-auction-backup-buyer': 'Post-auction / backup buyer',
   'tax-code-stack': 'Tax delinquent + code violation',
+  'preforeclosure-subto': 'Preforeclosure subject-to review',
   'on-market-lowball-agent-sweep': 'On-market agent cash review',
   'stale-listing-creative-finance': 'Stale listing creative terms',
-  'failed-landlord-exit': 'Failed landlord exit',
-  'insurance-damage-event': 'Insurance / damage event',
-  'zombie-rehab': 'Zombie rehab / stalled project',
-  'senior-downsizer': 'Equity-rich downsizer',
-  'rent-gap-multifamily': 'Small multifamily rent gap',
-  'probate-vacant-equity': 'Probate + vacant + equity',
-  'tired-airbnb-midterm': 'Tired Airbnb / midterm rental',
-  'utility-lien-water-shutoff': 'Utility / water lien pressure',
-  'contractor-distress-flip': 'Contractor distress flip',
-  'small-commercial-owner-exit': 'Small commercial owner exit',
-  'portfolio-fragmentation': 'Portfolio fragmentation',
-  'buyer-reverse-engineering': 'Buyer reverse-engineering',
-  'permit-spike-developer-land': 'Permit spike developer / land',
-  'judgment-lien-pressure': 'Judgment / lien pressure',
-  'tax-assessment-shock': 'Tax assessment shock',
   'reply-resurrection': 'Reply resurrection',
 }
 
@@ -229,43 +215,6 @@ function buildStaleListingEvents(dir: string): CampaignLedgerEvent[] {
   return events
 }
 
-/** Second-touch sends from scripts/send-reactivation-batch.mjs enter lane stats too. */
-function buildReactivationEvents(dir: string): CampaignLedgerEvent[] {
-  if (!fs.existsSync(dir)) return []
-  const events: CampaignLedgerEvent[] = []
-  for (const name of fs.readdirSync(dir)) {
-    if (!name.startsWith('reactivation-results-') || !name.endsWith('.json')) continue
-    const file = path.join(dir, name)
-    const rows = safeJson(file)
-    if (!Array.isArray(rows)) continue
-    const sentAt = isoFromMtime(file)
-    rows.forEach((row: AnyRow, index: number) => {
-      const strategyKey =
-        String(row.strategy || 'reactivation')
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '') || 'reactivation'
-      events.push({
-        id: `${name}:${index}`,
-        strategyKey,
-        strategyName: strategyName(strategyKey),
-        source: 'reactivation',
-        channel: 'email',
-        status: row.ok ? 'sent' : 'failed',
-        recipient: String(row.email || '').trim().toLowerCase() || null,
-        market: normalizeMarket(row.market) || marketFromAddress(row.property_address),
-        propertyAddress: String(row.property_address || '').trim() || null,
-        sentAt,
-        providerId: row.id || null,
-        artifactFile: name,
-        metadata: { secondTouch: true, error: row.error || null },
-      })
-    })
-  }
-  return events
-}
-
 function buildBlockedSourceEvents(): CampaignLedgerEvent[] {
   const events: CampaignLedgerEvent[] = []
   const distressDir = path.join(process.cwd(), 'data', 'distress-leads')
@@ -341,11 +290,11 @@ function sortEvents(events: CampaignLedgerEvent[]) {
   return [...events].sort((a, b) => Date.parse(b.sentAt || '') - Date.parse(a.sentAt || '') || a.id.localeCompare(b.id))
 }
 
-function writeCampaignLedgerCache(events: CampaignLedgerEvent[], repliedLeads: RepliedLeadSignal[] = []) {
+function writeCampaignLedgerCache(events: CampaignLedgerEvent[]) {
   try {
     fs.mkdirSync(LEDGER_DIR, { recursive: true })
     fs.writeFileSync(LEDGER_PATH, `${events.map((event) => JSON.stringify(event)).join('\n')}${events.length ? '\n' : ''}`, 'utf8')
-    fs.writeFileSync(SUMMARY_PATH, `${JSON.stringify(buildCampaignRollups(events, repliedLeads), null, 2)}\n`, 'utf8')
+    fs.writeFileSync(SUMMARY_PATH, `${JSON.stringify(buildCampaignRollups(events), null, 2)}\n`, 'utf8')
     return { ledgerPath: LEDGER_PATH, summaryPath: SUMMARY_PATH }
   } catch (error) {
     const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
@@ -357,18 +306,15 @@ function writeCampaignLedgerCache(events: CampaignLedgerEvent[], repliedLeads: R
   }
 }
 
-export function syncCampaignLedger(
-  repliedLeads: RepliedLeadSignal[] = []
-): { events: CampaignLedgerEvent[]; ledgerPath: string; summaryPath: string } {
+export function syncCampaignLedger(): { events: CampaignLedgerEvent[]; ledgerPath: string; summaryPath: string } {
   const outreachDir = path.join(process.cwd(), 'tmp', 'outreach')
   const events = sortEvents([
     ...buildDealmachineEvents(outreachDir),
     ...buildStaleListingEvents(outreachDir),
-    ...buildReactivationEvents(outreachDir),
     ...buildBlockedSourceEvents(),
   ])
 
-  return { events, ...writeCampaignLedgerCache(events, repliedLeads) }
+  return { events, ...writeCampaignLedgerCache(events) }
 }
 
 function topMarkets(events: CampaignLedgerEvent[]) {
@@ -383,121 +329,8 @@ function topMarkets(events: CampaignLedgerEvent[]) {
     .slice(0, 5)
 }
 
-function loadSuppressionRows() {
-  const data = safeJson(SUPPRESSION_PATH)
-  if (Array.isArray(data)) return data as AnyRow[]
-  // Current on-disk format is { emails: [...] }; older formats were a bare array or keyed object.
-  if (data && typeof data === 'object') {
-    if (Array.isArray((data as AnyRow).emails)) return (data as AnyRow).emails as AnyRow[]
-    return Object.values(data)
-      .flatMap((row) => (Array.isArray(row) ? row : [row]))
-      .filter((row) => row && typeof row === 'object') as AnyRow[]
-  }
-  return []
-}
-
-/**
- * Operator-logged replies (scripts/log-reply.mjs) recorded locally so reply
- * attribution works even before/without Supabase lead-status sync.
- */
-function loadLocalReplyLog(): RepliedLeadSignal[] {
-  try {
-    const lines = fs.readFileSync(REPLY_LOG_PATH, 'utf8').split('\n')
-    const rows: RepliedLeadSignal[] = []
-    for (const line of lines) {
-      const text = line.trim()
-      if (!text) continue
-      try {
-        const row = JSON.parse(text)
-        const email = String(row.email || '').trim().toLowerCase()
-        const status = String(row.status || '').trim().toLowerCase()
-        if (!email || !REPLY_POSITIVE_STATUSES.has(status)) continue
-        rows.push({ email, status, at: row.at || row.loggedAt || null })
-      } catch {
-        // skip malformed lines
-      }
-    }
-    return rows
-  } catch {
-    return []
-  }
-}
-
-function mergeRepliedLeads(...sources: (RepliedLeadSignal[] | undefined)[]) {
-  const byEmail = new Map<string, RepliedLeadSignal>()
-  for (const source of sources) {
-    for (const row of source || []) {
-      const email = row.email.trim().toLowerCase()
-      if (!email) continue
-      const existing = byEmail.get(email)
-      if (!existing || Date.parse(row.at || '') > Date.parse(existing.at || '')) {
-        byEmail.set(email, { ...row, email })
-      }
-    }
-  }
-  return byEmail
-}
-
-function suppressionRowsByEmail() {
-  const byEmail = new Map<string, AnyRow[]>()
-  for (const row of loadSuppressionRows()) {
-    const email = String(row.email || row.recipient || '').trim().toLowerCase()
-    if (!email) continue
-    const bucket = byEmail.get(email) || []
-    bucket.push(row)
-    byEmail.set(email, bucket)
-  }
-  return byEmail
-}
-
-function suppressionIsOptOut(row: AnyRow) {
-  const reason = `${row.reason || ''} ${row.type || ''} ${row.category || ''}`.toLowerCase()
-  return /unsubscribe|do[_ -]?not[_ -]?contact|opt[_ -]?out|remove|wrong[_ -]?owner/.test(reason)
-}
-
-function campaignNextMove(input: { key: string; sent: number; failed: number; drafted: number; blocked: number; optOuts: number; replies: number; latestBlocked?: CampaignLedgerEvent }) {
-  if (input.replies > 0) {
-    return `Work the ${input.replies} attributed repl${input.replies === 1 ? 'y' : 'ies'} in this lane to a next step (photos, condition, seller number, buyer fit) before adding fresh volume.`
-  }
-  if (input.latestBlocked) return String(input.latestBlocked.metadata.reason || 'Resolve source blocker before sending this strategy.')
-  if (/seller-options/.test(input.key) && input.sent > 0) {
-    return 'Pause generic seller-options live sends; move volume to high-intent stacked lanes and only stage this lane for manual review.'
-  }
-  if (input.key === 'on-market-lowball-agent-sweep' && input.sent > 0) {
-    return 'Keep on-market lowball as a staged backup-offer test only; do not repeat live volume until agent reply attribution is clear.'
-  }
-  if (input.optOuts > 0) return 'Tighten copy, suppress opt-outs, and rerun as a 30-lead test before scaling this lane.'
-  if (input.failed > 0) return 'Fix delivery failures and bounce risk before adding more sends.'
-  if (input.sent >= 30) return 'Run a smaller A/B test on message angle and compare replies before repeating this lane.'
-  if (input.sent > 0) return 'Monitor replies and run the learning audit before repeating volume.'
-  if (input.drafted > 0) return 'Review drafts and send only the strongest 30-lead batch.'
-  return 'Source and dry-run this strategy before sending.'
-}
-
-function campaignLearningSignal(input: { key: string; sent: number; failed: number; blocked: number; optOuts: number; replies: number }) {
-  const parts = [
-    `${input.sent} tracked sends`,
-    `${input.replies} attributed replies`,
-    `${input.failed} failures`,
-    `${input.blocked} source blockers`,
-    `${input.optOuts} suppression/opt-out signals`,
-  ]
-  if (/seller-options/.test(input.key)) parts.push('generic seller-options is now paused for live sends by default')
-  if (input.key === 'on-market-lowball-agent-sweep') parts.push('on-market lowball is now staged/review-only by default')
-  if (input.replies === 0 && input.sent > 0) {
-    parts.push('log replies via outreach:log-reply (or lead status updates) so this lane earns scaling decisions')
-  }
-  return parts.join(' · ')
-}
-
-export function buildCampaignRollups(
-  events: CampaignLedgerEvent[],
-  repliedLeads: RepliedLeadSignal[] = []
-): StrategyCampaignRollup[] {
+export function buildCampaignRollups(events: CampaignLedgerEvent[]): StrategyCampaignRollup[] {
   const byStrategy = new Map<string, CampaignLedgerEvent[]>()
-  const suppressions = suppressionRowsByEmail()
-  const repliedByEmail = mergeRepliedLeads(loadLocalReplyLog(), repliedLeads)
-
   for (const event of events) {
     const bucket = byStrategy.get(event.strategyKey) || []
     bucket.push(event)
@@ -511,21 +344,15 @@ export function buildCampaignRollups(
     const blocked = rows.filter((row) => row.status === 'blocked').length
     const latest = rows[0] || null
     const sourceNeededRows = rows.filter((row) => row.status === 'blocked')
+    const status: CommandStatus = blocked > 0 && sent === 0 ? 'red' : failed > 0 || blocked > 0 ? 'yellow' : sent > 0 ? 'green' : 'yellow'
     const latestBlocked = sourceNeededRows[0]
-    const recipientEmails = new Set(rows.map((row) => String(row.recipient || '').trim().toLowerCase()).filter(Boolean))
-    const suppressionRows = [...recipientEmails].flatMap((email) => suppressions.get(email) || [])
-    const optOuts = suppressionRows.filter(suppressionIsOptOut).length
-    const replies = [...recipientEmails].filter((email) => repliedByEmail.has(email)).length
-    const status: CommandStatus = replies > 0
-      ? 'green'
-      : blocked > 0 && sent === 0
-        ? 'red'
-        : failed > 0 || blocked > 0 || optOuts > 0
-          ? 'yellow'
-          : sent > 0
-            ? 'green'
-            : 'yellow'
-    const nextMove = campaignNextMove({ key, sent, failed, drafted, blocked, optOuts, replies, latestBlocked })
+    const nextMove = latestBlocked
+      ? String(latestBlocked.metadata.reason || 'Resolve source blocker before sending this strategy.')
+      : sent > 0
+        ? 'Monitor replies, suppress opt-outs, and run the learning pass before repeating volume.'
+        : drafted > 0
+          ? 'Review drafts and run the approved send lane.'
+          : 'Source and dry-run this strategy before sending.'
 
     return {
       key,
@@ -535,73 +362,59 @@ export function buildCampaignRollups(
       failed,
       drafted,
       blocked,
-      replies,
-      optOuts,
+      replies: 0,
+      optOuts: 0,
       lastEventAt: latest?.sentAt || null,
       markets: topMarkets(rows),
       latestArtifact: latest?.artifactFile || null,
       nextMove,
-      learningSignal: campaignLearningSignal({ key, sent, failed, blocked, optOuts, replies }),
+      learningSignal:
+        'Reply attribution is not fully wired yet; current score uses sends, source blockers, suppressions, and command-center reply totals.',
     }
   })
 
   return rollups.sort((a, b) => {
-    const order =
-      b.replies - a.replies || b.sent - a.sent || a.status.localeCompare(b.status) || a.label.localeCompare(b.label)
+    const order = b.sent - a.sent || a.status.localeCompare(b.status) || a.label.localeCompare(b.label)
     return order
   })
 }
 
-/** Latest reactivation-queue run stats so the loop card reflects real state. */
-function loadReactivationSnapshot() {
-  const dir = path.join(LEDGER_DIR, 'reactivation')
-  try {
-    const latest = fs
-      .readdirSync(dir)
-      .filter((name) => name.startsWith('reactivation-queue-') && name.endsWith('.json'))
-      .sort()
-      .pop()
-    if (!latest) return { eligible: 0, staged: 0, lastRunAt: null as string | null }
-    const data = safeJson(path.join(dir, latest))
-    const staged = Array.isArray(data?.queue) ? data.queue.length : 0
-    return {
-      eligible: Number(data?.eligible ?? staged) || staged,
-      staged,
-      lastRunAt: (data?.generatedAt as string | undefined) || isoFromMtime(path.join(dir, latest)),
-    }
-  } catch {
-    return { eligible: 0, staged: 0, lastRunAt: null as string | null }
-  }
-}
+export type LoadOperatingLoopTelemetryInput = Omit<
+  OperatingLoopBuilderInput,
+  'campaigns' | 'blockedSources' | 'ledgerEventCount' | 'lastEventAt'
+>
 
 export function loadOperatingLoopTelemetry(input: LoadOperatingLoopTelemetryInput): OperatingLoopTelemetry {
-  const { repliedLeads = [], ...builderInput } = input
-  const { events } = syncCampaignLedger(repliedLeads)
-  const campaigns = buildCampaignRollups(events, repliedLeads)
-  const reactivation = loadReactivationSnapshot()
+  const { events } = syncCampaignLedger()
+  const campaigns = buildCampaignRollups(events)
   const lastEventAt = events[0]?.sentAt || null
+  const totalSent = campaigns.reduce((sum, campaign) => sum + Number(campaign.sent || 0), 0)
+  const lowballSent = campaigns.find((campaign) => campaign.key === 'on-market-lowball-agent-sweep')?.sent || 0
+  const lowballShare = totalSent > 0 ? lowballSent / totalSent : 0
   const blockedSources = campaigns
     .filter((campaign) => campaign.blocked > 0)
     .flatMap((campaign) => campaign.nextMove ? [`${campaign.label}: ${campaign.nextMove}`] : [])
-    .slice(0, 6)
+  if (totalSent >= 10 && lowballShare > 0.2) {
+    blockedSources.unshift(
+      `On-market agent cash review: lowball outreach is ${Math.round(lowballShare * 100)}% of sent volume. Hold it below 20% and shift capacity to creative, distress, landlord, builder, and preforeclosure lanes.`
+    )
+  }
+  const trimmedBlockedSources = blockedSources.slice(0, 6)
 
   return {
     generatedAt: new Date().toISOString(),
     ledgerPath: LEDGER_PATH,
     ledgerEventCount: events.length,
-    focusStrategyKey: builderInput.focusStrategyKey || campaigns[0]?.key || null,
-    challengerStrategyKey: builderInput.challengerStrategyKey || campaigns.find((campaign) => campaign.key !== campaigns[0]?.key)?.key || null,
+    focusStrategyKey: input.focusStrategyKey || campaigns[0]?.key || null,
+    challengerStrategyKey: input.challengerStrategyKey || campaigns.find((campaign) => campaign.key !== campaigns[0]?.key)?.key || null,
     campaigns,
-    blockedSources,
+    blockedSources: trimmedBlockedSources,
     loops: buildOperatingLoopCards({
-      ...builderInput,
+      ...input,
       campaigns,
-      blockedSources,
+      blockedSources: trimmedBlockedSources,
       ledgerEventCount: events.length,
       lastEventAt,
-      reactivationEligible: reactivation.eligible,
-      reactivationStaged: reactivation.staged,
-      reactivationLastRunAt: reactivation.lastRunAt,
     }),
   }
 }

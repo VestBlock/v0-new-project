@@ -81,8 +81,8 @@ results.push(
       '--env-file=.env.local',
       'scripts/outreach-v4-send-approved.mjs',
       `--date=${date}`,
-      '--limit=50',
-      '--daily-cap=50',
+      '--limit=500',
+      '--daily-cap=500',
     ],
     { allowFailure: !dryRunResult.ok }
   )

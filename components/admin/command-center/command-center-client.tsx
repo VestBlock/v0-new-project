@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react"
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -18,11 +18,13 @@ import {
 } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
+import { BrandMark } from "@/components/brand-logo"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { CommandCenterAnalyzerPanel, type PropertyCommandSeed } from "./command-center-analyzer-panel"
 import { CommandCenterCopilotPanel } from "./command-center-copilot-panel"
 import { CommandCenterStrategyPanel } from "./command-center-strategy-panel"
+import { RevenueEngineOverview } from "./revenue-engine-overview"
 import {
   CommandCenterInboxPanel,
   CommandCenterOutreachPanel,
@@ -754,7 +756,7 @@ export function CommandCenterClient({
         setRunningActionId(null)
       }
     },
-    [openDockTarget, refresh, router, toast]
+    [handleCommandCenterAuthFailure, openDockTarget, refresh, router, toast]
   )
 
   const coreAgents = data.agents.filter((agent) =>
@@ -763,19 +765,10 @@ export function CommandCenterClient({
   const supportAgents = data.agents.filter((agent) =>
     ["underwriting", "authority", "qa"].includes(agent.key)
   )
-  const queueByLabel = useMemo(
-    () => new Map(data.routingQueue.map((item) => [item.label, item.count])),
-    [data.routingQueue]
-  )
   const visibleAlerts = data.alerts.filter((alert) => alert.severity !== "info").slice(0, 3)
   const criticalAlerts = visibleAlerts.filter((alert) => alert.severity === "critical")
   const visibleOverdueTasks = data.overdueTasks.slice(0, 3)
   const visibleActivity = data.activity.slice(0, 8)
-  const buyerMatchesOpen = queueByLabel.get("Buyer matches open") ?? 0
-  const lenderMatchesOpen = queueByLabel.get("Lender matches open") ?? 0
-  const leadFollowUpsDue = queueByLabel.get("Lead follow-ups due") ?? 0
-  const partnerFollowUpsDue = queueByLabel.get("Partner follow-ups due") ?? 0
-
   const runIntent = useCallback(
     (intent: CommandIntent | null) => {
       if (!intent) return
@@ -1058,9 +1051,12 @@ export function CommandCenterClient({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-cyan-300/80">VestBlock · Operator Cockpit</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white md:text-3xl">Command Center</h1>
+        <div className="flex items-center gap-3">
+          <BrandMark className="h-11 w-11 rounded-xl border border-[#b7ff3c]/15 bg-[#b7ff3c]/[0.05] p-1" />
+          <div>
+            <p className="vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-[#b7ff3c]/80">VestBlock · Revenue OS</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white md:text-3xl">Command Center</h1>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -1098,6 +1094,8 @@ export function CommandCenterClient({
           </button>
         </div>
       </div>
+
+      <RevenueEngineOverview snapshot={data.revenueEngine} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div id="command-deck">

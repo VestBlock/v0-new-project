@@ -5,11 +5,16 @@ import { NextResponse } from 'next/server'
 
 import { checkAdminAccess } from '@/lib/auth/admin'
 import { applyStrategyUpdateById } from '@/lib/improvement/continuous-improvement'
+import { isTrustedMutationOrigin } from '@/lib/security/sameOrigin'
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin || !adminCheck.user) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: adminCheck.user ? 403 : 401 })
+  }
+
+  if (!isTrustedMutationOrigin(request)) {
+    return NextResponse.json({ error: 'Untrusted request origin.' }, { status: 403 })
   }
 
   const { id } = await context.params

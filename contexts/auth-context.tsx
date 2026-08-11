@@ -113,7 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (data) {
-          setUserProfile(data);
+          setUserProfile({
+            id: data.id,
+            full_name: data.full_name ?? undefined,
+            role: data.role ?? undefined,
+            is_subscribed: data.is_subscribed,
+            paypal_order_product: data.paypal_order_product,
+          });
         }
       } catch (error: any) {
         console.error('Error fetching user profile:', error);

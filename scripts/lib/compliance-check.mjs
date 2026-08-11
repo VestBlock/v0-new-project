@@ -83,6 +83,14 @@ function findBanned(text, audience) {
     if (rule.scope === 'seller' && audience !== 'seller') continue
     const match = String(text || '').match(rule.pattern)
     if (match) {
+      if (
+        /\bguarantee/i.test(match[0]) &&
+        /\b(?:do not|does not|don'?t|cannot|can'?t|no)\s+guarantee[ds]?\s*$/i.test(
+          String(text || '').slice(Math.max(0, match.index - 24), match.index + match[0].length)
+        )
+      ) {
+        continue
+      }
       violations.push({ severity: 'block', reason: rule.reason, matched: match[0] })
     }
   }

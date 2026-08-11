@@ -2,7 +2,8 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { AdminShell } from "@/components/admin/admin-shell"
-import { CommandCenterClient } from "@/components/admin/command-center/command-center-client"
+import { FounderCockpit } from "@/components/admin/command-center/founder-cockpit"
+import { getAutopilotCockpitSnapshot } from "@/lib/autopilot/cockpit"
 import { buildBossBriefing } from "@/lib/admin/bossAgent"
 import { getCommandCenterData } from "@/lib/admin/commandCenter"
 import { loadBossLearning } from "@/lib/admin/selfImprovement"
@@ -21,10 +22,15 @@ export default async function CommandCenterPreviewPage() {
 
   const [data, learning] = await Promise.all([getCommandCenterData(), loadBossLearning()])
   const bossBriefing = buildBossBriefing(data, learning)
+  const cockpit = await getAutopilotCockpitSnapshot(data)
 
   return (
     <AdminShell>
-      <CommandCenterClient initialData={data} initialBossBriefing={bossBriefing} />
+      <FounderCockpit
+        initialData={data}
+        initialCockpit={cockpit}
+        initialBossBriefing={bossBriefing}
+      />
     </AdminShell>
   )
 }

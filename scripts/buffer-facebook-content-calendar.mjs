@@ -18,6 +18,9 @@ const START_DATE = getArg("start") || "2026-06-05"
 const MAX_TO_SEND = getArg("max") ? Number.parseInt(getArg("max"), 10) : null
 const DEFAULT_CHANNEL_ID = "6824f8e7f49c987a95b0151f"
 const FACEBOOK_CHANNEL_ID = getArg("channel") || process.env.BUFFER_FACEBOOK_CHANNEL_ID || DEFAULT_CHANNEL_ID
+if (FACEBOOK_CHANNEL_ID !== DEFAULT_CHANNEL_ID) {
+  throw new Error("Buffer scheduling is locked to the approved VestBlock Facebook channel.")
+}
 const OUT_DIR = path.join(process.cwd(), "data", "buffer")
 const JSON_OUT = path.join(OUT_DIR, "vestblock-facebook-90-day-calendar.json")
 const CSV_OUT = path.join(OUT_DIR, "vestblock-facebook-90-day-calendar.csv")

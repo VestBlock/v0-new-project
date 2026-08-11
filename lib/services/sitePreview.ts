@@ -1,3 +1,6 @@
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+
 import { decodeHtmlEntities, safeUrl, stripHtml } from '@/lib/leads/utils';
 import type { WebsiteWeaknessReport } from '@/lib/leads/types';
 
@@ -57,6 +60,97 @@ const fallbackWeaknessReport: WebsiteWeaknessReport = {
   estimatedSpeed: 'unreachable',
   weakSignals: ['Website could not be reached'],
 };
+
+const MAX_PREVIEW_REDIRECTS = 3;
+
+function isPrivateIpv4(address: string) {
+  const parts = address.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return true;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
+function isPrivateIpAddress(address: string) {
+  const normalized = address.toLowerCase();
+  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  if (mappedIpv4) return isPrivateIpv4(mappedIpv4);
+
+  if (isIP(address) === 4) return isPrivateIpv4(address);
+
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80:')
+  );
+}
+
+async function validatePublicPreviewUrl(urlString: string) {
+  const url = new URL(urlString);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+  const hostname = url.hostname.toLowerCase();
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local')
+  ) {
+    return false;
+  }
+
+  if (isIP(hostname)) return !isPrivateIpAddress(hostname);
+
+  const addresses = await lookup(hostname, { all: true, verbatim: true }).catch(() => []);
+  if (addresses.length === 0) return false;
+
+  return addresses.every((entry) => !isPrivateIpAddress(entry.address));
+}
+
+async function fetchPublicHtml(startUrl: string, signal: AbortSignal) {
+  let currentUrl = startUrl;
+
+  for (let redirectCount = 0; redirectCount <= MAX_PREVIEW_REDIRECTS; redirectCount += 1) {
+    if (!(await validatePublicPreviewUrl(currentUrl))) {
+      throw new Error('Preview URL must resolve to a public website.');
+    }
+
+    const response = await fetch(currentUrl, {
+      headers: {
+        'user-agent': 'VestBlock Product Preview/1.0 (+https://www.vestblock.io)',
+      },
+      signal,
+      redirect: 'manual',
+    });
+
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location');
+      if (!location) return { finalUrl: currentUrl, response, html: '' };
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+
+    return {
+      finalUrl: currentUrl,
+      response,
+      html: await response.text(),
+    };
+  }
+
+  throw new Error('Too many preview redirects.');
+}
 
 function extractTagContent(html: string, pattern: RegExp) {
   const match = html.match(pattern);
@@ -212,15 +306,7 @@ async function fetchWebsiteSnapshot(websiteUrl: string): Promise<WebsiteSnapshot
   const startedAt = Date.now();
 
   try {
-    const response = await fetch(normalized, {
-      headers: {
-        'user-agent': 'VestBlock Product Preview/1.0 (+https://www.vestblock.io)',
-      },
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-
-    const html = await response.text();
+    const { finalUrl, response, html } = await fetchPublicHtml(normalized, controller.signal);
     const responseTimeMs = Date.now() - startedAt;
     const pageTitle = extractTagContent(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
     const metaDescription = extractTagContent(
@@ -233,10 +319,10 @@ async function fetchWebsiteSnapshot(websiteUrl: string): Promise<WebsiteSnapshot
     const textSnippet = stripHtml(html).slice(0, 1400);
     const siteName = pageTitle
       ? titleCasePhrase(pageTitle.split(/[\|\-–]/)[0]?.trim() || pageTitle.trim())
-      : hostnameLabel(normalized);
+      : hostnameLabel(finalUrl);
 
     return {
-      normalizedUrl: normalized,
+      normalizedUrl: finalUrl,
       siteName,
       pageTitle,
       metaDescription,

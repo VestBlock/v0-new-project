@@ -1,0 +1,95 @@
+{
+  "updated_at": "2026-07-06",
+  "markets": [
+    {
+      "market": "kansas-city-mo",
+      "county": "Jackson County",
+      "state": "MO",
+      "priority": 1,
+      "sources": [
+        {
+          "type": "tax_sale",
+          "label": "Jackson County Delinquent Land Tax Sale",
+          "url": "https://www.jacksongov.org/Government/Departments/Collection/Delinquent-Land-Tax-Sale",
+          "notes": "County tax-sale trigger and auction timing."
+        },
+        {
+          "type": "court_tax_sale",
+          "label": "16th Circuit Delinquent Land Tax Sale Overview",
+          "url": "https://www.16thcircuit.org/delinquent-land-tax-sale-overview",
+          "notes": "Circuit-court tax-sale overview and sale process."
+        },
+        {
+          "type": "foreclosure_sale",
+          "label": "Jackson County Sheriff Sales",
+          "url": "https://www.jacksoncountyso.com/sheriff-sales",
+          "notes": "Foreclosure sale schedule, case numbers, addresses, and postponements."
+        }
+      ]
+    },
+    {
+      "market": "tulsa-ok",
+      "county": "Tulsa County",
+      "state": "OK",
+      "priority": 1,
+      "sources": [
+        {
+          "type": "tax_sale",
+          "label": "Tulsa County June Real Estate Auction",
+          "url": "https://www2.tulsacounty.org/treasurer/properties-for-sale/june-real-estate-auction/",
+          "notes": "Annual county real-estate tax auction."
+        },
+        {
+          "type": "county_properties",
+          "label": "Tulsa County Properties for Sale",
+          "url": "https://www2.tulsacounty.org/treasurer/properties-for-sale/county-properties/",
+          "notes": "County-held inventory and sale pipeline."
+        },
+        {
+          "type": "foreclosure_sale",
+          "label": "Tulsa County Sheriff Property Auctions",
+          "url": "https://tcso.org/resources/property-auctions/",
+          "notes": "Sheriff foreclosure/property auction schedule."
+        },
+        {
+          "type": "assessor",
+          "label": "Tulsa County Assessor",
+          "url": "https://assessor.tulsacounty.org/",
+          "notes": "Parcel verification, value context, and owner/address cross-checks."
+        }
+      ]
+    },
+    {
+      "market": "little-rock-ar",
+      "county": "Pulaski County",
+      "state": "AR",
+      "priority": 1,
+      "sources": [
+        {
+          "type": "foreclosure_sale",
+          "label": "Pulaski County Circuit Clerk Auctions and Foreclosures",
+          "url": "https://pulaskiclerkar.gov/auction-about/",
+          "notes": "Judicial foreclosure sales handled by the clerk."
+        },
+        {
+          "type": "auction_notices",
+          "label": "Pulaski County Upcoming Auction Notices",
+          "url": "https://pulaskiclerkar.gov/auction-about/auction-notices/",
+          "notes": "Upcoming notice feed with filed notices and sale dates."
+        },
+        {
+          "type": "tax_delinquent",
+          "label": "Pulaski County Collector",
+          "url": "https://www.pulaskicollector.com/",
+          "notes": "Current and delinquent real-estate tax context."
+        },
+        {
+          "type": "assessor_records",
+          "label": "Pulaski County Real Estate Records",
+          "url": "https://www.arcountydata.com/county.asp?county=Pulaski",
+          "notes": "Assessor-backed parcel and ownership verification."
+        }
+      ]
+    }
+  ]
+}

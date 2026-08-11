@@ -35,3 +35,26 @@ Direct mail for no-email owners (live), Proof-Backed Credibility (gated until re
 <!-- The weekly lab run appends proposals below this line. Format:
 ## YYYY-MM-DD — <proposal name>  [PROPOSED | APPROVED | REJECTED: reason | KILLED: result]
 -->
+
+## 2026-07-05 — Inbox Reply Audit: First-Signal Recovery  [PROPOSED]
+
+**Motivating data point:** The learning audit (2026-07-05) shows 3,848 tracked sends and **0 attributed replies** across all lanes, all-time. The reply-log.jsonl file does not exist. The audit explicitly flags: *"Either nobody replied (source/copy problem) or replies are not being logged — run outreach:log-reply on every inbox reply before drawing conclusions."* Morning brief confirms the same: "Zero replies logged all-time." Every lane-level decision right now is made with zero signal.
+
+**VestBlock asset leveraged:** The `outreach:log-reply` command already exists and is ready to use. No build required. The sending inboxes (used for the June 13 – July 5 campaigns) already hold whatever replies arrived.
+
+**Target segment:** Internal ops — the sending inbox(es), not a new owner segment.
+
+**Copy angle:** N/A. This is an attribution recovery experiment, not a new send.
+
+**Implementation sketch:**
+1. Open each sending account used across all campaigns (seller-options, DealMachine seller-options, on-market sweep, small multifamily, stale-listing, portfolio-landlord, builder-infill, novation, tax-remote, tax-code-stack).
+2. Search for any replies from the ~3,848 contacts sent since June 13.
+3. For each reply found, run: `npm run outreach:log-reply` with the reply's sender email and the originating lane.
+4. Re-run `npm run outreach:learning-audit` immediately after. The morning brief will now show real reply rates per lane.
+5. Establish standing habit: check inbox and log any replies before each new send day.
+
+Reuses existing scripts only — zero new code.
+
+**Success metric:** At least 1 reply attributed and visible in the next learning audit within 7 days. Lane reply rates appear in morning brief instead of zero across the board.
+
+**Kill criterion:** If the inbox audit confirms no replies were ever received (not just un-logged), the bottleneck shifts to copy/source. Next proposal then: a subject-line A/B test on the highest-volume lane (seller-options, 1,885 sends) to generate measurable open/reply differentiation before scaling further.

@@ -35,8 +35,9 @@ const OUT_DIR = getArg(
   )
 )
 const LEDGER_PATH = path.join(process.cwd(), 'artifacts', 'offline-automation', 'relationship-campaigns', 'landbank-reo-sent-ledger.jsonl')
+const SUPPRESSION_PATH = path.join(process.cwd(), 'data', 'outreach-suppressions.json')
 
-const REQUIRED_OPTOUT = 'reply no and i will not follow up'
+const REQUIRED_OPTOUT = 'reply "unsubscribe" or "remove me" and i will remove you from future outreach'
 const INITIAL_WAIT_DAYS = 6
 const FOLLOWUP_ONE_WAIT_DAYS = 10
 
@@ -205,7 +206,7 @@ function ensureComplianceBody(body) {
   const parts = [String(body || '').trim()]
   const normalized = parts[0].toLowerCase()
   if (!normalized.includes(REQUIRED_OPTOUT)) {
-    parts.push('If this is not relevant, reply no and I will not follow up.')
+    parts.push('If this is not relevant, reply "unsubscribe" or "remove me" and I will remove you from future outreach.')
   }
   const mailingAddress = outreachMailingAddress()
   if (mailingAddress && !normalized.includes(mailingAddress.toLowerCase())) {
@@ -438,6 +439,13 @@ function loadSentEmails(ledgerPath) {
   )
 }
 
+function loadSuppressedEmails(filePath) {
+  if (!fs.existsSync(filePath)) return new Set()
+  const rows = readJson(filePath, [])
+  if (!Array.isArray(rows)) return new Set()
+  return new Set(rows.map((row) => normalizeEmail(row.email)).filter(Boolean))
+}
+
 async function main() {
   if (!fs.existsSync(CSV_PATH)) {
     console.error(`Target CSV not found: ${CSV_PATH}`)
@@ -447,9 +455,11 @@ async function main() {
   const targets = readCsvTargets(CSV_PATH)
   const state = readJson(STATE_PATH, {})
   const sentEmails = loadSentEmails(LEDGER_PATH)
+  const suppressedEmails = loadSuppressedEmails(SUPPRESSION_PATH)
 
   const eligible = targets
     .filter((target) => target.email && target.sendAllowed)
+    .filter((target) => !suppressedEmails.has(target.email))
     .filter((target) => (ONLY_TYPES.length ? ONLY_TYPES.includes(target.targetType) : true))
     .map((target) => {
       const stateEntry = state[target.email] || {}

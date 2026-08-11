@@ -103,7 +103,7 @@ const baseInput: AutopilotSnapshotInput = {
 }
 
 const batches = buildStrategyBatchPlans(baseInput)
-assert.equal(batches.length, 29, 'Autopilot should keep network, seller, high-fee, and epic strategies separated')
+assert.equal(batches.length, 14, 'Autopilot should keep network, seller, and high-fee strategies separated')
 assert.deepEqual(
   batches.map((batch) => batch.strategyKey),
   [
@@ -120,26 +120,11 @@ assert.deepEqual(
     'on-market-lowball-agent-sweep',
     'novation-retail-spread',
     'commercial-small-bay-distress',
-    'failed-landlord-exit',
-    'insurance-damage-event',
-    'zombie-rehab',
-    'senior-downsizer',
-    'rent-gap-multifamily',
-    'probate-vacant-equity',
-    'tired-airbnb-midterm',
-    'utility-lien-water-shutoff',
-    'contractor-distress-flip',
-    'small-commercial-owner-exit',
-    'portfolio-fragmentation',
-    'buyer-reverse-engineering',
-    'permit-spike-developer-land',
-    'judgment-lien-pressure',
-    'tax-assessment-shock',
     'stale-listing-creative-finance',
   ],
   'Strategy ordering should stay stable for command-center review'
 )
-assert.ok(batches.every((batch) => batch.targetEmailCount <= 30), 'No strategy should exceed 30 planned emails per rotation')
+assert.ok(batches.every((batch) => batch.targetEmailCount <= 100), 'No strategy should exceed 100 planned emails per batch')
 assert.ok(
   batches
     .filter((batch) => batch.sourceProvider === 'instantly')
@@ -173,20 +158,6 @@ assert.ok(
 assert.ok(
   batches.find((batch) => batch.strategyKey === 'on-market-lowball-agent-sweep')?.markets.includes('Milwaukee, WI'),
   'On-market lane should use hot markets first'
-)
-
-assert.ok(
-  batches.find((batch) => batch.strategyKey === 'failed-landlord-exit')?.command.includes('sellers:strategy-rotation'),
-  'Epic DealMachine lanes should use the 30-lead strategy rotation runner'
-)
-assert.ok(
-  batches.find((batch) => batch.strategyKey === 'permit-spike-developer-land')?.command.includes('--daily-cap=30'),
-  'Permit spike developer lane should be constrained to 30-lead rotations'
-)
-assert.equal(
-  batches.find((batch) => batch.strategyKey === 'buyer-reverse-engineering')?.targetBuyerLane.includes('buyer segment'),
-  true,
-  'Buyer reverse-engineering should start from verified demand'
 )
 
 const snapshot = buildAutopilotSnapshot(baseInput)

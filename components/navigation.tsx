@@ -15,6 +15,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Menu,
+  Loader2,
   User,
   LogOut,
   CreditCard,
@@ -33,6 +34,9 @@ export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const mobileTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const mobileCloseRef = React.useRef<HTMLButtonElement | null>(null);
+  const mobilePanelRef = React.useRef<HTMLDivElement | null>(null);
   const isAdmin = React.useMemo(
     () =>
       isClientAdmin({
@@ -42,20 +46,61 @@ export function Navigation() {
     [user?.email, userProfile?.role]
   );
 
+  React.useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const mobileTrigger = mobileTriggerRef.current;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const panel = mobilePanelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    window.requestAnimationFrame(() => mobileCloseRef.current?.focus());
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      mobileTrigger?.focus();
+    };
+  }, [isMobileMenuOpen]);
+
   // Admin surfaces run their own command shell; the marketing header stays out of the cockpit.
   if (pathname.startsWith('/admin') || pathname.startsWith('/dev/command-center-preview')) {
     return null;
   }
 
-  // Main public navigation links
+  // The public header routes by outcome. Role-specific and specialty tools live behind these doors.
   const mainNavLinks = [
-    { href: '/sell', label: 'Sell a Property' },
-    { href: '/property-analyzer', label: 'Property Analysis' },
-    { href: '/buyers', label: 'Buyer Network' },
-    { href: '/lenders', label: 'Lender Network' },
-    { href: '/dealvault', label: 'Deal Records' },
-    { href: '/real-estate-funding', label: 'Funding' },
-    { href: '/pricing', label: 'Pricing' },
+    { href: '/capital', label: 'Capital' },
+    { href: '/deals', label: 'Deals' },
+    { href: '/opportunities', label: 'Opportunities' },
+    { href: '/dealvault', label: 'DealVault' },
   ];
 
   const isActiveLink = (href: string) => {
@@ -89,10 +134,10 @@ export function Navigation() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#050913]/85 shadow-[0_10px_40px_rgba(2,6,23,0.22)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#050913]/70">
-      <div className="container flex min-h-16 items-center">
+    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#090a08]/94 backdrop-blur-md supports-[backdrop-filter]:bg-[#090a08]/82">
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center px-5 sm:px-8 lg:px-12">
         <div className="mr-4 flex items-center">
-          <Link href="/" className="group mr-6 flex items-center rounded-full outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <Link href="/" className="group mr-8 flex items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[#b7ff3c] focus-visible:ring-offset-4 focus-visible:ring-offset-[#090a08]">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
@@ -102,10 +147,10 @@ export function Navigation() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'rounded-lg px-3 py-2.5 transition-[color,background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-foreground hover:shadow-[0_0_24px_rgba(34,211,238,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'rounded-md px-3 py-2 transition-colors duration-200 hover:bg-white/[0.05] hover:text-[#f3efe6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b7ff3c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090a08]',
                   isActiveLink(link.href)
-                    ? 'bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(246,200,96,0.22)]'
-                    : 'text-slate-300/82'
+                    ? 'bg-white/[0.06] text-[#f3efe6]'
+                    : 'text-[#9c9d96]'
                 )}
               >
                 {link.label}
@@ -117,7 +162,7 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => setIsMobileMenuOpen(true)}>
+            <Button ref={mobileTriggerRef} variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu className="h-6 w-6" />
               <span className="sr-only">Toggle Menu</span>
             </Button>
@@ -125,16 +170,17 @@ export function Navigation() {
               <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label="Site navigation">
                 <button
                   type="button"
-                  aria-label="Close navigation"
+                  aria-label="Dismiss navigation backdrop"
                   className="absolute inset-0 cursor-default bg-background/70 backdrop-blur-sm"
                   onClick={() => setIsMobileMenuOpen(false)}
                 />
-                <div className="relative h-full w-80 max-w-[85vw] overflow-y-auto border-r border-border bg-background p-6 shadow-2xl">
+                <div ref={mobilePanelRef} className="relative h-full w-80 max-w-[88vw] overflow-y-auto border-r border-white/10 bg-[#090a08] p-6 shadow-2xl">
                   <button
+                    ref={mobileCloseRef}
                     type="button"
                     aria-label="Close navigation"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
+                    className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-md border border-white/10 bg-[#11130f] text-[#aaa9a2] hover:text-[#f3efe6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b7ff3c]"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -147,7 +193,7 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="flex min-h-11 items-center rounded-md px-3 py-2 text-[#f3efe6] transition-colors hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -155,15 +201,15 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/dashboard/services" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground hover:bg-white/[0.06]">
+                      <Link href="/login?redirect=/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-md px-3 text-[#f3efe6]">
                         Sign In
                       </Link>
                       <Link
                         href="/get-started"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex min-h-11 items-center rounded-lg bg-[#f6c860] px-3 py-3 font-semibold text-[#08111f] transition-colors hover:bg-[#ffd978]"
+                        className="flex min-h-12 items-center justify-center rounded-md bg-[#b7ff3c] px-3 py-2 font-semibold text-[#11130f] transition-colors hover:bg-[#cbff75]"
                       >
-                        Start Deal Review
+                        Start
                       </Link>
                     </>
                   ) : (
@@ -173,13 +219,13 @@ export function Navigation() {
                           key={link.href}
                           href={link.href}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-colors hover:bg-white/[0.05]"
+                          className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
                         >
                           {link.label}
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-colors hover:bg-white/[0.05]">
+                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
@@ -201,7 +247,9 @@ export function Navigation() {
           </div>
 
           {/* Desktop Auth Section */}
-          {isAuthenticated ? (
+          {isLoading ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -254,12 +302,12 @@ export function Navigation() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <nav aria-label={isLoading ? 'Account actions loading' : 'Account actions'} className="hidden items-center space-x-2 md:flex">
-              <Button variant="ghost" asChild>
-                <Link href="/login?redirect=/dashboard/services">Sign In</Link>
+            <nav className="hidden items-center space-x-2 md:flex">
+              <Button variant="ghost" asChild className="text-[#c7c5bd] hover:bg-white/[0.05] hover:text-[#f3efe6]">
+                <Link href="/login?redirect=/dashboard">Log in</Link>
               </Button>
-              <Button asChild className="bg-[#f6c860] text-[#08111f] shadow-[0_12px_30px_rgba(246,200,96,0.28)] hover:bg-[#ffd978]">
-                <Link href="/get-started">Start Deal Review</Link>
+              <Button asChild className="rounded-md bg-[#b7ff3c] font-semibold text-[#11130f] shadow-none hover:bg-[#cbff75]">
+                <Link href="/get-started">Start with VestBlock</Link>
               </Button>
             </nav>
           )}

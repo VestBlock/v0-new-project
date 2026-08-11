@@ -25,7 +25,6 @@ export type OperatingLoopKey =
   | 'offer_accuracy'
   | 'suppression_compliance'
   | 'buyer_demand'
-  | 'reactivation'
   | 'agent_performance'
   | 'dead_code_dirty_system'
   | 'daily_war_room'
@@ -78,9 +77,6 @@ export type OperatingLoopBuilderInput = {
   archivedLegacyRuntimeRows?: number
   openResearchChecklistCount?: number
   analyzerOutcomeCount?: number
-  reactivationEligible?: number
-  reactivationStaged?: number
-  reactivationLastRunAt?: string | null
 }
 
 function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
@@ -214,25 +210,6 @@ export function buildOperatingLoopCards(input: OperatingLoopBuilderInput): Opera
         (input.partnerBuyBoxesConfirmed || 0) > 0
           ? 'Source seller leads that match confirmed builder/buyer buy boxes before generic distress lists.'
           : 'Convert researched builders, buyers, and lenders into confirmed buy boxes so sourcing has a target.',
-    },
-    {
-      key: 'reactivation',
-      title: 'Second-Touch Reactivation Loop',
-      status:
-        (input.reactivationEligible || 0) > 100
-          ? 'red'
-          : (input.reactivationEligible || 0) > 0
-            ? 'yellow'
-            : 'green',
-      cadence: 'weekly (Monday batch)',
-      lastRunAt: input.reactivationLastRunAt || null,
-      summary: input.reactivationLastRunAt
-        ? `${plural(input.reactivationEligible || 0, 'paid-for contact')} eligible for a second touch · ${plural(input.reactivationStaged || 0, 'draft')} staged in the latest run.`
-        : 'No reactivation run yet — one-touch contacts are aging out silently.',
-      nextAction:
-        (input.reactivationEligible || 0) > 0
-          ? 'Run outreach:reactivation-queue, verify the batch with outreach:verify-emails, then send the strongest lanes through the guarded sender.'
-          : 'Queue is clear. Keep logging replies so second touches stay accurate.',
     },
     {
       key: 'agent_performance',

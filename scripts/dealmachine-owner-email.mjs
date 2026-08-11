@@ -487,9 +487,12 @@ function buildEmail(contact) {
   const property = contact.property_line
   const location = contact.city_state ? ` in ${contact.city_state}` : ""
   const ownerLine = contact.owner_name ? `I have ${contact.owner_name} connected to the property record.` : ""
-  const signalLine = contact.distress_stack || contact.delinquent_amount
-    ? "The property came through a local review lane where ownership, timing, condition, or carrying costs may matter, so I wanted to ask directly instead of making assumptions."
+  const signalLine = contact.distress_stack
+    ? `The note I have on this file is: ${contact.distress_stack}.`
     : "The property came through my review list, so I wanted to ask directly instead of making assumptions."
+  const amountLine = contact.delinquent_amount
+    ? `I also have a public-record amount noted as ${contact.delinquent_amount}; if that is outdated or not relevant, no problem.`
+    : ""
   const subject = `Question about ${property}`
   const address = mailingAddress()
   const body = [
@@ -498,6 +501,7 @@ function buildEmail(contact) {
     `I'm Robert with VestBlock. I wanted to ask about ${property}${location}. ${ownerLine}`,
     "",
     signalLine,
+    amountLine,
     "",
     "If it would help, I can review this specific property and walk through several options. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic for this property.",
     "",
@@ -715,20 +719,8 @@ async function main() {
     if (contactsByEmail.has(exportContact.email)) continue
     const matchedRecord =
       recordIndex.byId.get(String(exportContact.dealmachine_id || "")) ||
-      recordIndex.byAddress.get(normalizeAddress(exportContact.full_address)) ||
-      {
-        dealmachine_id: exportContact.dealmachine_id || "",
-        full_address: exportContact.full_address || "",
-        property_address: exportContact.property_line || "the property",
-        city: exportContact.city_state.split(",")[0]?.trim() || "",
-        state: exportContact.city_state.split(",")[1]?.trim() || "",
-        owner_name: exportContact.owner_name || "",
-        market: exportContact.market || exportContact.city_state || "",
-        pushed_at: exportContact.pushed_at || "",
-        key: exportContact.source_key || normalizeAddress(exportContact.full_address),
-        distress_stack: exportContact.source_strategy || "",
-        delinquent_amount: "",
-      }
+      recordIndex.byAddress.get(normalizeAddress(exportContact.full_address))
+    if (!matchedRecord) continue
     contactsByEmail.set(exportContact.email, {
       ...exportContact,
       dealmachine_id: exportContact.dealmachine_id || matchedRecord?.dealmachine_id || "",
@@ -739,13 +731,13 @@ async function main() {
       market: exportContact.market || matchedRecord?.market || "",
       pushed_at: exportContact.pushed_at || matchedRecord?.pushed_at || "",
       source_key: exportContact.source_key || matchedRecord?.key || "",
-      distress_stack: matchedRecord?.distress_stack || exportContact.source_strategy || "",
+      distress_stack: matchedRecord?.distress_stack || "",
       delinquent_amount: matchedRecord?.delinquent_amount || "",
     })
     exportContactsAdded++
   }
 
-  const contacts = [...contactsByEmail.values()].slice(0, LIMIT)
+  const contacts = [...contactsByEmail.values()]
   const drafts = contacts.map((contact) => ({ ...contact, ...buildEmail(contact) }))
 
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })

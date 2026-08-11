@@ -43,6 +43,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
+import { markJobsIngested, markSourceFileProcessed } from "./lib/dealmachine-export-jobs.mjs"
 
 const args = process.argv.slice(2)
 const APPLY = args.includes("--apply")
@@ -54,6 +55,8 @@ const getArg = (name) => {
 const EXPLICIT_FILE = getArg("file")
 const MARKET_OVERRIDE = (getArg("market") || "").trim().toLowerCase()
 const SPLIT_BY_MARKET = args.includes("--split-by-market") || args.includes("--split")
+const MIN_ROWS = getArg("min-rows") ? Number.parseInt(getArg("min-rows"), 10) : 10
+const ALLOW_SMALL_EXPORT = args.includes("--allow-small-export") || args.includes("--allow-small")
 const DOWNLOADS = path.join(os.homedir(), "Downloads")
 const DM_EXPORT_DIR = path.join(process.cwd(), "data", "dm-exports")
 
@@ -316,6 +319,8 @@ function splitByMarket(sourceFile, header, rows) {
 
   const fullDest = path.join(DM_EXPORT_DIR, `all-markets-${dateStr}.csv`)
   fs.copyFileSync(sourceFile, fullDest)
+  markSourceFileProcessed(sourceFile, outputs)
+  markJobsIngested(outputs)
   console.log("")
   console.log(`✓ Wrote ${outputs.length} market files to ${DM_EXPORT_DIR}`)
   console.log(`✓ Copied full export to ${fullDest}`)
@@ -335,14 +340,10 @@ function main() {
     process.exit(1)
   }
 
-  // Validate it's actually a DealMachine Contacts export. Some current
-  // DealMachine Contacts exports include contact identity + associated property
-  // address but omit email/phone fields when no sendable contact data is present.
-  const hasSendableContactCols = header.some((h) => /email|phone/i.test(h))
-  const hasContactIdentityCols = header.some((h) => /^contact_id$/i.test(h)) &&
-    header.some((h) => /first.*name|last.*name|full.*name|owner/i.test(h))
+  // Validate it's actually a DealMachine Contacts export
+  const hasContactCols = header.some((h) => /email|phone/i.test(h))
   const hasAddressCols = header.some((h) => /address/i.test(h))
-  if ((!hasSendableContactCols && !hasContactIdentityCols) || !hasAddressCols) {
+  if (!hasContactCols || !hasAddressCols) {
     console.error("This file doesn't look like a DealMachine Contacts export.")
     console.error("Make sure you exported 'Contacts' (not just 'Leads') from DealMachine.")
     console.error(`Columns found: ${header.slice(0, 8).join(", ")}`)
@@ -350,6 +351,13 @@ function main() {
   }
 
   const stats = summarize(rows, header)
+  if (!ALLOW_SMALL_EXPORT && rows.length < MIN_ROWS) {
+    console.error(`Export has only ${rows.length} data rows; refusing to ingest as a production outreach source.`)
+    console.error(`Minimum rows required: ${MIN_ROWS}. Pass --allow-small-export only for smoke-test fixtures.`)
+    console.error(`Source: ${sourceFile}`)
+    process.exit(1)
+  }
+
   if (SPLIT_BY_MARKET) {
     splitByMarket(sourceFile, header, rows)
     return
@@ -388,6 +396,8 @@ function main() {
 
   // Copy the file
   fs.copyFileSync(sourceFile, destFile)
+  markSourceFileProcessed(sourceFile, [{ market, destFile, count: rows.length }])
+  markJobsIngested([{ market, destFile, count: rows.length }])
   console.log(`\n✓ Copied to ${destFile}`)
   console.log("")
   console.log("=== Next: run outreach ===")

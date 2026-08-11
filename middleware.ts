@@ -93,8 +93,29 @@ function shouldNoIndex(pathname: string) {
     matchProtectedPath(pathname, protectedAdminPages) ||
     matchProtectedPath(pathname, protectedAdminApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
-    matchProtectedPath(pathname, protectedDiagnostics)
+    matchProtectedPath(pathname, protectedDiagnostics) ||
+    matchProtectedPath(pathname, protectedDiagnosticApis)
   );
+}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function isSameOriginMutation(request: NextRequest) {
+  if (SAFE_METHODS.has(request.method.toUpperCase())) return true
+
+  const secFetchSite = request.headers.get('sec-fetch-site')?.toLowerCase()
+  if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+    return false
+  }
+
+  const origin = request.headers.get('origin')
+  if (!origin) return true
+
+  try {
+    return new URL(origin).origin === request.nextUrl.origin
+  } catch {
+    return false
+  }
 }
 
 function withNoIndex(response: NextResponse, pathname: string) {
@@ -102,6 +123,10 @@ function withNoIndex(response: NextResponse, pathname: string) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   }
+
+  response.headers.set('X-DNS-Prefetch-Control', 'off')
+  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
+  response.headers.set('Origin-Agent-Cluster', '?1')
 
   return response;
 }
@@ -241,12 +266,31 @@ async function getUserProfileRole(input: {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  const localDevelopmentPreview =
+    process.env.NODE_ENV !== 'production' &&
+    pathname === '/dev/command-center-preview' &&
+    ['localhost', '127.0.0.1', '[::1]', '::1'].includes(request.nextUrl.hostname)
+  if (localDevelopmentPreview) {
+    return withNoIndex(NextResponse.next(), pathname)
+  }
+
   if (!matchesProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
   const adminRequest = requiresAdmin(pathname);
   const apiRequest = isProtectedApi(pathname);
+
+  if (apiRequest && !isSameOriginMutation(request)) {
+    return withNoIndex(
+      NextResponse.json(
+        { error: 'Cross-site state-changing requests are not allowed.' },
+        { status: 403 }
+      ),
+      pathname
+    )
+  }
+
   const config = getSupabaseConfig();
   const accessToken = config
     ? getSupabaseAccessToken(request, config.supabaseUrl)

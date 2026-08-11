@@ -14,6 +14,10 @@ tsconfig.tsbuildinfo
 /test-results/
 /.playwright-cli/
 /reports/
+/logs/
+/ops/
+/docs/
+/.agents/
 /$CODEX_HOME/
 
 # Internal planning/docs that are not needed by the web runtime
@@ -27,6 +31,7 @@ tsconfig.tsbuildinfo
 # Lead lists, exports, trackers, and local data files
 /data/command-center/
 /data/property-portfolios/
+/data/preforeclosure-county/
 *.csv
 *.xlsx
 *.xls

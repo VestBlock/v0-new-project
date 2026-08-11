@@ -12,6 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+function getSafeRedirectTarget(value: string | null, fallback: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return fallback
+  }
+
+  return value
+}
+
 export function LoginPageClient() {
   const defaultRedirectTarget = "/dashboard/services"
   const searchParams = useSearchParams()
@@ -21,13 +29,7 @@ export function LoginPageClient() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { signIn, isLoading, authError, isAuthenticated } = useAuth()
   const router = useRouter()
-  const redirectTarget = searchParams.get("redirect") || defaultRedirectTarget
-
-  useEffect(() => {
-    if (prefilledEmail) {
-      setEmail((current) => current || prefilledEmail)
-    }
-  }, [prefilledEmail])
+  const redirectTarget = getSafeRedirectTarget(searchParams.get("redirect"), defaultRedirectTarget)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -49,12 +51,13 @@ export function LoginPageClient() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <Card className="mx-auto max-w-sm">
+    <div className="vb-page flex min-h-screen items-center justify-center px-4 py-24">
+      <Card className="mx-auto w-full max-w-md border-white/10 bg-[#0e1114] shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">Sign in to VestBlock</CardTitle>
+          <p className="vb-eyebrow">Your VestBlock workspace</p>
+          <CardTitle className="text-3xl font-medium tracking-tight">Pick up where you left off.</CardTitle>
           <CardDescription>
-            Open your network workspace, saved requests, funding tools, and DealVault records.
+            Open saved capital requests, deal work, opportunities, and DealVault records.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -64,7 +67,9 @@ export function LoginPageClient() {
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="border-white/15 bg-[#090a08]"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -83,6 +88,8 @@ export function LoginPageClient() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
+                className="border-white/15 bg-[#090a08]"
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -95,7 +102,7 @@ export function LoginPageClient() {
               className="w-full"
               disabled={isSubmitting || (!email && !password && isLoading)}
             >
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Login"}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign in"}
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">

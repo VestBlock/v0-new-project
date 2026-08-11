@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs
- *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=30 --send
+ *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=150 --send
  */
 
 import { Resend } from "resend"
@@ -17,17 +17,16 @@ import path from "node:path"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
-const STAGE_COMMAND_CENTER = args.includes("--stage-command-center") || args.includes("--queue-command-center")
 const SYNC_COMMAND_CENTER = !args.includes("--no-command-center-sync")
-const CONTROLLED_LANE_CAP = 30
-const ALLOW_HIGH_VOLUME = args.includes("--allow-high-volume")
+const IGNORE_SENT_PROPERTIES = args.includes("--ignore-sent-properties")
+const IGNORE_SENT_EMAILS = args.includes("--ignore-sent-emails")
+const REQUIRE_QUEUE_MATCH = args.includes("--require-queue-match")
 const getArg = (name) => {
   const hit = [...args].reverse().find((arg) => arg.startsWith(`--${name}=`))
   return hit ? hit.split("=").slice(1).join("=") : null
 }
 
-const REQUESTED_LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : CONTROLLED_LANE_CAP
-const LIMIT = ALLOW_HIGH_VOLUME ? REQUESTED_LIMIT : Math.min(REQUESTED_LIMIT, CONTROLLED_LANE_CAP)
+const LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : 150
 const THROTTLE_MS = getArg("throttle") ? Number.parseInt(getArg("throttle"), 10) : 1800
 const OUT_DIR = path.join(process.cwd(), "data", "distress-leads")
 const DM_EXPORT_DIR = path.join(process.cwd(), "data", "dm-exports")
@@ -37,162 +36,39 @@ const BCC = getArg("bcc") || ""
 const CONFIG_FILE = getArg("config-file")
 const EXPORT_CSV = getArg("export-csv")
 const QUEUE_CSV = getArg("queue-csv")
-const REQUIRE_QUEUE_MATCH = args.includes("--require-queue-match")
-const EXPORT_ONLY = args.includes("--export-only") || (Boolean(getArg("export-csv")) && !QUEUE_CSV && !REQUIRE_QUEUE_MATCH)
 const MARKET_ARG = (getArg("market") || getArg("markets") || "").trim()
-const STRATEGY = normalizeMarketSlug(getArg("strategy") || "portfolio-landlord")
-const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 7
+const STRATEGY = normalizeMarketSlug(getArg("strategy") || "seller-options")
+const MAX_EXPORT_AGE_DAYS = getArg("max-export-age-days") ? Number.parseInt(getArg("max-export-age-days"), 10) : 2
+const SENT_LOOKBACK_DAYS = getArg("sent-lookback-days") ? Number.parseInt(getArg("sent-lookback-days"), 10) : null
+const ALLOW_STALE_EXPORT = args.includes("--allow-stale-export")
 const PORTFOLIO_STRATEGIES = new Set(["portfolio-landlord", "senior-landlord", "out-of-state-landlord", "landlord-portfolio"])
 const ON_MARKET_STRATEGIES = new Set(["on-market-lowball", "on-market-cash-sweep", "active-listing-cash-review", "dealmachine-on-market"])
 const TAX_CODE_STRATEGIES = new Set(["tax-code-stack", "tax-delinquent-code-violation", "code-tax-stack"])
-const REMOTE_TAX_EQUITY_STRATEGIES = new Set(["tax-remote-equity-rotation", "tax-remote-equity", "remote-tax-equity"])
 const BUILDER_INFILL_STRATEGIES = new Set(["builder-infill-teardown", "infill-builder-teardown", "builder-teardown", "lot-assembly-builder"])
 const LAND_WHOLESALE_STRATEGIES = new Set(["land-wholesale", "land-infill-lowball", "vacant-land-wholesale", "developer-land-arbitrage"])
 const SMALL_MULTIFAMILY_STRATEGIES = new Set(["small-multifamily-portfolio", "multifamily-portfolio", "portfolio-breakup", "2-20-unit-portfolio"])
 const INSTITUTIONAL_BTR_STRATEGIES = new Set(["institutional-btr-buybox", "btr-buybox", "sfr-aggregator-buybox", "institutional-sfr"])
 const COMMERCIAL_DISTRESS_STRATEGIES = new Set(["commercial-small-bay-distress", "small-bay-distress", "commercial-distress", "mixed-use-distress"])
 const NOVATION_RETAIL_STRATEGIES = new Set(["novation-retail-spread", "retail-spread-novation", "novation"])
-const GENERIC_SELLER_STRATEGIES = new Set(["seller-options", "dealmachine-seller-options", "owner-options"])
-const ALLOW_GENERIC_SELLER_OPTIONS = args.includes("--allow-generic-seller-options")
-const ALLOW_ON_MARKET_LIVE = args.includes("--allow-on-market-lowball-live")
-const EPIC_STRATEGY_CONFIG = {
-  "failed-landlord-exit": {
-    label: "Failed landlord exit",
-    niche: "epic_failed_landlord_exit",
-    angle: "Failed landlord exit review: portfolio, absentee, tax, lien, vacancy, or management-friction signals",
-    reason: "failed_landlord_exit_lane",
-    pattern: /landlord|rental|portfolio|multi|absentee|out of state|tax|delinquent|lien|vacant|eviction|code|violation/i,
-    signal: "The file landed in a landlord-friction lane, so I wanted to ask directly instead of making assumptions about timing or management plans.",
-    ask: "If simplifying one rental, a few doors, or a harder-to-manage property would help, I can review the as-is options and tell you quickly if it does or does not fit."
-  },
-  "insurance-damage-event": {
-    label: "Insurance / damage event",
-    niche: "epic_insurance_damage_event",
-    angle: "Damage-event seller review for fire, storm, boarded, insurance, or heavy-repair signals",
-    reason: "insurance_damage_event_lane",
-    pattern: /fire|storm|damage|insurance|boarded|unsafe|condemned|shell|repair|rehab|vacant|code|violation|lien/i,
-    signal: "The file came through a condition-review lane, so I am trying to verify the real condition before making any assumptions.",
-    ask: "If there are repairs, insurance delays, access issues, or cleanup decisions still hanging over the property, I can review it as-is before you spend more time managing the project."
-  },
-  "zombie-rehab": {
-    label: "Zombie rehab / stalled project",
-    niche: "epic_zombie_rehab",
-    angle: "Stalled rehab review: vacant, lien, tax, permit, heavy-rehab, or unfinished-project signals",
-    reason: "zombie_rehab_lane",
-    pattern: /rehab|unfinished|vacant|permit|lien|tax|delinquent|code|violation|repair|demo|shell|boarded/i,
-    signal: "The address looks like it may belong in a stalled-project review lane, where timing, repairs, access, or capital can matter more than a normal offer formula.",
-    ask: "If the project is paused, unfinished, or simply not worth more time, I can review the as-is exit paths without asking you to clean it up first."
-  },
-  "senior-downsizer": {
-    label: "Equity-rich downsizer",
-    niche: "epic_senior_downsizer",
-    angle: "Equity-rich simplify/downsize review with soft, low-pressure seller language",
-    reason: "senior_downsizer_lane",
-    pattern: /equity|owner occupied|long term|senior|tax|high equity|free and clear|absentee/i,
-    signal: "The file landed in a high-equity simplify lane, so I wanted to ask directly and carefully rather than make assumptions.",
-    ask: "If selling as-is, downsizing, or just understanding options would be useful, I can keep the review simple and pressure-free."
-  },
-  "rent-gap-multifamily": {
-    label: "Small multifamily rent gap",
-    niche: "epic_rent_gap_multifamily",
-    angle: "Small multifamily rent-gap review: rental upside, occupancy, and portfolio buyer fit",
-    reason: "rent_gap_multifamily_lane",
-    pattern: /duplex|triplex|fourplex|multi|multifamily|apartment|units|rent|rental|portfolio|landlord/i,
-    signal: "The file reads like a rental or small multifamily review, where rents, occupancy, and condition can change the buyer lane.",
-    ask: "If you would consider selling one property or a small group, I can review rental-buyer, cash, or flexible options after confirming the real rent roll and condition."
-  },
-  "probate-vacant-equity": {
-    label: "Probate + vacant + equity",
-    niche: "epic_probate_vacant_equity",
-    angle: "Probate/vacant/equity review with cleanout, title, and as-is seller path",
-    reason: "probate_vacant_equity_lane",
-    pattern: /probate|estate|heir|vacant|inherited|cleanout|equity|tax|delinquent/i,
-    signal: "The address came through a vacant/equity review lane; if the data is wrong, no problem.",
-    ask: "If cleanout, title timing, repairs, or family logistics are part of the decision, I can review an as-is path and keep it straightforward."
-  },
-  "tired-airbnb-midterm": {
-    label: "Tired Airbnb / midterm rental",
-    niche: "epic_tired_airbnb_midterm",
-    angle: "Short-term or midterm rental fatigue review for operators whose rental plan may have changed",
-    reason: "tired_airbnb_midterm_lane",
-    pattern: /airbnb|short term|str|midterm|furnished|rental|vacancy|booking|portfolio|absentee/i,
-    signal: "The property landed in a rental-operator review, where occupancy, operations, and market changes can matter more than a simple value estimate.",
-    ask: "If the rental plan is not performing the way you expected, I can review whether a clean as-is exit or buyer-match path makes sense."
-  },
-  "utility-lien-water-shutoff": {
-    label: "Utility / water lien pressure",
-    niche: "epic_utility_lien_pressure",
-    angle: "Utility, water, nuisance, lien, tax, or municipal-pressure seller review",
-    reason: "utility_lien_water_shutoff_lane",
-    pattern: /water|utility|nuisance|lien|tax|delinquent|municipal|code|violation|vacant/i,
-    signal: "The file came through a property-friction lane, where carrying costs, utilities, condition, or timing can create pressure.",
-    ask: "If any of those items are making the property harder to keep, I can review the as-is options and avoid wasting your time if it is not a fit."
-  },
-  "contractor-distress-flip": {
-    label: "Contractor distress buyer-seller flip",
-    niche: "epic_contractor_distress_flip",
-    angle: "Contractor-heavy distress lane paired with rehab/fire/structural buyer demand",
-    reason: "contractor_distress_flip_lane",
-    pattern: /contractor|fire|structural|rehab|repair|damage|vacant|code|violation|demo|shell|boarded/i,
-    signal: "The property came through a contractor-heavy review lane, so condition and repair scope matter more than a simple Zestimate-style number.",
-    ask: "If you have photos or a rough idea of the repair situation, I can review whether the deal fits a contractor, builder, or heavy-rehab buyer lane."
-  },
-  "small-commercial-owner-exit": {
-    label: "Small commercial owner exit",
-    niche: "epic_small_commercial_owner_exit",
-    angle: "Small commercial, mixed-use, retail, office, warehouse, or small-bay owner exit review",
-    reason: "small_commercial_owner_exit_lane",
-    pattern: /commercial|mixed use|retail|office|warehouse|industrial|small bay|shop|storage|zoning|vacant|lease/i,
-    signal: "The file reads like a small commercial or mixed-use review, where use, leases, access, zoning, and condition drive the decision.",
-    ask: "If vacancy, repairs, leases, or timing are making the property harder to carry, I can review whether it fits a real operator-buyer lane."
-  },
-  "portfolio-fragmentation": {
-    label: "Portfolio fragmentation",
-    niche: "epic_portfolio_fragmentation",
-    angle: "Portfolio fragmentation review: identify one weak door inside a multi-property owner file",
-    reason: "portfolio_fragmentation_lane",
-    pattern: /portfolio|multiple properties|multi|landlord|rental|tax|lien|vacant|code|violation|absentee/i,
-    signal: "The owner record appears to belong in a portfolio review lane, where one or two properties may be worth reviewing separately from the whole group.",
-    ask: "If you would consider selling only the problem property, a small subset, or the whole group, I can keep the review organized around what you actually want to simplify."
-  },
-  "buyer-reverse-engineering": {
-    label: "Buyer reverse-engineering",
-    niche: "epic_buyer_reverse_engineering",
-    angle: "Buyer-pattern sourced seller review using active buyer demand before seller follow-up",
-    reason: "buyer_reverse_engineering_lane",
-    pattern: /buyer|buy box|cash buyer|rental|portfolio|duplex|land|builder|vacant|equity|absentee/i,
-    signal: "This address came up because it may resemble property types active buyers have been asking us to find.",
-    ask: "If you are open to a clean review, I can compare it against real buyer criteria first instead of guessing at an offer."
-  },
-  "permit-spike-developer-land": {
-    label: "Permit spike developer / land",
-    niche: "epic_permit_spike_developer_land",
-    angle: "Permit-spike/developer-activity land, infill, teardown, or assemblage review",
-    reason: "permit_spike_developer_land_lane",
-    pattern: /permit|new construction|developer|infill|land|lot|vacant|zoning|assemblage|teardown|demo/i,
-    signal: "The property landed in a developer-activity lane, where nearby permits, infill, land, teardown, or zoning patterns may matter.",
-    ask: "If you would consider selling the parcel, lot, or structure as-is, I can review whether a builder/developer path is realistic."
-  },
-  "judgment-lien-pressure": {
-    label: "Judgment / lien pressure",
-    niche: "epic_judgment_lien_pressure",
-    angle: "Judgment, lien, municipal, tax, or title-pressure seller review",
-    reason: "judgment_lien_pressure_lane",
-    pattern: /judgment|lien|tax|delinquent|municipal|title|code|violation|nuisance|foreclosure/i,
-    signal: "The file came through a title/timing review lane; if the signal is old or already handled, no problem.",
-    ask: "If title, carrying-cost, or timing issues are making a normal sale difficult, I can review whether an as-is path still makes sense."
-  },
-  "tax-assessment-shock": {
-    label: "Tax assessment shock",
-    niche: "epic_tax_assessment_shock",
-    angle: "Tax burden or assessment-shock review for high-equity owners",
-    reason: "tax_assessment_shock_lane",
-    pattern: /assessment|tax|delinquent|high equity|equity|senior|absentee|out of state/i,
-    signal: "The property landed in a carrying-cost/high-equity review, so I wanted to ask directly instead of assuming the data tells the whole story.",
-    ask: "If the carrying cost has changed your plans, I can review a few options and only continue if the numbers are realistic."
-  }
-}
-const EPIC_STRATEGIES = new Set(Object.keys(EPIC_STRATEGY_CONFIG))
+const PREFORECLOSURE_SUBTO_STRATEGIES = new Set(["preforeclosure-subto", "preforeclosure-subject-to", "subject-to-preforeclosure"])
+const DIVORCE_STRATEGIES = new Set(["divorce-separation", "divorce", "separation", "marital-split"])
+const RELOCATION_STRATEGIES = new Set(["relocation-job-transfer", "relocation", "job-transfer", "military-pcs"])
+const OUT_OF_STATE_HEIR_STRATEGIES = new Set(["out-of-state-heir", "long-distance-owner", "out-of-state-owner", "heir-distance"])
+const SENIOR_DOWNSIZING_STRATEGIES = new Set(["senior-downsizing-medical", "senior-downsizing", "medical-hardship", "accessibility-hardship"])
+const FIRE_DAMAGE_STRATEGIES = new Set(["fire-storm-damage", "fire-damage", "storm-damage", "insurance-damage"])
+const PROBLEM_TENANT_STRATEGIES = new Set(["problem-tenant-eviction", "problem-tenant", "eviction-landlord", "occupied-distress"])
+const SELLER_FINANCE_STRATEGIES = new Set(["seller-finance-equity", "seller-finance", "owner-carry", "creative-equity", "carry-back"])
+const TIRED_LANDLORD_STRATEGIES = new Set(["tired-landlord", "burned-out-landlord", "absentee-rental", "rental-fatigue"])
+const PROBATE_INHERITANCE_STRATEGIES = new Set(["probate-inheritance", "probate", "inheritance", "estate-property", "heir-property"])
+const VACANT_PROPERTY_STRATEGIES = new Set(["vacant-property-refresh", "vacant-property", "vacant-home", "vacant-refresh"])
+const CODE_VIOLATION_STRATEGIES = new Set(["code-violation-distress", "code-violation", "city-pressure", "nuisance-property"])
+const TAX_DELINQUENT_SIMPLE_STRATEGIES = new Set(["tax-delinquent-cure", "tax-delinquent", "tax-cure", "back-taxes"])
+const FSBO_STRATEGIES = new Set(["fsbo-conversion", "fsbo", "for-sale-by-owner", "owner-listed"])
+const FAILED_FLIPPER_STRATEGIES = new Set(["failed-flipper-stuck-rehab", "failed-flipper", "stuck-rehab", "hard-money-maturity"])
+const HOA_DELINQUENT_STRATEGIES = new Set(["hoa-delinquent", "hoa-lien", "association-lien", "hoa-pressure"])
+const REVERSE_MORTGAGE_STRATEGIES = new Set(["reverse-mortgage-exit", "reverse-mortgage", "hecm-exit", "senior-hecm"])
+const TITLE_ISSUE_STRATEGIES = new Set(["title-issue-cloud", "title-issue", "cloud-on-title", "quiet-title"])
+const POST_AUCTION_STRATEGIES = new Set(["post-auction-backup-buyer", "post-auction", "backup-buyer", "redemption-window"])
 const LOWBALL_MIN_PCT = boundedPercent(getArg("cash-min-pct") || "0.50", 0.5)
 const LOWBALL_MAX_PCT = boundedPercent(getArg("cash-max-pct") || "0.60", 0.6)
 const MAX_CASH_REVIEW_ANCHOR = getArg("max-anchor") ? numberish(getArg("max-anchor")) : 750000
@@ -292,15 +168,11 @@ function loadMarketConfigs() {
     const file = path.resolve(CONFIG_FILE)
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"))
     if (!Array.isArray(parsed)) throw new Error("Config file must be a JSON array.")
-    return parsed.map((entry) => {
-      const queueCsv = String(entry.queueCsv || "").trim()
-      return {
-        market: normalizeMarketSlug(entry.market),
-        queueCsv,
-        exportCsv: String(entry.exportCsv || "").trim(),
-        requireQueueMatch: entry.requireQueueMatch !== false && Boolean(queueCsv),
-      }
-    })
+    return parsed.map((entry) => ({
+      market: normalizeMarketSlug(entry.market),
+      queueCsv: String(entry.queueCsv || "").trim(),
+      exportCsv: String(entry.exportCsv || "").trim(),
+    }))
   }
 
   if (!MARKET_ARG) {
@@ -323,12 +195,10 @@ function loadMarketConfigs() {
       )
     }
 
-    const inferredQueueCsv = QUEUE_CSV ? path.resolve(QUEUE_CSV) : (EXPORT_ONLY ? "" : findQueueCsvForMarket(market))
     return {
       market,
-      queueCsv: inferredQueueCsv,
+      queueCsv: QUEUE_CSV ? path.resolve(QUEUE_CSV) : findQueueCsvForMarket(market),
       exportCsv,
-      requireQueueMatch: Boolean(QUEUE_CSV || REQUIRE_QUEUE_MATCH),
     }
   })
 }
@@ -553,20 +423,23 @@ function sellerPathList(value) {
 
 function buildEmail(contact) {
   const property = contact.property_address_full
+  const pathLine = pathLabelList(contact.suggested_exit_paths)
   const line = property.split(",")[0]
-  const market = contact.market_label || marketLabelFromAddress(property) || "the area"
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
-    `I am reviewing a small batch of ${market} properties where owners may want a simple as-is review, a creative structure, or a quick pass if the numbers do not work.`,
-    "I am not assuming you want to sell and I am not sending a blind offer. I am trying to verify whether there is a real reason to talk before either of us wastes time.",
+    `I came across it while reviewing off-market opportunities in ${contact.market_label}.`,
+    contact.tax_delinquent === "Yes"
+      ? "I also saw a tax signal tied to the property, which is one reason it landed on my list."
+      : "It landed on my review list, so I figured I'd ask directly instead of making assumptions.",
     "",
-    "If there is nothing to discuss, no problem. If timing, repairs, tenants, distance, or carrying costs are making the property less simple than it should be, I can review the realistic paths and tell you quickly if VestBlock is not a fit.",
+    "I wanted to ask whether you have any plans for the property in the near term, or if you would at least be open to reviewing options.",
+    pathLine ? `Depending on the situation, that could include ${pathLine}.` : "If there is a fit, we can keep it simple and only talk through the options that actually make sense.",
     "",
-    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    `Would you be open to a quick reply on whether ${line} is worth a conversation, or should I close the file out on my side?`,
     "",
     "Best,",
     "Robert Sanders",
@@ -574,45 +447,7 @@ function buildEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
-    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
-    mailingAddress(),
-  ]
-    .filter(Boolean)
-    .join("\n")
-  return { subject, body }
-}
-
-function buildRemoteTaxEquityEmail(contact) {
-  const property = contact.property_address_full
-  const line = property.split(",")[0]
-  const market = contact.market_label || marketLabelFromAddress(property) || "the area"
-  const taxLine = "The property came through a small owner-options review where timing, equity, distance, or carrying costs may matter, so I wanted to ask directly instead of assuming anything."
-  const distanceLine = contact.out_of_state_mailing === "true"
-    ? "The mailing address and property address appear to be in different areas, which can make a simple review useful if the timing is right."
-    : "The file also landed in an owner-options review, so I wanted to ask directly instead of assuming anything."
-  const subject = `Question about ${line}`
-  const body = [
-    `Hi ${contact.first_name},`,
-    "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
-    "",
-    taxLine,
-    distanceLine,
-    "",
-    `I am reviewing a small batch of ${market} properties where distance, equity, timing, or carrying costs may make a simple review useful. I am not assuming you want to sell and I am not sending a blind offer.`,
-    "",
-    "If the property is becoming harder to manage, I can look at a few realistic paths, including an as-is cash review, a creative structure, or passing quickly if it does not make sense.",
-    "",
-    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
-    "",
-    "Best,",
-    "Robert Sanders",
-    "VestBlock",
-    "acquisitions@vestblock.io",
-    "(414) 687-6923",
-    "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -624,20 +459,22 @@ function buildRemoteTaxEquityEmail(contact) {
 function buildTaxCodeStackEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
-  const codeLine = "The property came through a local review where condition, repairs, timing, or carrying costs may matter, so I wanted to ask directly instead of guessing about the situation."
-  const taxLine = "I am not assuming anything from third-party data; I only want to see whether a clean as-is review would be useful or whether I should close the file out."
-  const subject = `Question about ${line}`
+  const codeLine = contact.code_violation
+    ? `I also saw a local code or condition note tied to it ("${contact.code_violation}"), which is why it landed on my list.`
+    : "It also showed a local property-condition signal, which is why it landed on my list."
+  const taxLine = contact.past_due_amount
+    ? `I have a tax signal showing ${contact.past_due_amount}; if that's outdated or already handled, no problem.`
+    : "I also have a tax signal in my review queue; if that's outdated or already handled, no problem."
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     taxLine,
     codeLine,
     "",
-    "I am not assuming you want to sell and I am not sending a blind offer. If the property is becoming harder to manage because of repairs, tenants, carrying costs, or timing, I can review it and talk through realistic paths.",
-    "",
-    "Depending on the numbers and condition, that review could include an as-is cash path, a creative structure, or simply passing if it does not make sense.",
+    "If taxes, repairs, code items, tenants, or timing have made the property harder to manage, I can review whether a direct purchase or another practical path even makes sense.",
     "",
     `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
     "",
@@ -647,7 +484,7 @@ function buildTaxCodeStackEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, tax advisor, code-enforcement agency, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -665,22 +502,22 @@ function buildPortfolioLandlordEmail(contact) {
       ? `The same owner record appears tied to ${contact.portfolio_count} properties in this export, so I wanted to ask whether you are open to reviewing one property or the small group.`
       : "This looks like a landlord-style owner record, so I wanted to ask directly instead of guessing."
   const distanceLine = contact.out_of_state_mailing === "true"
-    ? "The mailing address also appears to be outside the property state, which can make management more of a headache over time."
+    ? "The mailing address also appears to be outside the property state, which is one reason I reached out."
     : contact.absentee_owner === "true"
-      ? "The record reads like an absentee-owner file, which can make management more of a headache over time."
-      : "Sometimes owners with several rentals only want to sell if there is a simple path and a real buyer on the other side."
-  const subject = `Question about your ${market} rental property`
+      ? "The record reads like an absentee-owner file, which is one reason I reached out."
+      : "Sometimes owners with a few rentals are open to selling when the pricing and timing line up."
+  const subject = `Quick question on your ${market} rental`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     portfolioLine,
     distanceLine,
     "",
-    "We are building buyer and builder demand in a few markets and can review rental, cash, and creative options before anyone wastes time. I am not sending a blind offer or promising a closing; I only want to see whether one of those options is realistic.",
+    "If you're open to it, I can take a quick look at that property or the small group and tell you whether we have a real fit on our side without dragging you through a long process.",
     "",
-    `Would you be open to a quick conversation about ${line}, or if there are multiple properties you would rather simplify, a short review of the group?`,
+    `Would you be open to a quick conversation about ${line}, or if there are multiple properties you may want to sell, a short review of the group?`,
     "",
     "Best,",
     "Robert Sanders",
@@ -702,19 +539,17 @@ function buildBuilderInfillEmail(contact) {
   const line = property.split(",")[0]
   const market = contact.market_label || marketLabelFromAddress(property) || "your market"
   const signalLine = contact.property_type || contact.zoning || contact.code_violation
-    ? "The address landed in a builder/infill review lane, so I wanted to ask about the real use, condition, and timing instead of guessing."
+    ? `The file has a few builder-review signals on it${contact.property_type ? `, including "${contact.property_type}"` : ""}${contact.zoning ? ` and zoning/use noted as "${contact.zoning}"` : ""}${contact.code_violation ? `, plus a condition note marked "${contact.code_violation}"` : ""}.`
     : "The address landed in a builder/infill review lane, so I wanted to ask about the real condition and timing instead of guessing."
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     signalLine,
     "",
-    `We work through buyer criteria for builders and rehab operators in ${market}. If the property is a teardown, heavy rehab, vacant lot, or just something you would rather not keep dealing with, I can review it as-is and see whether a builder-fit path is realistic.`,
-    "",
-    "I am not sending a blind number or promising a closing. Builder pricing depends on access, title, zoning, liens, utility status, and the actual scope.",
+    `We work through builder and rehab criteria in ${market}. If it's a teardown, heavy rehab, vacant lot, or just something you'd rather not keep dealing with, I can give it a real first-pass review.`,
     "",
     `Would you be open to sending a few details or photos for ${line}, or should I close the file out?`,
     "",
@@ -743,17 +578,15 @@ function buildSmallMultifamilyEmail(contact) {
       : contact.units
         ? `The file reads like a ${contact.units}-unit or small multifamily opportunity, so I wanted to ask directly before making assumptions.`
         : "The file reads like a small rental or multifamily-style opportunity, so I wanted to ask directly before making assumptions."
-  const subject = `Question about ${market} rentals`
+  const subject = `Quick question on ${market} rentals`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     portfolioLine,
     "",
-    "We are matching rental and small multifamily buyers by market, unit count, condition, occupancy, and close speed. If simplifying one rental, several doors, or a harder-to-manage property would help, I can review the numbers and see whether a cash or terms path makes sense.",
-    "",
-    "I am not assuming you want to sell and I am not sending a blind offer. Rent roll, occupancy, access, title, taxes, and repairs all matter before any real number is useful.",
+    "If you would consider selling one rental, several doors, or a harder-to-manage property, I can take a quick look and see whether there's a real fit without wasting your time.",
     "",
     `Would you be open to a quick conversation about ${line}, or should I close this out on my side?`,
     "",
@@ -776,15 +609,15 @@ function buildInstitutionalBtrEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
   const market = contact.market_label || marketLabelFromAddress(property) || "your market"
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
-    `We are reviewing a few ${market} properties against active rental-buyer and build-to-rent style criteria. Your address came across the board as a possible fit, but I would need real condition, title, occupancy, and timing details before knowing whether it belongs in that lane.`,
+    `We are reviewing a few ${market} properties against active rental-buyer and build-to-rent criteria. Your address came across as a possible fit.`,
     "",
-    "If the data is wrong or the property is not something you would ever consider selling, no problem. If you would consider a simple as-is review, I can keep it clean and only move forward if the criteria actually match.",
+    "If the data is wrong or it's not something you'd ever consider selling, no problem. If you are open to it, I can do a quick review and only keep going if the criteria actually match.",
     "",
     `Would you be open to sending a few details about ${line}, or is this not worth revisiting?`,
     "",
@@ -809,17 +642,15 @@ function buildCommercialDistressEmail(contact) {
   const useLine = contact.property_type || contact.zoning
     ? `The file shows ${[contact.property_type, contact.zoning].filter(Boolean).join(" / ")} as the use or zoning signal.`
     : "The property came through a commercial or mixed-use review lane."
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     useLine,
     "",
-    "We route some commercial, mixed-use, storage, small-bay, and redevelopment opportunities to operators who already know what they are looking for. If this property has repairs, vacancy, title issues, lease complexity, or timing pressure, I can review it as-is and see whether it fits a real buyer lane.",
-    "",
-    "I am not quoting a number from incomplete data. Use, leases, access, environmental items, zoning, liens, and condition all need to be understood first.",
+    "We route commercial, mixed-use, storage, and redevelopment opportunities to operators already active in those lanes. If this property has vacancy, repairs, lease complexity, or timing pressure, I can review it and see if there's a real fit.",
     "",
     `Would you be open to a short conversation about ${line}, or should I close this out?`,
     "",
@@ -841,15 +672,13 @@ function buildCommercialDistressEmail(contact) {
 function buildNovationRetailSpreadEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
-    "Sometimes a straight cash offer is not the best fit, especially when the property may be closer to a retail sale after cleanup, photos, access, or a better presentation path. If that is the case here, I can review whether a fully disclosed market-assisted structure is realistic.",
-    "",
-    "That kind of structure only works with clear seller consent, clean paperwork, and the right local contract review. If cash is the better answer, I can look at that too.",
+    "Sometimes a straight cash offer is not the best fit, especially when a property may do better with cleanup, photos, access, or a cleaner presentation path. If that's the case here, I can review whether a market-assisted route makes more sense.",
     "",
     `Would you be open to sharing a few details and photos for ${line}?`,
     "",
@@ -866,6 +695,333 @@ function buildNovationRetailSpreadEmail(contact) {
     .filter(Boolean)
     .join("\n")
   return { subject, body }
+}
+
+function buildSellerFinanceEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    "Not every property is best served by a straight cash sale. In some cases, monthly payments or flexible seller-finance terms create a better path for the owner.",
+    "If that is something you would ever consider, I can review whether a simple owner-carry structure even makes sense before anyone wastes time.",
+    "",
+    `Would you be open to a quick conversation about whether ${line} could fit a seller-finance or flexible-terms path, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, legal advisor, or closing agent. We do not guarantee offers, payments, sale timelines, closing, financing approval, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildTiredLandlordEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const market = contact.market_label || marketLabelFromAddress(property) || "your market"
+  const subject = `Quick question on your ${market} rental`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    "I reached out because the record reads like a rental or absentee-owner file, and sometimes owners are open to selling when a property becomes more work than it is worth.",
+    "If tenants, repairs, turnover, distance, or just timing have made the property harder to manage, I can review whether there is a real fit on our side.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close it out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, property manager, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildProbateInheritanceEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    "If the property is tied to an estate, probate, or inherited situation, I know that can create extra decisions and loose ends at the wrong time.",
+    "If the simplest path is selling it as-is, I can review whether we have a real fit without dragging you through a long process.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, probate attorney, estate representative, or closing agent. We do not guarantee offers, sale timelines, legal outcomes, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildVacantPropertyEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    "The address came across my review list as a likely vacant or lightly used property, so I wanted to ask directly instead of making assumptions.",
+    "If it is sitting empty, needs work, or is no longer part of your plan, I can review whether an as-is purchase even makes sense.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, contractor, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildCodeViolationEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const codeLine = contact.code_violation
+    ? `The property record also showed a local issue noted as "${contact.code_violation}".`
+    : "The property record also showed a local city or condition issue."
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    codeLine,
+    "If repairs, citations, cleanup, or city pressure have made the property harder to manage, I can review whether a direct as-is path makes sense.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, municipal department, legal advisor, or closing agent. We do not guarantee offers, code resolutions, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildTaxDelinquentEmail(contact) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const taxLine = contact.past_due_amount
+    ? `The file also showed a tax amount around ${contact.past_due_amount}; if that is already resolved or outdated, no problem.`
+    : "The file also showed a tax signal; if that is already resolved or outdated, no problem."
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    taxLine,
+    "If catching up taxes, carrying costs, or property upkeep has become more trouble than the property is worth, I can review whether an as-is solution makes sense.",
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    "VestBlock routes real estate conversations and is not a brokerage, lender, tax advisor, legal advisor, or closing agent. We do not guarantee offers, tax outcomes, sale timelines, closing, or transaction outcomes.",
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildScenarioEmail(contact, lines, complianceLine) {
+  const property = contact.property_address_full
+  const line = property.split(",")[0]
+  const subject = `Quick question on ${line}`
+  const body = [
+    `Hi ${contact.first_name},`,
+    "",
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
+    "",
+    ...lines,
+    "",
+    `Would you be open to a quick conversation about ${line}, or should I close the file out on my side?`,
+    "",
+    "Best,",
+    "Robert Sanders",
+    "VestBlock",
+    "acquisitions@vestblock.io",
+    "(414) 687-6923",
+    "",
+    complianceLine,
+    'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
+    mailingAddress(),
+  ].filter(Boolean).join("\n")
+  return { subject, body }
+}
+
+function buildDivorceSeparationEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If the property has become part of a divorce, separation, or broader split, sometimes the simplest solution is a quiet as-is sale on a timeline both sides can work with.",
+      "If that is the situation here, I can review whether there is a real fit without turning it into a long process.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, law firm, mediator, or closing agent. We do not guarantee offers, legal outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildRelocationEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "I reached out because some owners hit a point where a move, job transfer, or out-of-state change forces a quick decision on whether to keep a house as a rental or sell it cleanly.",
+      "If timing is the main issue, we can review an as-is path and work around your move-out or relocation window.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, employer, relocation company, lender, or closing agent. We do not guarantee offers, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildOutOfStateHeirEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "Managing a property from out of state can get expensive fast, especially when the house is inherited or tied to family cleanout and deferred maintenance.",
+      "If you would rather handle it remotely and be done with it, I can review whether an as-is purchase makes sense.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, estate representative, or closing agent. We do not guarantee offers, remote closing timelines, legal outcomes, or transaction outcomes."
+  )
+}
+
+function buildSeniorDownsizingEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If the property has become too much to keep up with, or if accessibility, upkeep, or health changes are driving the decision, an as-is sale can sometimes be the simplest path.",
+      "We can review that without repairs, showings, or a rushed move-out expectation unless you want speed.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, medical provider, care advisor, or closing agent. We do not guarantee offers, housing outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildFireDamageEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If the property has fire, storm, water, or insurance-related damage and the repair process is dragging, I can review whether an as-is sale makes more sense than carrying the rebuild.",
+      "If there is still a claim or contractor issue in motion, no problem — I only want to see if there is a realistic fit.",
+    ],
+    "VestBlock routes real estate conversations and is not an insurance carrier, public adjuster, contractor, brokerage, lender, or closing agent. We do not guarantee offers, claim outcomes, repair outcomes, sale timelines, or transaction outcomes."
+  )
+}
+
+function buildProblemTenantEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If dealing with a tenant, eviction, occupancy issue, or squatter situation is what has kept you tied to the property, that is exactly the kind of headache some owners want to exit.",
+      "If that is the case here, I can review whether we would take it in its current condition and occupancy status.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, property manager, eviction attorney, or closing agent. We do not guarantee offers, eviction outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildFsboEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If you are already trying to sell it yourself, I figured it made more sense to ask directly instead of adding another layer of noise.",
+      "If you would rather skip the tire-kickers and compare a real as-is path, I can review whether there is a fit.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, listing service, or closing agent. We do not guarantee offers, buyer demand, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildFailedFlipperEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If the project has stretched longer than planned, permits or contractors have slowed it down, or carrying costs are starting to eat the deal, I can review it as-is from an investor perspective.",
+      "I am not looking to waste your time with generic curiosity — just whether there is a real exit fit.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, hard-money lender, general contractor, or closing agent. We do not guarantee offers, refi outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildHoaDelinquentEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If HOA dues, an association lien, or condo/association pressure has become a bigger problem than the property is worth, I can review whether a clean sale solves it before it grows.",
+      "If the data is wrong or already resolved, no problem.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, homeowners association, legal advisor, or closing agent. We do not guarantee offers, lien outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildReverseMortgageEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If a reverse-mortgage balance is part of the decision, sometimes families wait too long to compare options and lose flexibility.",
+      "If that is part of the situation here, I can review whether an as-is sale makes sense before the timeline gets tighter.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, HECM servicer, legal advisor, or closing agent. We do not guarantee offers, loan outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildTitleIssueEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If a title issue, heirship problem, missing deed, or cloud on title is what has kept the property stuck, that is worth knowing up front.",
+      "We review some properties with title complications, so if that is the blocker here, I can at least tell you whether it is worth a conversation.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, title company, legal advisor, or closing agent. We do not guarantee offers, title outcomes, quiet-title outcomes, sale timelines, closing, or transaction outcomes."
+  )
+}
+
+function buildPostAuctionEmail(contact) {
+  return buildScenarioEmail(
+    contact,
+    [
+      "If an auction fell through, a sale was postponed, or there is still a redemption-style window around the property, there may still be time to compare options before the path narrows.",
+      "If that is the situation here, I can review whether there is a real fit instead of assuming it is already gone.",
+    ],
+    "VestBlock routes real estate conversations and is not a brokerage, lender, foreclosure attorney, trustee, or closing agent. We do not guarantee rescue outcomes, legal outcomes, sale timelines, closing, or transaction outcomes."
+  )
 }
 
 function developerActivityScore(contact) {
@@ -944,21 +1100,22 @@ function buildLandWholesaleEmail(contact) {
   const score = developerActivityScore(contact)
   const range = cashRangeFromContact(contact)
   const rangeLine = range.low && range.high
-    ? `For land and infill deals like this, my first-pass review usually starts around ${money(range.low)}-${money(range.high)} based on the property signal I have. That is not a final offer; it depends on access, utilities, zoning, title, liens, survey, buildability, and whether a builder can actually use it.`
+    ? `For land and infill deals like this, my first-pass review usually starts around ${money(range.low)}-${money(range.high)} based on the public value signal I have. That is not a final offer; it depends on access, utilities, zoning, title, liens, survey, buildability, and whether a builder can actually use it.`
     : "I would need the parcel details, access, utilities, zoning, title, lien status, survey, and buildability before putting a real number on it."
   const developerLine = score >= 75
     ? `The reason I am asking is that ${market} has enough builder/developer activity for land and infill opportunities to be worth a separate review.`
     : `I am checking whether this is a simple land or infill opportunity that could fit a builder/developer lane in ${market}.`
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
     developerLine,
-    rangeLine,
+    "I am not sending a blind number off one data point.",
     "",
-    "If the property is more improved than the property data suggests, the review can move up after I see photos or details. If it is truly land, a vacant lot, or a teardown/infill situation, I can keep it simple and review it as-is.",
+    rangeLine,
+    "If it's truly land, a vacant lot, or a teardown/infill situation, I can review it quickly once I see a little more detail.",
     "",
     `Would you be open to sending the best details you have on ${line}, or should I close this out?`,
     "",
@@ -977,26 +1134,30 @@ function buildLandWholesaleEmail(contact) {
   return { subject, body }
 }
 
-function buildEpicStrategyEmail(contact) {
-  const config = EPIC_STRATEGY_CONFIG[STRATEGY]
-  if (!config) return buildEmail(contact)
+function buildPreforeclosureSubtoEmail(contact) {
   const property = contact.property_address_full
   const line = property.split(",")[0]
-  const market = contact.market_label || marketLabelFromAddress(property) || "the market"
-  const subject = `Question about ${line}`
+  const market = contact.market_label || marketLabelFromAddress(property) || "your market"
+  const ownershipLine = contact.out_of_state_mailing === "true"
+    ? "The mailing record also appears to be outside the property state, which is one reason the file stood out."
+    : contact.absentee_owner === "true"
+      ? "The file also reads more like an absentee or non-occupant owner record, which is one reason it stood out."
+      : "The file has a timing-sensitive owner signal, which is why I reached out directly."
+  const subject = `Open to reviewing options on ${line}?`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I wanted to ask about ${property}.`,
+    `I'm Robert with VestBlock. Quick question about ${property}.`,
     "",
-    config.signal,
+    `Public records suggest there may be timing pressure around the property in ${market}.`,
+    ownershipLine,
     "",
-    `I am reviewing a small, separated batch of ${market} properties that may need a more flexible as-is review. I am not assuming you want to sell and I am not sending a blind offer.`,
-    config.ask,
+    "When that happens, some owners prefer to review practical off-market options before the timeline gets tighter.",
+    "Depending on the numbers and the file itself, that can mean a direct purchase, a market-assisted sale, or in some cases a review of whether the existing financing can be worked through as part of a creative structure.",
     "",
-    "Any number or path would depend on real condition, access, title, occupancy, and timing. If the data is wrong or this is not relevant, I can close the file out.",
+    "If timing pressure is not addressed, it can make future financing harder, which is one reason some owners choose to review options early.",
     "",
-    `Would you be open to a quick conversation about ${line}, or should I take it off my review list?`,
+    `If you are open to a short conversation about ${line}, reply yes and I will keep it straightforward. If not, I can close the file out on my side.`,
     "",
     "Best,",
     "Robert Sanders",
@@ -1004,7 +1165,7 @@ function buildEpicStrategyEmail(contact) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock routes real estate conversations and is not a brokerage, lender, attorney, title company, contractor, developer, or closing agent. We do not guarantee offers, sale timelines, buyer demand, closing, zoning outcomes, or transaction outcomes.",
+    "VestBlock is not a law firm, credit-repair company, housing counselor, brokerage, lender, or closing agent. We do not guarantee foreclosure relief, lender approval, credit outcomes, offers, sale timelines, closing, or transaction outcomes.",
     'If this is not relevant, reply "unsubscribe" or "do not contact" and we will remove you from future outreach.',
     mailingAddress(),
   ]
@@ -1020,16 +1181,16 @@ function buildOnMarketCashReviewEmail(contact) {
   const status = contact.market_status ? ` as ${String(contact.market_status).toLowerCase()}` : ""
   const range = cashRangeFromContact(contact)
   const rangeLine = range.low && range.high
-    ? `Based on the value/listing signal I have, my first-pass as-is cash review would probably start around ${money(range.low)}-${money(range.high)}. That is not a final offer; it depends on photos, access, title, tenant status, and the real condition.`
+    ? `Based on the public value/listing signal I have, my first-pass as-is cash review would probably start around ${money(range.low)}-${money(range.high)}. That is not a final offer; it depends on photos, access, title, liens, tenant status, and the real condition.`
     : "I would need photos, access, title, lien, tenant, and condition details before putting a real cash number on it."
-  const subject = `Question about ${line}`
+  const subject = `Quick question on ${line}`
   const body = [
     `Hi ${contact.first_name},`,
     "",
-    `I'm Robert with VestBlock. I am reviewing a few on-market and recently surfaced properties in ${market}, and ${line} came across my review board${status}.`,
+    `I'm Robert with VestBlock. ${line} came across my DealMachine board${status}, so I wanted to reach out directly.`,
     "",
     rangeLine,
-    "If the property is cleaner than the data suggests, I can sharpen the number upward after I see more detail. If it needs work or has timing pressure, I can keep the review simple and focus on an as-is path.",
+    "If the property is cleaner than the data suggests, I can sharpen that after I see more detail. If it needs work or has timing pressure, I can keep the review focused on an as-is path.",
     "",
     "If you are represented by an agent, I am happy to work through them or loop them in so the conversation stays clean.",
     "",
@@ -1051,8 +1212,25 @@ function buildOnMarketCashReviewEmail(contact) {
 }
 
 function buildStrategyEmail(contact) {
+  if (DIVORCE_STRATEGIES.has(STRATEGY)) return buildDivorceSeparationEmail(contact)
+  if (RELOCATION_STRATEGIES.has(STRATEGY)) return buildRelocationEmail(contact)
+  if (OUT_OF_STATE_HEIR_STRATEGIES.has(STRATEGY)) return buildOutOfStateHeirEmail(contact)
+  if (SENIOR_DOWNSIZING_STRATEGIES.has(STRATEGY)) return buildSeniorDownsizingEmail(contact)
+  if (FIRE_DAMAGE_STRATEGIES.has(STRATEGY)) return buildFireDamageEmail(contact)
+  if (PROBLEM_TENANT_STRATEGIES.has(STRATEGY)) return buildProblemTenantEmail(contact)
+  if (SELLER_FINANCE_STRATEGIES.has(STRATEGY)) return buildSellerFinanceEmail(contact)
+  if (TIRED_LANDLORD_STRATEGIES.has(STRATEGY)) return buildTiredLandlordEmail(contact)
+  if (PROBATE_INHERITANCE_STRATEGIES.has(STRATEGY)) return buildProbateInheritanceEmail(contact)
+  if (VACANT_PROPERTY_STRATEGIES.has(STRATEGY)) return buildVacantPropertyEmail(contact)
+  if (CODE_VIOLATION_STRATEGIES.has(STRATEGY)) return buildCodeViolationEmail(contact)
+  if (TAX_DELINQUENT_SIMPLE_STRATEGIES.has(STRATEGY)) return buildTaxDelinquentEmail(contact)
+  if (FSBO_STRATEGIES.has(STRATEGY)) return buildFsboEmail(contact)
+  if (FAILED_FLIPPER_STRATEGIES.has(STRATEGY)) return buildFailedFlipperEmail(contact)
+  if (HOA_DELINQUENT_STRATEGIES.has(STRATEGY)) return buildHoaDelinquentEmail(contact)
+  if (REVERSE_MORTGAGE_STRATEGIES.has(STRATEGY)) return buildReverseMortgageEmail(contact)
+  if (TITLE_ISSUE_STRATEGIES.has(STRATEGY)) return buildTitleIssueEmail(contact)
+  if (POST_AUCTION_STRATEGIES.has(STRATEGY)) return buildPostAuctionEmail(contact)
   if (ON_MARKET_STRATEGIES.has(STRATEGY)) return buildOnMarketCashReviewEmail(contact)
-  if (REMOTE_TAX_EQUITY_STRATEGIES.has(STRATEGY)) return buildRemoteTaxEquityEmail(contact)
   if (TAX_CODE_STRATEGIES.has(STRATEGY)) return buildTaxCodeStackEmail(contact)
   if (PORTFOLIO_STRATEGIES.has(STRATEGY)) return buildPortfolioLandlordEmail(contact)
   if (BUILDER_INFILL_STRATEGIES.has(STRATEGY)) return buildBuilderInfillEmail(contact)
@@ -1061,7 +1239,7 @@ function buildStrategyEmail(contact) {
   if (INSTITUTIONAL_BTR_STRATEGIES.has(STRATEGY)) return buildInstitutionalBtrEmail(contact)
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(STRATEGY)) return buildCommercialDistressEmail(contact)
   if (NOVATION_RETAIL_STRATEGIES.has(STRATEGY)) return buildNovationRetailSpreadEmail(contact)
-  if (EPIC_STRATEGIES.has(STRATEGY)) return buildEpicStrategyEmail(contact)
+  if (PREFORECLOSURE_SUBTO_STRATEGIES.has(STRATEGY)) return buildPreforeclosureSubtoEmail(contact)
   return buildEmail(contact)
 }
 
@@ -1071,10 +1249,73 @@ function buildText(contact) {
   const greeting = first && first !== "there"
     ? `Hi ${contact.first_name},`
     : "Hi,"
-  if (LAND_WHOLESALE_STRATEGIES.has(STRATEGY)) {
-    return `${greeting} Robert with VestBlock. I’m reviewing land/infill opportunities near ${line}. If you’d consider selling, I can do a quick as-is review; numbers depend on title, access, zoning, utilities, and condition. Worth a quick conversation? Reply STOP to opt out.`
+  if (DIVORCE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the property has become part of a split or separation and you want a quiet as-is option, I’d be glad to compare paths. Reply STOP to opt out.`
   }
-  return `${greeting} Robert with VestBlock here. Reaching out about ${line}. Wanted to see if you'd consider selling if the numbers made sense. We have various options depending on the property. Worth a quick conversation? Reply STOP to opt out.`
+  if (RELOCATION_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If a move or job transfer is part of the reason you may sell, I’d be glad to compare timing options. Reply STOP to opt out.`
+  }
+  if (OUT_OF_STATE_HEIR_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If managing it from out of state has become a headache, I’d be glad to compare as-is options. Reply STOP to opt out.`
+  }
+  if (SENIOR_DOWNSIZING_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the house has become too much to keep up with and you’d ever consider selling as-is, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (FIRE_DAMAGE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If repairs or insurance issues are dragging and you’d consider selling as-is, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (PROBLEM_TENANT_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the tenant or occupancy situation is what’s keeping you tied to it, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (SELLER_FINANCE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If you would ever consider monthly payments or flexible terms instead of a straight cash sale, I’d be glad to compare options. If not, I’ll close it out on my side. Reply STOP to opt out.`
+  }
+  if (TIRED_LANDLORD_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If you are still holding it as a rental, would you consider selling if the timing and terms made sense? Reply STOP to opt out.`
+  }
+  if (PROBATE_INHERITANCE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the property is part of an estate or inherited situation and you’d ever consider selling as-is, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (VACANT_PROPERTY_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. Is that property still part of your plan, or would you consider selling it as-is? Reply STOP to opt out.`
+  }
+  if (CODE_VIOLATION_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If city issues, repairs, or cleanup have made the property harder to manage, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (TAX_DELINQUENT_SIMPLE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If catching up taxes or holding costs has become a headache, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (FSBO_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If you'd rather skip the tire-kickers and compare a real as-is path, I’d be glad to talk. Reply STOP to opt out.`
+  }
+  if (FAILED_FLIPPER_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the rehab has stretched longer than planned and you want an as-is exit, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (HOA_DELINQUENT_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If the HOA or association situation is becoming a bigger problem, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (REVERSE_MORTGAGE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If a reverse-mortgage timeline is part of the decision, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (TITLE_ISSUE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If title issues are what have kept the property stuck, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (POST_AUCTION_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If an auction fell through or timing is still tight around the property, I’d be glad to compare options. Reply STOP to opt out.`
+  }
+  if (LAND_WHOLESALE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. Is that lot something you would consider selling if the numbers and timing made sense? If not, no problem and I'll close it out on my side. Reply STOP to opt out.`
+  }
+  if (TAX_CODE_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. ${line} came across my review list, so I wanted to ask whether you would be open to reviewing options on it. If not, I'll close the file out on my side. Reply STOP to opt out.`
+  }
+  if (PORTFOLIO_STRATEGIES.has(STRATEGY) || SMALL_MULTIFAMILY_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. If you would consider selling that property, or even a small group of rentals, I'd be glad to compare timing and options with you. Reply STOP to opt out.`
+  }
+  if (PREFORECLOSURE_SUBTO_STRATEGIES.has(STRATEGY)) {
+    return `${greeting} Robert with VestBlock. Reaching out about ${line}. Public records suggest there may be timing pressure around the property, and I wanted to ask whether you are open to reviewing off-market options before the timeline gets tighter. Reply STOP to opt out.`
+  }
+  return `${greeting} Robert with VestBlock. Reaching out about ${line}. Are you open to reviewing options on the property, or should I close the file out on my side? Reply STOP to opt out.`
 }
 
 function normalizeUsPhone(value) {
@@ -1087,19 +1328,30 @@ function normalizeUsPhone(value) {
 function isTextablePhone(phone) {
   const type = String(phone?.type || "").trim().toLowerCase()
   const dnc = String(phone?.dnc || "").trim().toLowerCase()
-  if (!dnc) return false
   if (/do not call/.test(dnc)) return false
   if (type === "landline") return false
   if (!/(mobile|wireless|cell)/.test(type)) return false
   return Boolean(normalizeUsPhone(phone?.number))
 }
 
+function parseResultsFileTimestamp(file) {
+  const stamp = String(file || "").match(/(\d{4}-\d{2}-\d{2}T\d{2}[-:]\d{2}[-:]\d{2}(?:[-.]\d+)?Z)/)
+  if (!stamp) return 0
+  const iso = stamp[1].replace(/T(\d{2})-(\d{2})-(\d{2})/, "T$1:$2:$3")
+  const parsed = Date.parse(iso)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function loadAlreadyContacted() {
   const sentEmails = new Set()
   const sentProperties = new Set()
   if (!fs.existsSync(OUTREACH_DIR)) return { sentEmails, sentProperties }
+  const cutoff = Number.isFinite(SENT_LOOKBACK_DAYS) && SENT_LOOKBACK_DAYS >= 0
+    ? Date.now() - SENT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    : 0
   for (const file of fs.readdirSync(OUTREACH_DIR)) {
     if (!file.startsWith("dealmachine-export-outreach-results-") || !file.endsWith(".json")) continue
+    if (cutoff && parseResultsFileTimestamp(file) && parseResultsFileTimestamp(file) < cutoff) continue
     try {
       const rows = JSON.parse(fs.readFileSync(path.join(OUTREACH_DIR, file), "utf8"))
       if (!Array.isArray(rows)) continue
@@ -1112,6 +1364,17 @@ function loadAlreadyContacted() {
     } catch {}
   }
   return { sentEmails, sentProperties }
+}
+
+function assertFreshExport(file) {
+  if (ALLOW_STALE_EXPORT || !file) return
+  const stat = fs.statSync(file)
+  const threshold = Date.now() - MAX_EXPORT_AGE_DAYS * 24 * 60 * 60 * 1000
+  if (stat.mtimeMs < threshold) {
+    throw new Error(
+      `Export CSV is stale for live outreach: ${file}. Fresh exports must be newer than ${MAX_EXPORT_AGE_DAYS} day(s), or re-run with --allow-stale-export.`
+    )
+  }
 }
 
 function loadSuppressedEmails() {
@@ -1133,7 +1396,7 @@ function loadMatches(marketConfigs) {
   for (const config of marketConfigs) {
     const exportRows = loadCsv(config.exportCsv)
     const queueRows = config.queueCsv && fs.existsSync(config.queueCsv) ? loadCsv(config.queueCsv) : []
-    const requireQueueMatch = Boolean(config.requireQueueMatch) && queueRows.length > 0
+    const requireQueueMatch = REQUIRE_QUEUE_MATCH && queueRows.length > 0
     const queueByAddress = new Map()
     for (const row of queueRows) {
       const key = normalizeAddress(queueAddress(row))
@@ -1229,9 +1492,9 @@ function loadMatches(marketConfigs) {
         buyer_packet_summary: queue?.buyer_packet_summary || queue?.notes || "",
         distress_score: queue ? queueDistressScore(queue) : 0,
         dealmachine_id: queue?.dealmachine_id || hit.lead_id || hit.id || "",
-        queue_strategy_key: queue?.strategy_key || STRATEGY,
-        queue_strategy_name: queue?.strategy_name || STRATEGY.replace(/-/g, " "),
-        export_reason: queue?.export_reason || (EXPORT_ONLY ? "explicit_dealmachine_contact_export" : ""),
+        queue_strategy_key: queue?.strategy_key || "",
+        queue_strategy_name: queue?.strategy_name || "",
+        export_reason: queue?.export_reason || "",
         request_source_file: queue?.source_file || "",
         emails,
         phones,
@@ -1390,8 +1653,334 @@ function isCommercialDistressCandidate(contact) {
   )
 }
 
+function hasProbateSignal(contact) {
+  return /\b(probate|estate|heir|inherited|inheritance|executor|executrix|personal representative|deceased)\b/.test(strategyHaystack(contact))
+}
+
+function hasDivorceSignal(contact) {
+  return /\b(divorce|separation|dissolution|marital|family court|domestic relations)\b/.test(strategyHaystack(contact))
+}
+
+function hasRelocationSignal(contact) {
+  return /\b(relocation|relocating|job transfer|transferred|pcs|military move|new job|moving out of state)\b/.test(strategyHaystack(contact))
+}
+
+function isOutOfStateHeirCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    contact.out_of_state_mailing === "true" &&
+    hasProbateSignal(contact)
+  )
+}
+
+function isSeniorDownsizingCandidate(contact) {
+  const haystack = strategyHaystack(contact)
+  const yearsOwned = numberish(contact.years_owned || contact.ownership_years || contact.ownership_length)
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    !hasProbateSignal(contact) &&
+    (
+      /\b(senior|downsizing|medical|assisted living|nursing|accessibility|mobility)\b/.test(haystack) ||
+      yearsOwned >= 20
+    )
+  )
+}
+
+function isFireDamageCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    /\b(fire|storm|insurance|smoke|water damage|hail|flood|boarded|condemned)\b/.test(strategyHaystack(contact))
+  )
+}
+
+function isProblemTenantCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    (
+      contact.absentee_owner === "true" ||
+      /\b(tenant|eviction|occupied|squatter|lease violation|non paying|landlord)\b/.test(strategyHaystack(contact))
+    )
+  )
+}
+
+function isFsboCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    /\b(fsbo|for sale by owner|owner listed|zillow fsbo|facebook marketplace|craigslist|yard sign)\b/.test(strategyHaystack(contact))
+  )
+}
+
+function isFailedFlipperCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    /\b(rehab|flip|flipper|hard money|construction|permit|stalled|unfinished|contractor)\b/.test(strategyHaystack(contact))
+  )
+}
+
+function hasHoaSignal(contact) {
+  return /\b(hoa|association lien|association dues|condo dues|poa)\b/.test(strategyHaystack(contact))
+}
+
+function isReverseMortgageCandidate(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    /\b(reverse mortgage|hecm|hud payoff|senior loan)\b/.test(strategyHaystack(contact))
+  )
+}
+
+function hasTitleIssueSignal(contact) {
+  return /\b(title issue|cloud on title|quiet title|unrecorded|deed issue|heirship|probate title)\b/.test(strategyHaystack(contact))
+}
+
+function isPostAuctionCandidate(contact) {
+  return /\b(post auction|auction cancelled|auction postponed|redemption|backup buyer|sale fell through)\b/.test(strategyHaystack(contact))
+}
+
+function isSellerFinanceCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const equityPercent = numberish(contact.equity_percent)
+  const equityAmount = numberish(contact.equity_amount)
+  const value = anchorValue(contact)
+  const landlordSignal = /\b(rental|tenant|leased|landlord|portfolio|absentee)\b/.test(haystack)
+  const vacant = String(contact.is_vacant || "").toLowerCase() === "true"
+  const outOfState = contact.out_of_state_mailing === "true"
+  return !hasProbateSignal(contact) && !/\b(preforeclosure|foreclosure|auction)\b/.test(haystack) && (
+    equityPercent >= 45 ||
+    equityAmount >= 90000 ||
+    (value >= 150000 && equityPercent >= 30)
+  ) && (landlordSignal || vacant || outOfState || /\b(seller finance|owner carry|owner financing|carry|wrap|creative)\b/.test(haystack))
+}
+
+function isTiredLandlordCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  return (
+    contact.absentee_owner === "true" ||
+    contact.out_of_state_mailing === "true" ||
+    /\b(landlord|rental|tenant|lease|portfolio|absentee)\b/.test(haystack)
+  ) && (
+    hasDistressSignal(contact) ||
+    String(contact.is_vacant || "").toLowerCase() === "true" ||
+    numberish(contact.equity_percent) >= 25
+  )
+}
+
+function isVacantPropertyCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const commercialHeavy = /\b(commercial|industrial|warehouse|mixed use|office)\b/.test(haystack)
+  return !commercialHeavy && (
+    String(contact.is_vacant || "").toLowerCase() === "true" ||
+    /\b(vacant|boarded|empty|unoccupied)\b/.test(haystack)
+  )
+}
+
+function hasCodeDistressSignal(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    String(contact.code_violation_hit || "").toLowerCase() === "true" &&
+    !Boolean(contact.tax_delinquent || contact.past_due_amount)
+  ) || (
+    /\b(code|violation|citation|nuisance|condemned|unsafe)\b/.test(strategyHaystack(contact)) &&
+    !Boolean(contact.tax_delinquent || contact.past_due_amount)
+  )
+}
+
+function hasTaxOnlySignal(contact) {
+  return (
+    !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name) &&
+    Boolean(contact.tax_delinquent || contact.past_due_amount) &&
+    String(contact.code_violation_hit || "").toLowerCase() !== "true"
+  )
+}
+
+function isPreforeclosureSubjectToCandidate(contact) {
+  if (isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name)) return false
+  const haystack = strategyHaystack(contact)
+  const explicitPreforeclosureExport = /preforeclosure/i.test(String(contact.export_csv || ""))
+  const preforeclosureSignal =
+    /\b(preforeclosure|foreclosure|lis pendens|auction|notice of default|sale date)\b/.test(haystack) ||
+    /preforeclosure/i.test(String(contact.queue_strategy_key || "")) ||
+    /preforeclosure/i.test(String(contact.queue_strategy_name || "")) ||
+    explicitPreforeclosureExport
+  if (!preforeclosureSignal) return false
+  if (explicitPreforeclosureExport) return contact.senior_landlord_signal !== "true"
+
+  const absentee = contact.absentee_owner === "true" || contact.out_of_state_mailing === "true"
+  const landlordOrCreativeSignal =
+    /\b(rental|tenant|leased|landlord|creative|subject to|seller finance|carry|wrap)\b/.test(haystack)
+  const businessOwnerSignal = /\bbusiness|llc|inc|corp|trust\b/i.test(String(contact.record_owner_name || contact.owner_name || ""))
+  const distressSupportSignal =
+    String(contact.is_vacant || "").toLowerCase() === "true" ||
+    String(contact.active_lien || "").toLowerCase() === "yes" ||
+    String(contact.tax_delinquent || "").toLowerCase() === "yes" ||
+    Number(contact.distress_score || 0) >= 75 ||
+    numberish(contact.equity_percent) >= 25
+  const seniorOwner = contact.senior_landlord_signal === "true"
+
+  return (absentee || landlordOrCreativeSignal || businessOwnerSignal || distressSupportSignal) && !seniorOwner
+}
+
 function applyStrategyFilter(contacts) {
   const annotated = annotatePortfolioSignals(contacts)
+  if (DIVORCE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(hasDivorceSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "divorce_separation_quiet_exit_lane",
+        numberish(contact.equity_percent) >= 25 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+      ]))
+  }
+  if (RELOCATION_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(hasRelocationSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "relocation_job_transfer_timing_lane",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+      ]))
+  }
+  if (OUT_OF_STATE_HEIR_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isOutOfStateHeirCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "out_of_state_heir_remote_relief_lane",
+        numberish(contact.equity_percent) >= 25 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+      ]))
+  }
+  if (SENIOR_DOWNSIZING_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isSeniorDownsizingCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "senior_downsizing_medical_hardship_lane",
+        numberish(contact.years_owned || contact.ownership_years || contact.ownership_length) >= 20 ? "long_term_owner" : "",
+      ]))
+  }
+  if (FIRE_DAMAGE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isFireDamageCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "fire_storm_insurance_damage_lane",
+        hasDistressSignal(contact) ? "distress_signal" : "",
+      ]))
+  }
+  if (PROBLEM_TENANT_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isProblemTenantCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "problem_tenant_eviction_lane",
+        contact.absentee_owner === "true" ? "absentee_owner" : "",
+      ]))
+  }
+  if (SELLER_FINANCE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isSellerFinanceCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "seller_finance_owner_carry_lane",
+        numberish(contact.equity_percent) >= 45 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+        numberish(contact.equity_amount) >= 90000 ? `equity_amount_${Math.round(numberish(contact.equity_amount) / 1000)}k` : "",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+      ]))
+  }
+  if (TIRED_LANDLORD_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isTiredLandlordCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "tired_landlord_rental_fatigue_lane",
+        Number(contact.portfolio_count || 0) >= 2 ? `portfolio_count_${contact.portfolio_count}` : "",
+        contact.absentee_owner === "true" ? "absentee_owner" : "",
+        contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
+      ]))
+  }
+  if (PROBATE_INHERITANCE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(hasProbateSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "probate_inheritance_soft_touch_lane",
+        String(contact.is_vacant || "").toLowerCase() === "true" ? "vacant_signal" : "",
+        numberish(contact.equity_percent) >= 25 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+      ]))
+  }
+  if (VACANT_PROPERTY_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isVacantPropertyCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "vacant_property_refresh_lane",
+        contact.is_vacant ? `vacant_${normalizeMarketSlug(contact.is_vacant)}` : "",
+        hasDistressSignal(contact) ? "distress_signal" : "",
+      ]))
+  }
+  if (CODE_VIOLATION_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(hasCodeDistressSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "code_violation_city_pressure_lane",
+        contact.code_violation ? `code_${normalizeMarketSlug(contact.code_violation).slice(0, 32)}` : "code_violation_signal",
+      ]))
+  }
+  if (TAX_DELINQUENT_SIMPLE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(hasTaxOnlySignal)
+      .map((contact) => withStrategyReason(contact, [
+        "tax_delinquent_cure_lane",
+        contact.past_due_amount ? "tax_amount_visible" : "tax_delinquent_signal",
+        numberish(contact.equity_percent) >= 20 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+      ]))
+  }
+  if (FSBO_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isFsboCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "fsbo_conversion_real_buyer_lane",
+        anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
+      ]))
+  }
+  if (FAILED_FLIPPER_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isFailedFlipperCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "failed_flipper_stuck_rehab_lane",
+        hasDistressSignal(contact) ? "distress_signal" : "",
+      ]))
+  }
+  if (HOA_DELINQUENT_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(hasHoaSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "hoa_delinquent_association_pressure_lane",
+        numberish(contact.equity_percent) >= 20 ? `equity_percent_${Math.round(numberish(contact.equity_percent))}` : "",
+      ]))
+  }
+  if (REVERSE_MORTGAGE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter(isReverseMortgageCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "reverse_mortgage_exit_lane",
+        hasProbateSignal(contact) ? "estate_or_heir_signal" : "",
+      ]))
+  }
+  if (TITLE_ISSUE_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(hasTitleIssueSignal)
+      .map((contact) => withStrategyReason(contact, [
+        "title_issue_cloud_on_title_lane",
+        hasProbateSignal(contact) ? "probate_title_overlap" : "",
+      ]))
+  }
+  if (POST_AUCTION_STRATEGIES.has(STRATEGY)) {
+    return annotated
+      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
+      .filter(isPostAuctionCandidate)
+      .map((contact) => withStrategyReason(contact, [
+        "post_auction_backup_buyer_lane",
+        /redemption/.test(strategyHaystack(contact)) ? "redemption_signal" : "",
+      ]))
+  }
   if (ON_MARKET_STRATEGIES.has(STRATEGY)) {
     return annotated
       .filter((contact) => isOnMarketStatus(contact.market_status))
@@ -1412,20 +2001,6 @@ function applyStrategyFilter(contacts) {
             : contact.estimated_value
               ? "estimated_value_anchor"
               : "",
-        ].filter(Boolean).join(" | "),
-      }))
-  }
-  if (REMOTE_TAX_EQUITY_STRATEGIES.has(STRATEGY)) {
-    return annotated
-      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
-      .map((contact) => ({
-        ...contact,
-        strategy_fit: "true",
-        strategy_reason: [
-          contact.strategy_reason,
-          "tax_delinquent_remote_owner_equity_rotation",
-          contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "remote_owner_lane",
-          contact.equity_percent ? `equity_${contact.equity_percent}` : "equity_filter_from_dealmachine_list",
         ].filter(Boolean).join(" | "),
       }))
   }
@@ -1513,16 +2088,15 @@ function applyStrategyFilter(contacts) {
         anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
       ]))
   }
-  if (EPIC_STRATEGIES.has(STRATEGY)) {
-    const config = EPIC_STRATEGY_CONFIG[STRATEGY]
+  if (PREFORECLOSURE_SUBTO_STRATEGIES.has(STRATEGY)) {
     return annotated
-      .filter((contact) => !isInstitutionalNonSellerOwner(contact.record_owner_name || contact.owner_name))
-      .filter((contact) => config.pattern.test(strategyHaystack(contact)) || hasDistressSignal(contact) || contact.strategy_fit === "true")
+      .filter(isPreforeclosureSubjectToCandidate)
       .map((contact) => withStrategyReason(contact, [
-        config.reason,
-        hasDistressSignal(contact) ? "distress_or_public_record_signal" : "pattern_fit",
+        "preforeclosure_subject_to_review_lane",
         contact.out_of_state_mailing === "true" ? "out_of_state_mailing" : "",
-        anchorValue(contact) ? `value_anchor_${Math.round(anchorValue(contact) / 1000)}k` : "",
+        contact.absentee_owner === "true" ? "absentee_owner" : "",
+        /\b(rental|tenant|leased|landlord)\b/.test(strategyHaystack(contact)) ? "rental_signal" : "",
+        /preforeclosure|foreclosure|auction/.test(strategyHaystack(contact)) ? "preforeclosure_signal" : "",
       ]))
   }
   if (!PORTFOLIO_STRATEGIES.has(STRATEGY)) return annotated
@@ -1568,32 +2142,66 @@ function commandCenterExternalId(draft) {
 }
 
 function strategyLeadNiche(strategy) {
+  if (DIVORCE_STRATEGIES.has(strategy)) return "dealmachine_divorce_separation"
+  if (RELOCATION_STRATEGIES.has(strategy)) return "dealmachine_relocation_job_transfer"
+  if (OUT_OF_STATE_HEIR_STRATEGIES.has(strategy)) return "dealmachine_out_of_state_heir"
+  if (SENIOR_DOWNSIZING_STRATEGIES.has(strategy)) return "dealmachine_senior_downsizing"
+  if (FIRE_DAMAGE_STRATEGIES.has(strategy)) return "dealmachine_fire_storm_damage"
+  if (PROBLEM_TENANT_STRATEGIES.has(strategy)) return "dealmachine_problem_tenant"
   if (ON_MARKET_STRATEGIES.has(strategy)) return "dealmachine_on_market_cash_review"
+  if (SELLER_FINANCE_STRATEGIES.has(strategy)) return "dealmachine_seller_finance_review"
+  if (TIRED_LANDLORD_STRATEGIES.has(strategy)) return "dealmachine_tired_landlord"
+  if (PROBATE_INHERITANCE_STRATEGIES.has(strategy)) return "dealmachine_probate_inheritance"
+  if (VACANT_PROPERTY_STRATEGIES.has(strategy)) return "dealmachine_vacant_property"
+  if (CODE_VIOLATION_STRATEGIES.has(strategy)) return "dealmachine_code_violation"
+  if (TAX_DELINQUENT_SIMPLE_STRATEGIES.has(strategy)) return "dealmachine_tax_delinquent"
+  if (FSBO_STRATEGIES.has(strategy)) return "dealmachine_fsbo_conversion"
+  if (FAILED_FLIPPER_STRATEGIES.has(strategy)) return "dealmachine_failed_flipper"
+  if (HOA_DELINQUENT_STRATEGIES.has(strategy)) return "dealmachine_hoa_delinquent"
+  if (REVERSE_MORTGAGE_STRATEGIES.has(strategy)) return "dealmachine_reverse_mortgage_exit"
+  if (TITLE_ISSUE_STRATEGIES.has(strategy)) return "dealmachine_title_issue"
+  if (POST_AUCTION_STRATEGIES.has(strategy)) return "dealmachine_post_auction"
   if (BUILDER_INFILL_STRATEGIES.has(strategy)) return "high_fee_builder_infill"
   if (LAND_WHOLESALE_STRATEGIES.has(strategy)) return "high_fee_land_wholesale"
   if (SMALL_MULTIFAMILY_STRATEGIES.has(strategy)) return "high_fee_small_multifamily"
   if (INSTITUTIONAL_BTR_STRATEGIES.has(strategy)) return "high_fee_institutional_btr"
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "high_fee_commercial_distress"
   if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "high_fee_novation_retail_spread"
+  if (PREFORECLOSURE_SUBTO_STRATEGIES.has(strategy)) return "dealmachine_preforeclosure_subject_to_review"
   if (PORTFOLIO_STRATEGIES.has(strategy)) return "dealmachine_portfolio_landlord"
-  if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "dealmachine_tax_remote_equity_rotation"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "dealmachine_tax_code_stack"
-  if (EPIC_STRATEGY_CONFIG[strategy]) return EPIC_STRATEGY_CONFIG[strategy].niche
   return "dealmachine_owner_contact"
 }
 
 function strategyOutreachAngle(strategy) {
+  if (DIVORCE_STRATEGIES.has(strategy)) return "Quiet, discreet as-is exit for divorce or separation timing pressure"
+  if (RELOCATION_STRATEGIES.has(strategy)) return "Relocation or job-transfer timing review"
+  if (OUT_OF_STATE_HEIR_STRATEGIES.has(strategy)) return "Remote inherited-property relief for out-of-state owners"
+  if (SENIOR_DOWNSIZING_STRATEGIES.has(strategy)) return "Senior downsizing or medical-hardship simplicity review"
+  if (FIRE_DAMAGE_STRATEGIES.has(strategy)) return "Fire, storm, or insurance-damage as-is review"
+  if (PROBLEM_TENANT_STRATEGIES.has(strategy)) return "Problem-tenant or eviction-relief seller review"
   if (ON_MARKET_STRATEGIES.has(strategy)) return "On-market/as-is cash review from DealMachine active/pending status"
+  if (SELLER_FINANCE_STRATEGIES.has(strategy)) return "Seller-finance or owner-carry review for high-equity owners"
+  if (TIRED_LANDLORD_STRATEGIES.has(strategy)) return "Tired-landlord rental sale review"
+  if (PROBATE_INHERITANCE_STRATEGIES.has(strategy)) return "Probate or inheritance soft-touch seller review"
+  if (VACANT_PROPERTY_STRATEGIES.has(strategy)) return "Vacant-property as-is seller review"
+  if (CODE_VIOLATION_STRATEGIES.has(strategy)) return "Code-violation or city-pressure seller review"
+  if (TAX_DELINQUENT_SIMPLE_STRATEGIES.has(strategy)) return "Tax-delinquent seller review"
+  if (FSBO_STRATEGIES.has(strategy)) return "FSBO conversion into real as-is buyer review"
+  if (FAILED_FLIPPER_STRATEGIES.has(strategy)) return "Failed-flipper or stuck-rehab investor relief review"
+  if (HOA_DELINQUENT_STRATEGIES.has(strategy)) return "HOA delinquency or association-pressure seller review"
+  if (REVERSE_MORTGAGE_STRATEGIES.has(strategy)) return "Reverse-mortgage exit or heir-protection review"
+  if (TITLE_ISSUE_STRATEGIES.has(strategy)) return "Title-issue or cloud-on-title seller review"
+  if (POST_AUCTION_STRATEGIES.has(strategy)) return "Post-auction rescue or backup-buyer review"
   if (BUILDER_INFILL_STRATEGIES.has(strategy)) return "Builder, infill, teardown, or heavy-rehab seller review"
   if (LAND_WHOLESALE_STRATEGIES.has(strategy)) return "Land wholesale review cross-checked against developer and infill activity"
   if (SMALL_MULTIFAMILY_STRATEGIES.has(strategy)) return "Small multifamily or portfolio-breakup seller review"
   if (INSTITUTIONAL_BTR_STRATEGIES.has(strategy)) return "Institutional or build-to-rent buy-box seller review"
   if (COMMERCIAL_DISTRESS_STRATEGIES.has(strategy)) return "Commercial, mixed-use, or small-bay distress review"
   if (NOVATION_RETAIL_STRATEGIES.has(strategy)) return "Disclosed novation or retail-spread seller review"
-  if (PORTFOLIO_STRATEGIES.has(strategy)) return "Portfolio landlord simplification review"
-  if (REMOTE_TAX_EQUITY_STRATEGIES.has(strategy)) return "Tax delinquent remote-owner equity seller review"
+  if (PREFORECLOSURE_SUBTO_STRATEGIES.has(strategy)) return "Preforeclosure review with creative-structure screening for likely absentee or investor-style ownership"
+  if (PORTFOLIO_STRATEGIES.has(strategy)) return "Portfolio landlord sale review"
   if (TAX_CODE_STRATEGIES.has(strategy)) return "Tax delinquent and code-violation seller review"
-  if (EPIC_STRATEGY_CONFIG[strategy]) return EPIC_STRATEGY_CONFIG[strategy].angle
   return "Seller options review from DealMachine owner-contact export"
 }
 
@@ -1623,7 +2231,6 @@ async function upsertCommandCenterLead(admin, draft, result) {
   const existing = await findExistingCommandCenterLead(admin, draft, externalId)
   const now = new Date().toISOString()
   const sentOk = Boolean(result.ok)
-  const staged = result.stage === "ready"
   const strategy = normalizeMarketSlug(draft.strategy || STRATEGY)
   const onMarketStrategy = ON_MARKET_STRATEGIES.has(strategy)
   const suggestedPaths = sellerPathList(draft.suggested_exit_paths) || "seller options"
@@ -1650,8 +2257,8 @@ async function upsertCommandCenterLead(admin, draft, result) {
     email_valid: true,
     bounce_risk_score: 10,
     status: sentOk ? "contacted" : "outreach_ready",
-    outreach_status: sentOk ? "sent" : staged ? "needs_review" : "failed",
-    delivery_status: sentOk ? "sent" : staged ? "queued" : "failed",
+    outreach_status: sentOk ? "sent" : "failed",
+    delivery_status: sentOk ? "sent" : "failed",
     last_contacted_at: sentOk ? now : null,
     last_outreach_generated_at: now,
     imported_at: now,
@@ -1661,7 +2268,7 @@ async function upsertCommandCenterLead(admin, draft, result) {
     outreach_angle: strategyOutreachAngle(strategy),
     notes: draft.buyer_packet_summary || (onMarketStrategy
       ? "DealMachine active/pending owner-contact export queued for conditional as-is cash-review outreach."
-      : "DealMachine owner-contact export queued for high-intent seller-options review."),
+      : "DealMachine owner-contact export queued for seller-options outreach."),
     contact_info: {
       source: "dealmachine_contacts_export",
       ownerName: draft.owner_name || null,
@@ -1752,7 +2359,6 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
   if (findError) throw findError
 
   const sentOk = Boolean(result.ok)
-  const staged = result.stage === "ready"
   const payload = {
     lead_id: leadId,
     channel: "email",
@@ -1760,14 +2366,14 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
     body: draft.body,
     cta: "Reply if you are open to a quick conversation, or reply unsubscribe/do not contact to opt out.",
     language: "en",
-    compliance_note: "Includes seller disclosure, opt-out language, and mailing address.",
+    compliance_note: "Includes seller-options disclosure, opt-out language, and mailing address.",
     generated_with: "dealmachine_export_outreach",
-    status: sentOk ? "sent" : staged ? "needs_review" : "failed",
-    approved_at: sentOk ? now : null,
+    status: sentOk ? "sent" : "failed",
+    approved_at: now,
     approved_by_user_id: null,
     sent_at: sentOk ? now : null,
-    send_provider: sentOk ? "resend" : null,
-    send_error: sentOk || staged ? null : result.error || "Resend send failed.",
+    send_provider: "resend",
+    send_error: sentOk ? null : result.error || "Resend send failed.",
     last_generated_at: now,
   }
 
@@ -1794,16 +2400,15 @@ async function upsertCommandCenterOutreachMessage(admin, leadId, draft, result) 
 async function syncCommandCenterSend(admin, draft, result) {
   const leadId = await upsertCommandCenterLead(admin, draft, result)
   const outreachMessageId = await upsertCommandCenterOutreachMessage(admin, leadId, draft, result)
-  const staged = result.stage === "ready"
   const { error } = await admin.from("outreach_send_events").insert({
     lead_id: leadId,
     outreach_message_id: outreachMessageId,
     channel: "email",
-    provider: result.ok ? "resend" : staged ? "vestblock_queue" : "resend",
-    status: result.ok ? "sent" : staged ? "queued" : "failed",
+    provider: "resend",
+    status: result.ok ? "sent" : "failed",
     recipient: draft.email,
     subject: draft.subject,
-    error_message: result.ok || staged ? null : result.error || "Resend send failed.",
+    error_message: result.ok ? null : result.error || "Resend send failed.",
     metadata_json: {
       source: "dealmachine_export_outreach",
       market: draft.market,
@@ -1839,38 +2444,22 @@ async function syncCommandCenterSend(admin, draft, result) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function main() {
-  if (SEND && GENERIC_SELLER_STRATEGIES.has(STRATEGY) && !ALLOW_GENERIC_SELLER_OPTIONS) {
-    throw new Error("Generic seller-options live sends are paused. Use a high-intent strategy, stage for review, or pass --allow-generic-seller-options after reply attribution and suppressions are reviewed.")
-  }
-  if (SEND && ON_MARKET_STRATEGIES.has(STRATEGY) && !ALLOW_ON_MARKET_LIVE) {
-    throw new Error("On-market lowball live sends are paused. Stage this lane or pass --allow-on-market-lowball-live after manual review.")
-  }
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
-  const commandCenterAdmin = (SEND || STAGE_COMMAND_CENTER) && SYNC_COMMAND_CENTER ? supabaseAdmin() : null
+  const commandCenterAdmin = SEND && SYNC_COMMAND_CENTER ? supabaseAdmin() : null
 
   fs.mkdirSync(DM_EXPORT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
   const marketConfigs = loadMarketConfigs()
   for (const config of marketConfigs) {
     if (!fs.existsSync(config.exportCsv)) throw new Error(`Missing DealMachine export CSV for ${config.market}: ${config.exportCsv}`)
+    assertFreshExport(config.exportCsv)
   }
   const alreadyContacted = loadAlreadyContacted()
   const suppressedEmails = loadSuppressedEmails()
   const rawContacts = applyStrategyFilter(loadMatches(marketConfigs)).sort(
     (a, b) => b.distress_score - a.distress_score || a.property_address_full.localeCompare(b.property_address_full)
   )
-  const diagnostics = {
-    strategyFitContacts: rawContacts.length,
-    contactsWithUsableEmail: rawContacts.filter((contact) => contact.emails.length > 0).length,
-    contactsWithTextablePhone: rawContacts.filter((contact) => contact.phones.some(isTextablePhone)).length,
-    skippedAlreadyContactedProperty: 0,
-    skippedDuplicatePropertyInBatch: 0,
-    skippedSuppressedEmail: 0,
-    skippedDuplicateEmailInBatch: 0,
-    skippedAlreadyContactedEmail: 0,
-    skippedNoSelectedEmail: 0,
-  }
 
   const emailDrafts = []
   const phoneQueue = []
@@ -1881,31 +2470,15 @@ async function main() {
 
   for (const contact of rawContacts) {
     const propertyKey = normalizeAddress(contact.property_address_full)
-    if (alreadyContacted.sentProperties.has(propertyKey)) {
-      diagnostics.skippedAlreadyContactedProperty += 1
-      continue
-    }
-    if (seenEmailProperty.has(propertyKey)) {
-      diagnostics.skippedDuplicatePropertyInBatch += 1
-      continue
-    }
+    if (!IGNORE_SENT_PROPERTIES && alreadyContacted.sentProperties.has(propertyKey)) continue
+    if (seenEmailProperty.has(propertyKey)) continue
 
     let emailSelectedForProperty = false
     for (const email of contact.emails) {
       const normalizedEmail = email.toLowerCase()
       const key = `${contact.property_address_full}|${normalizedEmail}`
-      if (suppressedEmails.has(normalizedEmail)) {
-        diagnostics.skippedSuppressedEmail += 1
-        continue
-      }
-      if (seenEmail.has(key) || seenRecipientEmail.has(normalizedEmail)) {
-        diagnostics.skippedDuplicateEmailInBatch += 1
-        continue
-      }
-      if (alreadyContacted.sentEmails.has(normalizedEmail)) {
-        diagnostics.skippedAlreadyContactedEmail += 1
-        continue
-      }
+      if (suppressedEmails.has(normalizedEmail)) continue
+      if (seenEmail.has(key) || seenRecipientEmail.has(normalizedEmail) || (!IGNORE_SENT_EMAILS && alreadyContacted.sentEmails.has(normalizedEmail))) continue
       const cashReview = cashRangeFromContact(contact)
       seenEmail.add(key)
       seenRecipientEmail.add(normalizedEmail)
@@ -1963,8 +2536,6 @@ async function main() {
       emailSelectedForProperty = true
       if (emailSelectedForProperty) break
     }
-
-    if (contact.emails.length > 0 && !emailSelectedForProperty) diagnostics.skippedNoSelectedEmail += 1
 
     let phoneSelectedForProperty = false
     for (const phone of contact.phones) {
@@ -2076,64 +2647,17 @@ async function main() {
 
   console.log("=== DealMachine export outreach ===")
   console.log(`Mode:           ${SEND ? "LIVE SEND (Resend)" : "DRY RUN"}`)
-  console.log(`Strategy fit:   ${diagnostics.strategyFitContacts}`)
-  console.log(`Contacts email: ${diagnostics.contactsWithUsableEmail}`)
-  console.log(`Contacts phone: ${diagnostics.contactsWithTextablePhone}`)
   console.log(`Matched emails: ${emailDrafts.length}`)
   console.log(`Selected send:  ${selectedDrafts.length}`)
-  if (!ALLOW_HIGH_VOLUME && REQUESTED_LIMIT > CONTROLLED_LANE_CAP) console.log(`Controlled cap: ${REQUESTED_LIMIT} requested, capped to ${CONTROLLED_LANE_CAP}. Pass --allow-high-volume only after reply attribution is reviewed.`)
   console.log(`Phone queue:    ${phoneQueue.length}`)
-  console.log(`Skip stats:     ${JSON.stringify({
-    alreadyContactedProperty: diagnostics.skippedAlreadyContactedProperty,
-    duplicatePropertyInBatch: diagnostics.skippedDuplicatePropertyInBatch,
-    suppressedEmail: diagnostics.skippedSuppressedEmail,
-    duplicateEmailInBatch: diagnostics.skippedDuplicateEmailInBatch,
-    alreadyContactedEmail: diagnostics.skippedAlreadyContactedEmail,
-    noSelectedEmail: diagnostics.skippedNoSelectedEmail,
-  })}`)
   console.log(`Strategy:       ${STRATEGY}`)
   console.log(`Email CSV:      ${emailCsv}`)
   console.log(`Phone CSV:      ${phoneCsv}`)
   console.log(`Draft review:   ${draftsTxt}`)
-  console.log(`CC sync:        ${(SEND || STAGE_COMMAND_CENTER) && SYNC_COMMAND_CENTER ? "enabled" : "disabled"}`)
-
-  if (STAGE_COMMAND_CENTER) {
-    if (!selectedDrafts.length) {
-      console.log("No selected drafts to stage.")
-      return
-    }
-    if (!commandCenterAdmin) throw new Error("Command-center staging requires Supabase env vars and command-center sync enabled.")
-    const results = []
-    for (let index = 0; index < selectedDrafts.length; index++) {
-      const draft = selectedDrafts[index]
-      const result = { ok: false, stage: "ready", id: null }
-      let commandCenter = null
-      try {
-        commandCenter = await syncCommandCenterSend(commandCenterAdmin, draft, result)
-      } catch (error) {
-        commandCenter = { ok: false, error: error instanceof Error ? error.message : String(error) }
-      }
-      results.push({
-        strategy: draft.strategy || STRATEGY,
-        market: draft.market,
-        email: draft.email,
-        subject: draft.subject,
-        property_address_full: draft.property_address_full,
-        dealmachine_id: draft.dealmachine_id,
-        commandCenter,
-        ...result,
-      })
-      const syncLabel = commandCenter ? (commandCenter.ok ? "staged" : `stage-failed: ${commandCenter.error}`) : "not-staged"
-      console.log(`queued ${index + 1}/${selectedDrafts.length} ${draft.property_address_full} ${syncLabel}`)
-    }
-    fs.writeFileSync(path.join(OUTREACH_DIR, `dealmachine-export-outreach-staged-${stamp}.json`), JSON.stringify(results, null, 2))
-    const staged = results.filter((row) => row.commandCenter?.ok).length
-    console.log(`Done. Staged ${staged}/${results.length} to command center; no emails sent.`)
-    return
-  }
+  console.log(`CC sync:        ${SEND && SYNC_COMMAND_CENTER ? "enabled" : "disabled"}`)
 
   if (!SEND || !selectedDrafts.length) {
-    console.log(SEND ? "No selected drafts to send." : "Dry run only. Re-run with --send to deliver through Resend, or --stage-command-center to queue in VestBlock.")
+    console.log(SEND ? "No selected drafts to send." : "Dry run only. Re-run with --send to deliver through Resend.")
     return
   }
 

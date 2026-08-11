@@ -315,8 +315,8 @@ async function sendApprovedEmail(draft) {
 
 async function main() {
   const date = getArgValue('--date', new Date().toISOString().slice(0, 10))
-  const requestedLimit = intArg('--limit', Number.parseInt(getEnv('OUTREACH_V4_DAILY_SEND_LIMIT') || '50', 10), 50)
-  const dailyCap = intArg('--daily-cap', Number.parseInt(getEnv('OUTREACH_V4_DAILY_SEND_LIMIT') || '50', 10), 50)
+  const requestedLimit = intArg('--limit', Number.parseInt(getEnv('OUTREACH_V4_DAILY_SEND_LIMIT') || '500', 10), 500)
+  const dailyCap = intArg('--daily-cap', Number.parseInt(getEnv('OUTREACH_V4_DAILY_SEND_LIMIT') || '500', 10), 500)
   const perDomainLimit = intArg('--per-domain-limit', 1, 5)
   const send = hasFlag('--send')
   const liveSendConfirm = getArgValue('--confirm-live-send', getEnv('OUTREACH_V4_LIVE_SEND_CONFIRM'))

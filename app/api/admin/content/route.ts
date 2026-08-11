@@ -11,6 +11,7 @@ import {
   type VestBlockServiceKey,
 } from '@/lib/content/marketingServices';
 import { logEvent } from '@/lib/system/logEvent';
+import { isTrustedMutationOrigin } from '@/lib/security/sameOrigin';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const serviceKeys = vestblockMarketingServices.map((service) => service.key) as [
@@ -39,6 +40,8 @@ const updateSchema = z.object({
   socialCaption: z.string().max(5000).optional().nullable(),
   ctaLabel: z.string().max(100).optional().nullable(),
   ctaUrl: z.string().max(300).optional().nullable(),
+  scheduledFor: z.string().datetime({ offset: true }).optional().nullable(),
+  scheduleStatus: z.enum(['unscheduled', 'planned', 'approved', 'scheduled']).optional(),
 });
 
 export async function POST(request: Request) {
@@ -48,6 +51,10 @@ export async function POST(request: Request) {
       { error: 'Admin access required.' },
       { status: adminCheck.user ? 403 : 401 }
     );
+  }
+
+  if (!isTrustedMutationOrigin(request)) {
+    return NextResponse.json({ error: 'Untrusted request origin.' }, { status: 403 });
   }
 
   const parsed = generateSchema.safeParse(await request.json().catch(() => ({})));
@@ -144,6 +151,10 @@ export async function PATCH(request: Request) {
     );
   }
 
+  if (!isTrustedMutationOrigin(request)) {
+    return NextResponse.json({ error: 'Untrusted request origin.' }, { status: 403 });
+  }
+
   const parsed = updateSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json(
@@ -179,6 +190,19 @@ export async function PATCH(request: Request) {
 
   try {
     const supabase = createAdminClient();
+    if (parsed.data.scheduledFor !== undefined || parsed.data.scheduleStatus !== undefined) {
+      const { data: existing, error: existingError } = await supabase
+        .from('content_assets')
+        .select('metadata_json')
+        .eq('id', parsed.data.id)
+        .single();
+      if (existingError) throw new Error(existingError.message);
+      updates.metadata_json = {
+        ...(existing.metadata_json || {}),
+        scheduledFor: parsed.data.scheduledFor ?? null,
+        scheduleStatus: parsed.data.scheduleStatus || (parsed.data.scheduledFor ? 'planned' : 'unscheduled'),
+      };
+    }
     const { data, error } = await supabase
       .from('content_assets')
       .update(updates)

@@ -199,7 +199,7 @@ function extractEmail(record) {
 }
 
 function getApiKey() {
-  const envKey = String(process.env.OUTSCRAPER_API_KEY || process.env.DATAPIPE_API_KEY || '').trim()
+  const envKey = String(process.env.OUTSCRAPER_API_KEY || '').trim()
   if (envKey) return envKey
   if (process.platform !== 'darwin') return ''
   try {
@@ -365,7 +365,7 @@ async function main() {
   }
 
   const apiKey = getApiKey()
-  if (!apiKey) throw new Error('OUTSCRAPER_API_KEY or DATAPIPE_API_KEY missing and Keychain fallback was not found.')
+  if (!apiKey) throw new Error('OUTSCRAPER_API_KEY missing and Keychain fallback was not found.')
 
   const leads = []
   for (const market of markets) {

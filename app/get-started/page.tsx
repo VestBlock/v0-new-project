@@ -6,14 +6,14 @@ import { absoluteUrl } from '@/lib/seo/site';
 export const metadata: Metadata = {
   title: 'Get Started With VestBlock',
   description:
-    'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
+    'Tell VestBlock whether you need capital, deals, or a business opportunity, then continue into the right existing workflow.',
   alternates: {
     canonical: '/get-started',
   },
   openGraph: {
     title: 'Get Started With VestBlock',
     description:
-      'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
+      'Tell VestBlock whether you need capital, deals, or a business opportunity, then continue into the right existing workflow.',
     url: absoluteUrl('/get-started'),
     images: [
       {
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Get Started With VestBlock',
     description:
-      'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
+      'Tell VestBlock whether you need capital, deals, or a business opportunity, then continue into the right existing workflow.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

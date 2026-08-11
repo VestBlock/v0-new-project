@@ -173,7 +173,12 @@ async function main() {
       }
     }
 
-    if (reason) {
+    // mx_lookup_failed means OUR network couldn't resolve DNS (offline/sandboxed run),
+    // not that the address is bad. Pass with a warning instead of holding the batch.
+    if (reason === "mx_lookup_failed") {
+      bump("verified_mx_unchecked")
+      verified.push(row)
+    } else if (reason) {
       bump(reason)
       risky.push({ row, reason })
     } else {

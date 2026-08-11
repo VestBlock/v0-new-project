@@ -21,6 +21,8 @@ import {
   type AutopilotSnapshot,
   type SourceDoctrineLane,
 } from '@/lib/admin/autonomousOperatingCore'
+import { buildRevenueExecutiveSnapshot } from '@/lib/revenue-engine/executiveSnapshot'
+import type { RevenueExecutiveSnapshot } from '@/lib/revenue-engine/types'
 
 export type CommandStatus = 'green' | 'yellow' | 'red'
 export type AgentStatus = 'active' | 'attention' | 'idle'
@@ -192,6 +194,7 @@ export type CommandCenterStreamItem = {
   title: string
   detail: string
   hint?: string
+  suggestedReply?: string | null
   at: string | null
   statusLabel?: string
   priority: 'critical' | 'warning' | 'info'
@@ -308,6 +311,8 @@ export type CommandCenterDealMachineExportRequest = {
   guidePath: string | null
   summaryFile: string | null
   noDealMachineSkipTraceDefault: boolean
+  orchestratorSummaryFile?: string | null
+  exportJobCounts?: Record<string, number> | null
 }
 
 export type CommandCenterOsintSourceBoard = {
@@ -623,6 +628,7 @@ export type CommandCenterData = {
   missionNodes: MissionNode[]
   priorities: string[]
   alerts: CommandAlert[]
+  revenueEngine: RevenueExecutiveSnapshot
   agents: AgentPanelData[]
   outboundControl: CommandCenterOutboundControl
   strategyLab: CommandCenterStrategyLab
@@ -1130,6 +1136,10 @@ function loadDealMachineExportRequest(): CommandCenterDealMachineExportRequest |
     const latestSummary = newestLocalFile(dir, 'dealmachine-contact-export-request-summary-')
     const parsed = readJsonObject(latestSummary?.file)
     if (!latestSummary || !parsed) return null
+    const orchestrator = readJsonObject(path.join(process.cwd(), 'data', 'operating-loops', 'dealmachine-export-orchestrator-summary.json'))
+    const exportJobs = orchestrator?.exportJobs && typeof orchestrator.exportJobs === 'object'
+      ? orchestrator.exportJobs
+      : null
 
     const createdAt = typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date(latestSummary.mtimeMs).toISOString()
     const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 60000))
@@ -1144,6 +1154,8 @@ function loadDealMachineExportRequest(): CommandCenterDealMachineExportRequest |
       guidePath: typeof parsed.guidePath === 'string' ? parsed.guidePath : null,
       summaryFile: latestSummary.name,
       noDealMachineSkipTraceDefault: parsed.noDealMachineSkipTraceDefault !== false,
+      orchestratorSummaryFile: typeof orchestrator?.generatedAt === 'string' ? 'data/operating-loops/dealmachine-export-orchestrator-summary.json' : null,
+      exportJobCounts: exportJobs?.byStatus && typeof exportJobs.byStatus === 'object' ? exportJobs.byStatus as Record<string, number> : null,
     }
   } catch {
     return null
@@ -2529,7 +2541,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('command_center_reply_memory')
-          .select('id,strategy_key,mailbox,from_email,subject,property_address,market,classification,received_at,next_step,reply_summary')
+          .select('id,lead_id,strategy_key,mailbox,from_email,subject,property_address,market,classification,received_at,next_step,reply_summary,metadata_json')
           .order('received_at', { ascending: false }),
       'command_center_reply_memory',
       issues,
@@ -2632,7 +2644,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   })
 
   // ── Shared signals ─────────────────────────────────────────────────────────
-  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 50)
+  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 500)
   const revenueTarget = envInt('VESTBLOCK_MONTHLY_REVENUE_TARGET', 100000)
 
   const leadById = new Map(t.leads.map((lead) => [lead.id, lead]))
@@ -2989,21 +3001,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     ],
   }
 
-  // Reply-positive leads (any age) so campaign rollups can attribute replies to strategy lanes by recipient email.
-  const repliedLeadSignals = currentLeads
-    .filter(
-      (lead) =>
-        ['replied', 'interested', 'qualified', 'closed_won'].includes(lower(lead.status)) &&
-        String(lead.email || '').trim()
-    )
-    .map((lead) => ({
-      email: String(lead.email).trim().toLowerCase(),
-      status: lower(lead.status),
-      at: (lead.updated_at || lead.last_contacted_at || lead.created_at || null) as string | null,
-    }))
-
   const operatingLoops = loadOperatingLoopTelemetry({
-    repliedLeads: repliedLeadSignals,
     sentToday: strategyLab.sentToday,
     sent7d: sends7d,
     remainingToday: strategyLab.remainingToday,
@@ -3159,15 +3157,82 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   })
 
   // ── Inbox / outreach command surfaces ─────────────────────────────────────
-  const hotLeadReplies: CommandCenterStreamItem[] = currentLeads
-    .filter((lead) => ['replied', 'interested', 'qualified'].includes(lower(lead.status)))
+  const actionableReplyClassifications = new Set([
+    'positive_interested',
+    'requesting_more_information',
+    'price_terms_provided',
+    'call_requested',
+    'not_now',
+    'follow_up_later',
+    'needs_human_review',
+    // Preserve the classifications written by older reply processors.
+    'hot_seller_lead',
+    'positive',
+    'interested',
+  ])
+  const inboundReplyItems: CommandCenterStreamItem[] = t.commandCenterReplyMemory
+    .filter((reply) =>
+      actionableReplyClassifications.has(
+        lower(reply.metadata_json?.reply_classification || reply.classification)
+      )
+    )
+    .sort((a, b) => Date.parse(b.received_at || '') - Date.parse(a.received_at || ''))
+    .slice(0, 8)
+    .map((reply) => {
+      const classification = lower(
+        reply.metadata_json?.reply_classification || reply.classification
+      )
+      const lead = reply.lead_id ? leadById.get(reply.lead_id) : null
+      const strategy = lower(reply.strategy_key)
+      const lane: CommandCenterStreamItem['lane'] = strategy.includes('buyer')
+        ? 'buyer'
+        : strategy.includes('lender') || strategy.includes('capital') || strategy.includes('funding') || strategy.includes('dscr')
+          ? 'lender'
+          : strategy.includes('partner')
+            ? 'partner'
+            : 'seller'
+      return {
+        id: `inbound-reply-${reply.id}`,
+        lane,
+        title: String(reply.from_email || reply.property_address || 'Inbound reply'),
+        detail: String(reply.reply_summary || reply.subject || 'Reply received'),
+        hint: String(reply.next_step || 'Review before any further outreach.'),
+        suggestedReply: String(reply.metadata_json?.suggested_reply || '').trim() || null,
+        at: reply.received_at || null,
+        statusLabel: titleCase(classification),
+        priority: ['positive_interested', 'price_terms_provided', 'call_requested', 'hot_seller_lead'].includes(classification)
+          ? ('critical' as const)
+          : ('warning' as const),
+        href: leadHref(lead),
+        actions: [navigateAction(`inbound-reply-open-${reply.id}`, 'Open contact', leadHref(lead), 'primary')],
+      }
+    })
+  const inboundReplyLeadIds = new Set(
+    t.commandCenterReplyMemory
+      .filter((reply) =>
+        actionableReplyClassifications.has(
+          lower(reply.metadata_json?.reply_classification || reply.classification)
+        )
+      )
+      .map((reply) => String(reply.lead_id || ''))
+      .filter(Boolean)
+  )
+
+  const hotLeadReplies: CommandCenterStreamItem[] = [
+    ...inboundReplyItems,
+    ...currentLeads
+    .filter(
+      (lead) =>
+        ['replied', 'interested', 'qualified'].includes(lower(lead.status)) &&
+        !inboundReplyLeadIds.has(String(lead.id))
+    )
     .sort((a, b) => Date.parse(timestampOf(b) || '') - Date.parse(timestampOf(a) || ''))
     .slice(0, 4)
     .map((lead) => {
       const status = lower(lead.status)
       return {
         id: `seller-reply-${lead.id}`,
-        lane: 'seller',
+        lane: 'seller' as const,
         title: leadLabel(lead),
         detail: `${marketLabel(lead) || lead.source || 'Seller lead'} · ${titleCase(status)}`,
         hint: String(lead.email || '').trim() || String(lead.source || '').trim() || 'Open seller thread',
@@ -3182,7 +3247,10 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
             : leadStatusAction(`lead-qualify-${lead.id}`, 'Mark qualified', lead.id, 'qualified', 'success'),
         ],
       }
-    })
+    }),
+  ]
+    .sort((a, b) => Date.parse(b.at || '') - Date.parse(a.at || ''))
+    .slice(0, 8)
 
   const partnerReplyItems: CommandCenterStreamItem[] = [
     ...t.buyers
@@ -4252,8 +4320,43 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     },
   ]
 
+  const routingQueue = [
+    { label: 'Buyer matches open', count: pendingBuyerMatches, href: '/admin/buyer-matches' },
+    { label: 'Lender matches open', count: pendingLenderMatches, href: '/admin/lender-matches' },
+    { label: 'Buyer packets ready', count: dealPipeline.totals.packetReady, href: '#property-command' },
+    { label: 'Active deal pipeline', count: dealPipeline.totals.activeDeals, href: '#lane-diagnostics' },
+    { label: 'Research checklists open', count: openChecklists, href: '/admin/research-checklists' },
+    { label: 'Partner buy boxes to confirm', count: Math.max(0, partnerOutreachReady - partnerBuyBoxesConfirmed), href: '/admin/investor-partnerships' },
+    { label: 'Lead follow-ups due', count: followupsDue, href: '/admin/leads?outreachStatus=followup_due' },
+    { label: 'Partner follow-ups due', count: partnerFollowupsDue, href: '/admin/buyers' },
+  ]
+  const generatedAt = new Date().toISOString()
+  const revenueEngine = buildRevenueExecutiveSnapshot({
+    generatedAt,
+    liveDataReachable,
+    dataSourceIssues: issues,
+    priorities,
+    alerts,
+    overdueTasks: overdueTaskItems,
+    summary: {
+      revenue30d,
+      revenueTarget,
+      outreach24h,
+      outreachTarget,
+      newLeads24h,
+      replySignals7d,
+      urgentTasks: urgentTasks.length,
+      activePartners: activeBuyers + activeLenders,
+      partnerOutreachReady,
+      partnerBuyBoxesConfirmed,
+    },
+    routingQueue,
+    dealPipeline,
+    autopilot,
+  })
+
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     liveDataReachable,
     dataSourceIssues: issues,
     summary: {
@@ -4280,6 +4383,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     missionNodes,
     priorities: priorities.slice(0, 7),
     alerts: alerts.slice(0, 8),
+    revenueEngine,
     agents,
     outboundControl,
     strategyLab,
@@ -4303,16 +4407,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     },
     outreachQueues,
     marketHeat,
-    routingQueue: [
-      { label: 'Buyer matches open', count: pendingBuyerMatches, href: '/admin/buyer-matches' },
-      { label: 'Lender matches open', count: pendingLenderMatches, href: '/admin/lender-matches' },
-      { label: 'Buyer packets ready', count: dealPipeline.totals.packetReady, href: '#property-command' },
-      { label: 'Active deal pipeline', count: dealPipeline.totals.activeDeals, href: '#lane-diagnostics' },
-      { label: 'Research checklists open', count: openChecklists, href: '/admin/research-checklists' },
-      { label: 'Partner buy boxes to confirm', count: Math.max(0, partnerOutreachReady - partnerBuyBoxesConfirmed), href: '/admin/investor-partnerships' },
-      { label: 'Lead follow-ups due', count: followupsDue, href: '/admin/leads?outreachStatus=followup_due' },
-      { label: 'Partner follow-ups due', count: partnerFollowupsDue, href: '/admin/buyers' },
-    ],
+    routingQueue,
     overdueTasks: overdueTaskItems,
     activity: activityFeed,
     localSignals: {
