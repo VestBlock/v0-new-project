@@ -27,6 +27,11 @@ const scoreSchema = z.object({
   timeToResult: z.number().min(0).max(100),
   executionDifficulty: z.number().min(0).max(100),
   risk: z.number().min(0).max(100),
+  evidenceQuality: z.number().min(0).max(100).optional(),
+  strategicFit: z.number().min(0).max(100).optional(),
+  availableAudience: z.number().min(0).max(100).optional(),
+  historicalPerformance: z.number().min(0).max(100).optional(),
+  complianceRisk: z.number().min(0).max(100).optional(),
 })
 
 const requestSchema = z.discriminatedUnion('intent', [

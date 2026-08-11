@@ -38,7 +38,6 @@ const serviceMatchers = [
   ['OpenAI', /\bopenai\b/i],
   ['Outscraper', /\boutscraper\b/i],
   ['PayPal', /\bpaypal\b/i],
-  ['PostHog', /\bposthog\b/i],
   ['RentCast', /\brentcast\b/i],
   ['Resend', /\bresend\b/i],
   ['SAM.gov', /sam\.gov|sam_gov|\bsam automation\b/i],

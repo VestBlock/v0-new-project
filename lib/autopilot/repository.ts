@@ -20,6 +20,7 @@ import {
 } from './strategyEngine'
 import {
   BUSINESS_VERTICALS,
+  getVerticalScorecard,
   VERTICAL_REGISTRY,
   type BusinessVertical,
 } from './verticalRegistry'
@@ -82,6 +83,7 @@ export function buildWeeklyStrategyCandidates(
 
   const inputs: StrategyCandidateInput[] = BUSINESS_VERTICALS.map((vertical, index) => {
     const definition = VERTICAL_REGISTRY[vertical]
+    const scorecard = getVerticalScorecard(vertical)
     const evidence = evidenceByVertical[vertical]
     const researchRequired = evidence.every((item) => item.quality === 'missing')
       ? [`Connect a reliable ${definition.kpis[0]} aggregate with source lineage.`, 'Record the current baseline and one attributable outcome before promotion.']
@@ -90,6 +92,16 @@ export function buildWeeklyStrategyCandidates(
         : []
     const signalTotal = evidence.reduce((sum, item) => sum + (typeof item.value === 'number' ? item.value : 0), 0)
     const confidence = researchRequired ? 28 : evidence.some((item) => item.quality === 'verified') ? 72 : 54
+    const evidenceQuality = Math.round(
+      evidence.reduce((sum, item) => sum + (item.quality === 'verified' ? 90 : item.quality === 'partial' ? 55 : 0), 0) /
+      Math.max(1, evidence.length)
+    )
+    const verticalHistory = cockpit.strategyMemory.experiments.filter((experiment) =>
+      [experiment.metrics.vertical, experiment.metrics.strategyVertical].includes(vertical)
+    )
+    const historicalPerformance = verticalHistory.length === 0
+      ? 45
+      : Math.round((verticalHistory.filter((experiment) => experiment.winner).length / verticalHistory.length) * 100)
 
     return {
       name: researchRequired
@@ -135,6 +147,11 @@ export function buildWeeklyStrategyCandidates(
         timeToResult: researchRequired ? 72 : 70,
         executionDifficulty: researchRequired ? 25 : 38,
         risk: vertical === 'seller_opportunities' || vertical.includes('capital') ? 42 : 24,
+        evidenceQuality,
+        strategicFit: scorecard.confidence,
+        availableAudience: Math.min(88, researchRequired ? 28 : 48 + Math.min(40, signalTotal)),
+        historicalPerformance,
+        complianceRisk: vertical === 'seller_opportunities' ? 58 : vertical.includes('capital') ? 46 : 28,
       },
     }
   })

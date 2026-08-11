@@ -31,7 +31,7 @@ const systems = [
   { priority: 'P2', lane: 'Discovery', name: 'SAM.gov', all: ['SAM_GOV_API_KEY'] },
   { priority: 'P2', lane: 'Discovery', name: 'ATTOM', all: ['ATTOM_API_KEY'] },
   { priority: 'P2', lane: 'Payments', name: 'PayPal', all: ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID'] },
-  { priority: 'P2', lane: 'Analytics', name: 'PostHog', all: ['NEXT_PUBLIC_POSTHOG_KEY', 'POSTHOG_API_KEY'] },
+  { priority: 'P1', lane: 'CRM security', name: 'CRM identity hash secret', all: ['CRM_IDENTITY_HASH_SECRET'] },
   { priority: 'P2', lane: 'Observability', name: 'Sentry', alternatives: [['NEXT_PUBLIC_SENTRY_DSN'], ['SENTRY_DSN']], all: ['SENTRY_AUTH_TOKEN'] },
 ]
 

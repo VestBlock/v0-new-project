@@ -30,7 +30,7 @@ Updated: 2026-08-11
 
 | Integration | Current release-candidate state | Required credential or action |
 |---|---|---|
-| PostHog | Fail-closed because the configured value is a `phx_` personal key | Revoke/rotate the exposed personal key. Store the project token as `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and, if desired, `POSTHOG_PROJECT_TOKEN`. Never place a personal or secret key in `NEXT_PUBLIC_*`. |
+| Product analytics | First-party Vercel Analytics plus sanitized server events in Supabase | Keep event payloads coarse and PII-free; review retention and access through the existing admin controls. |
 | Supabase | Connected; privileged profile migration is versioned but not applied | Review duplicate/payment and admin-role prechecks, set trusted admin app metadata, then apply migration 057 through the normal database process. |
 | PayPal | Binding and idempotency logic implemented | Confirm sandbox client/secret and optional merchant identifier; complete preview-only $0/sandbox verification. |
 | Sentry | Next.js client, server, edge, request-error, router-transition, and global-error instrumentation are wired; it fails closed without a DSN and excludes default PII | Verify the project/org variables, source-map upload token, preview event receipt, alert ownership, and retention settings. |

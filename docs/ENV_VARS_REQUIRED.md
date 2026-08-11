@@ -49,14 +49,9 @@ No external property-valuation API is required for the current VestBlock analyze
 
 ## Analytics
 
-- `NEXT_PUBLIC_POSTHOG_KEY`
-  Use the PostHog project API key for client-side product analytics.
-- `NEXT_PUBLIC_POSTHOG_HOST`
-  Optional. Defaults to `https://us.i.posthog.com`.
-- `POSTHOG_API_KEY`
-  Optional server-side override. Falls back to `NEXT_PUBLIC_POSTHOG_KEY` if omitted.
-- `POSTHOG_HOST`
-  Optional server-side override for the PostHog host.
+- Vercel Analytics is the active product analytics surface. It requires no application secret.
+- `CRM_IDENTITY_HASH_SECRET`
+  Required server-side secret (minimum 32 characters) used to pseudonymize normalized CRM identifiers.
 
 ## Monitoring
 

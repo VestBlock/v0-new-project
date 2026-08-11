@@ -1,8 +1,10 @@
 import {
   ACQUISITION_CHANNELS,
   BUSINESS_VERTICALS,
+  getVerticalScorecard,
   type AcquisitionChannel,
   type BusinessVertical,
+  type OutreachChannel,
   type StrategyType,
 } from './verticalRegistry';
 
@@ -16,6 +18,11 @@ export type StrategyScoreInput = {
   timeToResult: number;
   executionDifficulty: number;
   risk: number;
+  evidenceQuality?: number;
+  strategicFit?: number;
+  availableAudience?: number;
+  historicalPerformance?: number;
+  complianceRisk?: number;
 };
 
 export type StrategyScore = StrategyScoreInput & {
@@ -30,6 +37,13 @@ export type StrategyEvidence = {
   observedAt: string;
   quality: 'verified' | 'partial' | 'missing';
   caveat: string | null;
+  evidenceClass?: 'fact' | 'estimate' | 'hypothesis' | 'missing';
+  sourceUrl?: string | null;
+  publisher?: string | null;
+  publishedAt?: string | null;
+  retrievedAt?: string | null;
+  credibility?: number;
+  freshnessDays?: number | null;
 };
 
 export type EvidenceState = 'sufficient' | 'partial' | 'research_required';
@@ -56,6 +70,18 @@ export type VestBlockStrategy = {
   evidenceState: EvidenceState;
   researchRequired: string[];
   portfolioRole: StrategyPortfolioRole;
+  differentiation: string;
+  requiredData: string[];
+  requiredProof: string[];
+  channelDecision: {
+    primary: OutreachChannel;
+    secondary: OutreachChannel;
+    avoid: string[];
+    rationale: string;
+  };
+  approvalRequirements: string[];
+  attributionModel: string;
+  nextExperiment: string;
   outreachPlan: {
     audiences: string[];
     angles: string[];
@@ -90,12 +116,32 @@ export type VestBlockStrategy = {
     evaluationWindowDays: number;
     killCriteria: string[];
   };
+  learningLoop: {
+    stages: string[];
+    daily: string;
+    weekly: string;
+    monthly: string;
+    changeLogRequired: true;
+  };
   dateCreated: string;
   status: 'candidate' | 'research_required' | 'approved' | 'testing' | 'measured' | 'retired';
   result: string | null;
   lesson: string | null;
   nextIteration: string | null;
   score: StrategyScore;
+};
+
+const DEFAULT_LEARNING_LOOP: VestBlockStrategy['learningLoop'] = {
+  stages: [
+    'real_world_signals', 'evidence_normalization', 'opportunity_identification',
+    'strategy_hypothesis', 'channel_selection', 'approval', 'controlled_experiment',
+    'crm_activity', 'outcome_attribution', 'retrospective', 'confidence_update',
+    'improve_scale_pause_or_retire', 'next_experiment',
+  ],
+  daily: 'Collect, deduplicate, classify, and freshness-score approved signals; create research tasks for missing evidence.',
+  weekly: 'Compare focus and challenger outcomes, inspect contradictions, and record every score change with its reason.',
+  monthly: 'Review the nine-vertical portfolio, cost and compliance boundaries, attribution gaps, and retirement decisions.',
+  changeLogRequired: true,
 };
 
 export type StrategyCandidateInput = {
@@ -140,21 +186,30 @@ export function scoreStrategy(input: StrategyScoreInput): StrategyScore {
     timeToResult: clamp(input.timeToResult),
     executionDifficulty: clamp(input.executionDifficulty),
     risk: clamp(input.risk),
+    evidenceQuality: clamp(input.evidenceQuality ?? input.confidence),
+    strategicFit: clamp(input.strategicFit ?? 50),
+    availableAudience: clamp(input.availableAudience ?? 50),
+    historicalPerformance: clamp(input.historicalPerformance ?? 50),
+    complianceRisk: clamp(input.complianceRisk ?? input.risk),
   };
   const total = Math.round(
-    normalized.expectedImpact * 0.3 +
-      normalized.confidence * 0.25 +
-      normalized.timeToResult * 0.15 +
-      (100 - normalized.cost) * 0.1 +
-      (100 - normalized.executionDifficulty) * 0.1 +
-      (100 - normalized.risk) * 0.1
+    normalized.expectedImpact * 0.22 +
+      normalized.confidence * 0.14 +
+      normalized.evidenceQuality * 0.12 +
+      normalized.strategicFit * 0.12 +
+      normalized.availableAudience * 0.1 +
+      normalized.historicalPerformance * 0.08 +
+      normalized.timeToResult * 0.08 +
+      (100 - normalized.cost) * 0.06 +
+      (100 - normalized.executionDifficulty) * 0.04 +
+      (100 - normalized.complianceRisk) * 0.04
   );
 
   return {
     ...normalized,
     total,
     formula:
-      'impact × 30% + confidence × 25% + speed × 15% + inverse cost × 10% + inverse difficulty × 10% + inverse risk × 10%',
+      'impact × 22% + confidence × 14% + evidence × 12% + strategic fit × 12% + audience × 10% + history × 8% + speed × 8% + inverse cost × 6% + inverse difficulty × 4% + inverse compliance risk × 4%',
   };
 }
 
@@ -179,6 +234,8 @@ function normalizeEvidence(
               observedAt: now,
               quality: 'partial',
               caveat: 'Legacy free-text evidence; verify its source before launch.',
+              evidenceClass: 'hypothesis',
+              retrievedAt: now,
             }
           : null;
       }
@@ -190,6 +247,13 @@ function normalizeEvidence(
         observedAt: item.observedAt || now,
         quality: item.quality,
         caveat: item.caveat?.trim() || null,
+        evidenceClass: item.evidenceClass || (item.quality === 'missing' ? 'missing' : 'fact'),
+        sourceUrl: item.sourceUrl?.trim() || null,
+        publisher: item.publisher?.trim() || null,
+        publishedAt: item.publishedAt || null,
+        retrievedAt: item.retrievedAt || now,
+        credibility: clamp(item.credibility ?? (item.quality === 'verified' ? 85 : item.quality === 'partial' ? 55 : 0)),
+        freshnessDays: Number.isFinite(item.freshnessDays) ? Math.max(0, Number(item.freshnessDays)) : null,
       };
     })
     .filter((item): item is StrategyEvidence => Boolean(item))
@@ -208,6 +272,7 @@ export function createStrategyObject(
   now = new Date().toISOString()
 ): VestBlockStrategy {
   const channels = normalizeChannels(input.channels);
+  const vertical = getVerticalScorecard(input.vertical);
   const secondaryKpis = input.secondaryKpis.map((value) => value.trim()).filter(Boolean).slice(0, 8);
   const evidence = normalizeEvidence(input.evidence, now);
   const evidenceState = input.evidenceState || inferEvidenceState(evidence);
@@ -239,6 +304,18 @@ export function createStrategyObject(
     evidenceState,
     researchRequired,
     portfolioRole,
+    differentiation: vertical.differentiation,
+    requiredData: vertical.requiredData,
+    requiredProof: vertical.requiredProof,
+    channelDecision: {
+      primary: vertical.primaryChannel,
+      secondary: vertical.secondaryChannel,
+      avoid: vertical.channelsToAvoid,
+      rationale: vertical.channelRationale,
+    },
+    approvalRequirements: vertical.approvalRequirements,
+    attributionModel: vertical.attributionModel,
+    nextExperiment: vertical.nextExperiment,
     outreachPlan: {
       audiences: [input.targetAudience.trim()],
       angles: (input.outreachAngles || [input.hypothesis]).map((value) => value.trim()).filter(Boolean).slice(0, 5),
@@ -279,6 +356,7 @@ export function createStrategyObject(
         .filter(Boolean)
         .slice(0, 8),
     },
+    learningLoop: DEFAULT_LEARNING_LOOP,
     dateCreated: now,
     status,
     result: null,
@@ -312,7 +390,23 @@ export function normalizeStoredStrategy(value: unknown): VestBlockStrategy | nul
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, any>;
   if (record.schemaVersion === 2 && BUSINESS_VERTICALS.includes(record.vertical)) {
-    return record as VestBlockStrategy;
+    const scorecard = getVerticalScorecard(record.vertical as BusinessVertical);
+    return {
+      ...record,
+      differentiation: String(record.differentiation || scorecard.differentiation),
+      requiredData: Array.isArray(record.requiredData) ? record.requiredData : scorecard.requiredData,
+      requiredProof: Array.isArray(record.requiredProof) ? record.requiredProof : scorecard.requiredProof,
+      channelDecision: record.channelDecision || {
+        primary: scorecard.primaryChannel,
+        secondary: scorecard.secondaryChannel,
+        avoid: scorecard.channelsToAvoid,
+        rationale: scorecard.channelRationale,
+      },
+      approvalRequirements: Array.isArray(record.approvalRequirements) ? record.approvalRequirements : scorecard.approvalRequirements,
+      attributionModel: String(record.attributionModel || scorecard.attributionModel),
+      nextExperiment: String(record.nextExperiment || scorecard.nextExperiment),
+      learningLoop: record.learningLoop || DEFAULT_LEARNING_LOOP,
+    } as VestBlockStrategy;
   }
   if (record.schemaVersion !== 1 || typeof record.name !== 'string') return null;
 

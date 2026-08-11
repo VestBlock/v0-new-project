@@ -1,13 +1,14 @@
 import type React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
-import { PosthogProvider } from '@/components/providers/posthog-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from '@/components/ui/toaster';
 import { Navigation } from '@/components/navigation'; // Corrected import
+import { SiteFooter } from '@/components/site-footer';
 import {
   absoluteUrl,
   getSiteUrl,
@@ -92,14 +93,14 @@ export default function RootLayout({
         />
         <GoogleAdsProvider />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PosthogProvider>
-            <AuthProvider>
-              <Navigation />
-              <main>{children}</main>
-              <Toaster />
-            </AuthProvider>
-          </PosthogProvider>
+          <AuthProvider>
+            <Navigation />
+            <main>{children}</main>
+            <SiteFooter />
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );

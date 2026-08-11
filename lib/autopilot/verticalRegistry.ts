@@ -40,6 +40,24 @@ export const STRATEGY_TYPES = [
 
 export type StrategyType = (typeof STRATEGY_TYPES)[number];
 
+export const OUTREACH_CHANNELS = [
+  'outlook_graph',
+  'resend_permissioned',
+  'manual_networking',
+  'compliant_phone',
+  'consented_sms',
+  'direct_mail',
+  'partner_referral',
+  'buyer_alert',
+  'in_app',
+  'educational_content',
+  'seo_inbound',
+  'events_webinars',
+  'buffer_social',
+] as const;
+
+export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
+
 type VerticalRegistryEntry = {
   label: string;
   offer: string;
@@ -330,6 +348,194 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalRegistryEntry> 
     killCriteria: ['Unverifiable claim', 'Tracking remains unavailable', 'Spend exceeds approved cap', 'Platform policy rejection persists'],
   },
 };
+
+type VerticalStrategyDecision = {
+  differentiation: string;
+  evidenceQualityTarget: 'verified_primary' | 'verified_first_party' | 'mixed_verified';
+  evidenceFreshnessDays: number;
+  primaryChannel: OutreachChannel;
+  secondaryChannel: OutreachChannel;
+  channelsToAvoid: string[];
+  channelRationale: string;
+  requiredData: string[];
+  expectedCost: string;
+  expectedOutcome: string;
+  confidence: number;
+  attributionModel: 'first_touch_plus_position_based' | 'first_touch_plus_last_touch' | 'account_position_based';
+  nextExperiment: string;
+  portfolioRole: 'backlog';
+  approvalRequirements: string[];
+};
+
+export const VERTICAL_STRATEGY_DECISIONS: Record<BusinessVertical, VerticalStrategyDecision> = {
+  business_capital: {
+    differentiation: 'Readiness and use-of-funds clarity before a criteria-based introduction, with no approval promise.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'resend_permissioned',
+    channelsToAvoid: ['cold SMS', 'purchased consumer lists', 'approval-claim paid ads'],
+    channelRationale: 'Intent-led education earns the first request; permissioned lifecycle email can finish an incomplete readiness file.',
+    requiredData: ['consent timestamp', 'business operating state', 'use of funds', 'timeline', 'readiness inputs', 'source attribution'],
+    expectedCost: '$0-$20 per completed readiness follow-up before any approved media spend',
+    expectedOutcome: 'More complete, consented funding profiles that can be evaluated against current criteria.',
+    confidence: 76,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Compare an eligibility-first page with a document-readiness checklist on completed profiles, not clicks.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['claim review', 'consent verified', 'current partner criteria', 'cost cap approved'],
+  },
+  real_estate_capital: {
+    differentiation: 'Property and borrower facts are normalized before a lender sees the scenario.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'partner_referral',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['cold SMS', 'rate advertising without current terms', 'bulk borrower blasts'],
+    channelRationale: 'Trusted property professionals surface active scenarios; Outlook supports a human, file-specific follow-up.',
+    requiredData: ['property identifier', 'purpose', 'timeline', 'borrower consent', 'scenario assumptions', 'lender criteria timestamp'],
+    expectedCost: '$0-$35 per human-reviewed scenario excluding third-party reports',
+    expectedOutcome: 'Complete property-capital scenarios reaching a qualified lender review.',
+    confidence: 78,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Test a one-page scenario completeness score with two consented referral partners.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['borrower consent', 'fact-source review', 'lender criteria current', 'no commitment language'],
+  },
+  capital_partners: {
+    differentiation: 'VestBlock measures match disposition and keeps each lender box timestamped instead of promising volume.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'outlook_graph',
+    secondaryChannel: 'manual_networking',
+    channelsToAvoid: ['cold SMS', 'generic newsletter enrollment', 'unlicensed deal-flow claims'],
+    channelRationale: 'A lender-criteria conversation is high-context and should come from a named operator, followed by manual relationship work.',
+    requiredData: ['business identity', 'licensing status where applicable', 'product box', 'markets', 'exclusions', 'criteria confirmed date'],
+    expectedCost: '$0-$15 per verified partner profile using owned tools',
+    expectedOutcome: 'Current lender criteria and faster disposition on suitable introductions.',
+    confidence: 82,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Ask a small verified lender set to confirm one product box through a five-field criteria update.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['business-purpose basis', 'identity/licensing check', 'manual message review', 'suppression check'],
+  },
+  seller_opportunities: {
+    differentiation: 'Fact-sourced property review begins with timing and options, not pressure or an unverified offer.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'direct_mail',
+    channelsToAvoid: ['cold SMS', 'ringless voicemail', 'distress-shaming copy', 'automated consumer calls'],
+    channelRationale: 'Inbound preserves clear intent; where a documented property basis exists, direct mail is slower but easier to explain and audit.',
+    requiredData: ['ownership evidence', 'source URL or record', 'retrieval date', 'property context', 'contact basis', 'suppression state'],
+    expectedCost: '$0 inbound; direct-mail pilot capped at $1.25 per approved piece',
+    expectedOutcome: 'Qualified owner conversations and complete property reviews without complaint-driven volume.',
+    confidence: 67,
+    attributionModel: 'first_touch_plus_last_touch',
+    nextExperiment: 'Compare an options-review letter with a property-facts-check letter on qualified replies from one approved county source.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['contact-basis review', 'ownership confidence', 'copy approval', 'mail count and cost approval'],
+  },
+  buyers_investors: {
+    differentiation: 'Verified buy boxes and time-stamped appetite make every opportunity alert more relevant.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'buyer_alert',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['unsolicited SMS', 'unqualified deal blasts', 'claims of exclusive inventory'],
+    channelRationale: 'Permissioned alerts fit active buy boxes; Outlook handles criteria confirmation and high-value exceptions.',
+    requiredData: ['buyer identity', 'buy box', 'markets', 'asset types', 'price bands', 'capacity state', 'alert consent'],
+    expectedCost: 'Under $0.10 per permissioned alert plus operator review',
+    expectedOutcome: 'Higher accepted-match and diligence rates with fewer off-criteria alerts.',
+    confidence: 84,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Refresh ten existing buy boxes, then compare criteria-matched alerts with generic market alerts.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['buy box current', 'alert permission', 'deal facts verified', 'distribution count approved'],
+  },
+  development_partners: {
+    differentiation: 'Project role, market, capacity, and credential evidence are matched before an introduction.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 60,
+    primaryChannel: 'outlook_graph',
+    secondaryChannel: 'manual_networking',
+    channelsToAvoid: ['bulk contractor blasts', 'cold SMS', 'unverified licensing claims'],
+    channelRationale: 'Project partnerships are narrow, relationship-driven, and require a human explanation of scope and verification limits.',
+    requiredData: ['role', 'markets', 'project need', 'capacity evidence', 'license/insurance state', 'compensation expectations'],
+    expectedCost: '$0-$25 per verified project-fit conversation',
+    expectedOutcome: 'Accepted partner matches that move to a defined scope or milestone.',
+    confidence: 74,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Run a manual five-partner fit review for one defined builder or contractor need.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['credential review', 'scope owner', 'relationship disclosure', 'message approval'],
+  },
+  opportunity_service_partners: {
+    differentiation: 'Resources are admitted by current terms and measurable customer usefulness, not listing volume.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'partner_referral',
+    secondaryChannel: 'educational_content',
+    channelsToAvoid: ['paid placement without disclosure', 'guaranteed-benefit claims', 'cold SMS'],
+    channelRationale: 'Trusted introductions establish fit, while source-linked education lets users evaluate eligibility before referral.',
+    requiredData: ['canonical terms URL', 'terms date', 'eligibility', 'pricing or compensation disclosure', 'customer need', 'outcome feedback'],
+    expectedCost: '$0-$20 per verified resource review',
+    expectedOutcome: 'Qualified referrals to current, transparent resources with reported customer value.',
+    confidence: 71,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Validate one recurring customer need against three primary-source resources and measure qualified referral completion.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['terms verified', 'compensation disclosed', 'claims review', 'referral approval'],
+  },
+  dealvault: {
+    differentiation: 'DealVault keeps private documents private while making approved milestones, proofs, and payout records easier to audit.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'in_app',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['wallet-airdrop promotion', 'custody language', 'mass software-demo blasts'],
+    channelRationale: 'The strongest moment is an active multi-party workflow; a human demo can qualify more complex use cases.',
+    requiredData: ['authorized participants', 'use case', 'agreement state', 'milestones', 'privacy boundary', 'accountable pilot owner'],
+    expectedCost: '$0 for in-product activation; operator time for approved demos',
+    expectedOutcome: 'Qualified pilots with active records and completed milestones.',
+    confidence: 79,
+    attributionModel: 'first_touch_plus_last_touch',
+    nextExperiment: 'Offer a private proof-trail review at the moment an introduced opportunity becomes multi-party.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['participant authorization', 'privacy review', 'pilot scope', 'no chain write without approval'],
+  },
+  growth_visibility_services: {
+    differentiation: 'Visibility work is tied to qualified actions and revenue evidence instead of content volume or ranking promises.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'buffer_social',
+    channelsToAvoid: ['cold SMS', 'automated social DMs', 'ad spend without measurement and approval'],
+    channelRationale: 'Search captures explicit need; VestBlock-owned social profiles distribute proof and education without impersonation or list buying.',
+    requiredData: ['offer', 'audience', 'claim inventory', 'baseline', 'conversion event', 'source attribution', 'budget boundary'],
+    expectedCost: '$0 owned distribution before any approved media or provider budget',
+    expectedOutcome: 'More qualified discovery actions with defensible source-to-opportunity attribution.',
+    confidence: 73,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Publish one proof-backed service answer and compare qualified actions with the prior 28-day baseline.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['proof review', 'platform-policy review', 'measurement live', 'publish or spend approval'],
+  },
+};
+
+export function getVerticalScorecard(vertical: BusinessVertical) {
+  const definition = VERTICAL_REGISTRY[vertical];
+  return {
+    ...definition,
+    ...VERTICAL_STRATEGY_DECISIONS[vertical],
+    persona: definition.icp,
+    eligibility: definition.qualifications,
+    requiredProof: definition.approvedProof,
+    successMetrics: definition.kpis,
+    stopConditions: definition.killCriteria,
+    complianceRequirements: definition.compliance,
+  };
+}
 
 export function getVerticalDefinition(vertical: BusinessVertical) {
   return VERTICAL_REGISTRY[vertical];

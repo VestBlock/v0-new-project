@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "policy": "Prefer primary government, regulator, market, and first-party sources; normalize and cite every signal before it can influence a strategy.",
+  "sources": [
+    { "id": "sba", "publisher": "U.S. Small Business Administration", "url": "https://www.sba.gov/blog", "verticals": ["business_capital", "capital_partners"], "cadence": "daily", "authority": "primary" },
+    { "id": "cfpb", "publisher": "Consumer Financial Protection Bureau", "url": "https://www.consumerfinance.gov/about-us/newsroom/", "verticals": ["business_capital", "real_estate_capital"], "cadence": "daily", "authority": "primary" },
+    { "id": "federal_reserve", "publisher": "Federal Reserve", "url": "https://www.federalreserve.gov/newsevents.htm", "verticals": ["business_capital", "real_estate_capital"], "cadence": "daily", "authority": "primary" },
+    { "id": "hud", "publisher": "HUD USER", "url": "https://www.huduser.gov/portal/ushmc.html", "verticals": ["real_estate_capital", "seller_opportunities", "buyers_investors"], "cadence": "weekly", "authority": "primary" },
+    { "id": "census", "publisher": "U.S. Census Bureau", "url": "https://www.census.gov/economic-indicators/", "verticals": ["business_capital", "seller_opportunities", "growth_visibility_services"], "cadence": "daily", "authority": "primary" },
+    { "id": "sec", "publisher": "U.S. Securities and Exchange Commission", "url": "https://www.sec.gov/news", "verticals": ["capital_partners", "buyers_investors"], "cadence": "daily", "authority": "primary" }
+  ]
+}
