@@ -12,6 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+function getSafeRedirectTarget(value: string | null, fallback: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return fallback
+  }
+
+  return value
+}
+
 export function LoginPageClient() {
   const defaultRedirectTarget = "/dashboard/services"
   const searchParams = useSearchParams()
@@ -21,7 +29,7 @@ export function LoginPageClient() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { signIn, isLoading, authError, isAuthenticated } = useAuth()
   const router = useRouter()
-  const redirectTarget = searchParams.get("redirect") || defaultRedirectTarget
+  const redirectTarget = getSafeRedirectTarget(searchParams.get("redirect"), defaultRedirectTarget)
 
   useEffect(() => {
     if (prefilledEmail) {

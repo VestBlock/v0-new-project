@@ -29,24 +29,22 @@ These addresses feed enrichment (skip-trace / owner contact) and the seller-outr
 
 ## DealMachine handoff
 
-The stacked list can now be handed to DealMachine two ways:
+DealMachine now uses the official v2 API for property discovery, saved-list exports, and contact ingestion. The public-record stack remains an independent source and can be imported when it has DealMachine record IDs.
 
 ```bash
-# dry run + writes a full DealMachine-ready CSV
-npm run distress:dealmachine
+# free count and credit estimates across the daily strategy rotation
+pnpm distress:dealmachine:v2:plan
 
-# read-only API auth check
-npm run distress:dealmachine:pull
+# bounded property search without database ingestion
+pnpm distress:dealmachine:v2:search
 
-# safest first live API write: only the top 25 by delinquent amount
-npm run distress:dealmachine:push25
+# bounded property search with strategy-aware ingestion
+pnpm distress:dealmachine:v2:search:apply
 ```
 
-Files:
-- `data/distress-leads/dealmachine-import.csv` — manual DealMachine import file, sorted by highest delinquent amount first
-- `data/distress-leads/dealmachine-pushed.json` — local dedupe log for API pushes
+The API base is `https://api.v2.dealmachine.com/v1`. Old public/private front-end endpoints are hard-disabled. Discovery and ingestion do **not** start outreach; leads must still pass the strategy, contact-quality, suppression, compliance, and approval gates.
 
-The API sync uses DealMachine's official `public/v1` API with Bearer auth from `DEALMACHINE_API_KEY`. It creates leads and notes only; it does **not** start a mail sequence. If `DEALMACHINE_LIST_IDS`, `DEALMACHINE_TAG_IDS`, or `DEALMACHINE_LEAD_STATUS_ID` are set, the script can attach list/tag/status metadata after lead creation.
+See `docs/DEALMACHINE_V2_STRATEGY_AUTOMATION.md` for the full lane map and operating controls.
 
 ## Daily expansion
 - An **area queue** (`data/distress-sources/<market>-area-queue.json`) lists every neighborhood ordered by open-violation volume. Each run advances 2 areas and wraps around to refresh once all are covered.

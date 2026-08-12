@@ -7,6 +7,7 @@ import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { listSuppressions, upsertSuppression } from '@/lib/leads/repository'
 import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
 import { recordLeadOutcomeEvent } from '@/lib/admin/dealMemory'
+import { routeQualifiedSellerLeadToBuyers } from '@/lib/buyers/qualifiedSellerRouting'
 import { logEvent } from '@/lib/system/logEvent'
 
 function cleanLeadSearch(value: string) {
@@ -281,7 +282,21 @@ export async function PATCH(request: NextRequest) {
       }).catch(() => null)
     }
 
-    return NextResponse.json({ success: true, lead: data })
+    const buyerRouting = ['interested', 'qualified'].includes(String(status || ''))
+      ? await routeQualifiedSellerLeadToBuyers(id, {
+          autoSend: status === 'qualified' && ['1', 'true', 'yes', 'on'].includes(
+            String(process.env.BUYER_PACKET_AUTO_SEND_ENABLED || '').toLowerCase()
+          ),
+        }).catch((routingError) => ({
+          ok: false,
+          leadId: id,
+          status: 'failed',
+          reason: routingError instanceof Error ? routingError.message : String(routingError),
+          matchCount: 0,
+        }))
+      : null
+
+    return NextResponse.json({ success: true, lead: data, buyerRouting })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update lead.' },

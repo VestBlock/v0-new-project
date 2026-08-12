@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
+import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { logEvent } from '@/lib/system/logEvent'
 
@@ -33,12 +34,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const dailyTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 50))
-  const maxPerRun = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(dailyTarget, 100))
+  const dailyTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 500))
+  const maxPerRun = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(dailyTarget, 500))
   const target = Math.min(parsed.data.target || maxPerRun, maxPerRun)
   const budgetMs = envMs('LEADS_COMMAND_CENTER_OUTBOUND_BUDGET_MS', 90000)
 
   try {
+    if (!parsed.data.dryRun && await isCommandCenterDataIntegrityHold()) {
+      return commandCenterDataIntegrityHoldResponse()
+    }
+
     const result = await runLeadThroughputSprint({
       dryRun: parsed.data.dryRun,
       sendLimit: target,

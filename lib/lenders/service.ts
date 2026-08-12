@@ -4,10 +4,12 @@ import { enrichContactFromHunter } from '@/lib/email/hunter'
 import { discoverLendersForMarket } from '@/lib/lenders/discovery'
 import { matchBorrowerToLenders } from '@/lib/lenders/matching'
 import { generateLenderOutreach, LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
+import { evaluateLenderAutoApproval } from '@/lib/lenders/automationCore'
 import {
   addLenderNote,
   finishLenderOutreachRun,
   insertLenderRelationshipEvent,
+  getLenderOutreachMessageByChannel,
   listApprovedLenderEmailOutreach,
   listLendersForScoring,
   listLendersNeedingFollowup,
@@ -16,6 +18,7 @@ import {
   saveLenderScore,
   startLenderOutreachRun,
   updateLenderPerformance,
+  updateLenderOutreachMessage,
   updateLenderRecord,
   upsertLender,
   upsertLenderMatch,
@@ -26,6 +29,7 @@ import type { BorrowerMatchInput, LenderRecord } from '@/lib/lenders/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -351,32 +355,79 @@ export async function runDailyLenderOutreach(limit = 40) {
   return { ok: true, count: results.length, results }
 }
 
-export async function runDailyLenderFollowup(limit = 30) {
+export async function runDailyLenderFollowup(limit = 30, options: { dryRun?: boolean } = {}) {
   const lenders = await listLendersNeedingFollowup(limit)
-  const results: Array<{ lenderId: string; name: string; action: string }> = []
+  const minimumScore = envInt('LENDER_AUTO_APPROVE_MIN_SCORE', 40)
+  const results: Array<{ lenderId: string; name: string; action: string; reason?: string }> = []
   for (const lender of lenders) {
-    await createAdminTask({
-      title: `Lender follow-up: ${lender.name}`,
-      description: `Review lender relationship stage ${lender.relationship_stage} and determine the right next partner step.`,
-      taskType: 'lender_relationship_followup',
-      assignedTo: lender.owner_user_id || null,
-      priority: lender.relationship_stage === 'responded' ? 'high' : 'normal',
-      entityType: 'lender',
-      entityId: lender.id,
-      dueAt: adminTaskDueDates.now(),
-      metadata: {
-        lenderId: lender.id,
-        lenderCategory: lender.category,
-        relationshipStage: lender.relationship_stage,
-      },
-    }).catch(() => null)
+    if (['responded', 'reviewing', 'active_partner'].includes(lender.relationship_stage)) {
+      if (!options.dryRun) {
+        await createAdminTask({
+          title: `Lender relationship follow-up: ${lender.name}`,
+          description: 'This lender has replied or is active. Capture its lending box and route the relationship manually instead of sending another automated email.',
+          taskType: 'lender_relationship_followup',
+          assignedTo: lender.owner_user_id || null,
+          priority: 'high',
+          entityType: 'lender',
+          entityId: lender.id,
+          dueAt: adminTaskDueDates.now(),
+          metadata: { lenderId: lender.id, relationshipStage: lender.relationship_stage },
+        }).catch(() => null)
+        await updateLenderRecord(lender.id, { next_follow_up_at: null })
+      }
+      results.push({ lenderId: lender.id, name: lender.name, action: 'manual_relationship_followup' })
+      continue
+    }
 
-    await updateLenderRecord(lender.id, {
-      relationship_stage: lender.relationship_stage === 'responded' ? 'reviewing' : lender.relationship_stage,
-      outreach_status: lender.outreach_status === 'followup_due' ? 'needs_review' : lender.outreach_status,
-      next_follow_up_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    const message = await getLenderOutreachMessageByChannel(lender.id, 'email_followup')
+    if (!message) {
+      if (!options.dryRun) await updateLenderRecord(lender.id, { next_follow_up_at: null })
+      results.push({ lenderId: lender.id, name: lender.name, action: 'blocked', reason: 'missing_followup_message' })
+      continue
+    }
+
+    const decision = evaluateLenderAutoApproval({
+      lender,
+      message,
+      templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
+      minimumScore,
+      allowedChannels: ['email_followup'],
     })
-    results.push({ lenderId: lender.id, name: lender.name, action: 'followup_queued' })
+    if (!decision.approved || !isUsableContactEmail(lender.contact_email)) {
+      if (!options.dryRun) {
+        await createAdminTask({
+          title: `Lender follow-up blocked: ${lender.name}`,
+          description: `The guarded lender follow-up stopped at the safety gate: ${decision.reason}.`,
+          taskType: 'lender_autopilot_blocked',
+          priority: 'high',
+          entityType: 'lender',
+          entityId: lender.id,
+          dueAt: adminTaskDueDates.now(),
+          metadata: { lenderId: lender.id, reason: decision.reason, messageId: message.id },
+        }).catch(() => null)
+        await updateLenderRecord(lender.id, { next_follow_up_at: null })
+      }
+      results.push({ lenderId: lender.id, name: lender.name, action: 'blocked', reason: decision.reason })
+      continue
+    }
+
+    if (!options.dryRun) {
+      await updateLenderOutreachMessage(message.id, {
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        send_error: null,
+      })
+      await updateLenderRecord(lender.id, {
+        relationship_stage: 'contacted',
+        outreach_status: 'approved',
+        next_follow_up_at: null,
+      })
+    }
+    results.push({
+      lenderId: lender.id,
+      name: lender.name,
+      action: options.dryRun ? 'would_approve_followup' : 'followup_approved',
+    })
   }
   return { ok: true, count: results.length, results }
 }

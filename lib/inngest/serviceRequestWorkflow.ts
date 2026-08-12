@@ -54,8 +54,6 @@ export async function processGrowthServiceRequest(
 
   const [automationResult, deliverableResult] = await Promise.allSettled([
     runNewLeadAutomation({
-      // Service requests are real inbound customers, so the intake alert fires.
-      sendIntakeAlert: true,
       leadId: input.leadId,
       leadType: input.leadType,
       name: input.leadName,

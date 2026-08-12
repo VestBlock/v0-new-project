@@ -18,6 +18,9 @@
 
 import fs from "node:fs"
 import path from "node:path"
+import { blockLegacyDealMachineApi } from "./lib/dealmachine-legacy-disabled.mjs"
+
+blockLegacyDealMachineApi("dealmachine-market-harvest.mjs")
 
 const args = process.argv.slice(2)
 const getArg = (name) => {

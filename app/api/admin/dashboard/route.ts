@@ -990,7 +990,7 @@ export async function GET() {
   const hardScoreboardTargets = {
     monthlyRevenue: monthlyRevenueTarget,
     newLeads24h: 10,
-    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 50),
+    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 500),
     partnerOutreach24h: 6,
     replySignals7d: 7,
     bookedOrWon7d: 3,

@@ -1,12 +1,15 @@
 import 'server-only'
 
-import { spawnSync } from 'node:child_process'
-
 import { buildBossBriefing } from '@/lib/admin/bossAgent'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
+import { runDailyBuyerPipeline } from '@/lib/buyers/automation'
+import { runDailyInvestorPipeline } from '@/lib/investors/automation'
+import { runDailyLenderPipeline } from '@/lib/lenders/automation'
+import { syncOutlookMailbox } from '@/lib/email/outlookMailbox'
+import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { captureKpiSnapshot, runBossRetrospective } from '@/lib/admin/selfImprovement'
-import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
+import { loadOperatingLoopTelemetryFromDatabase, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 
 export type DailyOperatingLoopResult = {
   dryRun: boolean
@@ -15,6 +18,7 @@ export type DailyOperatingLoopResult = {
   generatedAt: string
   retrospective: Awaited<ReturnType<typeof runBossRetrospective>>
   telemetry: OperatingLoopTelemetry
+  mailbox: Awaited<ReturnType<typeof syncOutlookMailbox>>
   boss: {
     focusKey: string | null
     focusName: string | null
@@ -31,6 +35,12 @@ export type DailyOperatingLoopResult = {
     attempted: boolean
     ok: boolean
     message: string
+    details?: {
+      seller: unknown
+      buyer: unknown
+      lender: unknown
+      investor: unknown
+    }
   }
 }
 
@@ -44,19 +54,44 @@ const AGENT_LABELS: Record<string, string> = {
   operator: 'Operator Intelligence',
 }
 
-function runNodeScript(script: string, args: string[]) {
-  const result = spawnSync(process.execPath, ['--env-file=.env.local', script, ...args], {
-    cwd: process.cwd(),
-    env: process.env,
-    encoding: 'utf8',
-  })
+function envInt(name: string, fallback: number) {
+  const value = Number.parseInt(process.env[name] || '', 10)
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
 
-  return {
-    ok: result.status === 0,
-    status: result.status,
-    stdout: result.stdout,
-    stderr: result.stderr,
-  }
+async function recordRevenueLoopJob(input: {
+  status: 'active' | 'running' | 'failed'
+  lastStatus: string
+  error?: string | null
+  metrics?: Record<string, unknown>
+}) {
+  const now = new Date()
+  const admin = createAdminClient()
+  const { error } = await admin.from('command_center_jobs').upsert(
+    {
+      job_key: 'seller-outreach-batch',
+      job_type: 'seller_outreach_batch',
+      title: 'Run guarded seller and partner revenue lanes',
+      status: input.status,
+      cadence: '4 times daily',
+      priority: 95,
+      next_run_at: new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString(),
+      last_run_at: now.toISOString(),
+      last_status: input.lastStatus,
+      last_error: input.error || null,
+      metrics_json: input.metrics || {},
+      config_json: {
+        sellerLimit: envInt('BOSS_SELLER_SEND_LIMIT_PER_RUN', 35),
+        buyerLimit: envInt('BUYERS_SEND_LIMIT_PER_RUN', 10),
+        lenderLimit: envInt('LENDERS_DAILY_SEND_LIMIT', 15),
+        investorLimit: envInt('INVESTORS_DAILY_SEND_LIMIT', 20),
+        guardedSend: true,
+      },
+      updated_at: now.toISOString(),
+    },
+    { onConflict: 'job_key' }
+  )
+  if (error) throw error
 }
 
 async function dispatchBossPlay(playKey: string, createdByUserId: string | null) {
@@ -133,6 +168,12 @@ export async function runDailyOperatingLoop(options: {
   const dryRun = options.dryRun !== false
   const dispatch = Boolean(options.dispatch && !dryRun)
   const send = Boolean(options.send && !dryRun && process.env.BOSS_DAILY_LOOP_ENABLE_SEND === 'true')
+  await recordRevenueLoopJob({
+    status: 'running',
+    lastStatus: dryRun ? 'dry_run_started' : 'live_run_started',
+    metrics: { dryRun, dispatch, send },
+  }).catch((error) => console.warn('[daily-operating-loop] job start was not recorded:', error))
+  const mailbox = await syncOutlookMailbox({ dryRun, sinceHours: 72, limit: 50 })
   const data = await getCommandCenterData()
   const retrospective = dryRun
     ? {
@@ -144,7 +185,7 @@ export async function runDailyOperatingLoop(options: {
   const briefing = buildBossBriefing(data)
   const focus = briefing.plays.find((play) => play.key === briefing.focusKey) || briefing.plays[0] || null
   const challenger = briefing.plays.find((play) => play.key !== focus?.key) || null
-  const telemetry = loadOperatingLoopTelemetry({
+  const telemetry = await loadOperatingLoopTelemetryFromDatabase({
     sentToday: data.strategyLab.sentToday,
     remainingToday: data.strategyLab.remainingToday,
     replySignals7d: data.strategyLab.replySignals7d,
@@ -198,13 +239,58 @@ export async function runDailyOperatingLoop(options: {
   }
 
   if (send) {
-    const result = runNodeScript('scripts/seller-outreach-autopilot.mjs', ['--send'])
+    const [seller, buyer, lender, investor] = await Promise.allSettled([
+      runLeadThroughputSprint({
+        dryRun: false,
+        sendLimit: envInt('BOSS_SELLER_SEND_LIMIT_PER_RUN', 35),
+        budgetMs: envInt('BOSS_SELLER_BUDGET_MS', 75_000),
+      }),
+      runDailyBuyerPipeline({ dryRun: false }),
+      runDailyLenderPipeline({ dryRun: false }),
+      runDailyInvestorPipeline({ dryRun: false }),
+    ])
+    const sellerOk = seller.status === 'fulfilled' && seller.value.ok
+    const buyerOk = buyer.status === 'fulfilled' && buyer.value.ok
+    const lenderOk = lender.status === 'fulfilled' && lender.value.ok
+    const investorOk = investor.status === 'fulfilled' && investor.value.ok
+    const sellerDetail = seller.status === 'fulfilled'
+      ? seller.value
+      : { ok: false, error: seller.reason instanceof Error ? seller.reason.message : String(seller.reason) }
+    const buyerDetail = buyer.status === 'fulfilled'
+      ? buyer.value
+      : { ok: false, error: buyer.reason instanceof Error ? buyer.reason.message : String(buyer.reason) }
+    const lenderDetail = lender.status === 'fulfilled'
+      ? lender.value
+      : { ok: false, error: lender.reason instanceof Error ? lender.reason.message : String(lender.reason) }
+    const investorDetail = investor.status === 'fulfilled'
+      ? investor.value
+      : { ok: false, error: investor.reason instanceof Error ? investor.reason.message : String(investor.reason) }
     sendAttempt = {
       attempted: true,
-      ok: result.ok,
-      message: result.ok ? 'Seller outreach autopilot ran with the configured cap.' : result.stderr || 'Seller outreach autopilot failed.',
+      ok: sellerOk && buyerOk && lenderOk && investorOk,
+      message: sellerOk && buyerOk && lenderOk && investorOk
+        ? 'Seller, buyer, lender, and investor revenue lanes completed with their configured caps.'
+        : 'The revenue loop completed partially. Review the returned seller and partner stage results.',
+      details: { seller: sellerDetail, buyer: buyerDetail, lender: lenderDetail, investor: investorDetail },
     }
   }
+
+  await recordRevenueLoopJob({
+    status: sendAttempt.ok ? 'active' : 'failed',
+    lastStatus: dryRun ? 'dry_run_completed' : sendAttempt.ok ? 'completed' : 'partial',
+    error: sendAttempt.ok ? null : sendAttempt.message,
+    metrics: {
+      dryRun,
+      dispatch,
+      send,
+      mailboxConnected: mailbox.connected,
+      directivesDispatched: dispatchResult.dispatched,
+      sendAttempted: sendAttempt.attempted,
+      sendOk: sendAttempt.ok,
+      focusKey: focus?.key || null,
+      challengerKey: challenger?.key || null,
+    },
+  }).catch((error) => console.warn('[daily-operating-loop] job completion was not recorded:', error))
 
   return {
     dryRun,
@@ -213,6 +299,7 @@ export async function runDailyOperatingLoop(options: {
     generatedAt: new Date().toISOString(),
     retrospective,
     telemetry,
+    mailbox,
     boss: {
       focusKey: focus?.key || null,
       focusName: focus?.name || null,

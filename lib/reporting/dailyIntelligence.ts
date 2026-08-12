@@ -3,11 +3,11 @@ import { addDays, format } from 'date-fns'
 import { sendEmail } from '@/lib/email/sendEmail'
 import {
   getDailyGrowthReportByDate,
-  listEntitySeoOpportunities,
   replaceDailyGrowthReportSections,
   upsertDailyGrowthReport,
 } from '@/lib/reporting/repository'
 import type { DailyIntelligenceSummary } from '@/lib/reporting/types'
+import { countUniqueProviderAcceptedSends } from '@/lib/outreach/delivery-status'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 
@@ -35,8 +35,31 @@ function bestLabel(entries: Array<{ label: string; value: number }>) {
   return entries[0]?.label || null
 }
 
+function summaryMetric(section: Record<string, unknown>, key: string) {
+  return asNumber(section[key])
+}
+
+const nonReportableNiches = new Set([
+  'dealmachine_export_needed',
+  'contact_enrichment_required',
+  'skip_trace_required',
+])
+
+function isReportableNiche(value?: string | null) {
+  return Boolean(value && !nonReportableNiches.has(value.toLowerCase()))
+}
+
 function buildDigestHtml(summary: DailyIntelligenceSummary) {
   const actions = summary.recommendedActions.map((item) => `<li style="margin-bottom:8px;">${item}</li>`).join('')
+  const leadSends = summaryMetric(summary.leads, 'sends')
+  const leadReplies = summaryMetric(summary.leads, 'replies')
+  const buyerSends = summaryMetric(summary.buyers, 'outreachSent')
+  const buyerApproved = summaryMetric(summary.buyers, 'outreachApproved')
+  const lenderSends = summaryMetric(summary.lenders, 'outreachSent')
+  const lenderReplies = summaryMetric(summary.lenders, 'respondedLenders')
+  const propertyCandidates = summaryMetric(summary.leads, 'propertyCandidates')
+  const contactableLeads = summaryMetric(summary.leads, 'contactableLeads')
+  const contactEnrichmentRequired = summaryMetric(summary.leads, 'contactEnrichmentRequired')
   return `
     <div style="font-family:Arial,sans-serif;background:#081019;color:#eef6f8;padding:24px;">
       <h2 style="color:#fff;margin:0 0 12px;">VestBlock daily intelligence report</h2>
@@ -45,6 +68,12 @@ function buildDigestHtml(summary: DailyIntelligenceSummary) {
         Best niche: <strong>${summary.bestNiche || 'n/a'}</strong> ·
         Best SEO opportunity: <strong>${summary.bestSeoOpportunity || 'n/a'}</strong>
       </p>
+      <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 18px;">
+        <tr><td style="padding:8px;border:1px solid #29404a;">Seller outreach</td><td style="padding:8px;border:1px solid #29404a;">${leadSends} provider-accepted · ${leadReplies} replies</td></tr>
+        <tr><td style="padding:8px;border:1px solid #29404a;">Seller inventory</td><td style="padding:8px;border:1px solid #29404a;">${propertyCandidates} properties · ${contactableLeads} contactable · ${contactEnrichmentRequired} need enrichment</td></tr>
+        <tr><td style="padding:8px;border:1px solid #29404a;">Buyer outreach</td><td style="padding:8px;border:1px solid #29404a;">${buyerSends} sent · ${buyerApproved} approved/queued</td></tr>
+        <tr><td style="padding:8px;border:1px solid #29404a;">Lender outreach</td><td style="padding:8px;border:1px solid #29404a;">${lenderSends} sent · ${lenderReplies} replies</td></tr>
+      </table>
       <h3 style="color:#fff;margin:18px 0 8px;">Recommended actions</h3>
       <ul>${actions}</ul>
     </div>
@@ -75,11 +104,11 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
   ] = await Promise.all([
     admin
       .from('leads')
-      .select('id,city,state,niche,best_offer,category,email,lead_score,outreach_status,language_segment,created_at')
+      .select('id,city,state,niche,best_offer,category,email,phone,property_address,source,metadata_json,lead_score,outreach_status,language_segment,created_at')
       .gte('created_at', startedAt),
     admin
       .from('outreach_send_events')
-      .select('id,status,lead_id,created_at')
+      .select('id,status,lead_id,outreach_message_id,created_at')
       .gte('created_at', startedAt),
     admin
       .from('outreach_messages')
@@ -175,7 +204,9 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
   for (const lead of leads) {
     const city = cityKey(lead.city, lead.state)
     if (city) leadCities.set(city, (leadCities.get(city) || 0) + 1)
-    if (lead.niche) leadNiches.set(lead.niche, (leadNiches.get(lead.niche) || 0) + 1)
+    if (isReportableNiche(lead.niche)) {
+      leadNiches.set(lead.niche, (leadNiches.get(lead.niche) || 0) + 1)
+    }
     if (lead.best_offer) leadOffers.set(lead.best_offer, (leadOffers.get(lead.best_offer) || 0) + 1)
     if (lead.category) leadCategories.set(lead.category, (leadCategories.get(lead.category) || 0) + 1)
   }
@@ -215,13 +246,24 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
   const topNiches = rankEntries(leadNiches, 10)
   const topOffers = rankEntries(leadOffers, 10)
 
+  const contactableLeads = leads.filter((lead) => Boolean(lead.email || lead.phone))
+  const propertyCandidates = leads.filter((lead) => Boolean(lead.property_address))
+  const contactEnrichmentRequired = propertyCandidates.filter(
+    (lead) => !lead.email && !lead.phone
+  )
+
   const leadsSummary = {
     newLeadsToday: leads.length,
+    propertyCandidates: propertyCandidates.length,
+    contactableLeads: contactableLeads.length,
+    contactEnrichmentRequired: contactEnrichmentRequired.length,
     scoredLeads: leads.filter((lead) => asNumber(lead.lead_score) > 0).length,
     emailReadyLeads: leads.filter((lead) => !!lead.email).length,
-    outreachReadyLeads: leads.filter((lead) => ['needs_review', 'approved', 'queued'].includes(String(lead.outreach_status || ''))).length,
+    outreachReadyLeads: contactableLeads.filter((lead) =>
+      ['needs_review', 'approved', 'queued'].includes(String(lead.outreach_status || ''))
+    ).length,
     replies: sendEvents.filter((event) => event.status === 'replied').length,
-    sends: sendEvents.filter((event) => event.status === 'sent').length,
+    sends: countUniqueProviderAcceptedSends(sendEvents),
     approvals: outreachMessages.filter((message) => message.status === 'approved').length,
     topCities: topCities.slice(0, 5),
     topNiches: topNiches.slice(0, 5),
@@ -233,6 +275,8 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     lendersScored: lenders.filter((row) => row.last_scored_at && row.last_scored_at >= startedAt).length,
     outreachDrafted: lenders.filter((row) => row.last_outreach_generated_at && row.last_outreach_generated_at >= startedAt).length,
     outreachApproved: lenderMessages.filter((row) => row.status === 'approved').length,
+    outreachSent: lenderMessages.filter((row) => row.status === 'sent').length,
+    outreachFailed: lenderMessages.filter((row) => row.status === 'failed').length,
     respondedLenders: lenders.filter((row) => row.relationship_stage === 'responded').length,
     activePartners: lenders.filter((row) => row.relationship_stage === 'active_partner').length,
     strongestCategories: rankEntries(lenderCategories, 5),
@@ -243,6 +287,10 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     newBuyersDiscovered: buyers.filter((row) => new Date(row.created_at).toISOString() >= startedAt).length,
     buyersScored: buyers.filter((row) => row.last_scored_at && row.last_scored_at >= startedAt).length,
     outreachDrafted: buyers.filter((row) => row.last_outreach_generated_at && row.last_outreach_generated_at >= startedAt).length,
+    outreachApproved: buyerMessages.filter((row) => row.status === 'approved').length,
+    outreachSent: buyerMessages.filter((row) => row.status === 'sent').length,
+    outreachFailed: buyerMessages.filter((row) => row.status === 'failed').length,
+    respondedBuyers: buyers.filter((row) => ['responded', 'reviewing', 'active_buyer'].includes(row.relationship_stage)).length,
     activeBuyers: buyers.filter((row) => row.relationship_stage === 'active_buyer').length,
     propertyMatchesCreated: buyerMatches.length,
     topBuyerCategories: rankEntries(buyerCategories, 5),
@@ -279,6 +327,9 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
   }
 
   const recommendedActions = compact<string>([
+    leadsSummary.contactEnrichmentRequired > 0
+      ? `${leadsSummary.contactEnrichmentRequired} property candidates need verified phone or email enrichment before outreach.`
+      : null,
     leadsSummary.emailReadyLeads > 20 ? `Work the ${leadsSummary.emailReadyLeads} email-ready leads first.` : null,
     lendersSummary.outreachApproved === 0 && lendersSummary.outreachDrafted > 0 ? 'Approve lender outreach so the partner pipeline can start moving.' : null,
     buyersSummary.propertyMatchesCreated === 0 ? 'Push more seller and real-estate property intakes so buyer matching can build real history.' : null,
@@ -349,14 +400,58 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     },
   })
 
-  if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
+  const reportRecipient = (
+    process.env.OPERATIONS_REPORT_EMAIL ||
+    process.env.OUTREACH_ALERT_EMAIL ||
+    process.env.ACQUISITIONS_ALERT_EMAIL ||
+    process.env.ADMIN_ALERT_EMAIL ||
+    'acquisitions@vestblock.io'
+  ).trim()
+  let delivery: Awaited<ReturnType<typeof sendEmail>> | null = null
+  if (reportRecipient) {
+    delivery = await sendEmail({
+      to: reportRecipient,
       subject: `VestBlock daily intelligence: ${summary.bestCity || 'operations'}`,
       html: buildDigestHtml(summary),
       eventType: 'admin_lead_run_daily_report',
-    }).catch(() => null)
+    })
+    if (!delivery.ok) {
+      await logEvent({
+        eventType: 'admin_action',
+        entityType: 'daily_growth_report',
+        entityId: report.id,
+        metadata: {
+          action: 'daily_report_delivery_failed',
+          reportDate,
+          recipient: reportRecipient,
+          error: delivery.error || 'Unknown delivery failure.',
+        },
+      })
+    }
   }
 
-  return getDailyGrowthReportByDate(reportDate)
+  const deliverySnapshot = {
+    attempted: Boolean(reportRecipient),
+    ok: Boolean(delivery?.ok),
+    recipient: reportRecipient || null,
+    provider: delivery?.provider || null,
+    providerMessageId: delivery?.id || null,
+    error: delivery?.error || null,
+    attemptedAt: new Date().toISOString(),
+  }
+  const { error: deliveryPersistError } = await createAdminClient()
+    .from('daily_growth_reports')
+    .update({
+      summary_json: {
+        ...(report.summary_json || {}),
+        delivery: deliverySnapshot,
+      },
+    })
+    .eq('id', report.id)
+  if (deliveryPersistError) {
+    console.warn('[daily-intelligence] delivery status could not be persisted:', deliveryPersistError.message)
+  }
+
+  const storedReport = await getDailyGrowthReportByDate(reportDate)
+  return { ...storedReport, delivery }
 }

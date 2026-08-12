@@ -34,12 +34,15 @@
  */
 
 import { Resend } from "resend"
+import { createClient } from "@supabase/supabase-js"
+import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
+const INGEST = args.includes("--ingest")
 const getArg = (name) => {
   const hit = [...args].reverse().find((a) => a.startsWith(`--${name}=`))
   return hit ? hit.split("=").slice(1).join("=") : null
@@ -50,11 +53,7 @@ const MARKETS = (getArg("market") || getArg("markets") || "Milwaukee, WI")
   .map((m) => m.trim())
   .filter(Boolean)
 const MIN_DOM = Number.parseInt(getArg("min-dom") || "90", 10)
-const CONTROLLED_LANE_CAP = 30
-const ALLOW_HIGH_VOLUME = args.includes("--allow-high-volume")
-const ALLOW_ON_MARKET_LIVE = args.includes("--allow-on-market-lowball-live")
-const REQUESTED_LIMIT = Number.parseInt(getArg("limit") || "25", 10)
-const LIMIT = ALLOW_HIGH_VOLUME ? REQUESTED_LIMIT : Math.min(REQUESTED_LIMIT, CONTROLLED_LANE_CAP)
+const LIMIT = Number.parseInt(getArg("limit") || "25", 10)
 const INPUT_CSV = getArg("input-csv")
 const THROTTLE_MS = Number.parseInt(getArg("throttle") || "2000", 10)
 const BCC = getArg("bcc") || ""
@@ -63,12 +62,21 @@ const OUTSCRAPER_API_BASE_URL = (process.env.OUTSCRAPER_API_BASE_URL || "https:/
 const OFFER_MODE = normalizeSlug(getArg("offer-mode") || getArg("strategy") || "creative")
 const SOURCE = normalizeSlug(getArg("source") || (INPUT_CSV ? "csv" : "manual"))
 const LOWBALL_MODE = ["lowball", "cash-lowball", "as-is-cash", "on-market-lowball"].includes(OFFER_MODE)
+const CREATIVE_FINANCE_MODE = [
+  "creative",
+  "creative-finance",
+  "on-market-creative",
+  "on-market-creative-finance",
+  "seller-finance",
+  "terms",
+  "subject-to",
+].includes(OFFER_MODE)
 const SKIP_ANALYZER = args.includes("--skip-analyzer") || LOWBALL_MODE
 const PAID_SCRAPING_APPROVED = /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_PAID_SCRAPING || "").trim())
 const OUTSCRAPER_APPROVED =
   PAID_SCRAPING_APPROVED &&
   /^(1|true|yes|on)$/i.test(String(process.env.LEADS_ENABLE_OUTSCRAPER || "").trim()) &&
-  Boolean(String(process.env.OUTSCRAPER_API_KEY || process.env.DATAPIPE_API_KEY || "").trim())
+  Boolean(String(process.env.OUTSCRAPER_API_KEY || "").trim())
 const HOMEHARVEST_PYTHON = getArg("homeharvest-python") || path.join(process.cwd(), ".venv-homeharvest", "bin", "python")
 const HOMEHARVEST_LIMIT_PER_MARKET = Number.parseInt(getArg("harvest-limit-per-market") || String(Math.max(LIMIT * 3, 150)), 10)
 const PRICE_MAX = Number.parseInt(getArg("price-max") || "450000", 10)
@@ -85,6 +93,187 @@ const STAMP = new Date().toISOString().replace(/[:.]/g, "-")
 
 function env(name) {
   return String(process.env[name] || "").trim()
+}
+
+function homeHarvestExternalId(listing) {
+  const providerId = [listing.mls, listing.mls_id].filter(Boolean).join(":")
+  if (providerId) return providerId
+  const propertyKey = [listing.address, listing.city, listing.state, listing.zip]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join("|")
+  return createHash("sha256").update(propertyKey).digest("hex").slice(0, 32)
+}
+
+async function ingestHomeHarvestListings(listings) {
+  if (!INGEST) return { attempted: 0, inserted: 0, existing: 0, suppressed: 0, invalid: 0 }
+  if (SOURCE !== "homeharvest") {
+    throw new Error("--ingest currently supports only --source=homeharvest.")
+  }
+
+  const supabaseUrl = env("NEXT_PUBLIC_SUPABASE_URL") || env("SUPABASE_URL")
+  const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY")
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("--ingest requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+  }
+
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  const now = new Date().toISOString()
+  const contactable = listings.filter((listing) => isEmail(listing.agent_email))
+  const externalIds = contactable.map(homeHarvestExternalId)
+  const emails = [...new Set(contactable.map((listing) => String(listing.agent_email).trim().toLowerCase()))]
+
+  const existingIds = new Set()
+  for (let index = 0; index < externalIds.length; index += 250) {
+    const batch = externalIds.slice(index, index + 250)
+    const { data, error } = await admin
+      .from("leads")
+      .select("external_id")
+      .eq("source", "homeharvest_stale_listing")
+      .in("external_id", batch)
+    if (error) throw error
+    for (const row of data || []) if (row.external_id) existingIds.add(row.external_id)
+  }
+
+  const suppressedEmails = new Set()
+  for (let index = 0; index < emails.length; index += 250) {
+    const batch = emails.slice(index, index + 250)
+    const { data, error } = await admin
+      .from("lead_suppressions")
+      .select("email")
+      .eq("status", "active")
+      .in("email", batch)
+    if (error) throw error
+    for (const row of data || []) if (row.email) suppressedEmails.add(String(row.email).trim().toLowerCase())
+  }
+
+  const rows = []
+  let existing = 0
+  let suppressed = 0
+  let invalid = listings.length - contactable.length
+  for (const listing of contactable) {
+    const externalId = homeHarvestExternalId(listing)
+    const email = String(listing.agent_email).trim().toLowerCase()
+    if (existingIds.has(externalId)) {
+      existing += 1
+      continue
+    }
+    if (suppressedEmails.has(email)) {
+      suppressed += 1
+      continue
+    }
+    rows.push({
+      lead_type: "sell_house",
+      status: "new",
+      source: "homeharvest_stale_listing",
+      source_url: listing.listing_url || null,
+      category: "seller_lead",
+      external_id: externalId,
+      name: listing.agent_name || null,
+      business_name: listing.brokerage || listing.address || null,
+      property_address: listing.address || null,
+      phone: listing.agent_phone || null,
+      email,
+      city: listing.city || null,
+      state: listing.state || null,
+      zip: listing.zip || null,
+      pain_signal: [
+        listing.days_on_market ? `${listing.days_on_market} days on market` : null,
+        listing.distress_reasons || null,
+        listing.price ? `list price ${listing.price}` : null,
+      ].filter(Boolean).join("; "),
+      best_offer: "Real Estate Seller Lead",
+      market_segment: "creative_finance_candidate",
+      niche: "active_stale_listing_agent",
+      campaign_name: `HomeHarvest active-stale creative ${DATE}`,
+      email_valid: null,
+      bounce_risk_score: 20,
+      delivery_status: "not_sent",
+      imported_at: now,
+      outreach_status: "not_started",
+      outreach_angle: "Creative finance options for an active stale listing while protecting the listing agent's commission",
+      contact_info: {
+        contactRole: "listing_agent",
+        brokerage: listing.brokerage || null,
+        publicBusinessContact: true,
+      },
+      form_data: {
+        sourceObservedAt: now,
+        daysOnMarket: listing.days_on_market || null,
+        listPrice: listing.price || null,
+        propertyType: listing.style || null,
+        listingStatus: listing.mls_status || listing.status || null,
+        realEstateStrategy: "creative_finance",
+        offerMode: OFFER_MODE,
+      },
+      metadata_json: {
+        sourceObservedAt: now,
+        strategyPrimary: "active-stale-creative",
+        strategyStackMatches: ["active-stale-creative"],
+        strategySourceFamilies: ["homeharvest"],
+        strategySourceRecordId: `homeharvest:${externalId}`,
+        strategySourceContractVersion: 1,
+        listingFetchedAt: now,
+        listingUrl: listing.listing_url || null,
+        daysOnMarket: listing.days_on_market || null,
+        listPrice: listing.price || null,
+        mls: listing.mls || null,
+        mlsId: listing.mls_id || null,
+        brokerage: listing.brokerage || null,
+        distressScore: listing.distress_score || 0,
+        distressReasons: listing.distress_reasons || null,
+        creativeFinanceCandidate: true,
+        sourceProvider: "homeharvest",
+      },
+    })
+  }
+
+  let inserted = 0
+  for (let index = 0; index < rows.length; index += 100) {
+    const batch = rows.slice(index, index + 100)
+    const { data, error } = await admin
+      .from("leads")
+      .insert(batch)
+      .select("id")
+    if (error) throw error
+    inserted += (data || []).length
+  }
+
+  const sourcePayload = {
+    market: MARKETS.join(" | "),
+    strategyKey: "active-stale-creative",
+    observed: listings.length,
+    contactable: contactable.length,
+    inserted,
+    existing,
+    suppressed,
+    invalid,
+    sourceObservedAt: now,
+  }
+  const sourceEventId = `homeharvest:${DATE}:${createHash("sha256")
+    .update(`${MARKETS.join("|")}:${rows.map((row) => row.external_id).sort().join("|")}`)
+    .digest("hex")
+    .slice(0, 20)}`
+  const { error: eventError } = await admin.from("strategy_source_events").upsert({
+    provider: "homeharvest",
+    external_event_id: sourceEventId,
+    event_type: "listing_agent_discovery",
+    strategy_key: "active-stale-creative",
+    market: MARKETS.join(" | "),
+    status: "completed",
+    payload_hash: createHash("sha256").update(JSON.stringify(sourcePayload)).digest("hex"),
+    payload_json: sourcePayload,
+    rows_received: listings.length,
+    rows_ingested: inserted,
+    occurred_at: now,
+    processed_at: now,
+    updated_at: now,
+  }, { onConflict: "provider,external_event_id" })
+  if (eventError) throw eventError
+
+  return { attempted: listings.length, inserted, existing, suppressed, invalid }
 }
 
 function esc(value) {
@@ -269,9 +458,9 @@ async function harvestOutscraper(market) {
     }
   }
 
-  const apiKey = env("OUTSCRAPER_API_KEY") || env("DATAPIPE_API_KEY")
+  const apiKey = env("OUTSCRAPER_API_KEY")
   if (!apiKey) {
-    return { ok: false, reason: "OUTSCRAPER_API_KEY or DATAPIPE_API_KEY missing — use --input-csv or add the key to .env.local", listings: [] }
+    return { ok: false, reason: "OUTSCRAPER_API_KEY missing — use --input-csv or add the key to .env.local", listings: [] }
   }
 
   const params = new URLSearchParams({
@@ -487,6 +676,7 @@ function buildAgentEmail(listing, offer) {
   const firstName = firstNameForGreeting(listing.agent_name)
   const streetLine = listing.address.split(",")[0]
   const domLine = listing.days_on_market ? `${listing.days_on_market} days on market` : "a long time on market"
+  const listPrice = listing.price ? money(listing.price) : ""
 
   const structureLines = []
   if (offer?.metrics) {
@@ -503,18 +693,22 @@ function buildAgentEmail(listing, offer) {
   }
 
   const offerLabel = offer?.label || "a seller-finance structure"
-  const subject = `${streetLine} — a terms option for your seller (${domLine})`
+  const subject = `${streetLine} — open to creative terms?`
   const body = emailBody([
     `Hi ${firstName},`,
     "",
-    `I came across your listing at ${listing.address} — I see it's been sitting at ${domLine}${listing.price ? ` around ${money(listing.price)}` : ""}.`,
+    `I came across your listing at ${listing.address} — I see it's been sitting at ${domLine}${listPrice ? ` around ${listPrice}` : ""}.`,
     "",
-    `I work with VestBlock. We connect buyers who close on creative terms when the cash-buyer pool has gone quiet on a listing. For this property, ${offerLabel} could look roughly like:`,
-    structureLines.length ? structureLines.join("\n") : "- Happy to put real numbers together if you share the payoff situation.",
+    "I work with VestBlock. We are looking for on-market sellers who may be open to a creative structure instead of only waiting on a full retail buyer or a deep cash discount.",
     "",
-    "These are review numbers, not a contract offer — if your seller is open to terms, I'd put together a clean written proposal you can present. Either way, your commission is respected in the structure.",
+    "The key question is not whether there is a lot of equity. It is what the payoff/equity picture looks like so we can match the right structure. Depending on the numbers, that could mean subject-to, seller finance, a wrap-style path, or a hybrid structure that still protects your commission.",
     "",
-    `Worth a quick conversation about ${streetLine}?`,
+    `Based only on the public listing numbers, ${offerLabel} might be worth reviewing like this:`,
+    structureLines.length ? structureLines.join("\n") : "- Happy to put real numbers together if you share the payoff/equity situation.",
+    "",
+    "These are review numbers, not a contract offer. Before we write anything formal, we would need the approximate payoff, whether the seller needs cash at closing, and whether they are open to monthly payments, a delayed payoff, or another creative path.",
+    "",
+    `If your seller is open to terms, would it be worth a quick conversation about ${streetLine} so we can see whether sub-to, seller finance, or a hybrid option fits?`,
     "",
     "Best,",
     "Robert Sanders",
@@ -522,7 +716,7 @@ function buildAgentEmail(listing, offer) {
     "acquisitions@vestblock.io",
     "(414) 687-6923",
     "",
-    "VestBlock connects real estate opportunities with buyers, lenders, and partners. We are not a brokerage or lender and do not guarantee any purchase, terms, or closing.",
+    "VestBlock connects real estate opportunities with buyers, lenders, and partners. We are not a brokerage, lender, attorney, or financial advisor and do not guarantee any purchase, terms, financing outcome, or closing.",
     'If you would rather not receive these, reply "unsubscribe" and we will remove you.',
     mailingAddress() || null,
   ])
@@ -543,11 +737,11 @@ function buildLowballAgentEmail(listing) {
     "",
     `I came across your listing at ${listing.address}. I see it has been sitting at ${domLine}${listPriceLine}.`,
     "",
-    "I work with VestBlock on investor/builder style acquisitions. If the seller would consider a clean backup path, I can review it quickly and give you a real written number after photos, access, title, and condition are checked.",
+    "I work with VestBlock on investor/builder style acquisitions. If the seller would consider a clean as-is path, I can review it quickly and give you a real written number after photos, access, title, and condition are checked.",
     "",
-    `My internal backstop range for a property like this may start around ${rangeLine}, depending heavily on repairs, access, title, rent support, and seller timeline. I am sharing that only to avoid wasting your time if retail is the better path.`,
+    `Before anyone spends time, the initial cash review would probably start around ${rangeLine}. That is not a final offer, and there may be room to improve if the condition, rent support, repairs, or seller timeline justify it.`,
     "",
-    "I am not asking you to sell your client short. If the seller needs top retail, I am probably not the right fit. If certainty, condition, speed, or a backup buyer matters, I can be useful without disrupting your listing.",
+    "I know that range is below list. I am not asking you to sell your client short. I am trying to see whether a fast as-is backstop is useful if the property needs work, the seller wants certainty, or the retail buyer pool is not responding.",
     "",
     "If your seller is open to that kind of conversation, send over the best photos/condition notes and any known repair or access details. Your commission can be protected in any structure we seriously review.",
     "",
@@ -641,14 +835,11 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
 
-  if (SEND && LOWBALL_MODE && !ALLOW_ON_MARKET_LIVE) {
-    throw new Error("On-market lowball live sends are paused. Run dry/stage first or pass --allow-on-market-lowball-live after manual review.")
-  }
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY for --send.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS for --send (CAN-SPAM).")
 
   console.log("=== Stale-listing creative finance finder ===")
-  console.log(`Mode:      ${SEND ? "LIVE SEND" : "DRY RUN"}`)
+  console.log(`Mode:      ${SEND ? "LIVE SEND" : INGEST ? "INGEST + REVIEW QUEUE" : "PREVIEW ONLY"}`)
   console.log(`Min DOM:   ${MIN_DOM}`)
   console.log(`Limit:     ${LIMIT}`)
   console.log(`Offer:     ${OFFER_MODE}${LOWBALL_MODE ? ` (${Math.round(LOWBALL_MIN_PCT * 100)}-${Math.round(LOWBALL_MAX_PCT * 100)}% condition-dependent)` : ""}`)
@@ -727,12 +918,13 @@ async function main() {
 
   // 4. Write harvest CSV
   const csvCols = [
-    "market", "address", "city", "state", "zip", "price", "days_on_market", "beds", "baths", "sqft",
+    "source", "market", "address", "city", "state", "zip", "price", "days_on_market", "beds", "baths", "sqft",
     "year_built", "listing_url", "agent_name", "agent_phone", "agent_email", "brokerage",
     "status", "mls_status", "mls", "mls_id", "distress_score", "distress_reasons", "deal_strength", "offer_mode", "cash_review_lowball_low", "cash_review_lowball_high", "offer_label", "offer_viability", "offer_price", "offer_down", "offer_monthly", "analyzer_reason",
   ]
   const csvRows = analyzed.map((row) => ({
     ...row,
+    source: SOURCE === "homeharvest" ? "homeharvest_stale_listing" : SOURCE,
     offer_mode: OFFER_MODE,
     cash_review_lowball_low: lowballCashRange(row).low || "",
     cash_review_lowball_high: lowballCashRange(row).high || "",
@@ -776,10 +968,21 @@ async function main() {
 
   console.log(`\nHarvest CSV:   ${harvestCsvPath}`)
   console.log(`Call queue:    ${callQueuePath} (${callQueue.length} agents, phone follow-up)`)
-  console.log(`Email drafts:  ${drafts.length} (review: ${draftsTxt})`)
+  console.log(`Local message previews: ${drafts.length} (review file: ${draftsTxt}; not queued or sent)`)
+
+  const ingestResult = await ingestHomeHarvestListings(analyzed)
+  if (INGEST) {
+    console.log(
+      `Lead ingest:    ${ingestResult.inserted} inserted, ${ingestResult.existing} existing, ${ingestResult.suppressed} suppressed, ${ingestResult.invalid} without usable email`
+    )
+  }
 
   if (!SEND) {
-    console.log("\nDRY RUN complete. Read the drafts file, then re-run with --send.")
+    console.log(
+      INGEST
+        ? "\nINGEST complete. Qualified contacts were stored for the guarded strategy review queue; no messages were sent."
+        : "\nPREVIEW complete. Read the drafts file, then re-run with --ingest to store qualified contacts."
+    )
     return
   }
   if (!drafts.length) {
@@ -800,7 +1003,11 @@ async function main() {
     const ok = !error
     results.push({
       ok,
-      strategy: LOWBALL_MODE ? "on-market-lowball-agent-sweep" : "stale-listing-creative-finance",
+      strategy: LOWBALL_MODE
+        ? "on-market-lowball-agent-sweep"
+        : CREATIVE_FINANCE_MODE
+          ? "on-market-creative-finance-agent-sweep"
+          : "stale-listing-creative-finance",
       offer_mode: OFFER_MODE,
       market: draft.market,
       email: draft.agent_email,

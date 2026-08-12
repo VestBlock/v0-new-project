@@ -4,9 +4,12 @@ import { enrichContactFromHunter } from '@/lib/email/hunter'
 import { discoverBuyersForMarket } from '@/lib/buyers/discovery'
 import { matchPropertyToBuyers } from '@/lib/buyers/matching'
 import { BUYER_OUTREACH_TEMPLATE_VERSION, generateBuyerOutreach } from '@/lib/buyers/outreach'
+import { evaluateBuyerAutoApproval } from '@/lib/buyers/automationCore'
 import {
   addBuyerNote,
+  createBuyerPacket,
   finishBuyerOutreachRun,
+  getBuyerOutreachMessageByChannel,
   insertBuyerRelationshipEvent,
   listActiveBuyersWithBuyBoxes,
   listBuyersForScoring,
@@ -17,15 +20,18 @@ import {
   saveBuyerScore,
   startBuyerOutreachRun,
   updateBuyerPerformance,
+  updateBuyerOutreachMessage,
   updateBuyerRecord,
   upsertBuyer,
   upsertBuyerMatch,
+  upsertDealPipelineItem,
 } from '@/lib/buyers/repository'
 import { scoreBuyer } from '@/lib/buyers/scoring'
 import { analyzeBuyerWebsite } from '@/lib/buyers/site-analysis'
 import type { BuyerBuyBoxRecord, BuyerRecord, PropertyBuyerMatchInput } from '@/lib/buyers/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
 
 function envInt(name: string, fallback: number) {
@@ -125,7 +131,7 @@ export async function discoverAndIngestBuyersForMarket(input: {
       metroArea: input.metroArea,
       niches: input.niches,
       limitPerNiche: input.limitPerNiche,
-      provider: 'google',
+      provider: 'auto',
     })
 
     const saved: BuyerRecord[] = []
@@ -166,8 +172,11 @@ export async function discoverAndIngestBuyersForMarket(input: {
 
 export async function enrichAndScoreBuyer(buyer: BuyerRecord) {
   const analysis = await analyzeBuyerWebsite(buyer.website)
+  const preferFreeEnrichment =
+    process.env.BUYER_ENRICHMENT_PREFER_FREE === 'true' ||
+    process.env.BUYER_DISCOVERY_PREFER_FREE === 'true'
   const hunterResult =
-    buyer.contact_email || !buyer.website
+    preferFreeEnrichment || buyer.contact_email || !buyer.website
       ? null
       : await enrichContactFromHunter({
           website: buyer.website,
@@ -349,6 +358,80 @@ export async function persistPropertyBuyerMatches(input: PropertyBuyerMatchInput
     },
   })
 
+  if (rows.length > 0 && input.leadId && input.propertyAddress) {
+    const admin = createAdminClient()
+    const { data: existingPacket } = await admin
+      .from('property_buyer_packets')
+      .select('id')
+      .contains('metadata_json', { leadId: input.leadId })
+      .limit(1)
+      .maybeSingle()
+    let packetId = existingPacket?.id || null
+    let packetCreated = false
+
+    if (!packetId) {
+      const packet = await createBuyerPacket({
+        propertyAddress: input.propertyAddress,
+        city: input.city,
+        state: input.state,
+        zipCode: input.zipCode,
+        title: `Buyer routing packet: ${input.propertyAddress}`,
+        summary: `New seller opportunity matched to ${rows.length} buyer record(s). Confirm title, condition, access, seller authority, and deal terms before releasing the packet.`,
+        selectedBuyerCount: rows.length,
+        form: {
+          leadId: input.leadId,
+          serviceType: input.serviceType,
+          assetType: input.assetType,
+          occupancy: input.occupancy,
+          sellerMotivation: input.sellerMotivation,
+          timelineDays: input.timelineDays,
+        },
+        estimate: {
+          askingPrice: input.askingPrice,
+          estimatedValue: input.estimatedValue,
+          distressLevel: input.distressLevel,
+          rehabLevel: input.rehabLevel,
+          codeViolationLevel: input.codeViolationLevel,
+        },
+        opportunity: {
+          creativeFinanceOpen: input.creativeFinanceOpen,
+          landlordSignal: input.landlordSignal,
+          absenteeOwner: input.absenteeOwner,
+          matchCount: rows.length,
+        },
+        metadata: { leadId: input.leadId, matchIds: rows.map((row) => row.id), autoCreated: true },
+      })
+      packetId = packet.id
+      packetCreated = true
+    }
+
+    await upsertDealPipelineItem({
+      buyerPacketId: packetId,
+      leadId: input.leadId,
+      propertyAddress: input.propertyAddress,
+      city: input.city,
+      state: input.state,
+      zipCode: input.zipCode,
+      currentStage: 'analyzed',
+      priority: input.timelineDays && input.timelineDays <= 30 ? 'urgent' : 'high',
+      nextAction: 'Verify seller and property facts, then release the buyer packet to the strongest confirmed buy boxes.',
+      nextActionAt: new Date().toISOString(),
+      metadata: { autoCreated: true, buyerMatchCount: rows.length },
+    })
+    if (packetCreated) {
+      await createAdminTask({
+        title: `Route new seller lead to matched buyers: ${input.propertyAddress}`,
+        description: `The seller lead is matched to ${rows.length} buyer record(s) and a buyer packet is ready. Verify the property facts and release it to confirmed buyers whose buy boxes fit.`,
+        taskType: 'buyer_packet_ready_for_routing',
+        priority: 'urgent',
+        entityType: 'lead',
+        entityId: input.leadId,
+        dueAt: adminTaskDueDates.now(),
+        metadata: { packetId, matchIds: rows.map((row) => row.id), matchCount: rows.length },
+      })
+    }
+  }
+
   return rows
 }
 
@@ -374,42 +457,127 @@ export async function runDailyBuyerScoring(limit = 100) {
   return { ok: true, count: results.length, results }
 }
 
-export async function runDailyBuyerOutreach(limit = 40) {
-  const buyers = await listBuyersNeedingOutreach(limit)
-  const results: Array<{ buyerId: string; name: string; messageCount: number }> = []
+export async function runDailyBuyerOutreach(limit = 40, options: { dryRun?: boolean } = {}) {
+  const minimumScore = envInt('BUYER_AUTO_APPROVE_MIN_SCORE', 40)
+  const buyers = await listBuyersNeedingOutreach(limit, minimumScore)
+  const results: Array<{ buyerId: string; name: string; messageCount: number; status: string }> = []
   for (const buyer of buyers) {
+    if (options.dryRun) {
+      results.push({ buyerId: buyer.id, name: buyer.name, messageCount: 5, status: 'would_generate' })
+      continue
+    }
     const messages = await generateAndStoreBuyerOutreach(buyer)
-    results.push({ buyerId: buyer.id, name: buyer.name, messageCount: messages.length })
+    results.push({ buyerId: buyer.id, name: buyer.name, messageCount: messages.length, status: 'generated' })
   }
-  return { ok: true, count: results.length, results }
+  return { ok: true, count: results.length, minimumScore, results }
 }
 
-export async function runDailyBuyerFollowup(limit = 30) {
+export async function runDailyBuyerFollowup(limit = 30, options: { dryRun?: boolean } = {}) {
   const buyers = await listBuyersNeedingFollowup(limit)
-  const results: Array<{ buyerId: string; name: string; action: string }> = []
+  const minimumScore = envInt('BUYER_AUTO_APPROVE_MIN_SCORE', 40)
+  const results: Array<{ buyerId: string; name: string; action: string; reason?: string }> = []
   for (const buyer of buyers) {
-    await createAdminTask({
-      title: `Buyer follow-up: ${buyer.name}`,
-      description: `Review buyer relationship stage ${buyer.relationship_stage} and confirm the current acquisition box or submission path.`,
-      taskType: 'buyer_relationship_followup',
-      assignedTo: buyer.owner_user_id || null,
-      priority: buyer.relationship_stage === 'responded' ? 'high' : 'normal',
-      entityType: 'buyer',
-      entityId: buyer.id,
-      dueAt: adminTaskDueDates.now(),
-      metadata: {
-        buyerId: buyer.id,
-        buyerCategory: buyer.category,
-        relationshipStage: buyer.relationship_stage,
-      },
-    }).catch(() => null)
+    if (['responded', 'reviewing', 'active_buyer'].includes(buyer.relationship_stage)) {
+      if (!options.dryRun) {
+        await createAdminTask({
+          title: `Buyer relationship follow-up: ${buyer.name}`,
+          description: 'This buyer has replied or is already active. Review the relationship manually instead of sending an automated follow-up.',
+          taskType: 'buyer_relationship_followup',
+          assignedTo: buyer.owner_user_id || null,
+          priority: 'high',
+          entityType: 'buyer',
+          entityId: buyer.id,
+          dueAt: adminTaskDueDates.now(),
+          metadata: { buyerId: buyer.id, relationshipStage: buyer.relationship_stage },
+        }).catch(() => null)
+        await updateBuyerRecord(buyer.id, { next_follow_up_at: null })
+      }
+      results.push({ buyerId: buyer.id, name: buyer.name, action: 'manual_relationship_followup' })
+      continue
+    }
 
-    await updateBuyerRecord(buyer.id, {
-      relationship_stage: buyer.relationship_stage === 'responded' ? 'reviewing' : buyer.relationship_stage,
-      outreach_status: buyer.outreach_status === 'followup_due' ? 'needs_review' : buyer.outreach_status,
-      next_follow_up_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    const message = await getBuyerOutreachMessageByChannel(buyer.id, 'email_followup')
+    if (!message) {
+      if (!options.dryRun) {
+        await updateBuyerRecord(buyer.id, { next_follow_up_at: null })
+      }
+      results.push({ buyerId: buyer.id, name: buyer.name, action: 'blocked', reason: 'missing_followup_message' })
+      continue
+    }
+
+    const decision = evaluateBuyerAutoApproval({
+      buyer,
+      message,
+      templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
+      minimumScore,
+      allowedChannels: ['email_followup'],
     })
-    results.push({ buyerId: buyer.id, name: buyer.name, action: 'followup_queued' })
+    if (!decision.approved || !isUsableContactEmail(buyer.contact_email)) {
+      if (!options.dryRun) {
+        await createAdminTask({
+          title: `Buyer follow-up blocked: ${buyer.name}`,
+          description: `Automated buyer follow-up was stopped by the safety gate: ${decision.reason}. Review the buyer record before any additional contact.`,
+          taskType: 'buyer_autopilot_blocked',
+          assignedTo: buyer.owner_user_id || null,
+          priority: 'high',
+          entityType: 'buyer',
+          entityId: buyer.id,
+          dueAt: adminTaskDueDates.now(),
+          metadata: { buyerId: buyer.id, reason: decision.reason, messageId: message.id },
+        }).catch(() => null)
+        await updateBuyerRecord(buyer.id, { next_follow_up_at: null })
+      }
+      results.push({ buyerId: buyer.id, name: buyer.name, action: 'blocked', reason: decision.reason })
+      continue
+    }
+
+    if (!options.dryRun) {
+      await updateBuyerOutreachMessage(message.id, {
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        send_error: null,
+      })
+      await updateBuyerRecord(buyer.id, {
+        relationship_stage: 'contacted',
+        outreach_status: 'approved',
+        next_follow_up_at: null,
+      })
+      await logEvent({
+        eventType: 'outreach_approved',
+        entityType: 'buyer',
+        entityId: buyer.id,
+        metadata: {
+          messageId: message.id,
+          templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
+          approvalMode: 'guarded_followup_automation',
+        },
+      })
+    }
+
+    if (!options.dryRun) {
+      await createAdminTask({
+        title: `Buyer follow-up approved: ${buyer.name}`,
+        description: 'A single guarded buyer follow-up is approved for the next capped send run. Monitor for a reply and capture the acquisition box or submission path.',
+        taskType: 'buyer_relationship_followup',
+        assignedTo: buyer.owner_user_id || null,
+        priority: 'normal',
+        entityType: 'buyer',
+        entityId: buyer.id,
+        dueAt: adminTaskDueDates.days(7),
+        metadata: {
+          buyerId: buyer.id,
+          buyerCategory: buyer.category,
+          relationshipStage: buyer.relationship_stage,
+          messageId: message.id,
+        },
+      }).catch(() => null)
+    }
+
+    results.push({
+      buyerId: buyer.id,
+      name: buyer.name,
+      action: options.dryRun ? 'would_approve_followup' : 'followup_approved',
+    })
   }
   return { ok: true, count: results.length, results }
 }

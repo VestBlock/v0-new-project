@@ -173,6 +173,10 @@ function main() {
   const blockers = checks.filter((check) => !check.ok).map((check) => check.key)
   const payload = {
     ok: blockers.length === 0,
+    auditMode: 'static-source-architecture-only',
+    runtimeVerified: false,
+    claimLimit:
+      'This scorecard verifies source coverage only. It does not prove that pages are live, indexed, scheduled, or recently executed.',
     generatedAt: new Date().toISOString(),
     summary,
     blockers,
@@ -182,7 +186,8 @@ function main() {
     nextActions:
       blockers.length === 0
         ? [
-            'Run the daily content publisher so the new answer/comparison/best-for topics can enter the public content flow.',
+            'Run audit:seo:live and audit:platform before describing SEO/AEO automation as operational.',
+            'Run the daily content publisher so new seller and answer/comparison topics can enter the public content flow.',
             'Capture fresh proof screenshots and submit changed URLs through Search Console/Bing where available.',
             'Track the prompt tests weekly and create pages for any competitor/entity gaps.',
           ]

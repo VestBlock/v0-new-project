@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import type { BuyerOutreachMessageRecord, BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
 type SendBuyerEmailInput = {
   buyer: BuyerRecord
@@ -51,6 +52,18 @@ function getResendSender() {
   return process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || process.env.RESEND_EMAIL || DEFAULT_OUTREACH_SENDER
 }
 
+function getReplyToEmail() {
+  return process.env.OUTREACH_REPLY_TO_EMAIL || DEFAULT_OUTREACH_SENDER
+}
+
+function buildOutreachBody(message: BuyerOutreachMessageRecord) {
+  const body = String(message.body || '').trim()
+  const compliance = String(
+    message.compliance_note || 'If this is not relevant, reply and we will not contact you again.'
+  ).trim()
+  return body.toLowerCase().includes(compliance.toLowerCase()) ? body : `${body}\n\n${compliance}`
+}
+
 function hasGmailConfig() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID &&
@@ -94,6 +107,7 @@ function buildGmailMime(input: BuyerEmailEnvelope) {
   const recipient = input.buyer.contact_email?.trim() || ''
   const headers = [
     `From: VestBlock <${getSender()}>`,
+    `Reply-To: ${getReplyToEmail()}`,
     `To: ${recipient}`,
     `Subject: ${input.subject}`,
     'MIME-Version: 1.0',
@@ -170,6 +184,7 @@ async function sendWithResend(input: BuyerEmailEnvelope): Promise<SendBuyerEmail
     to: recipient,
     subject: input.subject,
     text: input.body,
+    replyTo: getReplyToEmail(),
     attachments: input.attachments?.map((attachment) => ({
       filename: attachment.filename,
       content: attachment.content,
@@ -185,6 +200,10 @@ async function sendWithResend(input: BuyerEmailEnvelope): Promise<SendBuyerEmail
 }
 
 async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
+  const replyCapture = getReplyCaptureReadiness()
+  if (!replyCapture.ready) {
+    return { ok: false, provider: 'none', error: replyCapture.reason || 'Reply capture is disconnected.' }
+  }
   if (!isUsableContactEmail(input.buyer.contact_email)) {
     return { ok: false, provider: 'none', error: 'Buyer does not have a usable contact email.' }
   }
@@ -218,7 +237,7 @@ export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promis
   return sendBuyerEnvelope({
     buyer: input.buyer,
     subject: input.message.subject || 'VestBlock partnership note',
-    body: input.message.body,
+    body: buildOutreachBody(input.message),
     attachments: input.attachments,
   })
 }

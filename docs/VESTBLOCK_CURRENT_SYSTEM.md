@@ -10,7 +10,7 @@ VestBlock is a Next.js App Router SaaS with public marketing pages, authenticate
 
 Current repo state is a large in-progress worktree, not a small patch. The latest status scan showed roughly 447 changed, deleted, or untracked entries. That is expected from recent feature sprints, but it should be committed in logical groups instead of one giant commit.
 
-Latest cleanup decision: do not remove PostHog right now. Sentry and OpenTelemetry are not wired into the app, but PostHog is actively used for payments, lead capture, chat, upload, dashboard usage, and the health endpoint. Removing it would reduce our ability to see whether the revenue funnel is working.
+Latest cleanup decision: PostHog has been removed from the application runtime. Sentry and OpenTelemetry are not wired into the app; select and configure a replacement analytics provider before treating funnel telemetry as available.
 
 ## What VestBlock Currently Sells
 

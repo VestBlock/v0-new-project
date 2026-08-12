@@ -31,6 +31,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'pipeline',
   },
   {
+    title: 'Deal Hunter',
+    description: 'Public-record property map, vacant-lot scoring, and OSINT-safe import review.',
+    href: '/admin/deal-hunter',
+    group: 'pipeline',
+  },
+  {
     title: 'Market Expansion',
     description: 'Priority metros for seller inventory and partner coverage.',
     href: '/admin/market-expansion',

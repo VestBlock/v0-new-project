@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
 type SendLeadEmailInput = {
   lead: LeadRecord
@@ -60,6 +61,10 @@ function buildLeadOutreachComplianceBlock(message: OutreachMessageRecord) {
 
 function getWorkspaceSender() {
   return getPreferredOutboundSender()
+}
+
+function getReplyToEmail() {
+  return process.env.OUTREACH_REPLY_TO_EMAIL || DEFAULT_OUTREACH_SENDER
 }
 
 function getResendSender() {
@@ -137,6 +142,7 @@ async function sendWithGmail(input: SendLeadEmailInput): Promise<SendLeadEmailRe
 
   const mime = [
     `From: VestBlock <${from}>`,
+    `Reply-To: ${getReplyToEmail()}`,
     `To: ${to}`,
     `Subject: ${input.message.subject || 'VestBlock follow-up'}`,
     'MIME-Version: 1.0',
@@ -180,6 +186,7 @@ async function sendWithResend(input: SendLeadEmailInput): Promise<SendLeadEmailR
     to: input.lead.email!,
     subject: input.message.subject || 'VestBlock follow-up',
     text: body,
+    replyTo: getReplyToEmail(),
   })
 
   if (error) {
@@ -196,6 +203,15 @@ async function sendWithResend(input: SendLeadEmailInput): Promise<SendLeadEmailR
 export async function sendLeadOutreachEmail(
   input: SendLeadEmailInput
 ): Promise<SendLeadEmailResult> {
+  const replyCapture = getReplyCaptureReadiness()
+  if (!replyCapture.ready) {
+    return {
+      ok: false,
+      provider: 'none',
+      error: `${replyCapture.reason} Configure Microsoft Graph reply ingestion or set OUTREACH_ALLOW_WITHOUT_REPLY_CAPTURE=true for a deliberate temporary override.`,
+    }
+  }
+
   if (!getOutreachMailingAddress()) {
     return {
       ok: false,

@@ -62,6 +62,11 @@ function normalizeComparableValue(value: string | null | undefined) {
   return String(value || '').trim().toLowerCase() || null
 }
 
+function effectiveLeadScore(lead: LeadEmailAutopilotInput) {
+  const strategyScore = Number((lead.metadata_json as Record<string, unknown> | null)?.strategyQualificationScore || 0)
+  return Math.max(Number(lead.lead_score || 0), Number.isFinite(strategyScore) ? strategyScore : 0)
+}
+
 function matchesSuppression(lead: LeadEmailAutopilotInput, suppressions: LeadSuppressionRecord[]) {
   const leadEmail = normalizeComparableValue(lead.email)
   const leadPhone = normalizeComparableValue(lead.phone)
@@ -187,7 +192,7 @@ export function getLeadEmailAutopilotDecision(
   if (fitIssue) {
     return { autoApproveEnabled, autoSendEnabled, minScore, maxBounceRisk, eligible: false, reason: fitIssue }
   }
-  if (Number(lead.lead_score || 0) < minScore) {
+  if (effectiveLeadScore(lead) < minScore) {
     return { autoApproveEnabled, autoSendEnabled, minScore, maxBounceRisk, eligible: false, reason: 'below_min_score' }
   }
 

@@ -6,6 +6,7 @@
 set -euo pipefail
 PROJECT_DIR="${VESTBLOCK_DIR:-/Users/mrsanders/Downloads/Codex Folder}"
 cd "$PROJECT_DIR"
+/usr/bin/env node scripts/require-primary-machine.mjs
 
 LOG_DIR="$PROJECT_DIR/data/distress-leads/logs"
 mkdir -p "$LOG_DIR"

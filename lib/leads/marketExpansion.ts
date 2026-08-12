@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { DEFAULT_LENDER_DISCOVERY_NICHES } from '@/lib/lenders/constants'
 import { findMarketPreset } from '@/lib/leads/marketPresets'
 import type { MarketDiscoverySummary, MarketSeed, TargetMarketRecord } from '@/lib/leads/types'
+import { isProviderAcceptedSendStatus } from '@/lib/outreach/delivery-status'
 
 const ROTATING_NICHES = [
   'boutique property management companies',
@@ -154,7 +155,7 @@ async function loadHistoricalPerformance(city: string, state: string) {
   const replied = (leads || []).filter((lead) => ['replied', 'interested', 'qualified', 'closed_won'].includes(lead.status)).length
   const booked = (leads || []).filter((lead) => ['closed_won'].includes(lead.status) || lead.delivery_status === 'booked').length
   const bounced = (leads || []).filter((lead) => lead.delivery_status === 'bounced').length
-  const sent = (sendEvents || []).filter((event) => event.status === 'sent').length
+  const sent = (sendEvents || []).filter((event) => isProviderAcceptedSendStatus(event.status)).length
   const failed = (sendEvents || []).filter((event) => event.status === 'failed').length
 
   return {

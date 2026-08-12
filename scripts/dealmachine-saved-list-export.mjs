@@ -18,9 +18,11 @@ import { execFileSync } from "node:child_process"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send") || args.includes("--export")
+const FORCE_REEXPORT = args.includes("--force-reexport") || args.includes("--force")
+const ALLOW_ZERO_EXPORTABLE = args.includes("--allow-zero-exportable")
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
-const DEFAULT_EMAIL = process.env.DEALMACHINE_EXPORT_EMAIL || "acquisitions@vestblock.io"
+const DEFAULT_EMAIL = "acquisitions@vestblock.io"
 
 function getArg(name) {
   const hit = [...args].reverse().find((arg) => arg.startsWith(`--${name}=`))
@@ -132,6 +134,8 @@ function browserExportPayload(lists, email, send) {
   const lists = ${JSON.stringify(lists)}
   const email = ${JSON.stringify(email)}
   const send = ${JSON.stringify(send)}
+  const forceReexport = ${JSON.stringify(FORCE_REEXPORT)}
+  const allowZeroExportable = ${JSON.stringify(ALLOW_ZERO_EXPORTABLE)}
   const waitForContactsMs = ${JSON.stringify(waitForContactsMs)}
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   window.vbDmSavedListExport = { done: false, runId, email, send, results: [], startedAt: new Date().toISOString() }
@@ -176,8 +180,12 @@ function browserExportPayload(lists, email, send) {
         countResult.count ??
         countResponse.data?.actual_count ??
         null
-      if (!send || Number(actualCount || 0) > 0 || Date.now() - started >= waitForContactsMs) {
-        return { countResponse, countResult, actualCount }
+      const fallbackCount =
+        actualCount == null && countResponse.ok && Number(item.estimatedCount || 0) > 0
+          ? Number(item.estimatedCount || 0)
+          : actualCount
+      if (!send || Number(fallbackCount || 0) > 0 || Date.now() - started >= waitForContactsMs) {
+        return { countResponse, countResult, actualCount: fallbackCount }
       }
       await sleep(5000)
     } while (true)
@@ -202,7 +210,14 @@ function browserExportPayload(lists, email, send) {
         results.push({ ...item, requested: false, dryRun: true, actualCount, actualCountStatus, countResult })
         continue
       }
-      if (Number(actualCount || 0) <= 0) {
+      const actualNumeric = Number(actualCount || 0)
+      const estimatedNumeric = Number(item.estimatedCount || 0)
+      const effectiveCount = actualNumeric > 0
+        ? actualNumeric
+        : forceReexport && allowZeroExportable && estimatedNumeric > 0
+          ? estimatedNumeric
+          : 0
+      if (actualNumeric <= 0 && !allowZeroExportable) {
         results.push({
           ...item,
           requested: false,
@@ -214,11 +229,23 @@ function browserExportPayload(lists, email, send) {
         })
         continue
       }
+      if (effectiveCount <= 0) {
+        results.push({
+          ...item,
+          requested: false,
+          exportBlocked: true,
+          exportBlockReason: "blocked_no_effective_export_count",
+          actualCount,
+          actualCountStatus,
+          countResult
+        })
+        continue
+      }
       const fileName = String(item.title || "VestBlock DealMachine Contacts Export").slice(0, 150)
       const response = await api({
         type: "export_v2",
         select_all: 1,
-        total_count: actualCount || item.estimatedCount || 0,
+        total_count: effectiveCount,
         new_filters: null,
         emails: email,
         list_id: item.listId,
@@ -242,7 +269,22 @@ function browserExportPayload(lists, email, send) {
         remove_items_without_phone_numbers: 0,
         export_file_name: fileName
       })
-      results.push({ ...item, requested: response.ok && response.data?.error !== true, actualCount, actualCountStatus, countResult, status: response.status, response: response.data })
+      const verifiedRequest = response.ok && response.data?.error !== true && actualNumeric > 0
+      results.push({
+        ...item,
+        requested: verifiedRequest,
+        acceptedUnverified: response.ok && response.data?.error !== true && !verifiedRequest,
+        exportBlocked: !verifiedRequest,
+        exportBlockReason: verifiedRequest ? null : "accepted_without_exportable_contact_count",
+        actualCount,
+        effectiveCount,
+        forceReexport,
+        allowZeroExportable,
+        actualCountStatus,
+        countResult,
+        status: response.status,
+        response: response.data
+      })
       await sleep(350)
     }
     window.vbDmSavedListExport = { done: true, runId, email, send, results, finishedAt: new Date().toISOString() }
@@ -275,6 +317,8 @@ function writeOutputs(result) {
 
   const rows = result.results || []
   const requested = rows.filter((row) => row.requested).length
+  const acceptedUnverified = rows.filter((row) => row.acceptedUnverified).length
+  const blocked = rows.filter((row) => row.exportBlocked).length
   const failed = rows.filter((row) => !row.requested && !row.dryRun).length
   const byStrategy = rows.reduce((acc, row) => {
     const key = row.strategyKey || "unknown"
@@ -294,6 +338,8 @@ function writeOutputs(result) {
     `Email: ${result.email}`,
     `Lists: ${rows.length}`,
     `Requested: ${requested}`,
+    `Accepted but unverified: ${acceptedUnverified}`,
+    `Blocked: ${blocked}`,
     `Failed: ${failed}`,
     "",
     "## By Strategy",
@@ -302,7 +348,20 @@ function writeOutputs(result) {
     "",
     "## Lists",
     "",
-    ...rows.map((row) => `- ${row.requested || row.dryRun ? "OK" : "FAILED"} ${row.market} / ${row.strategyKey}: ${row.estimatedCount} leads, list ${row.listId}`),
+    ...rows.map((row) => {
+      const status = row.dryRun
+        ? "DRY"
+        : row.requested
+          ? "REQUESTED"
+          : row.acceptedUnverified
+            ? "UNVERIFIED"
+            : row.exportBlocked
+              ? "BLOCKED"
+              : "FAILED"
+      const countNote = `actual ${row.actualCount ?? "n/a"} / estimated ${row.estimatedCount}`
+      const reason = row.exportBlockReason ? ` (${row.exportBlockReason})` : ""
+      return `- ${status} ${row.market} / ${row.strategyKey}: ${countNote}, list ${row.listId}${reason}`
+    }),
     "",
     "## Export Settings",
     "",
@@ -345,9 +404,13 @@ function main() {
   const outputs = writeOutputs(result)
 
   const requested = (result.results || []).filter((row) => row.requested).length
+  const acceptedUnverified = (result.results || []).filter((row) => row.acceptedUnverified).length
+  const blocked = (result.results || []).filter((row) => row.exportBlocked).length
   const failed = (result.results || []).filter((row) => !row.requested && !row.dryRun).length
   console.log("")
   console.log(`Export requests: ${requested}/${lists.length}`)
+  console.log(`Unverified:      ${acceptedUnverified}`)
+  console.log(`Blocked:         ${blocked}`)
   console.log(`Failed:          ${failed}`)
   console.log(`Report:          ${outputs.mdPath}`)
   console.log(`JSON:            ${outputs.jsonPath}`)

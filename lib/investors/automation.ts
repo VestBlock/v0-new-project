@@ -7,6 +7,7 @@ import {
 import { BUILDER_PARTNER_MARKETS } from '@/lib/investors/builderStrategy'
 import {
   discoverAndIngestInvestorsForMarket,
+  runDailyInvestorApproval,
   runDailyInvestorFollowup,
   runDailyInvestorOutreach,
   runDailyInvestorPerformanceRollup,
@@ -143,13 +144,14 @@ export async function runDailyInvestorPipeline(options: { dryRun?: boolean } = {
     const discovery = await runDailyInvestorDiscovery({ dryRun: options.dryRun })
     const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(envInt('INVESTORS_DAILY_SCORE_LIMIT', 120))
     const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(envInt('INVESTORS_DAILY_OUTREACH_LIMIT', 50))
-    const send = options.dryRun ? { ok: true, count: 0, results: [], autoSendEnabled: false } : await runDailyInvestorSend(envInt('INVESTORS_DAILY_SEND_LIMIT', 20))
-    const followup = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorFollowup(envInt('INVESTORS_DAILY_FOLLOWUP_LIMIT', 30))
+    const followup = await runDailyInvestorFollowup(envInt('INVESTORS_DAILY_FOLLOWUP_LIMIT', 30), { dryRun: options.dryRun })
+    const approval = await runDailyInvestorApproval(envInt('INVESTORS_DAILY_APPROVAL_LIMIT', 25), { dryRun: options.dryRun })
+    const send = await runDailyInvestorSend(envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
     const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
 
-    const count = discovery.count + scoring.count + outreach.count + send.count + followup.count + performance.count
+    const count = discovery.count + scoring.count + outreach.count + followup.count + approval.count + send.count + performance.count
     await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: count })
-    return { ok: true, discovery, scoring, outreach, send, followup, performance }
+    return { ok: true, discovery, scoring, outreach, followup, approval, send, performance }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',

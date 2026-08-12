@@ -168,6 +168,7 @@ export type AutopilotSnapshot = {
 }
 
 const DEFAULT_MARKETS = ['Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Detroit, MI']
+const LOWBALL_MAX_OUTREACH_SHARE = 0.15
 
 export const SOURCE_DOCTRINE: SourceDoctrineLane[] = [
   {
@@ -379,156 +380,6 @@ const STRATEGY_DEFINITIONS: Array<Omit<StrategyBatchPlan, 'status' | 'markets' |
       'Keep the message exploratory and fact-finding; commercial pricing must stay conditional on use, leases, environmental, zoning, and access.',
   },
   {
-    strategyKey: 'failed-landlord-exit',
-    strategyName: 'Failed landlord exit',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$15k-$50k+ when a tired landlord has taxes, liens, vacancy, evictions, distance, or management friction and wants one property or a small group off the board.',
-    targetBuyerLane: 'Local landlords, DSCR buyers, small multifamily operators, and cash-flow investors',
-    qualificationGate: 'Landlord/portfolio signal + absentee/out-of-state/tax/lien/vacancy friction + contact export with DNC fields',
-    copyGuardrail:
-      'Use low-pressure simplification language; never shame the owner, claim tenant problems without proof, or imply tax/legal consequences.',
-  },
-  {
-    strategyKey: 'insurance-damage-event',
-    strategyName: 'Insurance / damage event',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$20k-$75k+ when fire, storm, boarded, shell, or insurance-delay sellers can be matched to heavy-rehab buyers before retail repairs are attempted.',
-    targetBuyerLane: 'Fire-damage buyers, restoration contractors, heavy-rehab investors, and builders',
-    qualificationGate: 'Damage/condition proxy + owner contact export + buyer lane confirmed for fire/structural/heavy-rehab risk',
-    copyGuardrail:
-      'Ask for photos/details; keep all pricing conditional on access, title, insurance status, scope, utilities, and safety.',
-  },
-  {
-    strategyKey: 'zombie-rehab',
-    strategyName: 'Zombie rehab / stalled project',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$20k-$80k+ when another owner or investor has an unfinished project, stalled permit, lien, or capital gap and needs an exit.',
-    targetBuyerLane: 'Heavy rehabbers, contractor-buyers, builders, and private-money-backed operators',
-    qualificationGate: 'Vacant/rehab/lien/tax/code/permit proxy + title and access diligence before any number',
-    copyGuardrail:
-      'Do not accuse the owner of failing a project; frame it as a clean as-is review if the project is paused or no longer worth the time.',
-  },
-  {
-    strategyKey: 'senior-downsizer',
-    strategyName: 'Equity-rich downsizer',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$10k-$35k when a high-equity owner wants a simple as-is exit, downsizing path, or flexible sale without retail prep.',
-    targetBuyerLane: 'Cash buyers, creative buyers, and local owner-occupant/landlord buyers depending on condition',
-    qualificationGate: 'High-equity/long-hold proxy + soft outreach + no age/protected-class assumptions in copy',
-    copyGuardrail:
-      'Do not mention age unless the owner introduced it. Keep the message respectful, optional, and focused on simplifying or understanding options.',
-  },
-  {
-    strategyKey: 'rent-gap-multifamily',
-    strategyName: 'Small multifamily rent-gap lane',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$25k-$100k+ when a duplex, fourplex, or small portfolio has below-market rents or operational upside that cash-flow buyers will pay for.',
-    targetBuyerLane: 'Small multifamily investors, DSCR buyers, 1031 buyers, and portfolio landlords',
-    qualificationGate: 'Small multifamily/portfolio signal + rent roll or rent estimate range needed before buyer packet',
-    copyGuardrail:
-      'Do not claim rents are below market until verified; ask for rent roll/occupancy and present ranges only after analysis.',
-  },
-  {
-    strategyKey: 'probate-vacant-equity',
-    strategyName: 'Probate + vacant + equity',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$15k-$60k when estate, inherited, vacant, or cleanout-heavy properties can sell as-is without heirs managing repairs.',
-    targetBuyerLane: 'Cash buyers, landlords, cleanout-friendly rehabbers, and local operators',
-    qualificationGate: 'Estate/probate/vacancy/equity proxy + owner/heir identity verification before outreach scale',
-    copyGuardrail:
-      'Use sensitive language. Do not imply death, probate, or family status unless the source data is explicit and verified.',
-  },
-  {
-    strategyKey: 'tired-airbnb-midterm',
-    strategyName: 'Tired Airbnb / midterm rental',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$15k-$45k when short-term or midterm rental operators are tired of occupancy, regulations, reviews, or furnishing costs.',
-    targetBuyerLane: 'Furnished rental buyers, landlords, creative buyers, and local cash-flow investors',
-    qualificationGate: 'Rental/STR/operator proxy + performance pain confirmed by owner or public listing signal before strong claims',
-    copyGuardrail:
-      'Do not claim poor occupancy or bad performance without owner confirmation. Ask if the rental plan changed.',
-  },
-  {
-    strategyKey: 'utility-lien-water-shutoff',
-    strategyName: 'Utility / water lien pressure',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$12k-$35k when water, utility, nuisance, municipal, tax, or lien friction shows distress before foreclosure.',
-    targetBuyerLane: 'Local cash buyers, code-repair operators, and landlords comfortable with municipal issues',
-    qualificationGate: 'Municipal/lien/tax proxy + current public-record check before referencing any specific item',
-    copyGuardrail:
-      'Never threaten consequences or imply government affiliation. If a municipal signal may be stale, say so clearly.',
-  },
-  {
-    strategyKey: 'contractor-distress-flip',
-    strategyName: 'Contractor distress buyer-seller flip',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$20k-$75k+ when damaged/heavy-rehab sellers can be matched to contractors and restoration buyers already comfortable with scope risk.',
-    targetBuyerLane: 'Restoration companies, contractor-buyers, fire-damage buyers, structural rehabbers, and builders',
-    qualificationGate: 'Heavy-repair signal + buyer criteria captured + photos/scope requested before pricing',
-    copyGuardrail:
-      'Ask for photos/details first; pricing must stay conditional on scope, permits, title, utilities, safety, and access.',
-  },
-  {
-    strategyKey: 'small-commercial-owner-exit',
-    strategyName: 'Small commercial owner exit',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$30k-$150k+ when mixed-use, small-bay, retail, office, or storage owners need a specialized operator instead of a generic residential buyer.',
-    targetBuyerLane: 'Small-bay industrial buyers, mixed-use operators, storage buyers, developers, and local business-owner investors',
-    qualificationGate: 'Use/zoning/lease/vacancy facts gathered before quote; environmental and title risk flagged',
-    copyGuardrail:
-      'Keep outreach fact-finding only; commercial terms must stay conditional on leases, zoning, access, environmental, title, and use.',
-  },
-  {
-    strategyKey: 'portfolio-fragmentation',
-    strategyName: 'Portfolio fragmentation',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$20k-$80k+ when one weak door inside a 3-10 property owner file can be bought separately or start a portfolio conversation.',
-    targetBuyerLane: 'Portfolio landlords, small multifamily buyers, DSCR buyers, and local operators',
-    qualificationGate: 'Multi-property owner + at least one tax/lien/vacancy/code/rent-gap signal + owner contact export',
-    copyGuardrail:
-      'Ask whether one property, a subset, or the whole group is worth reviewing. Do not imply the owner must sell the entire portfolio.',
-  },
-  {
-    strategyKey: 'buyer-reverse-engineering',
-    strategyName: 'Buyer reverse-engineering',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$25k-$100k+ when seller outreach starts from verified buyer demand instead of generic distress.',
-    targetBuyerLane: 'Whatever buyer segment recently bought or explicitly requested the asset type: cash buyers, landlords, builders, land buyers, or creative buyers',
-    qualificationGate: 'Known buyer pattern + matching market/property type + no seller outreach until the buyer lane is named',
-    copyGuardrail:
-      'Do not claim a buyer is guaranteed. Say the property may fit criteria we are reviewing and confirm facts before routing.',
-  },
-  {
-    strategyKey: 'permit-spike-developer-land',
-    strategyName: 'Permit spike developer / land',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$25k-$125k+ when permit activity, demolitions, rezonings, or new builds reveal land/infill demand before the owner sees it.',
-    targetBuyerLane: 'Infill builders, developers, land buyers, lot assemblers, and construction companies',
-    qualificationGate: 'Permit/developer activity source + land/lot/teardown proxy + zoning/access/utilities review',
-    copyGuardrail:
-      'Do not overstate buildability. Pricing and buyer fit depend on zoning, utilities, access, title, survey, and permit context.',
-  },
-  {
-    strategyKey: 'judgment-lien-pressure',
-    strategyName: 'Judgment / lien pressure',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$15k-$50k when liens, judgments, taxes, or title friction make a normal retail process too slow.',
-    targetBuyerLane: 'Cash buyers, title-savvy investors, legal-review operators, and local landlords',
-    qualificationGate: 'Lien/judgment/tax proxy + current source verification + no legal/tax claims in outreach',
-    copyGuardrail:
-      'Do not provide legal/tax advice or threaten consequences. Say the public-record signal may be outdated and ask if a simple review is useful.',
-  },
-  {
-    strategyKey: 'tax-assessment-shock',
-    strategyName: 'Tax assessment shock',
-    sourceProvider: 'dealmachine',
-    feeThesis: '$10k-$35k when tax burden or assessment jumps push high-equity owners to consider a clean exit.',
-    targetBuyerLane: 'Cash buyers, creative buyers, and landlords depending on condition and seller needs',
-    qualificationGate: 'Tax/high-equity/assessment proxy + current tax/assessment check before referencing a specific increase',
-    copyGuardrail:
-      'Frame around carrying cost and options. Do not imply tax distress unless verified; no tax advice.',
-  },
-  {
     strategyKey: 'stale-listing-creative-finance',
     strategyName: 'Stale listing creative terms',
     sourceProvider: 'homeharvest',
@@ -580,7 +431,7 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
     config: {
       channel: 'email',
       sms: 'review_only',
-      maxPerStrategy: 30,
+      maxPerStrategy: 100,
       dealMachineContactExportRequired: true,
       noDealMachineSkipTraceDefault: true,
       forbiddenSources: ['instantly_supersearch', 'instantly_lead_finder'],
@@ -695,56 +546,8 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
   if (strategyKey === 'commercial-small-bay-distress') {
     return normalizeMarketList([...heated, 'Milwaukee, WI', 'Toledo, OH', 'Cleveland, OH', 'Pittsburgh, PA'])
   }
-  if (strategyKey === 'failed-landlord-exit') {
-    return normalizeMarketList([...heated, ...refresh, 'Dayton, OH', 'Akron, OH', 'Tulsa, OK', 'Little Rock, AR'])
-  }
-  if (strategyKey === 'insurance-damage-event' || strategyKey === 'contractor-distress-flip') {
-    return normalizeMarketList([...heated, 'Kansas City, MO', 'St. Louis, MO', 'Memphis, TN', 'Birmingham, AL'])
-  }
-  if (strategyKey === 'zombie-rehab' || strategyKey === 'utility-lien-water-shutoff' || strategyKey === 'judgment-lien-pressure') {
-    return normalizeMarketList([...refresh, 'Dayton, OH', 'Akron, OH', 'Youngstown, OH', 'Tulsa, OK'])
-  }
-  if (strategyKey === 'senior-downsizer' || strategyKey === 'tax-assessment-shock') {
-    return normalizeMarketList([...heated, 'Omaha, NE', 'Des Moines, IA', 'Wichita, KS', 'Greensboro, NC'])
-  }
-  if (strategyKey === 'rent-gap-multifamily' || strategyKey === 'portfolio-fragmentation') {
-    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Cleveland, OH', 'Dayton, OH', 'Toledo, OH'])
-  }
-  if (strategyKey === 'probate-vacant-equity') {
-    return normalizeMarketList([...refresh, 'Kansas City, MO', 'Little Rock, AR', 'Omaha, NE', 'Wichita, KS'])
-  }
-  if (strategyKey === 'tired-airbnb-midterm') {
-    return normalizeMarketList(['Kansas City, MO', 'Louisville, KY', 'Indianapolis, IN', 'Pittsburgh, PA', ...heated])
-  }
-  if (strategyKey === 'small-commercial-owner-exit') {
-    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Cleveland, OH', 'Pittsburgh, PA', 'St. Louis, MO'])
-  }
-  if (strategyKey === 'buyer-reverse-engineering') {
-    return normalizeMarketList([...heated, 'Milwaukee, WI', 'Kansas City, MO', 'Cleveland, OH', 'Indianapolis, IN'])
-  }
-  if (strategyKey === 'permit-spike-developer-land') {
-    return normalizeMarketList([...heated, 'Columbus, OH', 'Indianapolis, IN', 'Louisville, KY', 'Kansas City, MO'])
-  }
   return normalizeMarketList([...heated, ...refresh, ...DEFAULT_MARKETS])
 }
-
-const EPIC_DEALMACHINE_ROTATION_STRATEGIES = new Set([
-  'failed-landlord-exit',
-  'insurance-damage-event',
-  'zombie-rehab',
-  'senior-downsizer',
-  'rent-gap-multifamily',
-  'probate-vacant-equity',
-  'tired-airbnb-midterm',
-  'utility-lien-water-shutoff',
-  'contractor-distress-flip',
-  'small-commercial-owner-exit',
-  'portfolio-fragmentation',
-  'buyer-reverse-engineering',
-  'permit-spike-developer-land',
-  'judgment-lien-pressure',
-  'tax-assessment-shock',
-])
 
 function strategyCommand(strategyKey: string, markets: string[], target: number) {
   const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join('|')
@@ -786,18 +589,21 @@ function strategyCommand(strategyKey: string, markets: string[], target: number)
   if (strategyKey === 'novation-retail-spread') {
     return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --offer-mode=novation --limit=${target}`
   }
-  if (EPIC_DEALMACHINE_ROTATION_STRATEGIES.has(strategyKey)) {
-    return `pnpm run sellers:strategy-rotation -- --strategy=${strategyKey} --markets="${marketList}" --daily-cap=30 --max-builds=4`
-  }
   return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --limit=${target}`
 }
 
 export function buildStrategyBatchPlans(input: AutopilotSnapshotInput): StrategyBatchPlan[] {
-  const maxPerStrategy = 30
+  const maxPerStrategy = 100
   const capacity = Math.max(0, Math.min(input.remainingToday, maxPerStrategy * STRATEGY_DEFINITIONS.length))
   const activeStrategyCount = input.replySignals7d > 0 ? 2 : STRATEGY_DEFINITIONS.length
   const baseTarget = activeStrategyCount > 0 ? Math.floor(capacity / activeStrategyCount) : 0
   const readyPressure = input.emailReady + input.needsReview
+  const historicalLowballSent = input.campaigns.find((campaign) => campaign.key === 'on-market-lowball-agent-sweep')?.sent || 0
+  const historicalTotalSent = input.campaigns.reduce((sum, campaign) => sum + Number(campaign.sent || 0), 0)
+  const historicalLowballShare = historicalTotalSent > 0 ? historicalLowballSent / historicalTotalSent : 0
+  const lowballTargetCap = historicalLowballShare >= LOWBALL_MAX_OUTREACH_SHARE
+    ? 0
+    : Math.max(0, Math.floor(capacity * LOWBALL_MAX_OUTREACH_SHARE))
 
   return STRATEGY_DEFINITIONS.map((definition, index) => {
     const blockedReason =
@@ -805,10 +611,14 @@ export function buildStrategyBatchPlans(input: AutopilotSnapshotInput): Strategy
         ? 'Suppression database is not visible; live sends must stay paused.'
         : sourceBlockedReason(input, definition.sourceProvider)
     const markets = strategyMarkets(input, definition.strategyKey)
-    const targetEmailCount =
+    const uncappedTarget =
       blockedReason || index >= activeStrategyCount
         ? 0
         : Math.max(0, Math.min(maxPerStrategy, baseTarget + (index === 0 ? capacity % activeStrategyCount : 0)))
+    const targetEmailCount =
+      definition.strategyKey === 'on-market-lowball-agent-sweep'
+        ? Math.min(uncappedTarget, lowballTargetCap)
+        : uncappedTarget
     const status: CommandStatus = blockedReason ? 'red' : targetEmailCount > 0 || readyPressure > 0 ? 'green' : 'yellow'
 
     return {
@@ -818,7 +628,7 @@ export function buildStrategyBatchPlans(input: AutopilotSnapshotInput): Strategy
       targetEmailCount,
       targetSmsReviewCount: definition.sourceProvider === 'instantly' ? 0 : targetEmailCount,
       blockedReason,
-      command: strategyCommand(definition.strategyKey, markets, Math.max(targetEmailCount, 30)),
+      command: strategyCommand(definition.strategyKey, markets, Math.max(targetEmailCount, 100)),
     }
   })
 }
@@ -846,6 +656,9 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
   ).length
 
   const batches = buildStrategyBatchPlans(input)
+  const lowballSent = input.campaigns.find((campaign) => campaign.key === 'on-market-lowball-agent-sweep')?.sent || 0
+  const totalCampaignSent = input.campaigns.reduce((sum, campaign) => sum + Number(campaign.sent || 0), 0)
+  const lowballShare = totalCampaignSent > 0 ? lowballSent / totalCampaignSent : 0
   const guardrails = [
     {
       label: 'Suppressions',
@@ -884,6 +697,15 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
       detail: input.remainingToday > 0 ? 'Autopilot can still plan outbound volume.' : 'Daily outbound cap is already full.',
     },
     {
+      label: 'Lowball share',
+      value: `${Math.round(lowballShare * 100)}%`,
+      status: lowballShare > LOWBALL_MAX_OUTREACH_SHARE ? 'yellow' : 'green',
+      detail:
+        lowballShare > LOWBALL_MAX_OUTREACH_SHARE
+          ? 'Lowball-style outreach is running hot. Keep it as a supplemental lane and push more volume into tax, landlord, preforeclosure, novation, and builder-fit stacks.'
+          : 'Lowball-style outreach is being kept as a minority lane versus creative, distress, and relationship-first campaigns.',
+    },
+    {
       label: 'SMS lane',
       value: 'review',
       status: 'yellow',
@@ -911,6 +733,8 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
   const nextMove =
     input.replySignals7d > 0
       ? 'Work replies and write memory before adding volume; each reply should update strategy, market, property, and next action.'
+      : lowballShare > LOWBALL_MAX_OUTREACH_SHARE
+        ? 'Lowball outreach is over the target share. Shift the next seller batch into tax-code-stack, senior landlord, preforeclosure subject-to review, builder infill, or novation lanes before adding more cash-review volume.'
       : firstBlocked
         ? `${firstBlocked.strategyName}: ${firstBlocked.blockedReason}`
         : topBatch

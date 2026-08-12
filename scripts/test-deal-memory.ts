@@ -35,8 +35,7 @@ const snapshot = buildDealMemorySnapshot([
 assert.equal(snapshot.totalAnalyses >= 1, true)
 assert.equal(snapshot.riskyCount >= 1, true)
 assert.equal(snapshot.goodCount, 0)
-const fixture = snapshot.recentAnalyses.find((item) => item.propertyAddress === '965 North Ave, Macon, GA')
-assert.equal(Boolean(fixture), true)
-assert.equal(fixture?.grade, 'RISKY')
+assert.equal(snapshot.recentAnalyses[0]?.propertyAddress, '965 North Ave, Macon, GA')
+assert.equal(snapshot.recentAnalyses[0]?.grade, 'RISKY')
 
 console.log('deal-memory: ok')

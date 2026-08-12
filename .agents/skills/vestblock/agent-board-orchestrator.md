@@ -40,11 +40,12 @@ Coordinate specialist agents without creating chaos. The board should improve re
 
 ## How To Run The Board
 
-1. Read `docs/CODEX_FAST_CONTEXT.md`, `docs/CODEX_TASK_PLAYBOOK.md`, and `docs/vestblock-agent-board.json`.
+1. Read `docs/CODEX_FAST_CONTEXT.md`, `docs/CODEX_TASK_PLAYBOOK.md`, `docs/VESTBLOCK_GITHUB_TOOLBELT.md`, and `docs/vestblock-agent-board.json`.
 2. Pick the board members needed for the task.
-3. If Rob explicitly asks for agents, spawn independent explorer/worker agents with disjoint scopes.
-4. Do not delegate live sends, payments, chain transactions, or secret handling.
-5. Main Codex integrates, patches, verifies, and reports.
+3. Select only the GitHub toolbelt source that helps the current bottleneck; its catalog entry defines activation and privacy gates.
+4. If Rob explicitly asks for agents, spawn independent explorer/worker agents with disjoint scopes.
+5. Do not delegate live sends, payments, chain transactions, or secret handling.
+6. Main Codex integrates, patches, verifies, and reports.
 
 ## Swarm Modes
 

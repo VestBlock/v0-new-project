@@ -1,6 +1,26 @@
 # GitHub Agent Integrations
 
-Last updated: 2026-06-12
+Last updated: 2026-08-10
+
+## 2026-08-10 Strategy Toolbelt Addition
+
+Six governed GitHub sources are now available as shallow local reference
+clones under `vendor/toolbelt/`:
+
+- `usestrix/strix`
+- `Anil-matcha/Open-Generative-AI`
+- `every-app/open-seo`
+- `ayghri/i-have-adhd`
+- `petergyang/no-ai-slop`
+- `lfnovo/open-notebook`
+
+`i-have-adhd` and `no-ai-slop` were also installed as global Codex skills.
+The other four repositories remain reference-ready until their runtime,
+credentials, provider costs, data policy, and authorized scope are explicitly
+approved. They are not bundled into the VestBlock application.
+
+The lane map, verified commits, activation gates, privacy rules, and refresh
+procedure live in `docs/VESTBLOCK_GITHUB_TOOLBELT.md`.
 
 ## 2026-06-12 Agent Infrastructure Review
 

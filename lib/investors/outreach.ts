@@ -1,6 +1,8 @@
 import type { InvestorProfileRecord, InvestorSequenceCode } from '@/lib/investors/types'
 import { HIGH_VALUE_BUYER_LANES, builderBuyBoxQuestions, builderOutreachAngle, isBuilderPartnerLike } from '@/lib/investors/builderStrategy'
 
+export const INVESTOR_OUTREACH_TEMPLATE_VERSION = 'vestblock-investor-network-2026-07-20'
+
 export const INVESTOR_OUTREACH_SEQUENCES: Record<
   InvestorSequenceCode,
   { name: string; subject: string; body: string; cta: string }
@@ -60,7 +62,7 @@ export function buildInvestorOutreachMessage(investor: InvestorProfileRecord, se
         `We are also separating higher-value buyer lanes so we do not send the wrong kind of deal:\n${laneLine}\n\n` +
         `Rather than send random properties, we want your real criteria first. The most useful things for us to understand are:\n` +
         questions.map((question) => `- ${question}`).join('\n') +
-        `\n\nIf your team already has a buy box, build sheet, or neighborhoods list, send it over and we will align to it.\n\nBest,\nVestBlock Partnerships`,
+        `\n\nIf your team already has a buy box, build sheet, or neighborhoods list, send it over and we will align to it.\n\nBest,\nVestBlock Partnerships\nacquisitions@vestblock.io\n\nIf this is not relevant, reply opt out and we will not contact you again.`,
       cta: angle.cta,
     }
   }
@@ -68,8 +70,23 @@ export function buildInvestorOutreachMessage(investor: InvestorProfileRecord, se
   return {
     sequenceCode,
     subject: sequence.subject,
-    body: `${intro}${sequence.body}${marketLine}\n\n${sequence.cta}\n\nBest,\nVestBlock Partnerships`,
+    body: `${intro}${sequence.body}${marketLine}\n\n${sequence.cta}\n\nBest,\nVestBlock Partnerships\nacquisitions@vestblock.io\n\nIf this is not relevant, reply opt out and we will not contact you again.`,
     cta: sequence.cta,
+  }
+}
+
+export function buildInvestorFollowupMessage(investor: InvestorProfileRecord) {
+  const name = investor.person_name || investor.company_name || investor.llc_name || investor.display_name
+  const greeting = name ? `Hi ${name.split(' ')[0]},` : 'Hi,'
+  const markets = investor.markets?.length ? investor.markets.slice(0, 3).join(', ') : 'your active markets'
+  return {
+    sequenceCode: investor.assigned_sequence,
+    subject: `Quick follow-up on ${markets}`,
+    body:
+      `${greeting}\n\nI wanted to follow up once on my earlier VestBlock note. We are organizing seller opportunities, builder and investor demand, and capital relationships around confirmed criteria instead of sending generic deal blasts.\n\n` +
+      `If you are open to seeing opportunities, reply with your active markets, property types, price range, condition tolerance, close speed, and the best submission process. Even a short buy-box reply is enough for us to route more carefully.\n\n` +
+      `Best,\nVestBlock Partnerships\nacquisitions@vestblock.io\n\nIf this is not relevant, reply opt out and we will not contact you again.`,
+    cta: 'Can you send your current buy box or partner criteria?',
   }
 }
 

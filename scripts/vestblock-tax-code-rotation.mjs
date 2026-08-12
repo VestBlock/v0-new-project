@@ -73,22 +73,6 @@ function latestFiles(dir, test) {
     .sort((a, b) => b.mtime - a.mtime)
 }
 
-function exportableCountValue(row) {
-  if (row.actualCount !== null && row.actualCount !== undefined && row.actualCount !== '') return Number(row.actualCount)
-  const countResult = row.countResult || {}
-  if (countResult.total_count_not_yet_exported !== null && countResult.total_count_not_yet_exported !== undefined) {
-    return Number(countResult.total_count_not_yet_exported)
-  }
-  if (countResult.actual_count !== null && countResult.actual_count !== undefined) return Number(countResult.actual_count)
-  if (countResult.count !== null && countResult.count !== undefined) return Number(countResult.count)
-  return null
-}
-
-function isZeroExportable(row) {
-  const count = exportableCountValue(row)
-  return row.exportBlocked || (count !== null && Number.isFinite(count) && count <= 0)
-}
-
 function loadExportRequestedByMarket() {
   const byMarket = new Map()
   for (const entry of latestFiles(OUTREACH_DIR, (name) => /^dealmachine-export-lists-.*\.json$/i.test(name))) {
@@ -97,32 +81,20 @@ function loadExportRequestedByMarket() {
       if (!row.market) continue
       const key = slug(row.market)
       if (!wantedMarket(key)) continue
-      const countValue = exportableCountValue(row)
-      const zeroExportable = isZeroExportable(row)
-      const requested = Boolean(row.exported || row.requested) && !zeroExportable
       const current = byMarket.get(key) || {
         market: row.market,
         marketSlug: key,
         exportRequested: false,
-        zeroExportable: false,
-        latestActualCount: null,
-        latestExportCheckMtime: 0,
         exportReports: [],
         listIds: [],
         estimatedCount: 0,
         latestExportRequestMtime: 0,
       }
+      current.exportRequested = current.exportRequested || Boolean(row.exported || row.requested)
       current.exportReports.push(path.relative(process.cwd(), entry.file))
       if (row.id || row.listId) current.listIds.push(String(row.id || row.listId))
       current.estimatedCount = Math.max(current.estimatedCount, Number(row.count || row.estimatedCount || 0))
-      if (entry.mtime >= Number(current.latestExportCheckMtime || 0)) {
-        current.latestExportCheckMtime = entry.mtime
-        current.latestActualCount = countValue
-        current.zeroExportable = zeroExportable
-        current.latestExportReport = path.relative(process.cwd(), entry.file)
-      }
-      current.exportRequested = current.exportRequested || requested
-      if (requested) current.latestExportRequestMtime = Math.max(current.latestExportRequestMtime, entry.mtime)
+      if (row.exported || row.requested) current.latestExportRequestMtime = Math.max(current.latestExportRequestMtime, entry.mtime)
       byMarket.set(key, current)
     }
   }
@@ -163,19 +135,16 @@ function buildPlan() {
       const stackState = stack.byMarket.get(key)
       const market = exportState?.market || stackState?.market || key
       const exportCsv = latestDmExportForMarket(key, Number(exportState?.latestExportRequestMtime || 0))
-      const zeroExportable = Boolean(exportState?.zeroExportable) && !exportCsv
       const knownLeadCount = Number(stackState?.stackRows || 0) > 0
         ? Number(stackState?.stackRows || 0)
         : Number(exportState?.estimatedCount || 0)
       const loadedCount = exportCsv ? knownLeadCount : 0
-      const pendingCount = exportCsv || zeroExportable ? 0 : knownLeadCount
+      const pendingCount = exportCsv ? 0 : knownLeadCount
       const status = exportCsv
         ? "csv_ready_for_daily_send"
-        : zeroExportable
-          ? "blocked_zero_exportable_contacts"
-          : exportState?.exportRequested
-            ? "waiting_for_dealmachine_export_email"
-            : "needs_contact_export"
+        : exportState?.exportRequested
+          ? "waiting_for_dealmachine_export_email"
+          : "needs_contact_export"
       return {
         strategy: STRATEGY,
         market,
@@ -189,16 +158,10 @@ function buildPlan() {
         stackedRows: stackState?.stackedRows || 0,
         taxOnlyRows: stackState?.taxOnlyRows || 0,
         exportRequested: Boolean(exportState?.exportRequested),
-        zeroExportable,
-        latestActualCount: exportState?.latestActualCount ?? null,
-        latestExportReport: exportState?.latestExportReport || "",
         exportCsv: exportCsv ? path.relative(process.cwd(), exportCsv) : "",
         stackFile: stackState?.stackFile || "",
         exportReports: exportState?.exportReports || [],
         listIds: exportState?.listIds || [],
-        remediationCommand: zeroExportable
-          ? `npm run vestblock:tax-code-stack:build -- --markets="${market.replace(", ", ",")}" --per-city=${DAILY_CAP}`
-          : "",
         sendCommand: exportCsv
           ? [
               "node --env-file=.env.local scripts/dealmachine-export-outreach.mjs",
@@ -215,7 +178,7 @@ function buildPlan() {
     })
     .filter((lane) => lane.knownLeadCount > 0 || lane.exportRequested || lane.stackRows > 0)
     .sort((a, b) => {
-      const statusRank = { csv_ready_for_daily_send: 0, waiting_for_dealmachine_export_email: 1, needs_contact_export: 2, blocked_zero_exportable_contacts: 3 }
+      const statusRank = { csv_ready_for_daily_send: 0, waiting_for_dealmachine_export_email: 1, needs_contact_export: 2 }
       return (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || b.knownLeadCount - a.knownLeadCount || a.market.localeCompare(b.market)
     })
 
@@ -257,7 +220,7 @@ function writePlan(plan) {
   const csvPath = path.join(OPERATING_DIR, "tax-code-stack-rotation.csv")
   const batchCsvPath = path.join(OPERATING_DIR, "tax-code-stack-daily-batches.csv")
   fs.writeFileSync(jsonPath, JSON.stringify(plan, null, 2))
-  const laneColumns = ["strategy", "market", "status", "dailyCap", "knownLeadCount", "loadedCount", "pendingCount", "stackRows", "stackedRows", "taxOnlyRows", "latestActualCount", "latestExportReport", "exportCsv", "sendCommand", "ingestCommand", "remediationCommand"]
+  const laneColumns = ["strategy", "market", "status", "dailyCap", "knownLeadCount", "loadedCount", "pendingCount", "stackRows", "stackedRows", "taxOnlyRows", "exportCsv", "sendCommand", "ingestCommand"]
   fs.writeFileSync(csvPath, [laneColumns.join(","), ...plan.lanes.map((row) => laneColumns.map((column) => esc(row[column])).join(","))].join("\n"))
   const batchColumns = ["date", "strategy", "market", "targetSendCount", "status", "sendCommand"]
   fs.writeFileSync(batchCsvPath, [batchColumns.join(","), ...plan.batches.map((row) => batchColumns.map((column) => esc(row[column])).join(","))].join("\n"))

@@ -35,7 +35,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
-type GrantProfileRow = {};
+type GrantProfileRow = {
+  user_id: string;
+  state: string | null;
+  business_status: string | null;
+  industry: string | null;
+  revenue_range: string | null;
+  founder_attributes: string[] | null;
+  has_ein: boolean | null;
+  business_name: string | null;
+  updated_at: string | null;
+};
 
 type Answers = {
   state: string;
@@ -232,7 +242,7 @@ export default function GrantsPage() {
 
   async function upsertProfile(next: Answers) {
     if (!user) return;
-    const payload: Partial<GrantProfileRow> = {
+    const payload: GrantProfileRow = {
       user_id: user.id,
       state: next.state,
       business_status: next.business_status,
@@ -680,11 +690,11 @@ export default function GrantsPage() {
                       Letter will appear here after you run.
                     </div>
                   ) : (
-                    <div
-                      className="prose prose-sm md:prose lg:prose-lg max-w-none border rounded-md p-4 bg-white dark:bg-background text-white"
-                      dangerouslySetInnerHTML={{
-                        __html: result.letterHtml.slice(0, 1200) + '…',
-                      }}
+                    <iframe
+                      title="Grant letter preview"
+                      className="h-80 w-full rounded-md border bg-white"
+                      sandbox=""
+                      srcDoc={result.letterHtml}
                     />
                   )}
                 </CardContent>
@@ -717,9 +727,11 @@ export default function GrantsPage() {
               </Button>
             </div>
             <div className="h-[calc(100vh-8rem)] sm:h-[70vh] overflow-auto border rounded-md p-4 text-white ">
-              <div
-                className="prose prose-sm md:prose lg:prose-lg prose-neutral max-w-none text-white"
-                dangerouslySetInnerHTML={{ __html: result.letterHtml }}
+              <iframe
+                title="Full grant letter preview"
+                className="h-full w-full border-0 bg-white"
+                sandbox=""
+                srcDoc={result.letterHtml}
               />
             </div>
           </div>

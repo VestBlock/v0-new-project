@@ -2,7 +2,7 @@ import { CATEGORY_LABELS } from '@/lib/buyers/constants'
 import type { BuyerRecord, GeneratedBuyerOutreachBundle } from '@/lib/buyers/types'
 
 const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\nacquisitions@vestblock.io'
-export const BUYER_OUTREACH_TEMPLATE_VERSION = 'vestblock-buyer-refresh-2026-06-11'
+export const BUYER_OUTREACH_TEMPLATE_VERSION = 'vestblock-buyer-box-2026-07-14'
 
 function bulletList(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
@@ -60,30 +60,22 @@ function economicsPrompt(buyer: BuyerRecord) {
   return 'If you already have a preferred referral structure, intake sheet, or dispositions process, we are happy to work inside it and keep submissions clean.'
 }
 
-function demandEngineAngle(buyer: BuyerRecord) {
-  if (buyer.buyer_type === 'institutional') {
-    return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and criteria are clear, so the relationship is supported by more inbound visibility and not just manual outreach.'
-  }
-
-  return 'We also attach an AEO/SEO Booster to serious network partners once their positioning and criteria are clear, so the relationship is supported by more inbound visibility and not just manual outreach.'
-}
-
 export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreachBundle {
   const label = CATEGORY_LABELS[buyer.category] || buyer.category
   const partnershipAngle = introAngle(buyer)
   const propertyAngle = propertyReferralAngle(buyer)
   const questions = qualificationQuestions(buyer)
   const economics = economicsPrompt(buyer)
-  const demandEngine = demandEngineAngle(buyer)
   const complianceNote =
-    'VestBlock positions property opportunities based on fit, seller context, and truthful deal information. We do not promise volume, assignment rights, or guaranteed deal outcomes.'
+    'VestBlock sends property opportunities only when they appear to fit the criteria provided. If this is not relevant, reply and we will not contact you again.'
+  const market = [buyer.headquarters_city, buyer.headquarters_state].filter(Boolean).join(', ') || 'your active markets'
 
   return {
     generatedWith: 'template',
     emailIntro: {
-      subject: `VestBlock deal flow aligned to your ${label} buy box`,
-      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nI’m reaching out from VestBlock. ${partnershipAngle}\n\n${propertyAngle}\n\nWe are building a serious buyer network so we can route seller leads by market, asset type, distress level, close speed, and real acquisition criteria instead of blasting inventory to the wrong list.\n\nOn the seller side, we are working opportunities through fast cash, creative, and novation paths. On the partner side, we want clean buy-box guidance so the right deals move quickly.\n\n${demandEngine}\n\nIf it helps, these are the first things we usually want to understand before we ever send a property over:\n${bulletList(questions)}\n\nIf your team already has a buy box, acquisitions one-pager, or preferred intake format, I’d be happy to organize that on our side and only send cleaner matches.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
-      cta: 'Open to a quick conversation about your buy box, acquisition criteria, and preferred submissions process?',
+      subject: `What is your current buy box for ${market}?`,
+      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nI’m Robert with VestBlock. We source on-market and off-market property opportunities, then route them by location, asset type, condition, price range, and deal structure.\n\nI found ${buyer.name} while building our buyer coverage for ${market}. Before we send anything, could you reply with:\n- cities or ZIP codes you are buying in\n- property types and price range\n- rehab or occupancy limits\n- cash, subject-to, seller-finance, or hybrid structures you will consider\n\nIf you already have a buy-box sheet or acquisitions form, send that instead. We will record it and only bring you opportunities that appear to fit.\n\nIf this is not relevant, reply and we will not contact you again.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
+      cta: 'Reply with your buy box or acquisitions intake link and we will route matching opportunities to you.',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,
       complianceNote,
@@ -91,8 +83,8 @@ export function generateBuyerOutreach(buyer: BuyerRecord): GeneratedBuyerOutreac
       economicsPrompt: null,
     },
     emailFollowup: {
-      subject: 'Quick follow-up on your VestBlock buy box and partner fit',
-      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nWanted to circle back on my earlier note. We’re actively building a cleaner buyer network for ${label} and would rather understand your real acquisition box than send mismatched deals.\n\nWe are trying to build this the right way: clear seller paths, cleaner routing, stronger buyer partnerships, and optional AEO/SEO Booster support once a partner’s positioning is clear.\n\nEven a short reply with a few of these would help a lot:\n${bulletList(questions.slice(0, 5))}\n\n${economics}\n\nThanks again,\n${OUTREACH_SIGNATURE}`,
+      subject: `Still buying in ${market}?`,
+      body: `Hi ${buyer.contact_name || buyer.name} team,\n\nFollowing up once on my note about routing matching property opportunities to ${buyer.name}. A short reply with your active markets, property types, price range, and acceptable deal structures is enough for us to build your buy box.\n\n${economics}\n\nIf this is not relevant, reply and we will not contact you again.\n\nThanks,\n${OUTREACH_SIGNATURE}`,
       cta: 'A short reply with your buy box or acquisitions process is enough for us to get started.',
       partnershipAngle,
       propertyReferralAngle: propertyAngle,

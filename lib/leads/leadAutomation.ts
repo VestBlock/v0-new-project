@@ -1,5 +1,4 @@
 import { createLeadFollowupTask } from '@/lib/admin/tasks';
-import { sendNewLeadAlertEmail } from '@/lib/email/sendEmail';
 import { logEvent } from '@/lib/system/logEvent';
 
 type NewLeadAutomationInput = {
@@ -15,12 +14,6 @@ type NewLeadAutomationInput = {
   sourcePath?: string | null;
   summary?: string | null;
   metadata?: Record<string, unknown>;
-  /**
-   * When true, send the admin intake alert email (ADMIN_ALERT_EMAIL via Resend).
-   * Only public inbound-form routes should set this — bulk import/scoring paths
-   * stay silent so batch runs never flood the inbox.
-   */
-  sendIntakeAlert?: boolean;
 };
 
 export async function runNewLeadAutomation(input: NewLeadAutomationInput) {
@@ -29,24 +22,11 @@ export async function runNewLeadAutomation(input: NewLeadAutomationInput) {
     String(input.email || '').trim() || String(input.phone || '').trim()
   );
   const [emailResult, taskResult, logResult] = await Promise.allSettled([
-    input.sendIntakeAlert
-      ? sendNewLeadAlertEmail({
-          leadId,
-          leadType: input.leadType,
-          name: input.name,
-          email: input.email,
-          phone: input.phone,
-          propertyAddress: input.propertyAddress,
-          city: input.city,
-          state: input.state,
-          sourcePath: input.sourcePath,
-          summary: input.summary,
-        })
-      : Promise.resolve({
-          ok: true,
-          skipped: true,
-          reason: 'intake_alert_not_requested',
-        }),
+    Promise.resolve({
+      ok: true,
+      skipped: true,
+      reason: hasDirectContact ? 'intake_alert_replaced_by_send_alerts' : 'missing_direct_contact_path',
+    }),
     leadId
       ? hasDirectContact
         ? createLeadFollowupTask({

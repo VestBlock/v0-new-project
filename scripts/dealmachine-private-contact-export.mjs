@@ -13,11 +13,16 @@
  * Usage:
  *   node scripts/dealmachine-private-contact-export.mjs --market=philadelphia-pa --token=...
  *   node scripts/dealmachine-private-contact-export.mjs --market=kansas-city-mo --token=... --limit=25
+ *   node --env-file=.env.local scripts/dealmachine-private-contact-export.mjs --market=omaha-ne --list-id=1312730 --output-slug=vestblock-tax-code-stack-omaha-ne-2026-06-30-1312730
  */
 
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { markJobsPrivateFallback } from "./lib/dealmachine-export-jobs.mjs"
+import { blockLegacyDealMachineApi } from "./lib/dealmachine-legacy-disabled.mjs"
+
+blockLegacyDealMachineApi("dealmachine-private-contact-export.mjs")
 
 const args = process.argv.slice(2)
 const getArg = (name) => {
@@ -26,14 +31,22 @@ const getArg = (name) => {
 }
 
 const MARKET_ARG = getArg("market")
+const LIST_ID = getArg("list-id")
+const STRATEGY_KEY = normalizeSlug(getArg("strategy-key") || "")
+const SOURCE_CSV = getArg("source-csv")
+const OUTPUT_SLUG = normalizeSlug(getArg("output-slug") || "")
 const EXPLICIT_TOKEN = getArg("token") || String(process.env.DEALMACHINE_WEB_TOKEN || "").trim()
-const LIMIT = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : 25
+const LIMIT_RAW = getArg("limit") ? Number.parseInt(getArg("limit"), 10) : null
 const SINCE_HOURS = getArg("since-hours") ? Number.parseInt(getArg("since-hours"), 10) : 72
+const CACHE_HOURS = getArg("cache-hours") ? Number.parseInt(getArg("cache-hours"), 10) : 72
+const DEALMACHINE_API_KEY = String(process.env.DEALMACHINE_API_KEY || "").trim()
 
 const ROOT = process.cwd()
 const PUSHED_RECORDS = path.join(ROOT, "data", "distress-leads", "dealmachine-pushed-records.json")
 const DM_EXPORT_DIR = path.join(ROOT, "data", "dm-exports")
 const OUTREACH_DIR = path.join(ROOT, "tmp", "outreach")
+const CACHE_DIR = path.join(ROOT, "data", "operating-loops")
+const PROPERTY_CACHE_FILE = path.join(CACHE_DIR, "dealmachine-private-property-cache.json")
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
 const ATLAS_DEBUG_LOG = path.join(
   os.homedir(),
@@ -77,6 +90,14 @@ function marketShort(value) {
   return MARKET_SHORT[slug] || slug.replace(/-[a-z]{2}$/, "")
 }
 
+function normalizeSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
 function localDateStamp(date = new Date()) {
   const year = String(date.getFullYear())
   const month = String(date.getMonth() + 1).padStart(2, "0")
@@ -94,6 +115,55 @@ function readJson(file, fallback) {
   } catch {
     return fallback
   }
+}
+
+function parseCsvText(text) {
+  const rows = []
+  let row = []
+  let value = ""
+  let quoted = false
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    const next = text[index + 1]
+    if (char === '"' && quoted && next === '"') {
+      value += '"'
+      index += 1
+    } else if (char === '"') {
+      quoted = !quoted
+    } else if (char === "," && !quoted) {
+      row.push(value)
+      value = ""
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1
+      row.push(value)
+      if (row.some((cell) => String(cell).trim())) rows.push(row)
+      row = []
+      value = ""
+    } else {
+      value += char
+    }
+  }
+  if (value.length || row.length) {
+    row.push(value)
+    if (row.some((cell) => String(cell).trim())) rows.push(row)
+  }
+  const [header = [], ...body] = rows
+  return body.map((cols) => Object.fromEntries(header.map((key, idx) => [String(key || "").trim(), cols[idx] ?? ""])))
+}
+
+function pick(row, keys) {
+  for (const key of keys) {
+    const exact = row[key]
+    if (exact !== undefined && String(exact).trim()) return String(exact).trim()
+    const found = Object.keys(row).find((name) => normalizeSlug(name) === normalizeSlug(key))
+    if (found && String(row[found]).trim()) return String(row[found]).trim()
+  }
+  return ""
+}
+
+function writeJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(value, null, 2))
 }
 
 function findAtlasToken() {
@@ -119,6 +189,15 @@ function paceFactory(delayMs = 250) {
     }
     lastAt = Date.now()
   }
+}
+
+function loadPropertyCache() {
+  const parsed = readJson(PROPERTY_CACHE_FILE, {})
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+}
+
+function savePropertyCache(cache) {
+  writeJson(PROPERTY_CACHE_FILE, cache)
 }
 
 function isEmail(value) {
@@ -246,31 +325,108 @@ function toRow(record, property, contact) {
 }
 
 async function fetchProperty(token, dealId, pace) {
-  await pace()
-  const url = new URL("https://api.dealmachine.com/v2/property/")
-  url.searchParams.set("token", token)
-  url.searchParams.set("deal_id", String(dealId))
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "User-Agent": "Mozilla/5.0 VestBlock/1.0",
-      "X-DM-Client-Key": DM_CLIENT_KEY,
-    },
-  })
-  const text = await response.text()
-  let data = null
-  try {
-    data = text ? JSON.parse(text) : null
-  } catch {
-    data = { raw: text }
+  let lastError = null
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    await pace()
+    const url = new URL("https://api.dealmachine.com/v2/property/")
+    url.searchParams.set("token", token)
+    url.searchParams.set("deal_id", String(dealId))
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 VestBlock/1.0",
+        "X-DM-Client-Key": DM_CLIENT_KEY,
+      },
+    })
+    const text = await response.text()
+    let data = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = { raw: text }
+    }
+    if (response.ok && data?.results?.property) return data.results.property
+    lastError = new Error(`DealMachine property fetch failed for ${dealId}: HTTP ${response.status}`)
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 4) break
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt + Math.floor(Math.random() * 400)))
   }
-  if (!response.ok) {
-    throw new Error(`DealMachine property fetch failed for ${dealId}: HTTP ${response.status}`)
+  throw lastError || new Error(`DealMachine property fetch failed for ${dealId}`)
+}
+
+async function fetchListLeads(listId) {
+  if (!DEALMACHINE_API_KEY) {
+    throw new Error("Missing DEALMACHINE_API_KEY in environment for --list-id mode.")
   }
-  if (!data?.results?.property) {
-    throw new Error(`DealMachine property fetch failed for ${dealId}: no property in response`)
+
+  const rows = []
+  let after = 0
+  const pageSize = 100
+  const hardLimit = Number.isFinite(LIMIT_RAW) && LIMIT_RAW > 0 ? LIMIT_RAW : Number.POSITIVE_INFINITY
+
+  while (rows.length < hardLimit) {
+    const url = new URL("https://api.dealmachine.com/public/v1/leads/")
+    url.searchParams.set("limit", String(Math.min(pageSize, hardLimit - rows.length)))
+    url.searchParams.set("after", String(after))
+    url.searchParams.set("list_id", String(listId))
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${DEALMACHINE_API_KEY}`,
+        "User-Agent": "VestBlockDealMachinePrivateExport/1.0 (+https://vestblock.io)",
+      },
+    })
+    const text = await response.text()
+    let data = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = { raw: text }
+    }
+    if (!response.ok || data?.error) {
+      throw new Error(data?.error?.message || data?.error || data?.message || data?.raw || `DealMachine public lead fetch failed: HTTP ${response.status}`)
+    }
+    const page = Array.isArray(data?.data) ? data.data : []
+    if (!page.length) break
+    rows.push(...page)
+    after += page.length
+    if (page.length < pageSize) break
   }
-  return data.results.property
+
+  return rows
+}
+
+function readSourceCsvRecords(file) {
+  const resolved = path.resolve(file)
+  const rows = parseCsvText(fs.readFileSync(resolved, "utf8"))
+  const headers = rows.length ? Object.keys(rows[0]).map((key) => normalizeSlug(key)) : []
+  const shellOnlyContactExport =
+    headers.includes("contact-id") &&
+    headers.includes("associated-property-address-full") &&
+    !headers.some((key) => /(^|-)lead-id$|dealmachine-id|deal-id/.test(key))
+
+  if (shellOnlyContactExport) {
+    throw new Error(
+      `${SOURCE_CSV} is a DealMachine lead-shell export. Its contact_id values are not property deal IDs, so this fallback cannot hydrate phone/email safely. Request/download the DealMachine Contacts export instead.`
+    )
+  }
+
+  const hardLimit = Number.isFinite(LIMIT_RAW) && LIMIT_RAW > 0 ? LIMIT_RAW : Number.POSITIVE_INFINITY
+  return rows
+    .map((row) => {
+      const dealmachineId = pick(row, ["lead_id", "dealmachine_id", "deal_id", "id"])
+      const firstName = pick(row, ["first_name", "owner_first_name"])
+      const lastName = pick(row, ["last_name", "owner_last_name"])
+      return {
+        dealmachine_id: dealmachineId,
+        full_address: pick(row, ["associated_property_address_full", "property_address_full", "address"]),
+        owner_name: pick(row, ["owner_name"]) || [firstName, lastName].filter(Boolean).join(" "),
+        market: marketSlug(MARKET_ARG),
+        pushed_at: new Date().toISOString(),
+        source_csv: resolved,
+      }
+    })
+    .filter((row) => row.dealmachine_id)
+    .slice(0, hardLimit)
 }
 
 async function main() {
@@ -287,29 +443,57 @@ async function main() {
   const short = marketShort(slug)
   const now = Date.now()
   const threshold = now - SINCE_HOURS * 60 * 60 * 1000
-  const records = readJson(PUSHED_RECORDS, [])
-    .filter((row) => row?.dealmachine_id && normalizeMarket(row.market) === short)
-    .filter((row) => {
-      const pushedAt = Date.parse(String(row.pushed_at || ""))
-      return Number.isFinite(pushedAt) ? pushedAt >= threshold : true
-    })
-    .sort((a, b) => Date.parse(String(b.pushed_at || "")) - Date.parse(String(a.pushed_at || "")))
-    .slice(0, LIMIT)
+  let records
+
+  if (SOURCE_CSV) {
+    records = readSourceCsvRecords(SOURCE_CSV)
+  } else if (LIST_ID) {
+    throw new Error(
+      "--list-id mode is disabled because DealMachine's public /public/v1/leads endpoint has been observed returning rows outside the requested list. Use scripts/dealmachine-export-lists.mjs or scripts/dealmachine-session-export.mjs to request a Contacts export for the list, then ingest the downloaded CSV."
+    )
+  } else {
+    if (!fs.existsSync(PUSHED_RECORDS)) throw new Error(`Missing pushed records log: ${PUSHED_RECORDS}`)
+    const fallbackLimit = Number.isFinite(LIMIT_RAW) && LIMIT_RAW > 0 ? LIMIT_RAW : 25
+    records = readJson(PUSHED_RECORDS, [])
+      .filter((row) => row?.dealmachine_id && normalizeMarket(row.market) === short)
+      .filter((row) => {
+        const pushedAt = Date.parse(String(row.pushed_at || ""))
+        return Number.isFinite(pushedAt) ? pushedAt >= threshold : true
+      })
+      .sort((a, b) => Date.parse(String(b.pushed_at || "")) - Date.parse(String(a.pushed_at || "")))
+      .slice(0, fallbackLimit)
+  }
 
   if (!records.length) {
-    throw new Error(`No recent pushed DealMachine records found for ${short}.`)
+    throw new Error(SOURCE_CSV
+      ? `No DealMachine contact/deal ids found in ${SOURCE_CSV}.`
+      : LIST_ID
+      ? `No DealMachine leads found for list ${LIST_ID}.`
+      : `No recent pushed DealMachine records found for ${short}.`)
   }
 
   fs.mkdirSync(DM_EXPORT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
 
   const pace = paceFactory()
+  const propertyCache = loadPropertyCache()
+  const cacheThreshold = Date.now() - CACHE_HOURS * 60 * 60 * 1000
   const rows = []
   const rejected = []
 
   for (const record of records) {
     try {
-      const property = await fetchProperty(token, record.dealmachine_id, pace)
+      const cacheKey = String(record.dealmachine_id || "").trim()
+      const cached = propertyCache[cacheKey]
+      const property = cached && Date.parse(String(cached.cachedAt || "")) >= cacheThreshold
+        ? cached.property
+        : await fetchProperty(token, record.dealmachine_id, pace)
+      if (!cached || Date.parse(String(cached.cachedAt || "")) < cacheThreshold) {
+        propertyCache[cacheKey] = {
+          cachedAt: new Date().toISOString(),
+          property,
+        }
+      }
       const contacts = selectOwnerContacts(property)
       if (!contacts.length) {
         rejected.push({
@@ -335,7 +519,8 @@ async function main() {
 
   const dateStr = localDateStamp()
   const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-  const outCsv = path.join(DM_EXPORT_DIR, `${slug}-${dateStr}-private-owner-contacts.csv`)
+  const outBase = OUTPUT_SLUG || `${slug}-${dateStr}-private-owner-contacts`
+  const outCsv = path.join(DM_EXPORT_DIR, `${outBase}.csv`)
   const rejectedJson = path.join(OUTREACH_DIR, `dealmachine-private-contact-rejected-${slug}-${stamp}.json`)
 
   const cols = [
@@ -400,6 +585,16 @@ async function main() {
 
   fs.writeFileSync(outCsv, [cols.join(","), ...rows.map((row) => cols.map((col) => esc(row[col])).join(","))].join("\n"))
   fs.writeFileSync(rejectedJson, JSON.stringify(rejected, null, 2))
+  savePropertyCache(propertyCache)
+  markJobsPrivateFallback({
+    market: slug,
+    strategyKey: STRATEGY_KEY,
+    listId: LIST_ID,
+    outputFile: outCsv,
+    rowCount: rows.length,
+    rejectedCount: rejected.length,
+    source: "atlas_property_endpoint",
+  })
 
   const withEmail = rows.filter((row) => row.email_address_1 || row.email_address_2 || row.email_address_3).length
   const withPhone = rows.filter((row) => row.phone_1 || row.phone_2 || row.phone_3).length

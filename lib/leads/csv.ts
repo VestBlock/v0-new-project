@@ -73,8 +73,8 @@ export function mapCsvLeadRows(text: string): CsvLeadImportRow[] {
         record.address ||
         '',
       contact_name: record.contact_name || record.name || record.owner_name || record.agent_name || '',
-      email: record.email || '',
-      phone: record.phone || '',
+      email: record.email || record.agent_email || record.office_email || '',
+      phone: record.phone || record.agent_phone || record.office_phone || '',
       website: record.website || record.listing_url || record.url || '',
       city: record.city || record.property_city || '',
       state: record.state || record.property_state || '',

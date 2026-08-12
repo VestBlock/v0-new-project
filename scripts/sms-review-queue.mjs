@@ -123,6 +123,7 @@ function latestPhoneFiles(limitFiles) {
     if (!fs.existsSync(dir)) continue
     for (const name of fs.readdirSync(dir)) {
       if (!/phone|mobile|sms/i.test(name) || !name.toLowerCase().endsWith('.csv')) continue
+      if (/sms-review-queue/i.test(name)) continue
       const file = path.join(dir, name)
       const stat = fs.statSync(file)
       files.push({ file, mtime: stat.mtimeMs })
@@ -160,10 +161,10 @@ function messageFor(row, lane) {
   const address = pick(row, ['property_address_full', 'address', 'property_address', 'full_address']) || 'your property'
   const city = pick(row, ['property_city', 'city', 'market'])
   const suffix = city ? ` in ${city}` : ''
-  if (lane === 'land-wholesale') return `Hi, this is Robert with VestBlock. I wanted to see if you'd consider a quick as-is cash offer for ${address}${suffix}. If not, no worries.`
-  if (lane === 'tax-code-stack') return `Hi, this is Robert with VestBlock. I'm reviewing a small batch of as-is opportunities and wanted to ask about ${address}${suffix}. Would selling be worth discussing?`
-  if (lane === 'portfolio-landlord') return `Hi, this is Robert with VestBlock. Are you open to reviewing an as-is offer on ${address}${suffix}, or any other rentals you may be considering selling?`
-  return `Hi, this is Robert with VestBlock. Would you consider an as-is cash offer for ${address}${suffix}?`
+  if (lane === 'land-wholesale') return `Hi, this is Robert with VestBlock. Quick question about ${address}${suffix} - is that lot something you'd consider selling if the numbers and timing made sense? If not, I'll close it out on my side.`
+  if (lane === 'tax-code-stack') return `Hi, this is Robert with VestBlock. ${address}${suffix} came across my review list, so I wanted to ask whether you'd be open to reviewing options on it. If not, I'll close the file on my side.`
+  if (lane === 'portfolio-landlord') return `Hi, this is Robert with VestBlock. I wanted to ask about ${address}${suffix}. If you would consider selling that rental, or a small group of rentals, I'd be glad to compare options with you.`
+  return `Hi, this is Robert with VestBlock. Quick question about ${address}${suffix} - are you open to reviewing options on it, or should I close the file out on my side?`
 }
 
 function evaluate(row, file, suppressedPhones) {
@@ -172,12 +173,13 @@ function evaluate(row, file, suppressedPhones) {
   if (suppressedPhones.has(phone)) return { rejectedReason: 'suppressed_phone' }
 
   const dnc = pick(row, ['do_not_call', 'dnc', 'surfaced_phone_dnc'])
-  if (!dnc && !args.includes('--allow-missing-dnc')) return { rejectedReason: 'missing_dnc_status' }
   if (yes(dnc)) return { rejectedReason: 'dnc' }
-  if (dnc && !no(dnc)) return { rejectedReason: 'uncertain_dnc_status' }
+  if (!dnc) return { rejectedReason: 'missing_dnc_status' }
+  if (!no(dnc)) return { rejectedReason: 'uncertain_dnc_status' }
 
   const canText = pick(row, ['can_text', 'sms_ok', 'textable'])
-  if (canText && !yes(canText)) return { rejectedReason: 'not_marked_textable' }
+  if (!canText) return { rejectedReason: 'missing_text_consent' }
+  if (!yes(canText)) return { rejectedReason: 'not_marked_textable' }
 
   const phoneType = normalizeText(pick(row, ['phone_type', 'surfaced_phone_types', 'type']))
   if (phoneType && !/(mobile|cell|wireless)/i.test(phoneType)) return { rejectedReason: 'not_mobile' }
@@ -194,16 +196,14 @@ function evaluate(row, file, suppressedPhones) {
       owner_name: pick(row, ['owner_name', 'name', 'Owner Name']),
       phone,
       phone_type: phoneType,
-      dnc_status: dnc ? 'not_dnc' : 'not_provided',
+      dnc_status: 'not_dnc',
       source_file: path.relative(ROOT, file),
       message: messageFor(row, lane),
     },
   }
 }
 
-const allowHighVolume = args.includes('--allow-high-volume')
-const requestedLimit = intArg('limit', 30, 500)
-const limit = allowHighVolume ? requestedLimit : Math.min(requestedLimit, 30)
+const limit = intArg('limit', 100, 500)
 const limitFiles = intArg('files', 40, 300)
 const suppressedPhones = loadSuppressions()
 const seenPhones = new Set()
@@ -246,7 +246,6 @@ fs.writeFileSync(jsonPath, `${JSON.stringify({
 
 console.log('=== VestBlock SMS review queue ===')
 console.log(`Accepted: ${accepted.length}/${limit}`)
-if (!allowHighVolume && requestedLimit > 30) console.log(`Controlled cap: ${requestedLimit} requested, capped to 30. Pass --allow-high-volume only after DNC and reply tracking are reviewed.`)
 console.log(`CSV:      ${csvPath}`)
 console.log(`JSON:     ${jsonPath}`)
 console.log(`Rejected: ${JSON.stringify(Object.fromEntries([...rejected.entries()].sort()))}`)

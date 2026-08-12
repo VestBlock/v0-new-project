@@ -129,14 +129,14 @@ function chooseTopicsToPublish(input: {
 export function getDailyPublisherConfigFromEnv() {
   return {
     limit: parsePositiveInteger(process.env.DAILY_CONTENT_PUBLISH_LIMIT, 2),
-    preferSpanish: parseBoolean(process.env.DAILY_CONTENT_PUBLISH_PREFER_SPANISH, true),
+    preferSpanish: parseBoolean(process.env.DAILY_CONTENT_PUBLISH_PREFER_SPANISH, false),
     clusters: parseClusters(process.env.DAILY_CONTENT_PUBLISH_CLUSTERS),
   }
 }
 
 export async function runDailyContentPublisher(options: DailyPublishOptions) {
   const limit = options.limit && options.limit > 0 ? options.limit : 2
-  const preferSpanish = options.preferSpanish ?? true
+  const preferSpanish = options.preferSpanish ?? false
   const now = new Date().toISOString()
 
   const { data: assets, error } = await options.supabase

@@ -300,77 +300,6 @@ function buildListingContext(payload: AnalyzerReportPayload) {
   `
 }
 
-
-function rangeValue(low: number | null | undefined, base: number | null | undefined, high: number | null | undefined, formatter: (value: number | null | undefined) => string = money) {
-  const lowText = formatter(low)
-  const baseText = formatter(base)
-  const highText = formatter(high)
-  if (lowText === 'Needs review' && baseText === 'Needs review' && highText === 'Needs review') return 'Needs review'
-  return `${lowText} - ${highText} (base ${baseText})`
-}
-
-function buildBuyerIntelligence(payload: AnalyzerReportPayload) {
-  const intel = payload.opportunity.buyerIntelligence || {}
-  const rent = intel.rentMarketRange || {}
-  const neighborhood = intel.neighborhoodScore || {}
-  const value = intel.valueRange || {}
-  const repair = intel.repairRange || {}
-  const offer = intel.offerRange || {}
-  const rentRows = Array.isArray(intel.rentalSensitivity) ? intel.rentalSensitivity : []
-  const priceRows = Array.isArray(intel.priceSensitivity) ? intel.priceSensitivity : []
-  const dataSources = Array.isArray(intel.dataSources) ? intel.dataSources : []
-  const osintChecks = Array.isArray(intel.osintChecks) ? intel.osintChecks : []
-  const publicRecord = intel.publicRecordIntelligence || {}
-  const publicSignals = Array.isArray(publicRecord.signals) ? publicRecord.signals : []
-  const buyerTalkingPoints = Array.isArray(publicRecord.buyerTalkingPoints) ? publicRecord.buyerTalkingPoints : []
-  const dueDiligenceNeeds = Array.isArray(intel.dueDiligenceNeeds) ? intel.dueDiligenceNeeds : []
-
-  return `
-    ${metricGrid([
-      { label: 'Rent market range', value: rangeValue(rent.low, rent.base, rent.high) },
-      { label: 'Rent confidence', value: rent.confidence || 'Needs review' },
-      { label: 'Neighborhood score', value: neighborhood.score !== undefined ? `${neighborhood.label || 'Screening'} (${neighborhood.score}/100)` : 'Needs review' },
-      { label: 'Value range', value: rangeValue(value.low, value.base, value.high) },
-      { label: 'Value confidence', value: value.confidence || 'Needs review' },
-      { label: 'Repair range', value: rangeValue(repair.low, repair.base, repair.high) },
-      { label: 'Repair confidence', value: repair.confidence || 'Needs review' },
-      { label: 'Buyer offer band', value: rangeValue(offer.low, offer.base, offer.high) },
-      { label: 'Public record score', value: publicRecord.score !== undefined ? `${publicRecord.label || 'Public record'} (${publicRecord.score}/100)` : 'Needs review' },
-      { label: 'Source freshness', value: publicRecord.sourceFreshness || 'Needs review' },
-      { label: 'Diligence items', value: dueDiligenceNeeds.length ? String(dueDiligenceNeeds.length) : 'Needs review' },
-    ])}
-    <div class="notes">
-      <h3>Data sources</h3>
-      ${dataSources.length ? orderedList(dataSources) : '<p class="muted">No DealMachine or OSINT source metadata was attached.</p>'}
-      <h3>Range notes</h3>
-      ${orderedList([rent.summary, value.summary, repair.summary, offer.summary, neighborhood.summary].filter(Boolean))}
-      <h3>Public record intelligence</h3>
-      ${publicRecord.summary ? `<p>${publicRecord.summary}</p>` : '<p class="muted">Public-record intelligence needs source data.</p>'}
-      ${buyerTalkingPoints.length ? orderedList(buyerTalkingPoints) : '<p class="muted">No buyer-facing public-record talking points were generated.</p>'}
-      <h3>Public record signals</h3>
-      ${publicSignals.length ? orderedList(publicSignals) : '<p class="muted">No public-record signals were attached.</p>'}
-      <h3>Neighborhood screening factors</h3>
-      ${orderedList(neighborhood.factors || [])}
-      <h3>Rent sensitivity</h3>
-      ${
-        rentRows.length
-          ? orderedList(rentRows.map((row: any) => `${row.label}: rent ${money(row.monthlyRent)}, NOI ${money(row.noiAnnual)}, cash flow ${money(row.monthlyCashFlow)}, DSCR ${percent(row.dscr, 'x')}, cap ${percent(row.capRatePercent)}`))
-          : '<p class="muted">Rent sensitivity needs a rent input.</p>'
-      }
-      <h3>Price sensitivity</h3>
-      ${
-        priceRows.length
-          ? orderedList(priceRows.map((row: any) => `${row.label}: price ${money(row.purchasePrice)}, cap ${percent(row.capRatePercent)}, DSCR ${percent(row.dscr, 'x')}, cash flow ${money(row.monthlyCashFlow)}, CoC ${percent(row.cashOnCashReturnPercent)}`))
-          : '<p class="muted">Price sensitivity needs seller ask and financing inputs.</p>'
-      }
-      <h3>OSINT checks to run</h3>
-      ${osintChecks.length ? orderedList(osintChecks) : '<p class="muted">No OSINT checklist was generated.</p>'}
-      <h3>Buyer diligence prompts</h3>
-      ${dueDiligenceNeeds.length ? orderedList(dueDiligenceNeeds) : '<p class="muted">No diligence prompts were generated.</p>'}
-    </div>
-  `
-}
-
 function buildCapitalStack(payload: AnalyzerReportPayload) {
   const { opportunity } = payload
 
@@ -601,7 +530,6 @@ export function buildAnalyzerReportHtml(payload: AnalyzerReportPayload) {
           : [
               section('Property Snapshot', buildPropertyFacts(payload)),
               section('Comparables And Listing Context', `${buildComparableContext(payload)}${buildListingContext(payload)}`),
-              payload.reportType === 'buyer' ? section('Buyer Range Intelligence', buildBuyerIntelligence(payload)) : null,
               payload.reportType === 'builder' ? section('Builder Lane', buildBuilderLane(payload)) : section('Financial Overview', buildFinancialOverview(payload)),
               payload.reportType === 'builder' ? section('Financial Overview', buildFinancialOverview(payload)) : section('Capital Stack', buildCapitalStack(payload)),
               payload.reportType === 'builder' ? section('Capital Stack', buildCapitalStack(payload)) : section('Borrower And File Readiness', buildBorrowerAndFile(payload)),

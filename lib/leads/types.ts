@@ -137,7 +137,20 @@ export type LeadRecord = {
   campaign_name?: string | null
   email_valid?: boolean | null
   bounce_risk_score?: number | null
-  delivery_status?: 'not_sent' | 'queued' | 'sent' | 'bounced' | 'replied' | 'booked' | 'suppressed' | 'failed' | null
+  delivery_status?:
+    | 'not_sent'
+    | 'queued'
+    | 'accepted'
+    | 'sent'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'bounced'
+    | 'complained'
+    | 'replied'
+    | 'booked'
+    | 'suppressed'
+    | 'failed'
+    | null
   suppression_reason?: string | null
   imported_at?: string | null
   last_outreach_generated_at?: string | null
@@ -357,7 +370,21 @@ export type OutreachSendEventRecord = {
   outreach_message_id: string | null
   channel: OutreachChannel
   provider: string | null
-  status: 'approved' | 'queued' | 'sent' | 'failed' | 'skipped'
+  status:
+    | 'approved'
+    | 'queued'
+    | 'accepted'
+    | 'sent'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'bounced'
+    | 'complained'
+    | 'suppressed'
+    | 'failed'
+    | 'skipped'
+    | 'opened'
+    | 'clicked'
+    | 'replied'
   recipient: string | null
   subject: string | null
   error_message: string | null

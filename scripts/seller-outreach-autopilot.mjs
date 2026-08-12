@@ -125,7 +125,9 @@ function runMarket({ market, exportCsv, limit, throttle, send }) {
     `--export-csv=${exportCsv}`,
     `--limit=${limit}`,
     `--throttle=${throttle}`,
+    "--max-export-age-days=2",
   ]
+  if (!send) childArgs.push("--allow-stale-export")
   if (send) childArgs.push("--send")
 
   const result = spawnSync(process.execPath, childArgs, {
@@ -141,7 +143,7 @@ function runMarket({ market, exportCsv, limit, throttle, send }) {
 
 async function main() {
   const date = todayIso()
-  const dailyCap = intArg("--daily-cap", Number.parseInt(process.env.SELLER_OUTREACH_DAILY_CAP || "300", 10), 1000)
+  const dailyCap = intArg("--daily-cap", Number.parseInt(process.env.SELLER_OUTREACH_DAILY_CAP || "500", 10), 1000)
   const throttle = intArg("--throttle", 1800, 30000)
   const before = countTodaySends(date)
   let remaining = Math.max(0, dailyCap - before.successfulRows)
@@ -153,6 +155,17 @@ async function main() {
   console.log(`Daily cap:        ${dailyCap}`)
   console.log(`Sent today:       ${before.successfulRows}`)
   console.log(`Remaining slots:  ${remaining}`)
+
+  if (SEND) {
+    const guard = spawnSync(process.execPath, ["scripts/require-primary-machine.mjs"], {
+      cwd: ROOT,
+      env: process.env,
+      stdio: "inherit",
+    })
+    if (guard.status !== 0) {
+      throw new Error("Primary-machine guard blocked live seller outreach on this host.")
+    }
+  }
 
   if (remaining <= 0) {
     console.log("Seller outreach cap already reached. No sends attempted.")

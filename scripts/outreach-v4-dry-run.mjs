@@ -124,7 +124,16 @@ async function main() {
         timeoutMs: realSourceTimeoutMs,
         websiteAuditLimit,
       })
-      scraped.push(result.ok ? result : runVerticalScraperDryRun(verticalPlan, { date, perMarketLimit }))
+      if (result.ok || realSourceOnly) {
+        scraped.push(result)
+      } else {
+        scraped.push({
+          ...runVerticalScraperDryRun(verticalPlan, { date, perMarketLimit }),
+          fallbackFromProvider: result.provider || realSourceProvider,
+          fallbackReason: result.reason || result.error || 'real_source_adapter_failed',
+          attempts: result.attempts || [],
+        })
+      }
       continue
     }
     scraped.push(runVerticalScraperDryRun(verticalPlan, { date, perMarketLimit }))

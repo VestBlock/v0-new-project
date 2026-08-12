@@ -35,28 +35,21 @@
 ## Distress leads and DealMachine
 
 - `DEALMACHINE_API_KEY`
-  Optional locally, required for `npm run distress:dealmachine:pull`, `npm run distress:dealmachine:push25`, and `npm run distress:dealmachine:push`. Uses DealMachine Bearer auth.
-- `DEALMACHINE_LIST_IDS`
-  Optional comma-separated DealMachine list ids to attach after API lead creation.
-- `DEALMACHINE_TAG_IDS`
-  Optional comma-separated DealMachine tag ids to attach after API lead creation.
-- `DEALMACHINE_LEAD_STATUS_ID`
-  Optional DealMachine lead status id to set after API lead creation.
+  Full official v2 secret (`dm_sk_live_*`) or OAuth access token (`dm_at_live_*`). Prefix-only values are rejected before any API request.
+- `DEALMACHINE_DAILY_CREDIT_BUDGET`
+  Maximum credits reserved by the daily acquisition run. Defaults to `250`.
+- `DEALMACHINE_DAILY_ROWS_PER_STRATEGY`
+  Requested rows per standard strategy. Defaults to `10`; the conditional-cash lane is separately capped below 5% of total acquisition.
+- `DEALMACHINE_SOURCE_ENABLED`
+  Enables DealMachine acquisition inside the broader strategy engine. The dedicated daily v2 cron only requires a valid key.
+- `DEALMACHINE_SYNC_ENABLED`
+  Enables the authenticated manual DealMachine sync action in Property Intelligence.
+- `DEALMACHINE_WEBHOOK_SECRET`
+  HMAC secret for signed DealMachine export webhook ingestion.
 
 ## Property intelligence
 
 No external property-valuation API is required for the current VestBlock analyzer path. The baseline estimate engine uses local math plus operator inputs and should be tightened with real comps before pricing or routing.
-
-## Analytics
-
-- `NEXT_PUBLIC_POSTHOG_KEY`
-  Use the PostHog project API key for client-side product analytics.
-- `NEXT_PUBLIC_POSTHOG_HOST`
-  Optional. Defaults to `https://us.i.posthog.com`.
-- `POSTHOG_API_KEY`
-  Optional server-side override. Falls back to `NEXT_PUBLIC_POSTHOG_KEY` if omitted.
-- `POSTHOG_HOST`
-  Optional server-side override for the PostHog host.
 
 ## Monitoring
 

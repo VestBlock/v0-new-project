@@ -58,6 +58,15 @@ function normalizeMessages(messages: Array<{ id?: string; role: 'user' | 'assist
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
     const json = await request.json();
     const parsed = chatRequestSchema.safeParse(json);
 
@@ -80,11 +89,6 @@ export async function POST(request: NextRequest) {
     if (!openai) {
       return NextResponse.json({ error: 'OpenAI API key is not configured' }, { status: 500 });
     }
-
-    const supabase = getSupabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -120,7 +124,7 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode(text));
           }
 
-          if (user && assistantResponse.trim()) {
+          if (assistantResponse.trim()) {
             const storedMessages = [
               ...normalizedMessages,
               {

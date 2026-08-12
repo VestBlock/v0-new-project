@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordCommandCenterEvent } from '@/lib/admin/dealMemory'
+import { runStrategyExecutionEngine, type StrategyExecutionResult } from '@/lib/admin/strategyExecutionEngine'
 import {
   DEFAULT_AUTOPILOT_JOBS,
   buildAutopilotSnapshot,
@@ -33,6 +34,7 @@ export type CommandCenterAutopilotRunResult = {
   send: boolean
   generatedAt: string
   snapshot: AutopilotSnapshot
+  execution: StrategyExecutionResult | null
   persist: AutopilotPersistResult
   sendAttempt: {
     attempted: boolean
@@ -143,68 +145,6 @@ async function updateAutopilotJobs(now: string, status: string, metrics: Record<
   if (error) throw error
 }
 
-function strategyRunRows(snapshot: AutopilotSnapshot, now: string, dryRun: boolean) {
-  return snapshot.batches.map((batch) => ({
-    strategy_key: batch.strategyKey,
-    strategy_name: batch.strategyName,
-    status: batch.blockedReason ? 'blocked' : dryRun ? 'dry_run' : 'planned',
-    source_provider: batch.sourceProvider,
-    market: batch.markets.join(' | '),
-    target_email_count: batch.targetEmailCount,
-    target_sms_count: batch.targetSmsReviewCount,
-    lead_count: 0,
-    draft_count: batch.targetEmailCount,
-    approved_count: 0,
-    sent_count: 0,
-    sms_review_count: batch.targetSmsReviewCount,
-    suppression_blocked_count: 0,
-    cost_guardrail_status: batch.blockedReason ? 'blocked' : 'allowed',
-    started_at: now,
-    completed_at: now,
-    metadata_json: {
-      command: batch.command,
-      markets: batch.markets,
-      blockedReason: batch.blockedReason,
-      copyGuardrail: batch.copyGuardrail,
-      sourceProvider: batch.sourceProvider,
-    },
-  }))
-}
-
-function replyMemoryRows(data: AnyData, now: string) {
-  const sections = Array.isArray(data?.inbox?.sections) ? data.inbox.sections : []
-  const rows: Record<string, unknown>[] = []
-  for (const section of sections) {
-    const sectionKey = String(section?.key || '')
-    if (!['hot_replies', 'partner_replies'].includes(sectionKey)) continue
-    for (const item of Array.isArray(section?.items) ? section.items : []) {
-      const hint = String(item?.hint || '')
-      const email = hint.includes('@') ? normalizeEmail(hint) : null
-      const classification = sectionKey === 'hot_replies' ? 'hot_seller_lead' : 'partner_reply'
-      rows.push({
-        mailbox: 'acquisitions@vestblock.io',
-        message_id: `${String(item?.id || 'reply')}:${String(item?.at || now)}`,
-        from_email: email,
-        subject: String(item?.title || 'VestBlock reply').slice(0, 240),
-        property_address: String(item?.title || '').trim() || null,
-        market: String(item?.detail || '').split('·')[0]?.trim() || null,
-        received_at: item?.at || now,
-        classification,
-        next_step: String(item?.detail || '').includes('Qualified')
-          ? 'Prepare offer/route package and reply fast.'
-          : 'Open thread, confirm details, and attach next action.',
-        reply_summary: String(item?.detail || 'Reply surfaced in command center.'),
-        metadata_json: {
-          commandCenterItemId: item?.id || null,
-          href: item?.href || null,
-          statusLabel: item?.statusLabel || null,
-        },
-      })
-    }
-  }
-  return rows.slice(0, 20)
-}
-
 function suppressionDecisionRows(data: AnyData, now: string) {
   const suppressions = [
     ...(Array.isArray(data?.suppressionCenter?.recent) ? data.suppressionCenter.recent : []),
@@ -233,7 +173,11 @@ function suppressionDecisionRows(data: AnyData, now: string) {
     .slice(0, 50) as Record<string, unknown>[]
 }
 
-async function persistAutopilotRun(data: AnyData, snapshot: AutopilotSnapshot, options: { dryRun: boolean }) {
+async function persistAutopilotRun(
+  data: AnyData,
+  snapshot: AutopilotSnapshot,
+  options: { dryRun: boolean; strategyRunsWritten: number }
+) {
   const now = new Date().toISOString()
   const result: AutopilotPersistResult = {
     attempted: true,
@@ -250,22 +194,11 @@ async function persistAutopilotRun(data: AnyData, snapshot: AutopilotSnapshot, o
     result.jobsSeeded = jobs.length
 
     const admin = createAdminClient()
-    const strategyRows = strategyRunRows(snapshot, now, options.dryRun)
-    if (strategyRows.length) {
-      const { data: inserted, error } = await admin.from('command_center_strategy_runs').insert(strategyRows).select('id')
-      if (error) throw error
-      result.strategyRunsWritten = inserted?.length || 0
-    }
+    result.strategyRunsWritten = options.strategyRunsWritten
 
-    const replyRows = replyMemoryRows(data, now)
-    if (replyRows.length) {
-      const { data: inserted, error } = await admin
-        .from('command_center_reply_memory')
-        .upsert(replyRows, { onConflict: 'mailbox,message_id' })
-        .select('id')
-      if (error) throw error
-      result.replyMemoriesWritten = inserted?.length || 0
-    }
+    // Real mailbox messages are written by the Microsoft Graph sync. Copying
+    // command-center cards back into reply memory manufactured duplicate
+    // "replies" and made the inbox look connected when it was not.
 
     const suppressionRows = suppressionDecisionRows(data, now)
     if (suppressionRows.length) {
@@ -334,7 +267,13 @@ export async function runCommandCenterAutopilot(
   const dispatch = Boolean(options.dispatch && !dryRun)
   const requestedSend = Boolean(options.send && !dryRun)
   const snapshot = buildCommandCenterAutopilotSnapshot(data)
-  const persist = dispatch || dryRun ? await persistAutopilotRun(data, snapshot, { dryRun }) : {
+  const execution = dispatch || dryRun
+    ? await runStrategyExecutionEngine({ dryRun: !dispatch, syncDealMachine: true })
+    : null
+  const persist = dispatch || dryRun ? await persistAutopilotRun(data, snapshot, {
+    dryRun,
+    strategyRunsWritten: execution?.laneRuns.length || 0,
+  }) : {
     attempted: false,
     dbWritable: false,
     jobsSeeded: 0,
@@ -367,6 +306,7 @@ export async function runCommandCenterAutopilot(
     send: requestedSend && liveSendEnabled,
     generatedAt: new Date().toISOString(),
     snapshot,
+    execution,
     persist,
     sendAttempt,
   }

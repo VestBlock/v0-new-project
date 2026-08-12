@@ -110,30 +110,6 @@ type CommandCenterAnalyzerResult = {
       endBuyerProfit: number | null
       grade: "RISKY" | "GOOD" | null
     }
-    offerStrategy?: {
-      anchorOffer: number | null
-      targetOffer: number | null
-      walkAwayPrice: number | null
-      negotiationRoom: number | null
-      askGapToWalkAway: number | null
-      askGapPercent: number | null
-      approach: "move_fast" | "price_negotiation" | "creative_first" | "needs_inputs"
-      summary: string
-      concessionSteps: string[]
-    }
-    repairSensitivity?: {
-      breakevenRepairBudget: number | null
-      cushionPercent: number | null
-      summary: string
-      scenarios: Array<{
-        label: string
-        repairBudget: number | null
-        mao: number | null
-        spread: number | null
-        flipProfit: number | null
-        grade: "RISKY" | "GOOD" | null
-      }>
-    }
     comparables: {
       usedCount: number
       averageSalePrice: number | null
@@ -978,65 +954,6 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                 </div>
               </div>
 
-              {result.opportunity.offerStrategy ? (
-                <div className="rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-white">Offer strategy</p>
-                    <Badge className="border-amber-300/30 bg-amber-300/10 text-amber-100">
-                      {result.opportunity.offerStrategy.approach.replace(/_/g, " ")}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-slate-300">{result.opportunity.offerStrategy.summary}</p>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    {[
-                      { label: "Anchor", value: money(result.opportunity.offerStrategy.anchorOffer) },
-                      { label: "Target", value: money(result.opportunity.offerStrategy.targetOffer) },
-                      { label: "Walk-away", value: money(result.opportunity.offerStrategy.walkAwayPrice) },
-                    ].map((item) => (
-                      <div key={item.label} className="rounded-lg border border-white/[0.06] bg-slate-950/40 px-3 py-2">
-                        <p className="vb-mono text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
-                        <p className="mt-1 text-sm font-semibold text-amber-100">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {result.opportunity.offerStrategy.concessionSteps.length ? (
-                    <ul className="mt-3 space-y-1.5">
-                      {result.opportunity.offerStrategy.concessionSteps.map((step) => (
-                        <li key={step} className="text-xs leading-5 text-slate-400">
-                          · {step}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {result.opportunity.repairSensitivity ? (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-white">Repair overrun stress test</p>
-                    {result.opportunity.repairSensitivity.breakevenRepairBudget !== null ? (
-                      <p className="vb-mono text-[0.6rem] uppercase tracking-[0.14em] text-slate-500">
-                        Break-even budget {money(result.opportunity.repairSensitivity.breakevenRepairBudget)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-slate-300">{result.opportunity.repairSensitivity.summary}</p>
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    {result.opportunity.repairSensitivity.scenarios.map((scenario) => (
-                      <div key={scenario.label} className="rounded-lg border border-white/[0.06] bg-slate-950/40 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="vb-mono text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">{scenario.label}</p>
-                          <Badge className={dealGradeTone(scenario.grade)}>{scenario.grade ?? "—"}</Badge>
-                        </div>
-                        <p className="mt-1 text-sm font-semibold text-white">{money(scenario.mao)}</p>
-                        <p className="text-[0.65rem] text-slate-500">spread {money(scenario.spread)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
                   <p className="text-xs font-semibold text-white">Comp-backed ARV</p>
@@ -1304,7 +1221,7 @@ export function CommandCenterAnalyzerPanel({ commandSeed }: { commandSeed?: Prop
                           {[
                             { label: "Packet", value: buyerPacket.status.replaceAll("_", " ") },
                             { label: "Selected", value: selectedBuyerIds.length },
-                            { label: "Sent", value: buyerPacket.sent_count },
+                            { label: "Provider accepted", value: buyerPacket.sent_count },
                           ].map((item) => (
                             <div key={item.label} className="rounded-lg border border-white/[0.06] bg-slate-950/40 px-3 py-2">
                               <p className="vb-mono text-[0.56rem] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>

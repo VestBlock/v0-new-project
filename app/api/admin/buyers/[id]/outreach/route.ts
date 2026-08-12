@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
+import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { updateBuyerOutreachMessageSchema } from '@/lib/buyers/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getBuyerById, insertBuyerRelationshipEvent, updateBuyerOutreachMessage, updateBuyerPerformance, updateBuyerRecord } from '@/lib/buyers/repository'
@@ -20,6 +21,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   try {
+    if (parsed.data.sendNow && await isCommandCenterDataIntegrityHold()) {
+      return commandCenterDataIntegrityHoldResponse()
+    }
+
     const { id } = await params
     const admin = createAdminClient()
     const { data: message, error } = await admin

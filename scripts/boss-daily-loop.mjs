@@ -3,135 +3,177 @@
 /**
  * Boss daily operating loop runner.
  *
- * Defaults to a safe dry-run against the local command center. Use --live to
- * call the deployed site, and --dispatch to create directive tasks.
- * Live sends require both --send and BOSS_DAILY_LOOP_ENABLE_SEND=true.
+ * Defaults to a safe dry-run. It tries the local command center first, then
+ * falls back to configured/live URLs so morning reports do not silently die
+ * when the local dev server is not running.
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 
 const args = process.argv.slice(2)
+const reportDir = path.resolve('data/operating-loops')
 
 function has(flag) {
   return args.includes(flag)
 }
 
-function baseUrl() {
-  const live = has('--live')
-  if (!live) {
-    return (process.env.VESTBLOCK_LOCAL_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '')
-  }
+function cleanBaseUrl(value) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.replace(/\/+$/, '')
+}
 
-  return (
+function unique(values) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function candidateBaseUrls() {
+  const liveCandidates = [
     process.env.VESTBLOCK_BASE_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` ||
-    'http://localhost:3001'
-  ).replace(/\/+$/, '')
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL &&
+        `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`),
+    'https://vestblock.io',
+  ].map(cleanBaseUrl)
+
+  if (has('--live')) return unique(liveCandidates)
+
+  return unique([
+    cleanBaseUrl(process.env.VESTBLOCK_LOCAL_BASE_URL || 'http://localhost:3001'),
+    ...liveCandidates,
+  ])
 }
 
 const dispatch = has('--dispatch')
 const send = has('--send')
 const dryRun = !dispatch && !send
-const url = new URL('/api/cron/boss-daily-loop', baseUrl())
-url.searchParams.set('dryRun', dryRun ? 'true' : 'false')
-if (dispatch) url.searchParams.set('dispatch', 'true')
-if (send) url.searchParams.set('send', 'true')
-
-
-function readJson(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-function latestJson(dir, pattern) {
-  try {
-    return fs
-      .readdirSync(dir)
-      .filter((name) => pattern.test(name))
-      .map((name) => ({ file: path.join(dir, name), mtime: fs.statSync(path.join(dir, name)).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime)[0]?.file || null
-  } catch {
-    return null
-  }
-}
-
-function offlineDryRunPayload(error) {
-  const root = process.cwd()
-  const rotation = readJson(path.join(root, 'data', 'operating-loops', 'tax-code-stack-rotation.json'))
-  const smsFile = latestJson(path.join(root, 'tmp', 'outreach'), /^sms-review-queue-.*\.json$/)
-  const sms = smsFile ? readJson(smsFile) : null
-  const lanes = Array.isArray(rotation?.lanes) ? rotation.lanes : []
-  const readyLanes = lanes.filter((lane) => lane.status === 'csv_ready_for_daily_send')
-  const waitingLanes = lanes.filter((lane) => lane.status === 'waiting_for_dealmachine_export_email')
-  return {
-    success: true,
-    dryRun: true,
-    dispatch: false,
-    send: false,
-    mode: 'offline-local-snapshot',
-    generatedAt: new Date().toISOString(),
-    warning: `Command-center API was unreachable, so this is a local dry-run snapshot: ${error instanceof Error ? error.message : String(error)}`,
-    boss: {
-      focusKey: 'tax-code-stack-rotation',
-      focusName: waitingLanes.length ? 'Load DealMachine export rotation' : 'Prepare next outreach lane',
-      challengerKey: 'sms-review-queue',
-      challengerName: 'Manual SMS review queue',
-    },
-    telemetry: {
-      taxCodeLaneCount: lanes.length,
-      taxCodeReadyLanes: readyLanes.length,
-      taxCodeWaitingExportLanes: waitingLanes.length,
-      smsAcceptedCount: sms?.acceptedCount || 0,
-      smsRequestedLimit: sms?.requestedLimit || 0,
-    },
-    dispatchResult: {
-      attempted: false,
-      dispatched: 0,
-      skipped: lanes.length,
-      message: 'Offline dry run only; no Boss directives dispatched.',
-    },
-    sendAttempt: {
-      attempted: false,
-      ok: true,
-      message: 'Offline dry run only; no sends attempted.',
-    },
-    exactNextActions: [
-      waitingLanes.length
-        ? `Watch for ${waitingLanes.length} DealMachine export email(s), ingest those CSVs, then run the listed send commands at the daily cap.`
-        : 'Run a fresh DealMachine stack/export build for the next markets.',
-      sms?.acceptedCount
-        ? `Review ${sms.acceptedCount} SMS candidates before any manual text outreach.`
-        : 'No SMS candidates are ready; download/import newer phone exports before texting.',
-    ],
-  }
-}
 
 const headers = {}
 if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`
 
-console.log(`Boss daily loop: ${url.toString()}`)
-
-let response
-try {
-  response = await fetch(url, { headers })
-} catch (error) {
-  if (dryRun && !dispatch && !send) {
-    console.log(JSON.stringify(offlineDryRunPayload(error), null, 2))
-    process.exit(0)
-  }
-  throw error
+function buildUrl(baseUrl) {
+  const url = new URL('/api/cron/boss-daily-loop', baseUrl)
+  url.searchParams.set('dryRun', dryRun ? 'true' : 'false')
+  if (dispatch) url.searchParams.set('dispatch', 'true')
+  if (send) url.searchParams.set('send', 'true')
+  return url
 }
 
-const payload = await response.json().catch(() => ({}))
+async function fetchWithTimeout(url) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000)
 
-if (!response.ok) {
-  console.error(JSON.stringify(payload, null, 2))
+  try {
+    return await fetch(url, { headers, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function writeReports(result) {
+  fs.mkdirSync(reportDir, { recursive: true })
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const jsonPath = path.join(reportDir, 'boss-daily-loop-latest.json')
+  const markdownPath = path.join(reportDir, 'boss-daily-loop-latest.md')
+  const stampedJsonPath = path.join(reportDir, `boss-daily-loop-${stamp}.json`)
+
+  fs.writeFileSync(jsonPath, `${JSON.stringify(result, null, 2)}\n`)
+  fs.writeFileSync(stampedJsonPath, `${JSON.stringify(result, null, 2)}\n`)
+  fs.writeFileSync(markdownPath, renderMarkdownReport(result))
+}
+
+function renderMarkdownReport(result) {
+  const lines = [
+    '# VestBlock Boss Daily Loop',
+    '',
+    `- Status: ${result.ok ? 'ok' : 'failed'}`,
+    `- Mode: ${dryRun ? 'dry-run' : send ? 'send' : 'dispatch'}`,
+    `- Generated: ${result.generatedAt}`,
+    `- URL used: ${result.url || 'none'}`,
+    '',
+    '## Attempts',
+    '',
+    ...result.attempts.map(
+      (attempt) =>
+        `- ${attempt.baseUrl}: ${attempt.status || 'network-error'}${
+          attempt.error ? ` (${attempt.error})` : ''
+        }`
+    ),
+  ]
+
+  if (result.payload && typeof result.payload === 'object') {
+    lines.push('', '## Payload', '', '```json', JSON.stringify(result.payload, null, 2), '```')
+  }
+
+  if (result.error) lines.push('', '## Error', '', result.error)
+
+  return `${lines.join('\n')}\n`
+}
+
+const attempts = []
+let finalResult = null
+
+for (const baseUrl of candidateBaseUrls()) {
+  const url = buildUrl(baseUrl)
+  console.log(`Boss daily loop: ${url.toString()}`)
+
+  try {
+    const response = await fetchWithTimeout(url)
+    const text = await response.text()
+    const payload = text ? JSON.parse(text) : {}
+    const attempt = { baseUrl, url: url.toString(), status: response.status, ok: response.ok }
+    attempts.push(attempt)
+
+    if (response.ok) {
+      finalResult = {
+        ok: true,
+        generatedAt: new Date().toISOString(),
+        url: url.toString(),
+        attempts,
+        payload,
+      }
+      break
+    }
+
+    finalResult = {
+      ok: false,
+      generatedAt: new Date().toISOString(),
+      url: url.toString(),
+      attempts,
+      payload,
+      error: `Boss loop returned HTTP ${response.status}.`,
+    }
+
+    if (response.status === 401 || response.status === 403) break
+  } catch (error) {
+    attempts.push({
+      baseUrl,
+      url: url.toString(),
+      status: 0,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+if (!finalResult) {
+  finalResult = {
+    ok: false,
+    generatedAt: new Date().toISOString(),
+    url: null,
+    attempts,
+    error: 'No boss daily loop endpoint responded.',
+  }
+}
+
+writeReports(finalResult)
+
+if (!finalResult.ok) {
+  console.error(JSON.stringify(finalResult, null, 2))
   process.exit(1)
 }
 
-console.log(JSON.stringify(payload, null, 2))
+console.log(JSON.stringify(finalResult.payload, null, 2))

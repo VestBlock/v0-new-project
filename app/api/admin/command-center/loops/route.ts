@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 import { checkAdminAccess } from '@/lib/auth/admin'
 import { runDailyOperatingLoop } from '@/lib/admin/dailyOperatingLoop'
-import { loadOperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
+import { loadOperatingLoopTelemetryFromDatabase } from '@/lib/admin/operatingLoops'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
 import { commandCenterAuthError } from '../auth'
 
@@ -25,7 +25,7 @@ export async function GET() {
 
   try {
     const data = await getCommandCenterData()
-    const telemetry = loadOperatingLoopTelemetry({
+    const telemetry = await loadOperatingLoopTelemetryFromDatabase({
       sentToday: data.strategyLab.sentToday,
       remainingToday: data.strategyLab.remainingToday,
       replySignals7d: data.strategyLab.replySignals7d,

@@ -23,14 +23,39 @@ const getArg = (name) => {
 }
 
 const LISTS_JSON = getArg("lists-json") || getArg("file")
-const EMAILS = getArg("emails") || getArg("email") || process.env.DEALMACHINE_EXPORT_EMAIL || "acquisitions@vestblock.io"
+const EMAILS = getArg("emails") || getArg("email") || "acquisitions@vestblock.io"
 const OUT_DIR = path.join(process.cwd(), "tmp", "outreach")
 const RUN_ID = `vb-dm-export-${new Date().toISOString().replace(/[:.]/g, "-")}`
 const DM_CLIENT_KEY = "dM9xQ4wLpR7vKj2sYnBz8TfHcA6eUgW3"
 const DEDUPE_BY_DEALMACHINE = args.includes("--dealmachine-dedupe")
-const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || 0)
-const REQUEST_TIMEOUT_MS = Number(getArg("request-timeout-ms") || 45 * 1000)
-const EXPLICIT_TOKEN = getArg("token") || String(process.env.DEALMACHINE_WEB_TOKEN || "").trim()
+const WAIT_FOR_CONTACTS_MS = Number(getArg("wait-ms") || (SEND ? 45 * 60 * 1000 : 0))
+const WAIT_FOR_HYDRATION_MS = Number(getArg("hydration-wait-ms") || (SEND ? 30 * 60 * 1000 : 0))
+const MAX_LISTS = Number(getArg("max-lists") || 0)
+const FILTER_MARKETS = parsePipeList(getArg("markets") || getArg("market"))
+const FILTER_STRATEGIES = parseArgList(getArg("strategies") || getArg("strategy"))
+const FILTER_LIST_IDS = parseArgList(getArg("list-ids") || getArg("list-id"))
+
+function parseArgList(value) {
+  return String(value || "")
+    .split(/[|,;]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function parsePipeList(value) {
+  return String(value || "")
+    .split(/[|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function normalizeSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
 
 function selectedChromeUrl() {
   return execFileSync(
@@ -70,138 +95,23 @@ function loadBuiltLists(file) {
   const absolute = path.resolve(file)
   const parsed = JSON.parse(fs.readFileSync(absolute, "utf8"))
   const rows = Array.isArray(parsed) ? parsed : parsed.built || []
-  return rows
+  const filtered = rows
     .map((row) => ({
       market: row.market || [row.city, row.state].filter(Boolean).join(", "),
       strategyKey: row.strategyKey || row.strategy_key || row.strategy || "contacts",
       count: Number(row.count || row.estimated_count || 0),
       id: row.list?.id || row.list_id || row.id,
       title: row.title || row.list?.title || `DealMachine list ${row.list?.id || row.list_id || row.id}`,
+      building: Number(row.list?.building || row.building || 0),
+      leadCount: Number(row.list?.lead_count || row.lead_count || 0),
+      estimatedCount: Number(row.list?.estimated_count || row.estimated_count || row.count || 0),
     }))
     .filter((row) => row.id && row.count > 0)
-}
+    .filter((row) => !FILTER_MARKETS.length || FILTER_MARKETS.some((value) => normalizeSlug(row.market) === normalizeSlug(value)))
+    .filter((row) => !FILTER_STRATEGIES.length || FILTER_STRATEGIES.some((value) => normalizeSlug(row.strategyKey) === normalizeSlug(value)))
+    .filter((row) => !FILTER_LIST_IDS.length || FILTER_LIST_IDS.some((value) => String(row.id) === String(value)))
 
-async function dmPost(token, body) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-  let response
-  try {
-    response = await fetch("https://api.dealmachine.com/v2/list/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-DM-Client-Key": DM_CLIENT_KEY,
-        "Origin": "https://app.dealmachine.com",
-        "Referer": "https://app.dealmachine.com/",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({ token, ...body }),
-      signal: controller.signal,
-    })
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      return { ok: false, status: 0, data: { error: "DealMachine request timed out", timeoutMs: REQUEST_TIMEOUT_MS } }
-    }
-    throw error
-  } finally {
-    clearTimeout(timeout)
-  }
-  const text = await response.text()
-  let data
-  try { data = JSON.parse(text) } catch (error) { data = { raw: text.slice(0, 500) } }
-  return { ok: response.ok, status: response.status, data }
-}
-
-async function directExportableCount(token, list) {
-  const started = Date.now()
-  do {
-    const countResponse = await dmPost(token, {
-      type: "export_actual_count",
-      select_all: 1,
-      total_count: list.count,
-      list_id: list.id,
-      export_type: "contacts",
-      include_likely_owners: true,
-      include_family: false,
-      include_likely_renters: false,
-      include_potential_property_owners: false,
-      scrub_dnc: true,
-      scrub_landline: true,
-      scrub_wireless: false,
-      deduplicate: DEDUPE_BY_DEALMACHINE,
-      remove_items_without_phone_numbers: false,
-    })
-    const countResult = countResponse.data?.results || countResponse.data || {}
-    const actualCount = countResult.total_count_not_yet_exported ?? countResult.actual_count ?? countResult.count ?? null
-    if (!SEND || Number(actualCount || 0) > 0 || Date.now() - started >= WAIT_FOR_CONTACTS_MS) {
-      return { countResponse, countResult, actualCount }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-  } while (true)
-}
-
-function normalizeSlug(value) {
-  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-}
-
-async function directContactExportColumns(token) {
-  const settingsResponse = await dmPost(token, { type: "get_export_settings_for_user" })
-  const settings = settingsResponse.data?.results?.export_settings || {}
-  const columns = settings.user_column_preferences?.contact_export_columns || []
-  return Array.isArray(columns) ? columns.filter(Boolean) : []
-}
-
-async function runDirectExport(lists, token) {
-  const rows = []
-  const errors = []
-  const startedAt = new Date().toISOString()
-  const selectedColumns = await directContactExportColumns(token)
-  for (const list of lists) {
-    const { countResponse, countResult, actualCount } = await directExportableCount(token, list)
-    const row = { ...list, countStatus: countResponse.status, countOk: countResponse.ok, actualCount, countResult, waitedMs: WAIT_FOR_CONTACTS_MS, exported: false }
-    if (countResponse.data?.error === "Invalid token.") {
-      throw new Error("DealMachine direct token is invalid. Clear DEALMACHINE_WEB_TOKEN or refresh it from a logged-in browser session.")
-    }
-    if (SEND) {
-      if (!countResponse.ok || Number(actualCount || 0) <= 0) {
-        row.exportBlocked = true
-        row.exportBlockReason = "blocked_zero_exportable_contacts"
-        rows.push(row)
-        continue
-      }
-      const exportFileName = ["vestblock", normalizeSlug(list.strategyKey || "contacts"), normalizeSlug(list.market), new Date().toISOString().slice(0, 10), list.id].join("-")
-      const exportResponse = await dmPost(token, {
-        type: "export_v2",
-        select_all: 1,
-        total_count: Number(actualCount || list.count || 0),
-        emails: EMAILS,
-        list_id: list.id,
-        selected_columns: selectedColumns.join(","),
-        include_all_columns: selectedColumns.length ? 0 : 1,
-        export_type: "contacts",
-        include_likely_owners: true,
-        include_family: false,
-        include_likely_renters: false,
-        include_potential_property_owners: false,
-        scrub_dnc: true,
-        scrub_landline: true,
-        scrub_wireless: false,
-        deduplicate: DEDUPE_BY_DEALMACHINE,
-        remove_items_without_phone_numbers: false,
-        export_file_name: exportFileName,
-      })
-      row.exportStatus = exportResponse.status
-      row.exportOk = exportResponse.ok
-      row.exportError = exportResponse.data?.error || false
-      row.exportResult = exportResponse.data?.results || exportResponse.data || null
-      row.exported = exportResponse.ok && exportResponse.data?.error === false
-      row.exportFileName = exportFileName
-      row.selectedColumnCount = selectedColumns.length
-    }
-    rows.push(row)
-  }
-  return { runId: RUN_ID, done: true, send: SEND, startedAt, rows, errors, finishedAt: new Date().toISOString(), mode: "direct_api", selectedColumnCount: selectedColumns.length }
+  return MAX_LISTS > 0 ? filtered.slice(0, MAX_LISTS) : filtered
 }
 
 function makeBrowserPayload(lists) {
@@ -211,6 +121,7 @@ function makeBrowserPayload(lists) {
     emails: EMAILS,
     dealmachineDedupe: DEDUPE_BY_DEALMACHINE,
     waitForContactsMs: WAIT_FOR_CONTACTS_MS,
+    waitForHydrationMs: WAIT_FOR_HYDRATION_MS,
     lists,
   }
 
@@ -246,9 +157,55 @@ function makeBrowserPayload(lists) {
       return { ok: response.ok, status: response.status, data }
     }
 
-    const exportableCount = async (list) => {
+    const fetchListStatus = async (listId) => {
+      const response = await post({
+        type: "list",
+        list_id: listId,
+        page: 1,
+        limit: 1
+      })
+      const list =
+        response.data?.results?.list ||
+        response.data?.results?.lists?.[0] ||
+        response.data?.results ||
+        null
+      return { ...response, list }
+    }
+
+    const waitForHydration = async (list, row) => {
       const started = Date.now()
+      let attempts = 0
       do {
+        attempts += 1
+        const statusResponse = await fetchListStatus(list.id)
+        const latest = statusResponse.list || {}
+        const building = Number(latest?.building || 0)
+        const leadCount = Number(latest?.lead_count || 0)
+        const estimatedCount = Number(latest?.estimated_count || list.estimatedCount || list.count || 0)
+        row.hydrationStatus = statusResponse.status
+        row.hydrationAttempts = attempts
+        row.waitElapsedHydrationMs = Date.now() - started
+        row.building = building
+        row.leadCount = leadCount
+        row.estimatedCount = estimatedCount
+        row.lastHydrationCheckAt = new Date().toISOString()
+        row.waitingForHydration =
+          CONFIG.send &&
+          building === 1 &&
+          row.waitElapsedHydrationMs < CONFIG.waitForHydrationMs
+        if (!CONFIG.send || !row.waitingForHydration) {
+          row.hydrationTimedOut = CONFIG.send && building === 1 && row.waitElapsedHydrationMs >= CONFIG.waitForHydrationMs
+          return { statusResponse, building, leadCount, estimatedCount }
+        }
+        await sleep(5000)
+      } while (true)
+    }
+
+    const exportableCount = async (list, row) => {
+      const started = Date.now()
+      let attempts = 0
+      do {
+        attempts += 1
         const countResponse = await post({
           type: "export_actual_count",
           select_all: 1,
@@ -271,6 +228,14 @@ function makeBrowserPayload(lists) {
           countResult.actual_count ??
           countResult.count ??
           null
+        row.countStatus = countResponse.status
+        row.countOk = countResponse.ok
+        row.actualCount = actualCount
+        row.countResult = countResult
+        row.countAttempts = attempts
+        row.waitElapsedMs = Date.now() - started
+        row.waitingForContacts = CONFIG.send && Number(actualCount || 0) <= 0 && row.waitElapsedMs < CONFIG.waitForContactsMs
+        row.lastCheckedAt = new Date().toISOString()
         if (!CONFIG.send || Number(actualCount || 0) > 0 || Date.now() - started >= CONFIG.waitForContactsMs) {
           return { countResponse, countResult, actualCount }
         }
@@ -286,21 +251,39 @@ function makeBrowserPayload(lists) {
         const selectedColumns = settings.user_column_preferences?.contact_export_columns || []
 
         for (const list of CONFIG.lists) {
-          const { countResponse, countResult, actualCount } = await exportableCount(list)
           const row = {
             ...list,
-            countStatus: countResponse.status,
-            countOk: countResponse.ok,
-            actualCount,
-            countResult,
-            exported: false
+            countStatus: null,
+            countOk: false,
+            actualCount: null,
+            countResult: null,
+            countAttempts: 0,
+            waitingForContacts: false,
+            waitingForHydration: false,
+            waitElapsedMs: 0,
+            waitElapsedHydrationMs: 0,
+            exported: false,
+            startedAt: new Date().toISOString()
           }
+          window.vbDmExportLists.rows.push(row)
+          await waitForHydration(list, row)
+          if (CONFIG.send && row.building === 1) {
+            row.exportBlocked = true
+            row.exportBlockReason = row.hydrationTimedOut ? "blocked_hydration_timeout" : "blocked_waiting_for_hydration"
+            row.finishedAt = new Date().toISOString()
+            await sleep(350)
+            continue
+          }
+          const { countResponse, countResult, actualCount } = await exportableCount(list, row)
 
           if (CONFIG.send) {
             if (!countResponse.ok || Number(actualCount || 0) <= 0) {
               row.exportBlocked = true
-              row.exportBlockReason = "blocked_zero_exportable_contacts"
-              window.vbDmExportLists.rows.push(row)
+              row.exportBlockReason =
+                row.building === 1
+                  ? "blocked_not_hydrated"
+                  : "blocked_zero_exportable_contacts"
+              row.finishedAt = new Date().toISOString()
               await sleep(350)
               continue
             }
@@ -331,10 +314,9 @@ function makeBrowserPayload(lists) {
             row.exportResult = exportResponse.data?.results || exportResponse.data || null
             row.exported = exportResponse.ok && exportResponse.data?.error === false
             row.exportFileName = exportFileName
-            row.selectedColumnCount = selectedColumns.length
           }
 
-          window.vbDmExportLists.rows.push(row)
+          row.finishedAt = new Date().toISOString()
           await sleep(350)
         }
 
@@ -353,7 +335,8 @@ function makeBrowserPayload(lists) {
 
 function pollResults() {
   const started = Date.now()
-  while (Date.now() - started < 10 * 60 * 1000) {
+  const timeoutMs = Math.max(10 * 60 * 1000, WAIT_FOR_CONTACTS_MS + 10 * 60 * 1000)
+  while (Date.now() - started < timeoutMs) {
     const raw = chromeJavascript("JSON.stringify(window.vbDmExportLists || null)")
     if (raw && raw !== "null") {
       const parsed = JSON.parse(raw)
@@ -361,7 +344,11 @@ function pollResults() {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
         continue
       }
-      process.stdout.write(`\r${parsed.rows?.length || 0} lists checked${parsed.send ? " / export mode" : " / dry run"}`)
+      const rows = parsed.rows || []
+      const waiting = rows.filter((row) => row.waitingForContacts).length
+      const hydrating = rows.filter((row) => row.waitingForHydration).length
+      const done = rows.filter((row) => row.finishedAt).length
+      process.stdout.write(`\r${done}/${rows.length || 0} lists resolved${hydrating ? ` / hydrating ${hydrating}` : ""}${waiting ? ` / waiting ${waiting}` : ""}${parsed.send ? " / export mode" : " / dry run"}`)
       if (parsed.done) {
         process.stdout.write("\n")
         return parsed
@@ -370,7 +357,7 @@ function pollResults() {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
   }
   process.stdout.write("\n")
-  return { done: false, fatal: "Timed out waiting for DealMachine export results." }
+  return { done: false, fatal: `Timed out waiting for DealMachine export results after ${Math.round(timeoutMs / 60000)} minutes.` }
 }
 
 function writeOutputs(results) {
@@ -399,7 +386,15 @@ function writeOutputs(results) {
       "",
       "## Next Step",
       "",
-      "When DealMachine emails the Contacts CSV, save it into `data/dm-exports/` and ingest it. If exportable contacts are 0, the list has no currently export-ready contacts and should be fixed upstream with contact discovery/skip data before retrying:",
+      "DealMachine does not drop the CSV directly to disk. It emails a time-limited download link and also mirrors it in DealMachine notifications.",
+      "",
+      "Use one lane at a time when testing fresh strategies:",
+      "",
+      "```bash",
+      "node scripts/dealmachine-export-lists.mjs --lists-json=/path/to/run.json --send --emails=acquisitions@vestblock.io --market=<city-state> --strategy=<strategy-key> --max-lists=1",
+      "```",
+      "",
+      "When the Contacts CSV is downloaded, save it into `data/dm-exports/` and ingest it:",
       "",
       "```bash",
       "pnpm run distress:dealmachine:ingest-export:apply -- --file=/path/to/dealmachine-contacts.csv --split-by-market",
@@ -416,32 +411,25 @@ function writeOutputs(results) {
   return { jsonPath, mdPath }
 }
 
-async function main() {
+function main() {
+  const url = selectedChromeUrl()
+  if (!/app\.dealmachine\.com/i.test(url)) {
+    throw new Error(`Open DealMachine in Chrome before running this script. Current tab: ${url}`)
+  }
   const lists = loadBuiltLists(LISTS_JSON)
   if (!lists.length) throw new Error("No built DealMachine lists were found in the JSON.")
   console.log("=== DealMachine Contacts Export ===")
   console.log(`Mode:        ${SEND ? "export" : "dry run"}`)
   console.log(`Lists:       ${lists.length}`)
+  if (FILTER_MARKETS.length) console.log(`Markets:     ${FILTER_MARKETS.join(", ")}`)
+  if (FILTER_STRATEGIES.length) console.log(`Strategies:  ${FILTER_STRATEGIES.join(", ")}`)
+  if (FILTER_LIST_IDS.length) console.log(`List IDs:    ${FILTER_LIST_IDS.join(", ")}`)
   console.log(`Destination: ${EMAILS}`)
   console.log(`DM dedupe:   ${DEDUPE_BY_DEALMACHINE ? "on" : "off; VestBlock send logs will dedupe"}`)
-  console.log(`Runner:      ${EXPLICIT_TOKEN ? "direct API token" : "Chrome browser session"}`)
-  console.log(`Wait zero:   ${WAIT_FOR_CONTACTS_MS}ms`)
-  console.log(`Timeout:     ${REQUEST_TIMEOUT_MS}ms/request`)
   console.log("")
-  let results
-  if (EXPLICIT_TOKEN) {
-    results = await runDirectExport(lists, EXPLICIT_TOKEN)
-  } else {
-    const url = selectedChromeUrl()
-    if (!/app\.dealmachine\.com/i.test(url)) {
-      throw new Error(`Open DealMachine in Chrome before running this script. Current tab: ${url}`)
-    }
-    const start = chromeJavascript(makeBrowserPayload(lists))
-    if (!/started/.test(start)) throw new Error(`Could not start DealMachine export runner: ${start}`)
-    results = pollResults()
-  }
-  results.sourceFile = path.resolve(LISTS_JSON)
-  results.destination = EMAILS
+  const start = chromeJavascript(makeBrowserPayload(lists))
+  if (!/started/.test(start)) throw new Error(`Could not start DealMachine export runner: ${start}`)
+  const results = pollResults()
   const outputs = writeOutputs(results)
   console.log(`Report: ${outputs.mdPath}`)
   console.log(`JSON:   ${outputs.jsonPath}`)

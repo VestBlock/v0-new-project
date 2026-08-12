@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { createRequire } from 'node:module'
 
 type PdfParseInfo = Record<string, unknown> | null
 type PdfParseMetadata = Record<string, unknown> | null
@@ -24,12 +25,8 @@ type PdfParseFn = (
   options?: PdfParseOptions
 ) => Promise<PdfParseResult>
 
-const loadPdfParse = () => {
-  const runtimeRequire = eval('require') as NodeRequire
-  return runtimeRequire('pdf-parse/lib/pdf-parse.js') as PdfParseFn
-}
-
-const pdfParseInternal = loadPdfParse()
+const require = createRequire(import.meta.url)
+const pdfParseInternal = require('pdf-parse/lib/pdf-parse.js') as PdfParseFn
 
 export function parsePdfBuffer(dataBuffer: Buffer, options?: PdfParseOptions) {
   return pdfParseInternal(dataBuffer, options)

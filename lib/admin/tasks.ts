@@ -34,6 +34,13 @@ function addHours(hours: number) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
+function isUuid(value?: string | null) {
+  return Boolean(
+    value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 export const adminTaskDueDates = {
   now: () => new Date().toISOString(),
   hours: addHours,
@@ -79,8 +86,13 @@ export async function createAdminTask(input: CreateAdminTaskInput) {
         entity_id: input.entityId ?? null,
         source_event_id: input.sourceEventId ?? null,
         due_at: input.dueAt ?? null,
-        metadata_json: input.metadata ?? {},
-        created_by: input.createdBy ?? null,
+        metadata_json: {
+          ...(input.metadata ?? {}),
+          ...(!isUuid(input.createdBy) && input.createdBy
+            ? { automationSource: input.createdBy }
+            : {}),
+        },
+        created_by: isUuid(input.createdBy) ? input.createdBy : null,
         completed_at: status === 'completed' ? new Date().toISOString() : null,
       })
       .select('id,status')

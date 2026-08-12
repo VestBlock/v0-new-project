@@ -1,5 +1,7 @@
 import { sendEmail } from '@/lib/email/sendEmail'
 import type { InvestorProfileRecord } from '@/lib/investors/types'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
 type InvestorOutreachMessage = {
   id: string
@@ -19,7 +21,11 @@ function escapeHtml(value: string) {
 }
 
 function renderInvestorEmail(message: InvestorOutreachMessage) {
-  const body = escapeHtml(message.body).replace(/\n/g, '<br />')
+  const messageBody = String(message.body || '').trim()
+  const rawBody = /not relevant|do not contact|opt out/i.test(messageBody)
+    ? messageBody
+    : `${messageBody}\n\nIf this is not relevant, reply opt out and we will not contact you again.`
+  const body = escapeHtml(rawBody).replace(/\n/g, '<br />')
   return `
     <div style="margin:0;padding:0;background:#071016;font-family:Arial,sans-serif;color:#e8f4f7;">
       <div style="max-width:640px;margin:0 auto;padding:28px;">
@@ -35,8 +41,15 @@ export async function sendInvestorOutreachEmail(input: {
   investor: InvestorProfileRecord
   message: InvestorOutreachMessage
 }) {
+  const replyCapture = getReplyCaptureReadiness()
+  if (!replyCapture.ready) {
+    return { ok: false, skipped: true, provider: 'none' as const, providerMessageId: null, error: replyCapture.reason || 'Reply capture is disconnected.' }
+  }
+
   const to = input.investor.contact_email
-  if (!to) return { ok: false, skipped: true, provider: 'resend', error: 'Missing investor contact email.' }
+  if (!isUsableContactEmail(to)) {
+    return { ok: false, skipped: true, provider: 'none' as const, providerMessageId: null, error: 'Missing investor contact email.' }
+  }
 
   const result = await sendEmail({
     to,
@@ -48,7 +61,8 @@ export async function sendInvestorOutreachEmail(input: {
   return {
     ok: Boolean(result.ok),
     skipped: Boolean(result.skipped),
-    provider: 'resend',
+    provider: result.provider || ('none' as const),
+    providerMessageId: result.id || null,
     error: result.error || null,
   }
 }

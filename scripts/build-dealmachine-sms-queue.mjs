@@ -228,7 +228,7 @@ function latestExports(limitFiles) {
 function messageFor(row, propertyAddress) {
   const first = firstName(row)
   const shortAddress = propertyAddress.split(',')[0] || 'your property'
-  return `Hi ${first}, Robert with VestBlock. I wanted to ask if you would consider an as-is offer on ${shortAddress}. If not, no worries. Reply STOP to opt out.`
+  return `Hi ${first}, Robert with VestBlock. Reaching out about ${shortAddress}. Are you open to reviewing options on the property, or should I close it out on my side? Reply STOP to opt out.`
 }
 
 const limit = intArg('limit', 100, 1000)

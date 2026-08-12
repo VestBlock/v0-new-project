@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { FinancialGoalsSelector, FinancialGoal } from "@/components/financial-goals-selector"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { Target } from "lucide-react"
 
 interface UserProfile {
   id: string
@@ -31,6 +32,21 @@ interface UserProfile {
 interface ProfileStateForRoadmapCheck {
   credit_score: number | null
   financial_goal: FinancialGoal | null
+}
+
+function normalizeFinancialGoal(value: unknown): FinancialGoal | null {
+  if (!value || typeof value !== "object") return null
+  const goal = value as Record<string, unknown>
+  if (typeof goal.id !== "string" || typeof goal.title !== "string" || typeof goal.description !== "string") {
+    return null
+  }
+  return {
+    id: goal.id,
+    title: goal.title,
+    description: goal.description,
+    icon: <Target className="w-6 h-6" />,
+    customDetails: typeof goal.customDetails === "string" ? goal.customDetails : undefined,
+  }
 }
 
 export default function ProfilePage() {
@@ -58,11 +74,12 @@ export default function ProfilePage() {
           setProfile(data as UserProfile)
           setInitialProfileSnapshot({
             credit_score: data.credit_score,
-            financial_goal: data.financial_goal,
+            financial_goal: normalizeFinancialGoal(data.financial_goal),
           })
         } else {
           const newProfileData = {
             id: currentUserId,
+            user_id: currentUserId,
             email: currentUserEmail || null,
             full_name: currentUserFullName || currentUserEmail?.split("@")[0] || "New User",
           }
@@ -78,7 +95,7 @@ export default function ProfilePage() {
           setProfile(insertedProfile as UserProfile)
           setInitialProfileSnapshot({
             credit_score: insertedProfile.credit_score,
-            financial_goal: insertedProfile.financial_goal,
+            financial_goal: normalizeFinancialGoal(insertedProfile.financial_goal),
           })
           toast({
             title: "Profile Created",
@@ -126,13 +143,13 @@ export default function ProfilePage() {
 
     setIsSaving(true)
     try {
-      let financialGoalForDb: Partial<FinancialGoal> | null = null
+      let financialGoalForDb: Record<string, string> | null = null
       if (profile.financial_goal) {
         financialGoalForDb = {
           id: profile.financial_goal.id,
           title: profile.financial_goal.title,
           description: profile.financial_goal.description,
-          customDetails: profile.financial_goal.customDetails,
+          ...(profile.financial_goal.customDetails ? { customDetails: profile.financial_goal.customDetails } : {}),
         }
       }
 

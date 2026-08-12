@@ -487,7 +487,7 @@ export async function listLendersNeedingOutreach(limit = 100) {
   const { data, error } = await admin
     .from('lenders')
     .select('*')
-    .in('outreach_status', ['not_started', 'failed'])
+    .in('outreach_status', ['not_started', 'needs_review', 'failed'])
     .not('relationship_stage', 'in', '(paused,not_a_fit,active_partner)')
     .order('confidence_score', { ascending: false })
     .limit(limit)
@@ -508,6 +508,31 @@ export async function listApprovedLenderEmailOutreach(limit = 30) {
 
   if (error) throw error
   return (data || []) as Array<LenderOutreachMessageRecord & { lenders: LenderRecord | null }>
+}
+
+export async function listLenderOutreachForAutoApproval(limit = 30) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .select('*, lenders(*)')
+    .eq('channel', 'email_intro')
+    .eq('status', 'needs_review')
+    .order('last_generated_at', { ascending: true, nullsFirst: false })
+    .limit(limit)
+  if (error) throw error
+  return (data || []) as Array<LenderOutreachMessageRecord & { lenders: LenderRecord | null }>
+}
+
+export async function getLenderOutreachMessageByChannel(lenderId: string, channel: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .select('*')
+    .eq('lender_id', lenderId)
+    .eq('channel', channel)
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
 }
 
 export async function listLendersNeedingFollowup(limit = 100) {

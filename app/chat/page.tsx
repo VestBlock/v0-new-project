@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/auth-context';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { useChat } from '@ai-sdk/react';
+import { useVestBlockChat } from '@/hooks/use-vestblock-chat';
 import { AlertTriangle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { FinancialGoal } from '@/components/financial-goals-selector';
@@ -99,10 +99,9 @@ function ChatPageContent() {
     error,
     setMessages,
     setInput,
-  } = useChat({
+  } = useVestBlockChat({
     id: chatSessionId,
     api: '/api/chat',
-    streamProtocol: 'text',
     initialMessages,
     body: {
       creditScore: userProfileData?.credit_score,
@@ -207,7 +206,7 @@ function ChatPageContent() {
           .single();
 
         if (error && error.code !== 'PGRST116') throw error;
-        setUserProfileData(data as UserProfileData);
+        setUserProfileData(data ? (data as UserProfileData) : null);
       } catch (err: any) {
         console.error('Error fetching user profile for chat:', err);
         setProfileError(err.message || 'Could not load your profile data for the chat.');
@@ -219,35 +218,26 @@ function ChatPageContent() {
     if (user) {
       fetchUserProfile();
       refreshHistory();
-    } else if (!authLoading) {
-      setInitialLoading(false);
     }
   }, [user, authLoading, isAuthenticated, supabase, router, refreshHistory]);
 
   useEffect(() => {
     if (!selectedChatId) {
-      if (!contextType) {
-        setChatSessionId((current) => current || createChatId());
-      }
       return;
     }
 
     if (selectedChatId === chatSessionId && messages.length > 0) return;
-    loadConversation(selectedChatId);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void loadConversation(selectedChatId);
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChatId]);
 
-  if (initialLoading || authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <main className="flex-grow flex items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
-        </main>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated || !user) {
+  if (!authLoading && (!isAuthenticated || !user)) {
     return (
       <div className="min-h-screen bg-background">
         <main className="pt-32 px-4 text-center">
@@ -255,6 +245,16 @@ function ChatPageContent() {
           <Button onClick={() => router.push('/login?redirect=/chat')} className="mt-4">
             Go to Login
           </Button>
+        </main>
+      </div>
+    );
+  }
+
+  if (initialLoading || authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <main className="flex-grow flex items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
         </main>
       </div>
     );

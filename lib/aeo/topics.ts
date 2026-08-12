@@ -9,6 +9,7 @@ export type AeoTopic = {
     | 'credit-builder'
     | 'disputes'
     | 'dealvault'
+    | 'seller-solutions'
     | 'search-visibility'
     | 'ai-receptionist'
     | 'website-conversion';
@@ -32,6 +33,7 @@ export const clusterLabels: Record<AeoTopic['cluster'], string> = {
   'credit-builder': 'Credit Builder Tools',
   disputes: 'Credit Disputes',
   dealvault: 'DealVault Proof Records',
+  'seller-solutions': 'Property Seller Options',
   'search-visibility': 'Search Visibility',
   'ai-receptionist': 'AI Receptionist',
   'website-conversion': 'Website Conversion',
@@ -3388,6 +3390,215 @@ const expandedSpanishFundingTopics: AeoTopic[] = [
     ],
   },
 ];
+
+const sellerSolutionTopics: AeoTopic[] = [
+  {
+    slug: 'sell-a-house-that-needs-repairs',
+    title: 'How To Sell A House That Needs Repairs',
+    cluster: 'seller-solutions',
+    intent: 'lead-capture',
+    offerPath: '/sell',
+    metaDescription:
+      'Compare cash, creative finance, novation, and partner sale paths when a property needs repairs.',
+    audience: 'Property owners deciding whether to repair, list, or sell a house as-is.',
+    overview:
+      'A property that needs repairs can still have several sale paths. The right choice depends on condition, payoff, timeline, occupancy, and how much work the owner wants to complete before closing. A clear review should compare the tradeoffs instead of forcing every seller into one low-price cash offer.',
+    keyTakeaways: [
+      'An as-is cash sale can reduce repair and showing work but may trade price for speed and certainty.',
+      'A novation or partner-assisted retail path can make sense when the property has room for a market-facing resale.',
+      'Creative terms may solve a timing or financing problem when the debt and seller goals support the structure.',
+    ],
+    actionSteps: [
+      'Write down the known repairs, occupancy, insurance issues, and access constraints.',
+      'Gather the estimated payoff, desired timing, and minimum outcome needed at closing.',
+      'Request a review that compares cash, creative, novation, and referral options.',
+    ],
+    faqs: [
+      {
+        question: 'Do I have to repair the house before selling?',
+        answer:
+          'Not always. Some buyers purchase as-is, while other structures may include repairs or a resale plan. The economics and responsibilities should be written clearly before you agree.',
+      },
+      {
+        question: 'Will I receive a guaranteed offer?',
+        answer:
+          'No. A legitimate review depends on property details, title, condition, financing, and buyer interest before any written offer or structure is available.',
+      },
+    ],
+  },
+  {
+    slug: 'cash-offer-vs-subject-to-vs-seller-financing',
+    title: 'Cash Offer vs Subject-To vs Seller Financing',
+    cluster: 'seller-solutions',
+    intent: 'comparison',
+    offerPath: '/sell',
+    metaDescription:
+      'Understand the main differences between a cash sale, subject-to purchase, seller financing, and a hybrid structure.',
+    audience: 'Property owners comparing a fast sale with creative financing options.',
+    overview:
+      'Cash, subject-to, seller financing, and hybrid transactions solve different problems. Cash focuses on a direct payoff and closing. Subject-to generally leaves an existing loan in place while title transfers, which creates lender, insurance, servicing, and due-on-sale considerations. Seller financing replaces or supplements traditional financing with agreed payments to the seller. A hybrid can combine cash at closing with ongoing terms.',
+    keyTakeaways: [
+      'The amount of equity does not by itself decide whether a creative structure is possible.',
+      'Existing loan terms, arrears, title, insurance, seller cash needs, and risk tolerance all matter.',
+      'Creative transactions should use qualified legal, title, tax, and servicing professionals.',
+    ],
+    actionSteps: [
+      'Collect the current payoff, monthly payment, interest rate, arrears, and maturity date.',
+      'Decide how much cash is needed at closing and whether monthly payments are acceptable.',
+      'Compare written net outcomes and professional closing requirements for each path.',
+    ],
+    faqs: [
+      {
+        question: 'Does subject-to remove the original borrower from the loan?',
+        answer:
+          'Usually no. The existing loan commonly remains in the original borrower name even if title transfers, so the risks and servicing plan need careful professional review.',
+      },
+      {
+        question: 'Can a seller receive cash and monthly payments?',
+        answer:
+          'A hybrid structure may provide both, depending on equity, debt, buyer funds, and negotiated terms. Nothing should be assumed until the closing professionals confirm the structure.',
+      },
+    ],
+  },
+  {
+    slug: 'options-before-foreclosure-sale',
+    title: 'Property Sale Options Before Foreclosure',
+    cluster: 'seller-solutions',
+    intent: 'lead-capture',
+    offerPath: '/sell',
+    metaDescription:
+      'Review sale, reinstatement, loss-mitigation, short-sale, and creative options before a foreclosure deadline.',
+    audience: 'Owners who have received a default, foreclosure, or auction notice.',
+    overview:
+      'Foreclosure timelines and rights vary by state and case. Owners may need to compare reinstatement, lender loss mitigation, a conventional sale, a short sale, a cash sale, or a carefully structured creative transaction. Early action leaves more time to verify the debt, title, deadlines, and realistic closing path.',
+    keyTakeaways: [
+      'An auction date is a deadline, not a promise that a sale can stop the process.',
+      'A property buyer cannot provide legal advice or guarantee foreclosure prevention.',
+      'Bankruptcy, probate, active litigation, and owner-occupant sensitivity require professional review.',
+    ],
+    actionSteps: [
+      'Confirm the notice, case number, lender or servicer, arrears, and scheduled sale date.',
+      'Contact a qualified housing counselor or attorney about rights and lender options.',
+      'If selling is appropriate, request a title-aware review immediately and compare written net outcomes.',
+    ],
+    faqs: [
+      {
+        question: 'Can selling a property stop foreclosure?',
+        answer:
+          'A completed sale that satisfies the required debt may stop the process, but timing and lender requirements matter. Only the lender, court, trustee, or qualified counsel can confirm the status of a specific case.',
+      },
+      {
+        question: 'Is a subject-to sale always the best option?',
+        answer:
+          'No. It can introduce significant loan, insurance, servicing, and due-on-sale risks. The best path depends on the case and should be reviewed by qualified professionals.',
+      },
+    ],
+  },
+  {
+    slug: 'selling-an-inherited-property',
+    title: 'Selling An Inherited Property',
+    cluster: 'seller-solutions',
+    intent: 'education',
+    offerPath: '/sell',
+    metaDescription:
+      'Organize title, probate, property condition, occupants, and sale options before selling inherited real estate.',
+    audience: 'Heirs and representatives deciding what to do with inherited property.',
+    overview:
+      'Inherited property sales often depend on who has legal authority, whether probate is open, whether other heirs agree, and what debts or occupants affect the property. A sale review is useful only after the decision-makers and title path are understood.',
+    keyTakeaways: [
+      'An heir is not always authorized to sign a sale contract immediately.',
+      'Taxes, liens, mortgages, insurance, personal property, and occupants can affect timing.',
+      'Cash, listing, novation, creative terms, or a referral may each fit different estate goals.',
+    ],
+    actionSteps: [
+      'Identify the executor, administrator, trustee, or other authorized signer.',
+      'Gather probate or trust documents and request a preliminary title review.',
+      'Compare the heirs net outcome, timing, and responsibilities under each sale path.',
+    ],
+    faqs: [
+      {
+        question: 'Can one heir sell without the others?',
+        answer:
+          'That depends on title, estate authority, court orders, and state law. A title company or attorney should confirm who can sign.',
+      },
+      {
+        question: 'Can an inherited house be sold as-is?',
+        answer:
+          'Often yes, if the authorized parties agree and title can close. The price and path still depend on condition, debt, occupancy, and buyer demand.',
+      },
+    ],
+  },
+  {
+    slug: 'sell-a-tenant-occupied-property',
+    title: 'How To Sell A Tenant-Occupied Property',
+    cluster: 'seller-solutions',
+    intent: 'comparison',
+    offerPath: '/sell',
+    metaDescription:
+      'Compare investor, listing, creative, and partner sale paths for a property with tenants in place.',
+    audience: 'Landlords considering a sale while a lease or tenant remains in place.',
+    overview:
+      'A tenant-occupied sale should account for the lease, deposits, payment history, notices, access, local law, and the buyer type. Some investors prefer stable occupied properties, while other sale paths require different timing or cooperation.',
+    keyTakeaways: [
+      'The lease and local tenant protections continue to matter during a sale.',
+      'Accurate rent, expense, deposit, and maintenance records can improve buyer confidence.',
+      'The outreach and showing plan should protect the tenant relationship and avoid false promises.',
+    ],
+    actionSteps: [
+      'Gather the lease, ledger, deposits, notices, utilities, and repair history.',
+      'Confirm lawful notice and access requirements with a qualified local professional.',
+      'Route the property to buyers whose occupancy and rental criteria fit the actual situation.',
+    ],
+    faqs: [
+      {
+        question: 'Does the tenant have to move when the property sells?',
+        answer:
+          'Not automatically. The lease and applicable law usually control. A local attorney or property manager should confirm the specific obligations.',
+      },
+      {
+        question: 'Can a tenant-occupied property be sold to another landlord?',
+        answer:
+          'Yes, when the lease, numbers, condition, and local requirements fit the buyers criteria. Complete records make that review easier.',
+      },
+    ],
+  },
+  {
+    slug: 'novation-vs-cash-home-sale',
+    title: 'Novation vs Cash Home Sale',
+    cluster: 'seller-solutions',
+    intent: 'comparison',
+    offerPath: '/sell',
+    metaDescription:
+      'Compare a novation-style resale path with a direct cash sale, including timing, access, risk, and net proceeds.',
+    audience: 'Owners who want to compare speed and certainty with a potentially higher market-facing outcome.',
+    overview:
+      'A direct cash sale is usually designed for a simpler, faster closing at an agreed price. A novation-style arrangement may allow a partner to prepare and market the property to an end buyer before the owner sale closes. That can improve the potential outcome in some cases, but it adds time, access, contract, marketing, and execution considerations.',
+    keyTakeaways: [
+      'A novation is not a guaranteed retail-price outcome.',
+      'The agreement should clearly explain marketing authority, repairs, access, expenses, cancellation, and closing proceeds.',
+      'A cash sale may be preferable when certainty and a short timeline matter more than market exposure.',
+    ],
+    actionSteps: [
+      'Compare the written estimated net and timeline for each path.',
+      'Review who controls repairs, access, listing activity, costs, and cancellation rights.',
+      'Use an experienced title company and qualified legal advice before signing.',
+    ],
+    faqs: [
+      {
+        question: 'Is a novation the same as listing with an agent?',
+        answer:
+          'No. The legal and economic structure can differ substantially. The exact agreement and any licensed brokerage role should be explained in writing.',
+      },
+      {
+        question: 'Which option closes faster?',
+        answer:
+          'A funded cash purchase is often faster, while a novation-style path commonly depends on preparing and finding an end buyer.',
+      },
+    ],
+  },
+];
+
+vestblockAeoTopics.push(...sellerSolutionTopics);
 
 vestblockAeoTopics.push(
   ...expandedBuyerQuestionTopics.map<AeoTopic>((topic) => ({

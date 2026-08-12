@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=150)
     parser.add_argument("--price-max", type=int, default=0)
     parser.add_argument("--price-min", type=int, default=0)
+    parser.add_argument("--property-type", default="")
     parser.add_argument("--exclude-pending", action="store_true")
     args = parser.parse_args()
 
@@ -49,6 +50,8 @@ def main() -> None:
         kwargs["price_max"] = args.price_max
     if args.price_min > 0:
         kwargs["price_min"] = args.price_min
+    if args.property_type:
+        kwargs["property_type"] = [item.strip() for item in args.property_type.split(",") if item.strip()]
 
     frame = scrape_property(**kwargs)
     records = []

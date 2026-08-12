@@ -26,11 +26,12 @@ export const dynamic = 'force-dynamic'
  * Configuration:
  *   - NEXT_PUBLIC_SITE_URL: base URL for the site (default: https://www.vestblock.io)
  *   - CRON_SECRET: Bearer token required to authorize cron calls
- *   - NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY: optional for persistence
+ *   - Supabase server credentials: required for durable report persistence
  */
 
 import { NextResponse } from 'next/server'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /* ─── Route definitions ──────────────────────────────────────────────── */
 
@@ -435,36 +436,23 @@ async function runAeoAudit(siteUrl: string): Promise<AeoAuditReport> {
   }
 }
 
-/* ─── Persist report to Supabase (best-effort) ────────────────────────── */
+/* ─── Persist report to Supabase ──────────────────────────────────────── */
 
 async function persistReport(report: AeoAuditReport): Promise<void> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !serviceKey) return
-
-  try {
-    const { createClient } = await import('@supabase/supabase-js')
-    const supabase = createClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
-    await supabase.from('aeo_audit_reports').insert({
-      run_at: report.runAt,
-      site_url: report.siteUrl,
-      overall_score: report.overallScore,
-      score_summary: report.scoreSummary,
-      critical_issues: report.criticalIssues,
-      recommendations: report.recommendations,
-      route_results: report.routeResults,
-      robots_audit: report.robotsAudit,
-      sitemap_audit: report.sitemapAudit,
-      schema_audits: report.schemaAudits,
-    })
-  } catch (err) {
-    // Non-fatal — report is returned in response body regardless
-    console.warn('[aeo-site-audit] Supabase persist skipped:', err instanceof Error ? err.message : String(err))
-  }
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('aeo_audit_reports').insert({
+    run_at: report.runAt,
+    site_url: report.siteUrl,
+    overall_score: report.overallScore,
+    score_summary: report.scoreSummary,
+    critical_issues: report.criticalIssues,
+    recommendations: report.recommendations,
+    route_results: report.routeResults,
+    robots_audit: report.robotsAudit,
+    sitemap_audit: report.sitemapAudit,
+    schema_audits: report.schemaAudits,
+  })
+  if (error) throw new Error(`AEO report persistence failed: ${error.message}`)
 }
 
 /* ─── Route handler ────────────────────────────────────────────────────── */

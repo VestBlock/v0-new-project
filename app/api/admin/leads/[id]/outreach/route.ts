@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
+import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
@@ -25,6 +26,10 @@ export async function PATCH(
   }
 
   try {
+    if (parsed.data.sendNow && await isCommandCenterDataIntegrityHold()) {
+      return commandCenterDataIntegrityHoldResponse()
+    }
+
     const { id } = await params
     const admin = createAdminClient()
     const { data: message, error } = await admin
@@ -167,7 +172,7 @@ export async function PATCH(
 
       await Promise.all([
         updateOutreachMessage(message.id, {
-          status: 'sent',
+          status: 'accepted',
           sent_at: new Date().toISOString(),
           send_provider: sendResult.provider,
           send_error: null,
@@ -175,7 +180,7 @@ export async function PATCH(
         updateLeadRecord(id, {
           status: 'contacted',
           outreach_status: 'sent',
-          delivery_status: 'sent',
+          delivery_status: 'accepted',
           last_contacted_at: new Date().toISOString(),
           next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         }),

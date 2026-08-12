@@ -125,6 +125,43 @@ function hasSentOutreachState(lead: LeadRecord | null | undefined) {
   )
 }
 
+function effectiveLeadPriorityScore(lead: LeadRecord | null | undefined) {
+  if (!lead) return 0
+  const strategyScore = Number(lead.metadata_json?.strategyQualificationScore || 0)
+  return Math.max(
+    Number(lead.lead_score || 0),
+    Number.isFinite(strategyScore) ? strategyScore : 0
+  )
+}
+
+function strategyAutoApprovalAllowed(lead: LeadRecord | null | undefined) {
+  const strategyEngine = lead?.automation_flags_json?.strategyEngine
+  return Boolean(
+    strategyEngine &&
+    typeof strategyEngine === 'object' &&
+    (strategyEngine as Record<string, unknown>).autoApprovalAllowed === true
+  )
+}
+
+function sellerPropertyKey(lead: LeadRecord | null | undefined) {
+  if (!lead || (lead.category !== 'seller_lead' && lead.lead_type !== 'sell_house')) return null
+  const address = String(lead.property_address || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+  if (!address) return null
+  const city = String(lead.city || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const state = String(lead.state || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return [address, city, state].filter(Boolean).join('|')
+}
+
+function enrolledPropertyKey(value: string | null | undefined) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim() || null
+}
+
 function leadOutreachPriorityScore(lead: LeadRecord) {
   const createdAtMs = leadCreatedAtMs(lead)
   const ageMs = createdAtMs ? Date.now() - createdAtMs : Number.POSITIVE_INFINITY
@@ -136,8 +173,9 @@ function leadOutreachPriorityScore(lead: LeadRecord) {
     isSourceInFamily(lead.source, 'apify_yelp_businesses')
 
   return (
-    Number(lead.lead_score || 0) +
+    effectiveLeadPriorityScore(lead) +
     getRevenueCampaignPriority(lead) +
+    (strategyAutoApprovalAllowed(lead) ? 900 : 0) +
     (hasFreshEmail ? 300 : 0) +
     (contactFormCount > 0 ? 120 : 0) +
     (isFresh ? 80 : 0) +
@@ -652,7 +690,21 @@ export async function insertOutreachSendEvent(input: {
   outreachMessageId?: string | null
   channel: string
   provider?: string | null
-  status: 'approved' | 'queued' | 'sent' | 'failed' | 'skipped'
+  status:
+    | 'approved'
+    | 'queued'
+    | 'accepted'
+    | 'sent'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'bounced'
+    | 'complained'
+    | 'suppressed'
+    | 'failed'
+    | 'skipped'
+    | 'opened'
+    | 'clicked'
+    | 'replied'
   recipient?: string | null
   subject?: string | null
   errorMessage?: string | null
@@ -774,25 +826,67 @@ export async function listEmailOutreachForSendQueue(limit = 75) {
   const admin = createAdminClient()
   const allowSecondaryCampaigns = allowSecondaryRevenueSendQueue()
   const fetchLimit = Math.min(Math.max(limit * 50, 250), 2000)
-  const { data, error } = await admin
-    .from('outreach_messages')
-    .select('*, leads(*)')
-    .eq('channel', 'email')
-    .in('status', ['approved', 'queued', 'needs_review'])
-    .is('sent_at', null)
-    .order('approved_at', { ascending: true, nullsFirst: false })
-    .order('last_generated_at', { ascending: true, nullsFirst: false })
-    .limit(fetchLimit)
+  const [approvedResult, reviewResult] = await Promise.all([
+    admin
+      .from('outreach_messages')
+      .select('*, leads(*)')
+      .eq('channel', 'email')
+      .eq('status', 'approved')
+      .is('sent_at', null)
+      .order('approved_at', { ascending: true, nullsFirst: false })
+      .limit(fetchLimit),
+    admin
+      .from('outreach_messages')
+      .select('*, leads(*)')
+      .eq('channel', 'email')
+      .in('status', ['queued', 'needs_review'])
+      .is('sent_at', null)
+      .order('last_generated_at', { ascending: false, nullsFirst: false })
+      .limit(fetchLimit),
+  ])
 
-  if (error) throw error
-  const filtered = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter(
-    (row) =>
-      row.leads?.delivery_status !== 'sent' &&
-      row.leads?.outreach_status !== 'sent' &&
-      isCurrentVestblockOutboundLead(row.leads) &&
-      shouldIncludeInRevenueOutreach(row.leads, allowSecondaryCampaigns)
+  if (approvedResult.error) throw approvedResult.error
+  if (reviewResult.error) throw reviewResult.error
+  const data = [...(approvedResult.data || []), ...(reviewResult.data || [])]
+  const { data: contactedPropertyRows, error: contactedPropertyError } = await admin
+    .from('command_center_outbound_enrollments')
+    .select('property_address')
+    .eq('channel', 'email')
+    .in('status', ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied'])
+    .not('property_address', 'is', null)
+    .limit(10_000)
+  if (contactedPropertyError) throw contactedPropertyError
+
+  const contactedProperties = new Set(
+    (contactedPropertyRows || [])
+      .map((row) => enrolledPropertyKey(row.property_address))
+      .filter((key): key is string => Boolean(key))
   )
-  return sortMessagesForSendQueue(filtered).slice(0, limit)
+  const eligible = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter((row) => {
+    const lead = row.leads
+    if (
+      lead?.delivery_status === 'sent' ||
+      lead?.outreach_status === 'sent' ||
+      !isCurrentVestblockOutboundLead(lead) ||
+      !shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
+    ) return false
+
+    const enrolledKey = enrolledPropertyKey(lead?.property_address)
+    return !enrolledKey || !contactedProperties.has(enrolledKey)
+  })
+
+  const seenRecipients = new Set<string>()
+  const seenSellerProperties = new Set<string>()
+  const deduped = sortMessagesForSendQueue(eligible).filter((row) => {
+    const recipient = normalizeEmailAddress(row.leads?.email)
+    if (recipient && seenRecipients.has(recipient)) return false
+    const propertyKey = sellerPropertyKey(row.leads)
+    if (propertyKey && seenSellerProperties.has(propertyKey)) return false
+    if (recipient) seenRecipients.add(recipient)
+    if (propertyKey) seenSellerProperties.add(propertyKey)
+    return true
+  })
+  return deduped.slice(0, limit)
 }
 
 export async function listLeadsNeedingFollowup(limit = 100) {
@@ -808,6 +902,109 @@ export async function listLeadsNeedingFollowup(limit = 100) {
 
   if (error) throw error
   return (data || []) as LeadRecord[]
+}
+
+export async function listLeadEmailFollowupsDue(
+  limit = 30,
+  options: { excludeSourcePatterns?: string[] } = {}
+) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { data: leads, error: leadError } = await admin
+    .from('leads')
+    .select('*')
+    .lte('next_follow_up_at', now)
+    .in('delivery_status', ['accepted', 'sent', 'delivered', 'opened', 'clicked'])
+    .not('status', 'in', '(closed,closed_won,closed_lost,disqualified,do_not_contact)')
+    .not('outreach_status', 'in', '(responded,do_not_contact)')
+    .or('category.eq.seller_lead,lead_type.eq.sell_house')
+    .order('next_follow_up_at', { ascending: true })
+    .limit(Math.max(limit * 10, 300))
+  if (leadError) throw leadError
+
+  const excludedSourcePatterns = (options.excludeSourcePatterns || [])
+    .map((pattern) => pattern.trim().toLowerCase())
+    .filter(Boolean)
+  const candidateLeads = ((leads || []) as LeadRecord[]).filter(
+    (lead) => {
+      const source = String(lead.source || '').toLowerCase()
+      return (
+      !excludedSourcePatterns.some((pattern) => source.includes(pattern)) &&
+      isCurrentVestblockOutboundLead(lead) &&
+      isLeadEmailReady(lead) &&
+      (lead.category === 'seller_lead' || lead.lead_type === 'sell_house')
+      )
+    }
+  )
+  if (!candidateLeads.length) return []
+
+  const leadIds = candidateLeads.map((lead) => lead.id)
+  const candidateEmails = Array.from(
+    new Set(candidateLeads.map((lead) => normalizeEmailAddress(lead.email)).filter(Boolean))
+  ) as string[]
+  const [
+    { data: messages, error: messageError },
+    { data: sendEvents, error: eventError },
+    { data: inboundReplies, error: replyError },
+  ] = await Promise.all([
+    admin
+      .from('outreach_messages')
+      .select('*')
+      .in('lead_id', leadIds)
+      .eq('channel', 'email')
+      .eq('status', 'sent')
+      .order('sent_at', { ascending: false }),
+    admin
+      .from('outreach_send_events')
+      .select('lead_id,status,metadata_json')
+      .in('lead_id', leadIds)
+      .in('status', ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'complained', 'suppressed']),
+    candidateEmails.length
+      ? admin
+          .from('command_center_reply_memory')
+          .select('from_email,classification,metadata_json')
+          .in('from_email', candidateEmails)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (messageError) throw messageError
+  if (eventError) throw eventError
+  if (replyError) throw replyError
+
+  const initialMessageByLead = new Map<string, OutreachMessageRecord>()
+  for (const message of (messages || []) as OutreachMessageRecord[]) {
+    if (!initialMessageByLead.has(message.lead_id)) initialMessageByLead.set(message.lead_id, message)
+  }
+  const completedFollowupLeadIds = new Set(
+    (sendEvents || [])
+      .filter((event) => Number((event.metadata_json as Record<string, unknown> | null)?.sequenceStep || 0) >= 2)
+      .map((event) => String(event.lead_id))
+  )
+
+  // A reply is recipient-level evidence. Suppress every lead sharing that
+  // address so a duplicated listing or agent record cannot receive a false
+  // "no reply" follow-up after responding on another property.
+  const repliedEmails = new Set(
+    (inboundReplies || [])
+      .filter((reply) => String(reply.classification || '') !== 'spam_noise')
+      .map((reply) => normalizeEmailAddress(reply.from_email))
+      .filter(Boolean)
+  )
+  const seenRecipients = new Set<string>()
+  const seenProperties = new Set<string>()
+
+  return candidateLeads
+    .filter((lead) => {
+      if (!initialMessageByLead.has(lead.id) || completedFollowupLeadIds.has(lead.id)) return false
+      const recipient = normalizeEmailAddress(lead.email)
+      if (!recipient || repliedEmails.has(recipient) || seenRecipients.has(recipient)) return false
+      const propertyKey = sellerPropertyKey(lead)
+      if (propertyKey && seenProperties.has(propertyKey)) return false
+      seenRecipients.add(recipient)
+      if (propertyKey) seenProperties.add(propertyKey)
+      return true
+    })
+    .slice(0, limit)
+    .map((lead) => ({ lead, initialMessage: initialMessageByLead.get(lead.id)! }))
 }
 
 export async function getLeadById(id: string) {

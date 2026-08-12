@@ -22,11 +22,104 @@ function classifyCategoryFromNiche(niche: string): BuyerCategory {
   return 'local_cash_buyer'
 }
 
-export async function discoverBuyersForMarket(input: BuyerDiscoveryInput) {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY
-  if (!apiKey) {
-    throw new Error('GOOGLE_PLACES_API_KEY is required for buyer discovery.')
+const OSM_ENDPOINTS = Array.from(new Set([
+  process.env.OPENSTREETMAP_OVERPASS_URL,
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+].filter((value): value is string => Boolean(value))))
+const OSM_USER_AGENT = 'VestBlock/1.0 (acquisitions@vestblock.io)'
+
+type OsmElement = {
+  id: number
+  type: 'node' | 'way' | 'relation'
+  tags?: Record<string, string>
+}
+
+function escapeOverpassValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+async function discoverWithOpenStreetMap(input: BuyerDiscoveryInput) {
+  const city = escapeOverpassValue(input.city)
+  const query = `[out:json][timeout:25];
+area["name"="${city}"]["boundary"="administrative"]->.market;
+(
+  nwr(area.market)["name"~"investment|investor|home buyer|cash buyer|property|realty|capital|development",i]["website"];
+  nwr(area.market)["name"~"investment|investor|home buyer|cash buyer|property|realty|capital|development",i]["contact:website"];
+  nwr(area.market)["office"~"estate_agent|property_management|financial"];
+);
+out tags center ${Math.max(10, input.limitPerNiche * Math.max(1, input.niches.length))};`
+
+  let data: { elements?: OsmElement[] } | null = null
+  let lastError: unknown = null
+  for (const endpoint of OSM_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'User-Agent': OSM_USER_AGENT,
+        },
+        body: new URLSearchParams({ data: query }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!response.ok) throw new Error(`${endpoint} returned ${response.status}`)
+      data = (await response.json()) as { elements?: OsmElement[] }
+      break
+    } catch (error) {
+      lastError = error
+      console.warn(`[buyers] OpenStreetMap endpoint unavailable (${endpoint}):`, error)
+    }
   }
+  if (!data) {
+    throw new Error(
+      `OpenStreetMap buyer discovery failed across ${OSM_ENDPOINTS.length} endpoint(s): ${lastError instanceof Error ? lastError.message : String(lastError || 'unknown error')}`
+    )
+  }
+
+  const seen = new Set<string>()
+  return (data.elements || []).flatMap((element): NormalizedBuyerInput[] => {
+    const tags = element.tags || {}
+    const name = String(tags.name || '').trim()
+    const website = safeUrl(tags['contact:website'] || tags.website || '')
+    const phone = normalizePhone(tags['contact:phone'] || tags.phone || '')
+    const fingerprint = `${name.toLowerCase()}|${website || ''}`
+    if (!name || seen.has(fingerprint)) return []
+    seen.add(fingerprint)
+
+    const niche = input.niches.find((term) => name.toLowerCase().includes(term.toLowerCase())) || input.niches[0] || 'real estate buyer'
+    const category = classifyCategoryFromNiche(niche)
+    const buyerType = BUYER_CATEGORY_TO_TYPE[category]
+    return [{
+      name,
+      website,
+      buyerType,
+      category,
+      headquartersCity: input.city,
+      headquartersState: input.state,
+      marketsServed: [input.city, input.state],
+      nationalOrRegional: 'regional',
+      contactEmail: tags['contact:email'] || tags.email || null,
+      contactPhone: phone,
+      source: 'openstreetmap_buyers',
+      sourceUrl: `https://www.openstreetmap.org/${element.type}/${element.id}`,
+      externalId: `osm:${element.type}:${element.id}`,
+      fitSummary: `${name} was found in public OpenStreetMap business data for ${input.city}, ${input.state}; acquisition fit still needs verification.`,
+      bilingualSupport: false,
+      spanishSupport: false,
+      contactInfo: { osmTags: tags },
+      metadata: {
+        discoveryProvider: 'openstreetmap',
+        niche,
+        publicDataNeedsVerification: true,
+      },
+    }]
+  })
+}
+
+async function discoverWithGoogle(input: BuyerDiscoveryInput) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY is not configured.')
 
   const normalizedBuyers: NormalizedBuyerInput[] = []
   const niches = input.niches.length ? input.niches : [...DEFAULT_BUYER_DISCOVERY_NICHES]
@@ -96,4 +189,34 @@ export async function discoverBuyersForMarket(input: BuyerDiscoveryInput) {
   }
 
   return normalizedBuyers
+}
+
+export async function discoverBuyersForMarket(input: BuyerDiscoveryInput) {
+  if (input.provider === 'openstreetmap') return discoverWithOpenStreetMap(input)
+  if (input.provider === 'google') return discoverWithGoogle(input)
+
+  const googleConfigured = Boolean(process.env.GOOGLE_PLACES_API_KEY)
+  const preferFree = process.env.BUYER_DISCOVERY_PREFER_FREE === 'true'
+
+  if (preferFree) {
+    try {
+      const publicResults = await discoverWithOpenStreetMap(input)
+      if (publicResults.length || !googleConfigured) return publicResults
+      console.warn('[buyers] OpenStreetMap returned no buyers; using configured Google fallback.')
+    } catch (error) {
+      if (!googleConfigured) throw error
+      console.warn('[buyers] OpenStreetMap discovery unavailable; using configured Google fallback:', error)
+    }
+    return discoverWithGoogle(input)
+  }
+
+  if (googleConfigured) {
+    try {
+      return await discoverWithGoogle(input)
+    } catch (error) {
+      console.warn('[buyers] Google discovery unavailable; using public OpenStreetMap fallback:', error)
+    }
+  }
+
+  return discoverWithOpenStreetMap(input)
 }

@@ -1,11 +1,15 @@
 import { createAdminTask, adminTaskDueDates } from '@/lib/admin/tasks'
+import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { DEFAULT_LENDER_DISCOVERY_MARKETS, DEFAULT_LENDER_DISCOVERY_NICHES } from '@/lib/lenders/constants'
 import { listMarketsForExpansionLane, pickDiscoveryTermsForMarket } from '@/lib/leads/marketExpansion'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { sendLenderOutreachEmail } from '@/lib/lenders/outbound'
 import {
   finishLenderOutreachRun,
   listApprovedLenderEmailOutreach,
+  listLenderOutreachForAutoApproval,
   updateLenderOutreachMessage,
   updateLenderPerformance,
   updateLenderRecord,
@@ -18,6 +22,8 @@ import {
   runDailyLenderScoring,
 } from '@/lib/lenders/service'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { evaluateLenderAutoApproval } from '@/lib/lenders/automationCore'
+import { LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
 import { startLenderOutreachRun } from '@/lib/lenders/repository'
 import type { LenderRecord } from '@/lib/lenders/types'
 import { logEvent } from '@/lib/system/logEvent'
@@ -107,7 +113,10 @@ export async function runDailyLenderDiscovery(options: { dryRun?: boolean } = {}
 }
 
 export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean } = {}) {
-  const autoSend = envBool('LENDER_AUTO_SEND_ENABLED', true)
+  const autoSendRequested = envBool('LENDER_AUTO_SEND_ENABLED', false)
+  const deliveryCircuitBreaker = autoSendRequested ? await getDeliveryCircuitBreaker() : null
+  const replyCapture = getReplyCaptureReadiness()
+  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
   const approved = await listApprovedLenderEmailOutreach(limit)
   const results: Array<{ lenderId: string; name: string; status: string }> = []
 
@@ -171,6 +180,11 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
       sent_at: new Date().toISOString(),
       send_provider: sent.provider,
       send_error: null,
+      metadata_json: {
+        ...(row.metadata_json || {}),
+        providerMessageId: sent.providerMessageId || null,
+        providerAcceptedAt: new Date().toISOString(),
+      },
     })
     await updateLenderRecord(lender.id, {
       relationship_stage: 'contacted',
@@ -188,17 +202,116 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
       entityId: lender.id,
       metadata: { messageId: row.id, provider: sent.provider },
     })
-    results.push({ lenderId: lender.id, name: lender.name, status: 'sent' })
+    await recordOutboundEnrollment({
+      strategyKey: 'lender-network',
+      channel: 'email',
+      status: 'accepted',
+      messageId: row.id,
+      recipient: lender.contact_email,
+      market: [lender.headquarters_city, lender.headquarters_state].filter(Boolean).join(', '),
+      nextActionAt: adminTaskDueDates.days(4),
+      metadata: {
+        lenderId: lender.id,
+        lenderCategory: lender.category,
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+      },
+    }).catch(() => null)
+    results.push({ lenderId: lender.id, name: lender.name, status: 'accepted' })
   }
 
-  return { ok: true, count: results.length, results, autoSendEnabled: autoSend }
+  return { ok: true, count: results.length, results, autoSendEnabled: autoSend, autoSendRequested, deliveryCircuitBreaker, replyCapture }
+}
+
+async function runLenderStage<T>(name: string, task: () => Promise<T>) {
+  try {
+    return { ok: true as const, name, result: await task() }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await logEvent({
+      eventType: 'admin_action',
+      entityType: 'lender_pipeline',
+      entityId: name,
+      metadata: { action: 'lender_automation_stage_failed', stage: name, error: message },
+    }).catch(() => null)
+    return { ok: false as const, name, error: message }
+  }
+}
+
+export async function runDailyLenderApproval(limit = 20, options: { dryRun?: boolean } = {}) {
+  const minimumScore = envInt('LENDER_AUTO_APPROVE_MIN_SCORE', 40)
+  const candidates = await listLenderOutreachForAutoApproval(limit)
+  const results: Array<{ lenderId: string | null; name: string; status: string; reason: string }> = []
+
+  for (const message of candidates) {
+    const lender = message.lenders as LenderRecord | null
+    const decision = evaluateLenderAutoApproval({
+      lender,
+      message,
+      templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION,
+      minimumScore,
+    })
+    if (!decision.approved || !lender) {
+      results.push({ lenderId: lender?.id || null, name: lender?.name || 'Unknown lender', status: 'blocked', reason: decision.reason })
+      continue
+    }
+
+    if (!options.dryRun) {
+      await updateLenderOutreachMessage(message.id, {
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        send_error: null,
+      })
+      await updateLenderRecord(lender.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+      await logEvent({
+        eventType: 'outreach_approved',
+        entityType: 'lender',
+        entityId: lender.id,
+        metadata: { messageId: message.id, templateVersion: LENDER_OUTREACH_TEMPLATE_VERSION, minimumScore },
+      })
+    }
+    results.push({
+      lenderId: lender.id,
+      name: lender.name,
+      status: options.dryRun ? 'would_approve' : 'approved',
+      reason: decision.reason,
+    })
+  }
+
+  return {
+    ok: true,
+    count: results.filter((result) => ['approved', 'would_approve'].includes(result.status)).length,
+    reviewed: results.length,
+    minimumScore,
+    results,
+  }
 }
 
 export async function runDailyLenderPipeline(options: { dryRun?: boolean } = {}) {
-  const discovery = await runDailyLenderDiscovery({ dryRun: options.dryRun })
-  const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyLenderScoring(envInt('LENDERS_DAILY_SCORE_LIMIT', 90))
-  const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyLenderOutreach(envInt('LENDERS_DAILY_OUTREACH_LIMIT', 30))
-  const followup = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyLenderFollowup(envInt('LENDERS_DAILY_FOLLOWUP_LIMIT', 25))
-  const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyLenderPerformanceRollup()
-  return { ok: true, discovery, scoring, outreach, followup, performance }
+  const dryRun = Boolean(options.dryRun)
+  const discovery = await runLenderStage('discovery', () => runDailyLenderDiscovery({ dryRun }))
+  const scoring = await runLenderStage('scoring', () =>
+    dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyLenderScoring(envInt('LENDERS_DAILY_SCORE_LIMIT', 90))
+  )
+  const outreach = await runLenderStage('outreach', () =>
+    dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyLenderOutreach(envInt('LENDERS_DAILY_OUTREACH_LIMIT', 30))
+  )
+  const followup = await runLenderStage('followup', () =>
+    runDailyLenderFollowup(envInt('LENDERS_DAILY_FOLLOWUP_LIMIT', 25), { dryRun })
+  )
+  const approval = await runLenderStage('approval', () =>
+    runDailyLenderApproval(envInt('LENDERS_DAILY_APPROVAL_LIMIT', 20), { dryRun })
+  )
+  const send = await runLenderStage('send', () =>
+    runDailyLenderSend(envInt('LENDERS_DAILY_SEND_LIMIT', 15), { dryRun })
+  )
+  const performance = await runLenderStage('performance', () =>
+    dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyLenderPerformanceRollup()
+  )
+  const stages = { discovery, scoring, outreach, followup, approval, send, performance }
+  return {
+    ok: Object.values(stages).every((stage) => stage.ok),
+    partial: Object.values(stages).some((stage) => !stage.ok),
+    stages,
+  }
 }

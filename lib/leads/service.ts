@@ -136,7 +136,7 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
       updateLeadRecord(lead.id, {
         status: 'contacted',
         outreach_status: 'sent',
-        delivery_status: 'sent',
+        delivery_status: 'accepted',
         last_contacted_at: new Date().toISOString(),
         next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
       }),
@@ -145,7 +145,7 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
         outreachMessageId: message.id,
         channel: 'email',
         provider: sendResult.provider,
-        status: 'sent',
+        status: 'accepted',
         recipient: lead.email,
         subject: message.subject,
         metadata: { providerMessageId: sendResult.providerMessageId || null, action: 'auto_sent_after_approval' },

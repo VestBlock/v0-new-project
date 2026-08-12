@@ -1,5 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildInvestorOutreachMessage, inferFollowUpTasks } from '@/lib/investors/outreach'
+import {
+  buildInvestorFollowupMessage,
+  buildInvestorOutreachMessage,
+  inferFollowUpTasks,
+  INVESTOR_OUTREACH_TEMPLATE_VERSION,
+} from '@/lib/investors/outreach'
 import {
   buildInvestorPipelineMetadata,
   buildInvestorPipelineSnapshot,
@@ -8,6 +13,7 @@ import {
 import { calculateInvestorScore } from '@/lib/investors/scoring'
 import type {
   InvestorDashboardSummary,
+  InvestorOutreachMessageRecord,
   InvestorOutreachStatus,
   InvestorProfileRecord,
   InvestorRelationshipStage,
@@ -410,6 +416,7 @@ export async function generateInvestorOutreach(investorId: string, status: 'need
         status,
         generated_with: 'vestblock-investor-engine',
         last_generated_at: new Date().toISOString(),
+        metadata_json: { templateVersion: INVESTOR_OUTREACH_TEMPLATE_VERSION, sequenceStep: 1 },
       },
       { onConflict: 'investor_profile_id,sequence_code,step_number,channel' }
     )
@@ -567,7 +574,7 @@ export async function listInvestorsNeedingOutreach(limit = 50) {
   const { data, error } = await admin
     .from('investor_profiles')
     .select('*')
-    .in('outreach_status', ['draft_ready', 'not_started'])
+    .in('outreach_status', ['draft_ready', 'not_started', 'needs_review'])
     .not('outreach_status', 'eq', 'do_not_contact')
     .order('partnership_score', { ascending: false })
     .order('updated_at', { ascending: false })
@@ -609,7 +616,48 @@ export async function listApprovedInvestorEmailOutreach(limit = 25) {
     .limit(limit)
 
   if (error) throw error
-  return data || []
+  return (data || []) as Array<InvestorOutreachMessageRecord & { investor_profiles: InvestorProfileRecord | null }>
+}
+
+export async function listInvestorOutreachForAutoApproval(limit = 30) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('investor_outreach_messages')
+    .select('*, investor_profiles(*)')
+    .eq('status', 'needs_review')
+    .eq('channel', 'email')
+    .order('step_number', { ascending: true })
+    .order('last_generated_at', { ascending: true, nullsFirst: false })
+    .limit(limit)
+  if (error) throw error
+  return (data || []) as Array<InvestorOutreachMessageRecord & { investor_profiles: InvestorProfileRecord | null }>
+}
+
+export async function generateInvestorFollowup(investor: InvestorProfileRecord) {
+  const admin = createAdminClient()
+  const message = buildInvestorFollowupMessage(investor)
+  const { data, error } = await admin
+    .from('investor_outreach_messages')
+    .upsert(
+      {
+        investor_profile_id: investor.id,
+        sequence_code: message.sequenceCode,
+        step_number: 2,
+        channel: 'email',
+        subject: message.subject,
+        body: message.body,
+        cta: message.cta,
+        status: 'needs_review',
+        generated_with: 'vestblock-investor-engine',
+        last_generated_at: new Date().toISOString(),
+        metadata_json: { templateVersion: INVESTOR_OUTREACH_TEMPLATE_VERSION, sequenceStep: 2 },
+      },
+      { onConflict: 'investor_profile_id,sequence_code,step_number,channel' }
+    )
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as InvestorOutreachMessageRecord
 }
 
 export async function updateInvestorOutreachMessage(id: string, updates: Record<string, unknown>) {

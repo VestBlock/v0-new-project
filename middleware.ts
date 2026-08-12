@@ -12,6 +12,13 @@ const protectedAdminApis = [
   '/api/admin',
 ];
 
+const protectedAuthenticatedApis = [
+  '/api/ai-assistant-request',
+  '/api/chat',
+  '/api/chat-with-analysis',
+  '/api/side-hustle-chat',
+];
+
 const protectedAuthenticatedPages = [
   '/analysis/results',
   '/chat',
@@ -59,6 +66,7 @@ function matchesProtectedPath(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminPages) ||
     matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedAuthenticatedApis) ||
     matchProtectedPath(pathname, protectedAuthenticatedPages) ||
     matchProtectedPath(pathname, protectedDiagnostics) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
@@ -68,6 +76,7 @@ function matchesProtectedPath(pathname: string) {
 function isProtectedApi(pathname: string) {
   return (
     matchProtectedPath(pathname, protectedAdminApis) ||
+    matchProtectedPath(pathname, protectedAuthenticatedApis) ||
     matchProtectedPath(pathname, protectedDiagnosticApis)
   );
 }
@@ -97,11 +106,35 @@ function shouldNoIndex(pathname: string) {
   );
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function isSameOriginMutation(request: NextRequest) {
+  if (SAFE_METHODS.has(request.method.toUpperCase())) return true
+
+  const secFetchSite = request.headers.get('sec-fetch-site')?.toLowerCase()
+  if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+    return false
+  }
+
+  const origin = request.headers.get('origin')
+  if (!origin) return true
+
+  try {
+    return new URL(origin).origin === request.nextUrl.origin
+  } catch {
+    return false
+  }
+}
+
 function withNoIndex(response: NextResponse, pathname: string) {
   if (shouldNoIndex(pathname)) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   }
+
+  response.headers.set('X-DNS-Prefetch-Control', 'off')
+  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
+  response.headers.set('Origin-Agent-Cluster', '?1')
 
   return response;
 }
@@ -247,6 +280,17 @@ export async function middleware(request: NextRequest) {
 
   const adminRequest = requiresAdmin(pathname);
   const apiRequest = isProtectedApi(pathname);
+
+  if (apiRequest && !isSameOriginMutation(request)) {
+    return withNoIndex(
+      NextResponse.json(
+        { error: 'Cross-site state-changing requests are not allowed.' },
+        { status: 403 }
+      ),
+      pathname
+    )
+  }
+
   const config = getSupabaseConfig();
   const accessToken = config
     ? getSupabaseAccessToken(request, config.supabaseUrl)
@@ -343,6 +387,10 @@ export const config = {
     '/tools/my-dispute-letters/:path*',
     '/user-hub/:path*',
     '/api/admin/:path*',
+    '/api/ai-assistant-request/:path*',
+    '/api/chat/:path*',
+    '/api/chat-with-analysis/:path*',
+    '/api/side-hustle-chat/:path*',
     '/api/execute-sql/:path*',
     '/api/run-db-setup/:path*',
     '/api/setup-database/:path*',

@@ -6,8 +6,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildInvestorPipelineSnapshotFromRecord } from '@/lib/investors/pipeline'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
-import { loadOperatingLoopTelemetry, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
+import { loadOperatingLoopTelemetryFromDatabase, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
 import {
   buildDealMemorySnapshot,
@@ -15,6 +16,9 @@ import {
   type DealMemorySnapshot,
 } from '@/lib/admin/dealMemory'
 import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
+import { getOutlookMailboxStatus } from '@/lib/email/outlookMailbox'
+import { buildDatabaseDealMachineFreshness } from '@/lib/admin/dealMachineFreshness'
+import { buildRevenueFunnelSnapshot, type CommandCenterRevenueFunnel } from '@/lib/admin/revenueFunnel'
 import {
   SOURCE_DOCTRINE,
   buildAutopilotSnapshot,
@@ -233,6 +237,99 @@ export type CommandCenterOutboundControl = {
   smsReason: string
 }
 
+export type CommandCenterAutomationHealth = {
+  status: CommandStatus
+  headline: string
+  metrics24h: {
+    sellerSent: number
+    buyerSent: number
+    lenderSent: number
+    failed: number
+    replies: number
+    followupsDue: number
+  }
+  deliveryEvidence: {
+    windowDays: number
+    sampleSize: number
+    delivered: number
+    bounced: number
+    complained: number
+    suppressed: number
+    failed: number
+    badRate: number
+    threshold: number
+    circuitOpen: boolean
+    reason: string | null
+  }
+  mailbox: {
+    configured: boolean
+    mailbox: string
+    authMode: string
+    lastSyncAt: string | null
+    lastStatus: string | null
+    lastError: string | null
+    missing: string[]
+  }
+  scheduler: {
+    configuredRunsPerDay: number
+    jobsTracked: number
+    jobsDue: number
+    jobsBlocked: number
+    lastRevenueLoopAt: string | null
+    lastRevenueLoopStatus: string | null
+    nextRevenueLoopAt: string | null
+  }
+  buyerPipeline: {
+    lastRunId: string | null
+    lastRunAt: string | null
+    status: string | null
+    sent: number
+    error: string | null
+  }
+  report: {
+    reportDate: string | null
+    generatedAt: string | null
+    delivered: boolean | null
+    provider: string | null
+    recipient: string | null
+    error: string | null
+  }
+  latestActivityAt: string | null
+  blockers: {
+    key: string
+    severity: 'critical' | 'warning'
+    title: string
+    detail: string
+    href: string
+  }[]
+}
+
+export type CommandCenterStrategyExecution = {
+  reportDate: string | null
+  generatedAt: string | null
+  status: 'completed' | 'partial' | 'blocked' | 'failed' | 'not_started'
+  dryRun: boolean | null
+  citiesAttempted: number
+  sourcesAttempted: number
+  leadsDiscovered: number
+  leadsQualified: number
+  draftsCreated: number
+  staleCandidateLeadsExcluded: number
+  accepted: number
+  delivered: number
+  replies: number
+  blockers: string[]
+  laneRuns: {
+    strategyKey: string
+    strategyName: string
+    market: string
+    sourceProvider: string
+    status: string
+    qualified: number
+    draftsCreated: number
+  }[]
+}
+
 export type CommandCenterOnMarketSweep = {
   latestRunAt: string | null
   latestDraftAt: string | null
@@ -308,6 +405,8 @@ export type CommandCenterDealMachineExportRequest = {
   guidePath: string | null
   summaryFile: string | null
   noDealMachineSkipTraceDefault: boolean
+  orchestratorSummaryFile?: string | null
+  exportJobCounts?: Record<string, number> | null
 }
 
 export type CommandCenterOsintSourceBoard = {
@@ -624,6 +723,8 @@ export type CommandCenterData = {
   priorities: string[]
   alerts: CommandAlert[]
   agents: AgentPanelData[]
+  automationHealth: CommandCenterAutomationHealth
+  strategyExecution: CommandCenterStrategyExecution
   outboundControl: CommandCenterOutboundControl
   strategyLab: CommandCenterStrategyLab
   operatingLoops: OperatingLoopTelemetry
@@ -638,6 +739,7 @@ export type CommandCenterData = {
   outboundGovernance: CommandCenterOutboundGovernance
   buyBoxGraph: CommandCenterBuyBoxGraph
   dealPipeline: CommandCenterDealPipeline
+  revenueFunnel: CommandCenterRevenueFunnel
   foreclosureCommand: CommandCenterForeclosureCommand
   autopilot: AutopilotSnapshot
   inbox: {
@@ -737,6 +839,12 @@ function hoursSince(value?: string | null) {
 
 const withinHours = (value: string | null | undefined, hours: number) => hoursSince(value) <= hours
 const withinDays = (value: string | null | undefined, days: number) => hoursSince(value) <= days * 24
+
+function latestTimestamp(values: Array<string | null | undefined>) {
+  return values
+    .filter((value): value is string => Boolean(value) && Number.isFinite(Date.parse(String(value))))
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
+}
 
 const lower = (value?: string | null) => String(value || '').toLowerCase()
 
@@ -1130,6 +1238,10 @@ function loadDealMachineExportRequest(): CommandCenterDealMachineExportRequest |
     const latestSummary = newestLocalFile(dir, 'dealmachine-contact-export-request-summary-')
     const parsed = readJsonObject(latestSummary?.file)
     if (!latestSummary || !parsed) return null
+    const orchestrator = readJsonObject(path.join(process.cwd(), 'data', 'operating-loops', 'dealmachine-export-orchestrator-summary.json'))
+    const exportJobs = orchestrator?.exportJobs && typeof orchestrator.exportJobs === 'object'
+      ? orchestrator.exportJobs
+      : null
 
     const createdAt = typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date(latestSummary.mtimeMs).toISOString()
     const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 60000))
@@ -1144,6 +1256,8 @@ function loadDealMachineExportRequest(): CommandCenterDealMachineExportRequest |
       guidePath: typeof parsed.guidePath === 'string' ? parsed.guidePath : null,
       summaryFile: latestSummary.name,
       noDealMachineSkipTraceDefault: parsed.noDealMachineSkipTraceDefault !== false,
+      orchestratorSummaryFile: typeof orchestrator?.generatedAt === 'string' ? 'data/operating-loops/dealmachine-export-orchestrator-summary.json' : null,
+      exportJobCounts: exportJobs?.byStatus && typeof exportJobs.byStatus === 'object' ? exportJobs.byStatus as Record<string, number> : null,
     }
   } catch {
     return null
@@ -2296,6 +2410,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     adminTasks,
     leadSuppressions,
     dailyReports,
+    strategyDailyReports,
     researchChecklists,
     targetMarkets,
     propertyAnalysisRuns,
@@ -2303,7 +2418,9 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     commandCenterJobs,
     commandCenterStrategyRuns,
     commandCenterReplyMemory,
+    commandCenterOutboundEnrollments,
     commandCenterSuppressionDecisions,
+    strategySourceEvents,
     propertyBuyerPackets,
     propertyBuyerPacketSends,
     dealPipelineItems,
@@ -2313,7 +2430,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
         admin
           .from('leads')
           .select(
-            'id,name,business_name,property_address,email,email_valid,status,outreach_status,source,city,state,lead_score,lead_type,delivery_status,bounce_risk_score,created_at,updated_at,last_contacted_at,next_follow_up_at'
+            'id,name,business_name,property_address,email,phone,email_valid,status,outreach_status,source,city,state,lead_score,lead_type,delivery_status,bounce_risk_score,created_at,updated_at,last_contacted_at,next_follow_up_at'
           )
           .order('created_at', { ascending: false }),
       'leads',
@@ -2421,7 +2538,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
         admin
           .from('buyer_outreach_runs')
           .select('id,source_key,run_type,status,result_count,request_params,error_message,started_at,completed_at')
-          .in('run_type', ['daily_discovery', 'discovery'])
+          .in('run_type', ['daily_pipeline', 'daily_discovery', 'discovery'])
           .order('started_at', { ascending: false }),
       'buyer_outreach_runs',
       issues,
@@ -2473,11 +2590,21 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('daily_growth_reports')
-          .select('id,report_date,recommended_actions,created_at')
+          .select('id,report_date,leads_summary,lenders_summary,buyers_summary,recommended_actions,summary_json,created_at,updated_at')
           .order('report_date', { ascending: false }),
       'daily_growth_reports',
       issues,
       { maxRows: 10 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('strategy_daily_reports')
+          .select('id,report_date,status,cities_attempted,sources_attempted,leads_discovered,leads_qualified,drafts_created,accepted_count,delivered_count,reply_count,report_json,created_at,updated_at')
+          .order('report_date', { ascending: false }),
+      'strategy_daily_reports',
+      issues,
+      { maxRows: 14 }
     ),
     safeRows(() => admin.from('osint_research_checklists').select('*'), 'osint_research_checklists', issues, {
       maxRows: 500,
@@ -2519,7 +2646,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
       () =>
         admin
           .from('command_center_strategy_runs')
-          .select('id,strategy_key,strategy_name,status,source_provider,market,target_email_count,target_sms_count,lead_count,draft_count,approved_count,sent_count,sms_review_count,suppression_blocked_count,cost_guardrail_status,artifact_path,created_at,completed_at,metadata_json')
+          .select('id,run_key,strategy_key,strategy_name,status,source_provider,market,target_email_count,target_sms_count,lead_count,qualified_count,draft_count,approved_count,sent_count,accepted_count,delivered_count,reply_count,bounce_count,sms_review_count,suppression_blocked_count,cost_guardrail_status,source_error,artifact_path,created_at,completed_at,metadata_json')
           .order('created_at', { ascending: false }),
       'command_center_strategy_runs',
       issues,
@@ -2538,12 +2665,32 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     optionalRows(
       () =>
         admin
+          .from('command_center_outbound_enrollments')
+          .select('id,strategy_key,channel,status,market,next_action_at,last_message_id,created_at,updated_at,metadata_json')
+          .order('updated_at', { ascending: false }),
+      'command_center_outbound_enrollments',
+      issues,
+      { maxRows: 2000 }
+    ),
+    optionalRows(
+      () =>
+        admin
           .from('command_center_suppression_decisions')
           .select('id,strategy_key,channel,matched_value,decision,reason,created_at,metadata_json')
           .order('created_at', { ascending: false }),
       'command_center_suppression_decisions',
       issues,
       { maxRows: 500 }
+    ),
+    optionalRows(
+      () =>
+        admin
+          .from('strategy_source_events')
+          .select('id,provider,external_event_id,event_type,strategy_key,market,status,rows_received,rows_ingested,error_message,occurred_at,processed_at,created_at,updated_at,payload_json')
+          .order('created_at', { ascending: false }),
+      'strategy_source_events',
+      issues,
+      { maxRows: 2000 }
     ),
     optionalRows(
       () =>
@@ -2602,6 +2749,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     adminTasks,
     leadSuppressions,
     dailyReports,
+    strategyDailyReports,
     researchChecklists,
     targetMarkets,
     propertyAnalysisRuns,
@@ -2609,7 +2757,9 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     commandCenterJobs,
     commandCenterStrategyRuns,
     commandCenterReplyMemory,
+    commandCenterOutboundEnrollments,
     commandCenterSuppressionDecisions,
+    strategySourceEvents,
     propertyBuyerPackets,
     propertyBuyerPacketSends,
     dealPipelineItems,
@@ -2619,8 +2769,12 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
 export async function getCommandCenterData(): Promise<CommandCenterData> {
   const admin = createAdminClient()
   const issues: DataSourceIssue[] = []
-  const t = await loadTables(admin, issues)
+  const [t, deliveryEvidence] = await Promise.all([
+    loadTables(admin, issues),
+    getDeliveryCircuitBreaker(),
+  ])
   const local = loadLocalSignals()
+  const databaseDealMachineFreshness = buildDatabaseDealMachineFreshness(t.strategySourceEvents)
   const propertyAnalysisRuns = mergeRowsById(t.propertyAnalysisRuns, local.propertyAnalysisRuns)
   const propertyBuyerPackets = mergeRowsById(t.propertyBuyerPackets, local.propertyBuyerPackets)
   const dealPipelineItems = mergeRowsById(t.dealPipelineItems, local.dealPipelineItems)
@@ -2632,7 +2786,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   })
 
   // ── Shared signals ─────────────────────────────────────────────────────────
-  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 50)
+  const outreachTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', 500)
   const revenueTarget = envInt('VESTBLOCK_MONTHLY_REVENUE_TARGET', 100000)
 
   const leadById = new Map(t.leads.map((lead) => [lead.id, lead]))
@@ -2664,14 +2818,14 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const newLeads7d = currentLeads.filter((lead) => withinDays(lead.created_at, 7)).length
 
   const allLeadSends24h = t.outreachSendEvents.filter(
-    (event) => lower(event.status) === 'sent' && lower(event.channel) === 'email' && withinHours(event.created_at, 24)
+    (event) => ['accepted', 'sent'].includes(lower(event.status)) && lower(event.channel) === 'email' && withinHours(event.created_at, 24)
   ).length
   const partnerSends24h =
     activeLenderOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length +
     activeBuyerOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length
   const outreach24h = allLeadSends24h + partnerSends24h
   const sends7d =
-    currentOutreachSendEvents.filter((event) => lower(event.status) === 'sent' && withinDays(event.created_at, 7)).length +
+    currentOutreachSendEvents.filter((event) => ['accepted', 'sent'].includes(lower(event.status)) && withinDays(event.created_at, 7)).length +
     activeLenderOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length +
     activeBuyerOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length
 
@@ -2768,7 +2922,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const failedScrapes24h = recentScrapeRuns.filter((run) => lower(run.status) === 'failed').length
   const okScrapes24h = recentScrapeRuns.filter((run) => ['completed', 'partial'].includes(lower(run.status))).length
   const partnerDiscoveryRuns = [
-    ...t.buyerDiscoveryRuns.map((run) => ({
+    ...t.buyerDiscoveryRuns.filter((run) => lower(run.run_type) !== 'daily_pipeline').map((run) => ({
       lane: 'buyers',
       sourceKey: run.source_key as string | null,
       status: String(run.status || ''),
@@ -2803,7 +2957,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const cooldownSaves7d = recentPartnerRuns7d.filter((run) => isCooldownNote(run.note)).length
   const failedPartnerRuns7d = recentPartnerRuns7d.filter((run) => lower(run.status) === 'failed').length
   const archivedLegacyRuntimeRows = t.scrapeRuns.length
-  const staleExports = local.dmExports.filter((e) => e.ageDays > 7).length
+  const staleExports = databaseDealMachineFreshness?.staleCount ?? local.dmExports.filter((e) => e.ageDays > 7).length
 
   const openTasks = t.adminTasks.filter(
     (task) => !['done', 'completed', 'closed'].includes(lower(task.status)) && isCurrentVestblockTask(task)
@@ -2812,6 +2966,56 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const overdueTasks = openTasks.filter((task) => task.due_at && Date.parse(task.due_at) < Date.now())
 
   const latestReport = t.dailyReports[0] || null
+  const latestStrategyReport = t.strategyDailyReports[0] || null
+  const strategyReportJson = (latestStrategyReport?.report_json || {}) as Record<string, any>
+  const strategyLaneRuns = Array.isArray(strategyReportJson.laneRuns) ? strategyReportJson.laneRuns : []
+  let strategyExecution: CommandCenterStrategyExecution = latestStrategyReport
+    ? {
+        reportDate: String(latestStrategyReport.report_date || '') || null,
+        generatedAt: String(strategyReportJson.generatedAt || latestStrategyReport.updated_at || latestStrategyReport.created_at || '') || null,
+        status: ['completed', 'partial', 'blocked', 'failed'].includes(lower(latestStrategyReport.status))
+          ? (lower(latestStrategyReport.status) as CommandCenterStrategyExecution['status'])
+          : 'failed',
+        dryRun: typeof strategyReportJson.dryRun === 'boolean' ? strategyReportJson.dryRun : null,
+        citiesAttempted: Number(latestStrategyReport.cities_attempted || 0),
+        sourcesAttempted: Number(latestStrategyReport.sources_attempted || 0),
+        leadsDiscovered: Number(latestStrategyReport.leads_discovered || 0),
+        leadsQualified: Number(latestStrategyReport.leads_qualified || 0),
+        draftsCreated: Number(latestStrategyReport.drafts_created || 0),
+        staleCandidateLeadsExcluded: Number(strategyReportJson.staleCandidateLeadsExcluded || 0),
+        accepted: Number(latestStrategyReport.accepted_count || 0),
+        delivered: Number(latestStrategyReport.delivered_count || 0),
+        replies: Number(latestStrategyReport.reply_count || 0),
+        blockers: Array.isArray(strategyReportJson.report?.blockers)
+          ? strategyReportJson.report.blockers.map(String)
+          : [],
+        laneRuns: strategyLaneRuns.slice(0, 12).map((run: Record<string, unknown>) => ({
+          strategyKey: String(run.strategyKey || ''),
+          strategyName: String(run.strategyName || run.strategyKey || 'Strategy lane'),
+          market: String(run.market || 'Unknown market'),
+          sourceProvider: String(run.sourceProvider || 'unknown'),
+          status: String(run.status || 'unknown'),
+          qualified: Number(run.qualified || 0),
+          draftsCreated: Number(run.draftsCreated || 0),
+        })),
+      }
+    : {
+        reportDate: null,
+        generatedAt: null,
+        status: 'not_started',
+        dryRun: null,
+        citiesAttempted: 0,
+        sourcesAttempted: 0,
+        leadsDiscovered: 0,
+        leadsQualified: 0,
+        draftsCreated: 0,
+        staleCandidateLeadsExcluded: 0,
+        accepted: 0,
+        delivered: 0,
+        replies: 0,
+        blockers: ['The strategy execution engine has not stored its first report.'],
+        laneRuns: [],
+      }
   const missingSuppressionDb = issues.some((issue) => issue.source === 'lead_suppressions')
   const activeDbSuppressions = t.leadSuppressions.filter((row) => lower(row.status) !== 'released')
   const localSuppressionEmails = new Set(local.suppressionRecords.map((row) => row.email))
@@ -2853,7 +3057,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     ),
   ].slice(0, 4)
   const dmAges = local.dmExports.map((file) => file.ageDays)
-  const dealMachineFreshness: CommandCenterDealMachineFreshness = {
+  const localDealMachineFreshness: CommandCenterDealMachineFreshness = {
     freshCount: freshDmExports.length,
     staleCount: staleDmExports.length,
     oldestAgeDays: dmAges.length ? Math.max(...dmAges) : null,
@@ -2869,6 +3073,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       ? `${freshDmExports.length} fresh export${freshDmExports.length === 1 ? '' : 's'} and ${staleDmExports.length} stale export${staleDmExports.length === 1 ? '' : 's'} on disk${local.dealMachineExportRequest?.totalRows ? `; latest request has ${local.dealMachineExportRequest.totalRows} row${local.dealMachineExportRequest.totalRows === 1 ? '' : 's'} waiting for a Contacts export` : ''}.`
       : 'No DealMachine contact exports are on disk yet.',
   }
+  const dealMachineFreshness: CommandCenterDealMachineFreshness =
+    databaseDealMachineFreshness || localDealMachineFreshness
 
   const strategyLabDirectives = openTasks
     .filter((task) => lower(task.task_type) === 'boss_directive')
@@ -2989,21 +3195,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     ],
   }
 
-  // Reply-positive leads (any age) so campaign rollups can attribute replies to strategy lanes by recipient email.
-  const repliedLeadSignals = currentLeads
-    .filter(
-      (lead) =>
-        ['replied', 'interested', 'qualified', 'closed_won'].includes(lower(lead.status)) &&
-        String(lead.email || '').trim()
-    )
-    .map((lead) => ({
-      email: String(lead.email).trim().toLowerCase(),
-      status: lower(lead.status),
-      at: (lead.updated_at || lead.last_contacted_at || lead.created_at || null) as string | null,
-    }))
-
-  const operatingLoops = loadOperatingLoopTelemetry({
-    repliedLeads: repliedLeadSignals,
+  const operatingLoops = await loadOperatingLoopTelemetryFromDatabase({
     sentToday: strategyLab.sentToday,
     sent7d: sends7d,
     remainingToday: strategyLab.remainingToday,
@@ -4252,6 +4444,282 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     },
   ]
 
+  const sellerSends24h = currentOutreachSendEvents.filter(
+    (event) => ['accepted', 'sent'].includes(lower(event.status)) && lower(event.channel) === 'email' && withinHours(event.created_at, 24)
+  ).length
+  const buyerSends24h = activeBuyerOutreach.filter(
+    (message) => lower(message.status) === 'sent' && withinHours(message.sent_at || message.updated_at, 24)
+  ).length
+  const lenderSends24h = activeLenderOutreach.filter(
+    (message) => lower(message.status) === 'sent' && withinHours(message.sent_at || message.updated_at, 24)
+  ).length
+  const failedSends24h =
+    currentOutreachSendEvents.filter((event) => lower(event.status) === 'failed' && withinHours(event.created_at, 24)).length +
+    activeBuyerOutreach.filter((message) => lower(message.status) === 'failed' && withinHours(message.updated_at, 24)).length +
+    activeLenderOutreach.filter((message) => lower(message.status) === 'failed' && withinHours(message.updated_at, 24)).length
+  const revenueReplies24h = t.commandCenterReplyMemory.filter(
+    (reply) =>
+      ['hot_seller_lead', 'partner_reply'].includes(lower(reply.classification)) &&
+      withinHours(reply.received_at, 24)
+  ).length
+  const enrollmentFollowupsDue = t.commandCenterOutboundEnrollments.filter(
+    (enrollment) =>
+      enrollment.next_action_at &&
+      Date.parse(enrollment.next_action_at) <= Date.now() &&
+      ['sent', 'approved', 'queued'].includes(lower(enrollment.status))
+  ).length
+  const mailboxReadiness = getOutlookMailboxStatus()
+  if (mailboxReadiness.configured && strategyExecution.blockers.length) {
+    strategyExecution = {
+      ...strategyExecution,
+      blockers: strategyExecution.blockers.filter(
+        (blocker) => !/^Reply capture for .* is disconnected\./i.test(blocker)
+      ),
+    }
+  }
+  const revenueFunnel = buildRevenueFunnelSnapshot({
+    leads: currentLeads,
+    outreachMessages: currentOutreachMessages,
+    outreachSendEvents: currentOutreachSendEvents,
+    buyerPackets: propertyBuyerPackets,
+    buyerPacketSends: t.propertyBuyerPacketSends,
+    dealPipelineItems,
+    mailboxReady: mailboxReadiness.configured,
+    outboundReady:
+      outboundReadiness.defaultProvider !== 'none' && outboundReadiness.mailingAddressConfigured,
+  })
+  const mailboxJob = t.commandCenterJobs.find((job) => job.job_key === 'reply-memory-sync') || null
+  const revenueLoopJob = t.commandCenterJobs.find((job) => job.job_key === 'seller-outreach-batch') || null
+  const latestBuyerPipeline = t.buyerDiscoveryRuns.find((run) => lower(run.run_type) === 'daily_pipeline') || null
+  const reportDelivery = (latestReport?.summary_json?.delivery || null) as Record<string, unknown> | null
+  const jobsDue = t.commandCenterJobs.filter(
+    (job) =>
+      !['paused'].includes(lower(job.status)) &&
+      job.next_run_at &&
+      Date.parse(job.next_run_at) <= Date.now()
+  ).length
+  const jobsBlocked = t.commandCenterJobs.filter(
+    (job) => ['blocked', 'failed'].includes(lower(job.status)) || ['failed', 'disconnected'].includes(lower(job.last_status))
+  ).length
+  const latestSellerSendAt = latestTimestamp(
+    currentOutreachSendEvents
+      .filter((event) => ['accepted', 'sent'].includes(lower(event.status)))
+      .map((event) => event.created_at)
+  )
+  const latestBuyerSendAt = latestTimestamp(
+    activeBuyerOutreach
+      .filter((message) => lower(message.status) === 'sent')
+      .map((message) => message.sent_at || message.updated_at)
+  )
+  const latestLenderSendAt = latestTimestamp(
+    activeLenderOutreach
+      .filter((message) => lower(message.status) === 'sent')
+      .map((message) => message.sent_at || message.updated_at)
+  )
+  const latestReplyAt = latestTimestamp(
+    t.commandCenterReplyMemory
+      .filter((reply) => ['hot_seller_lead', 'partner_reply'].includes(lower(reply.classification)))
+      .map((reply) => reply.received_at)
+  )
+  const automationBlockers: CommandCenterAutomationHealth['blockers'] = []
+
+  if (!deliveryEvidence.allowed) {
+    const hasEnoughEvidence = deliveryEvidence.sampleSize >= 20
+    automationBlockers.push({
+      key: 'delivery-circuit-open',
+      severity: hasEnoughEvidence ? 'critical' : 'warning',
+      title: hasEnoughEvidence ? 'Email delivery circuit is open' : 'Email delivery evidence is incomplete',
+      detail: hasEnoughEvidence
+        ? `${(deliveryEvidence.badRate * 100).toFixed(1)}% of finalized email deliveries failed, bounced, or were suppressed. Automated sending is blocked above ${(deliveryEvidence.threshold * 100).toFixed(1)}%.`
+        : `Only ${deliveryEvidence.sampleSize} provider-confirmed outcomes are available. Automated sending remains blocked until enough evidence is collected.`,
+      href: '#outreach-command',
+    })
+  }
+
+  if (!mailboxReadiness.configured) {
+    automationBlockers.push({
+      key: 'mailbox-disconnected',
+      severity: 'critical',
+      title: 'Acquisitions mailbox is disconnected',
+      detail: `Production cannot ingest replies until ${mailboxReadiness.missing.join(' and ')} is configured.`,
+      href: '#inbox-command',
+    })
+  } else if (mailboxJob && ['blocked', 'failed'].includes(lower(mailboxJob.status))) {
+    automationBlockers.push({
+      key: 'mailbox-sync-failed',
+      severity: 'critical',
+      title: 'Mailbox sync needs repair',
+      detail: String(mailboxJob.last_error || 'The latest Microsoft Graph mailbox sync did not complete.'),
+      href: '#inbox-command',
+    })
+  }
+  if (!latestReport) {
+    automationBlockers.push({
+      key: 'report-missing',
+      severity: 'warning',
+      title: 'No operations report is stored',
+      detail: 'The daily report cron has not left a report record yet.',
+      href: '/admin/reports/daily',
+    })
+  } else if (reportDelivery?.attempted && reportDelivery.ok !== true) {
+    automationBlockers.push({
+      key: 'report-delivery-failed',
+      severity: 'warning',
+      title: 'Latest operations report was not delivered',
+      detail: String(reportDelivery.error || 'The report exists, but its email delivery was not confirmed.'),
+      href: `/admin/reports/daily/${latestReport.report_date}`,
+    })
+  }
+  if (failedSends24h > 0) {
+    automationBlockers.push({
+      key: 'send-failures',
+      severity: 'warning',
+      title: `${failedSends24h} outbound send${failedSends24h === 1 ? '' : 's'} failed in 24 hours`,
+      detail: 'Review recipient quality and provider errors before retrying these records.',
+      href: '#outreach-command',
+    })
+  }
+  if (latestBuyerPipeline && ['failed', 'partial'].includes(lower(latestBuyerPipeline.status))) {
+    automationBlockers.push({
+      key: 'buyer-pipeline-partial',
+      severity: 'warning',
+      title: 'Latest buyer pipeline was incomplete',
+      detail: String(latestBuyerPipeline.error_message || 'At least one buyer automation stage did not finish.'),
+      href: '/admin/scrape-runs',
+    })
+  }
+  if (jobsBlocked > 0 && !automationBlockers.some((blocker) => blocker.key === 'mailbox-sync-failed')) {
+    automationBlockers.push({
+      key: 'automation-jobs-blocked',
+      severity: 'warning',
+      title: `${jobsBlocked} automation job${jobsBlocked === 1 ? ' is' : 's are'} blocked or failed`,
+      detail: 'Open the strategy engine to inspect the job error and its source or configuration dependency.',
+      href: '#strategy-engine',
+    })
+  } else if (jobsDue > 0) {
+    automationBlockers.push({
+      key: 'automation-jobs-due',
+      severity: 'warning',
+      title: `${jobsDue} automation job${jobsDue === 1 ? ' is' : 's are'} due`,
+      detail: 'The scheduler has work ready to run or reconcile on its next execution.',
+      href: '#strategy-engine',
+    })
+  }
+  if (urgentTasks.length > 0) {
+    automationBlockers.push({
+      key: 'urgent-operator-work',
+      severity: 'warning',
+      title: `${urgentTasks.length} urgent operator task${urgentTasks.length === 1 ? '' : 's'} need attention`,
+      detail: 'These tasks include revenue replies, blocked sends, or deal-routing work that automation should not guess through.',
+      href: '#command-deck',
+    })
+  }
+  if (enrollmentFollowupsDue > 0) {
+    automationBlockers.push({
+      key: 'automated-followups-due',
+      severity: 'warning',
+      title: `${enrollmentFollowupsDue} enrolled follow-up${enrollmentFollowupsDue === 1 ? ' is' : 's are'} due`,
+      detail: 'Work or advance these contacts before increasing first-touch volume.',
+      href: '#outreach-command',
+    })
+  }
+  if (sends7d >= 20 && replySignals7d === 0 && !latestReplyAt) {
+    automationBlockers.push({
+      key: 'no-reply-signal',
+      severity: 'warning',
+      title: 'Outbound is moving without a recorded reply signal',
+      detail: 'Audit audience fit, message quality, deliverability, and mailbox ingestion before increasing volume.',
+      href: '#strategy-engine',
+    })
+  }
+  if (!liveDataReachable) {
+    automationBlockers.push({
+      key: 'data-sources-unreachable',
+      severity: 'critical',
+      title: 'Command-center data is incomplete',
+      detail: `${issues.length} required data source${issues.length === 1 ? ' is' : 's are'} currently unavailable.`,
+      href: '#lane-diagnostics',
+    })
+  }
+
+  const automationStatus: CommandStatus = automationBlockers.some((blocker) => blocker.severity === 'critical')
+    ? 'red'
+    : automationBlockers.length || jobsDue > 0 || jobsBlocked > 0
+      ? 'yellow'
+      : 'green'
+  const automationHealth: CommandCenterAutomationHealth = {
+    status: automationStatus,
+    headline:
+      automationStatus === 'red'
+        ? 'Automation is running with a critical connection or data blocker.'
+        : automationStatus === 'yellow'
+          ? 'Revenue loops are visible, with operator work still required.'
+          : 'Revenue loops, reporting, and reply capture are healthy.',
+    metrics24h: {
+      sellerSent: sellerSends24h,
+      buyerSent: buyerSends24h,
+      lenderSent: lenderSends24h,
+      failed: failedSends24h,
+      replies: revenueReplies24h,
+      followupsDue: enrollmentFollowupsDue,
+    },
+    deliveryEvidence: {
+      windowDays: deliveryEvidence.windowDays,
+      sampleSize: deliveryEvidence.sampleSize,
+      delivered: deliveryEvidence.delivered,
+      bounced: deliveryEvidence.bounced,
+      complained: deliveryEvidence.complained,
+      suppressed: deliveryEvidence.suppressed,
+      failed: deliveryEvidence.failed,
+      badRate: deliveryEvidence.badRate,
+      threshold: deliveryEvidence.threshold,
+      circuitOpen: !deliveryEvidence.allowed,
+      reason: deliveryEvidence.reason,
+    },
+    mailbox: {
+      configured: mailboxReadiness.configured,
+      mailbox: mailboxReadiness.mailbox,
+      authMode: mailboxReadiness.authMode,
+      lastSyncAt: mailboxJob?.last_run_at || null,
+      lastStatus: mailboxJob?.last_status || null,
+      lastError: mailboxJob?.last_error || null,
+      missing: mailboxReadiness.missing as string[],
+    },
+    scheduler: {
+      configuredRunsPerDay: envInt('BOSS_DAILY_LOOP_RUNS_PER_DAY', 4),
+      jobsTracked: t.commandCenterJobs.length,
+      jobsDue,
+      jobsBlocked,
+      lastRevenueLoopAt: revenueLoopJob?.last_run_at || null,
+      lastRevenueLoopStatus: revenueLoopJob?.last_status || null,
+      nextRevenueLoopAt: revenueLoopJob?.next_run_at || null,
+    },
+    buyerPipeline: {
+      lastRunId: latestBuyerPipeline?.id || null,
+      lastRunAt: latestBuyerPipeline?.completed_at || latestBuyerPipeline?.started_at || null,
+      status: latestBuyerPipeline?.status || null,
+      sent: Number(latestBuyerPipeline?.result_count || 0),
+      error: latestBuyerPipeline?.error_message || null,
+    },
+    report: {
+      reportDate: latestReport?.report_date || null,
+      generatedAt: latestReport?.updated_at || latestReport?.created_at || null,
+      delivered: reportDelivery ? Boolean(reportDelivery.ok) : null,
+      provider: typeof reportDelivery?.provider === 'string' ? reportDelivery.provider : null,
+      recipient: typeof reportDelivery?.recipient === 'string' ? reportDelivery.recipient : null,
+      error: typeof reportDelivery?.error === 'string' ? reportDelivery.error : null,
+    },
+    latestActivityAt: latestTimestamp([
+      latestSellerSendAt,
+      latestBuyerSendAt,
+      latestLenderSendAt,
+      latestReplyAt,
+      latestBuyerPipeline?.completed_at,
+      latestReport?.updated_at,
+    ]),
+    blockers: automationBlockers.slice(0, 6),
+  }
+
   return {
     generatedAt: new Date().toISOString(),
     liveDataReachable,
@@ -4281,6 +4749,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     priorities: priorities.slice(0, 7),
     alerts: alerts.slice(0, 8),
     agents,
+    automationHealth,
+    strategyExecution,
     outboundControl,
     strategyLab,
     operatingLoops,
@@ -4295,6 +4765,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     outboundGovernance,
     buyBoxGraph,
     dealPipeline,
+    revenueFunnel,
     foreclosureCommand,
     autopilot,
     inbox: {

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import type {
   BuyerBuyBoxRecord,
   BuyerContactRecord,
@@ -310,6 +311,19 @@ export async function updateBuyerOutreachMessage(messageId: string, updates: Rec
 
   if (error) throw error
   return data as BuyerOutreachMessageRecord
+}
+
+export async function getBuyerOutreachMessageByChannel(buyerId: string, channel: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .select('*')
+    .eq('buyer_id', buyerId)
+    .eq('channel', channel)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
 }
 
 export async function insertBuyerRelationshipEvent(input: {
@@ -624,17 +638,34 @@ export async function listBuyersForScoring(limit = 150) {
   return (data || []) as BuyerRecord[]
 }
 
-export async function listBuyersNeedingOutreach(limit = 100) {
+export async function listBuyersNeedingOutreach(limit = 100, minimumScore = 40) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('buyers')
     .select('*')
-    .in('outreach_status', ['not_started', 'failed'])
+    .in('outreach_status', ['not_started', 'failed', 'needs_review'])
     .not('relationship_stage', 'in', '(paused,not_a_fit,active_buyer)')
+    .not('contact_email', 'is', null)
+    .gte('confidence_score', minimumScore)
     .order('confidence_score', { ascending: false })
+    .limit(Math.max(limit * 5, limit))
+  if (error) throw error
+  return ((data || []) as BuyerRecord[])
+    .filter((buyer) => isUsableContactEmail(buyer.contact_email))
+    .slice(0, limit)
+}
+
+export async function listBuyerOutreachForAutoApproval(limit = 30) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .select('*, buyers(*)')
+    .eq('channel', 'email_intro')
+    .eq('status', 'needs_review')
+    .order('last_generated_at', { ascending: false, nullsFirst: false })
     .limit(limit)
   if (error) throw error
-  return (data || []) as BuyerRecord[]
+  return (data || []) as Array<BuyerOutreachMessageRecord & { buyers: BuyerRecord | null }>
 }
 
 export async function listApprovedBuyerEmailOutreach(limit = 30) {

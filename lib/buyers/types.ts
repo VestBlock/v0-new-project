@@ -273,7 +273,7 @@ export type BuyerPacketRecord = {
   state: string | null
   zip_code: string | null
   packet_type: 'buyer_disposition' | 'builder_disposition' | 'lender_review'
-  status: 'draft' | 'ready' | 'sending' | 'sent' | 'partial' | 'failed' | 'archived'
+  status: 'draft' | 'ready' | 'sending' | 'accepted' | 'sent' | 'partial' | 'failed' | 'archived'
   title: string
   summary: string | null
   file_name: string | null
@@ -298,7 +298,20 @@ export type BuyerPacketSendRecord = {
   buyer_match_id: string | null
   buyer_email: string | null
   subject: string | null
-  status: 'queued' | 'sent' | 'opened' | 'replied' | 'interested' | 'rejected' | 'failed'
+  status:
+    | 'queued'
+    | 'accepted'
+    | 'sent'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'opened'
+    | 'replied'
+    | 'interested'
+    | 'rejected'
+    | 'bounced'
+    | 'complained'
+    | 'suppressed'
+    | 'failed'
   send_provider: string | null
   provider_message_id: string | null
   sent_at: string | null
@@ -444,7 +457,7 @@ export type BuyerDiscoveryInput = {
   metroArea?: string | null
   niches: string[]
   limitPerNiche: number
-  provider: 'google'
+  provider: 'auto' | 'google' | 'openstreetmap'
 }
 
 export type NormalizedBuyerInput = {

@@ -35,38 +35,21 @@ function run(name, command, args) {
 }
 
 const steps = [
-  { name: 'boss-daily-loop', command: 'npm', args: ['run', 'boss:daily-loop'], required: true },
-  {
-    name: 'instantly-doctor',
-    command: 'npm',
-    args: ['run', 'instantly:doctor'],
-    required: false,
-    remediation:
-      'Add INSTANTLY_API_KEY to .env.local or the remote Mac keychain before Instantly lead sync/push can run.',
-  },
-  { name: 'tax-code-rotation', command: 'npm', args: ['run', 'vestblock:tax-code-stack:rotation', '--', '--daily-cap=30'], required: true },
-  { name: 'sms-review-queue', command: 'npm', args: ['run', 'outreach:sms-review', '--', '--limit=100'], required: true },
+  ['boss-daily-loop', 'npm', ['run', 'boss:daily-loop']],
+  ['instantly-doctor', 'npm', ['run', 'instantly:doctor']],
+  ['tax-code-rotation', 'npm', ['run', 'vestblock:tax-code-stack:rotation', '--', '--daily-cap=30']],
+  ['sms-review-queue', 'npm', ['run', 'outreach:sms-review', '--', '--limit=100']],
 ]
 
-const results = steps.map((step) => ({
-  ...run(step.name, step.command, step.args),
-  required: step.required,
-  remediation: step.remediation || null,
-}))
-const requiredFailures = results.filter((result) => result.required && !result.ok)
-const optionalFailures = results.filter((result) => !result.required && !result.ok)
+const results = steps.map(([name, command, args]) => run(name, command, args))
 const summary = {
   createdAt: new Date().toISOString(),
-  ok: requiredFailures.length === 0,
-  requiredFailureCount: requiredFailures.length,
-  optionalActionCount: optionalFailures.length,
+  ok: results.every((result) => result.ok),
   results: results.map((result) => ({
     name: result.name,
     ok: result.ok,
-    required: result.required,
     status: result.status,
     command: result.command,
-    remediation: result.ok ? null : result.remediation,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt,
   })),
@@ -78,12 +61,10 @@ fs.writeFileSync(REPORT_PATH, `${JSON.stringify({ ...summary, details: results }
 
 console.log('=== VestBlock revenue ops start ===')
 for (const result of results) {
-  const label = result.ok ? 'OK ' : result.required ? 'ERR' : 'ACT'
-  console.log(`${label} ${result.name}${result.required ? '' : ' (optional)'}`)
-  if (!result.ok && result.remediation) console.log(`    ${result.remediation}`)
+  console.log(`${result.ok ? 'OK ' : 'ERR'} ${result.name}`)
 }
 console.log(`Report: ${REPORT_PATH}`)
 
-if (requiredFailures.length) {
+if (!summary.ok) {
   process.exitCode = 1
 }

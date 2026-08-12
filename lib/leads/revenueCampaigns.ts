@@ -23,7 +23,7 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
     key: 'dealvault_smart_contracts',
     label: 'DealVault / Smart Contracts',
     primary: true,
-    sendWeight: 40,
+    sendWeight: 10,
     minAutoScore: 68,
     priority: 500,
     terms: [
@@ -94,7 +94,7 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
     key: 'funding_prep',
     label: 'Business Funding Prep',
     primary: true,
-    sendWeight: 30,
+    sendWeight: 10,
     minAutoScore: 70,
     priority: 420,
     terms: [
@@ -122,7 +122,7 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
     key: 'ai_receptionist_visibility',
     label: 'AI Receptionist / Search Visibility',
     primary: true,
-    sendWeight: 30,
+    sendWeight: 10,
     minAutoScore: 70,
     priority: 400,
     terms: [
@@ -146,13 +146,15 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
   {
     key: 'seller_real_estate',
     label: 'Real Estate Seller Review',
-    primary: false,
-    sendWeight: 0,
+    primary: true,
+    sendWeight: 70,
     minAutoScore: 78,
     priority: 220,
     terms: [
       'seller lead',
+      'seller_lead',
       'sell house',
+      'sell_house',
       'direct sale',
       'as-is',
       'cash path',
@@ -268,7 +270,8 @@ export function getLeadRevenueFitIssue(
 ) {
   if (!lead) return 'missing_lead'
 
-  if (isOutreachV2Enabled()) {
+  const sellerLead = lead.category === 'seller_lead' || lead.lead_type === 'sell_house'
+  if (isOutreachV2Enabled() && !sellerLead) {
     const v2Issue = getOutreachV2FitIssue(lead)
     if (v2Issue) return v2Issue
   }
@@ -300,6 +303,30 @@ export function validateOutreachMessageQuality(input: {
   lead: LeadRecord
   message: Pick<OutreachMessageRecord, 'subject' | 'body' | 'compliance_note'>
 }) {
+  if (input.lead.category === 'seller_lead' || input.lead.lead_type === 'sell_house') {
+    const subject = String(input.message.subject || '').trim()
+    const body = String(input.message.body || '').trim()
+    const complianceNote = String(input.message.compliance_note || '').trim()
+    const combined = `${subject}\n${body}\n${complianceNote}`
+    const propertyAddress = String(input.lead.property_address || '').trim().toLowerCase()
+
+    if (!subject) return 'missing_subject'
+    if (body.length < 180) return 'message_too_short'
+    if (body.length > 1800) return 'message_too_long'
+    if (!/vestblock/i.test(combined)) return 'missing_vestblock_identity'
+    if (!/reply/i.test(combined)) return 'missing_soft_reply_cta'
+    if (!/opt out|unsubscribe|do not contact/i.test(complianceNote)) return 'missing_opt_out_note'
+    if (propertyAddress && !combined.toLowerCase().includes(propertyAddress)) return 'missing_property_identity'
+    if (/guaranteed|guarantee approval|guaranteed closing|stop foreclosure guaranteed|government program/i.test(combined)) {
+      return 'overpromising_or_government_claim'
+    }
+    if (/\[(your name|your company|company name|insert|name|su nombre)\]|\{\{|\}\}|todo|lorem ipsum/i.test(combined)) {
+      return 'placeholder_copy'
+    }
+
+    return null
+  }
+
   if (isOutreachV2Enabled()) {
     return validateOutreachV2Copy(input)
   }

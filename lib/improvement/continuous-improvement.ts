@@ -53,6 +53,29 @@ type DailySnapshot = {
   summary: ContinuousImprovementSummary
 }
 
+function envBool(name: string, fallback = false) {
+  const value = String(process.env[name] || '').trim()
+  if (!value) return fallback
+  return /^(1|true|yes|on)$/i.test(value)
+}
+
+const nonLearningNiches = new Set([
+  'dealmachine_export_needed',
+  'contact_enrichment_required',
+  'skip_trace_required',
+])
+
+function isLearningEligibleLead(lead: {
+  email?: string | null
+  phone?: string | null
+  niche?: string | null
+}) {
+  return Boolean(
+    (lead.email || lead.phone) &&
+      (!lead.niche || !nonLearningNiches.has(String(lead.niche).toLowerCase()))
+  )
+}
+
 function makeWindow(daysBack = 1): DailyWindow {
   const endedAt = new Date()
   const startedAt = addDays(endedAt, -daysBack)
@@ -130,7 +153,7 @@ async function fetchDailySignals(window: DailyWindow) {
     admin
       .from('leads')
       .select(
-        'id,city,state,niche,best_offer,outreach_angle,lead_score,status,delivery_status,language_segment,category,target_market_id,created_at,updated_at'
+        'id,city,state,niche,best_offer,outreach_angle,lead_score,status,delivery_status,language_segment,category,target_market_id,email,phone,created_at,updated_at'
       )
       .gte('created_at', window.startedAt),
     admin
@@ -197,6 +220,7 @@ function summarizeSignals(signals: Awaited<ReturnType<typeof fetchDailySignals>>
 
   const leadById = new Map(signals.leads.map((lead) => [lead.id, lead]))
   for (const lead of signals.leads) {
+    if (!isLearningEligibleLead(lead)) continue
     const cityKey = [lead.city, lead.state].filter(Boolean).join(', ')
     if (cityKey) {
       const current = cityScores.get(cityKey) || { sent: 0, replied: 0, booked: 0, bounces: 0, leads: 0 }
@@ -309,9 +333,12 @@ function summarizeSignals(signals: Awaited<ReturnType<typeof fetchDailySignals>>
   const topSeoOpportunity = bestNiche
     ? `Expand ${bestNiche} pages with service, FAQ, and city-intent variations.`
     : 'Expand winning service clusters with more high-intent pages.'
-  const topSpanishOpportunity = spanishContentWins
-    ? 'Extend Spanish content into the best-performing city and funding clusters.'
-    : 'Start with Spanish funding and automation content in top bilingual markets.'
+  const spanishGrowthEnabled = envBool('VESTBLOCK_SPANISH_GROWTH_ENABLED', false)
+  const topSpanishOpportunity = spanishGrowthEnabled
+    ? spanishContentWins
+      ? 'Extend Spanish content into the best-performing city and funding clusters.'
+      : 'Start with Spanish funding and automation content in top bilingual markets.'
+    : null
   const topCreditFundingOpportunity =
     disputeLettersMailed < Math.max(1, Math.round(disputeLettersGenerated * 0.35))
       ? 'Improve post-letter follow-up and mailing completion.'

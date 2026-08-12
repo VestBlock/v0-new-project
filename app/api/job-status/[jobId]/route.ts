@@ -1,14 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import type { AnalysisJob, AiDetailedAnalysis, RoadmapData } from "@/types/supabase"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { getSupabaseServer } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
+import type { Database, AnalysisJob, AiDetailedAnalysis, RoadmapData } from "@/types/supabase"
+// Removed PDF.co specific imports: checkPdfCoJobStatus, downloadTextFile
+// import { isLikelyCreditReport } from "@/lib/text-utils"; // This is now in pdf-extraction-service or handled client side
 import { getComprehensiveAnalysisPrompt } from "@/lib/prompt-utils"
 import { getOpenAIClient } from "@/lib/openai-server"
 import { enrichCreditAnalysisResults } from "@/lib/credit/recommendation-engine"
+import { getServerUser } from "@/lib/auth/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -19,6 +24,9 @@ async function triggerAiAnalysis(
 ): Promise<Partial<AnalysisJob>> {
   if (!job.extracted_text) {
     return { status: "failed", error_message: "Cannot perform AI analysis: Extracted text is missing." }
+  }
+
+  if (job.is_likely_credit_report === false) {
   }
 
   const prompt = getComprehensiveAnalysisPrompt({
@@ -98,22 +106,16 @@ async function triggerAiAnalysis(
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   void request
+  const user = await getServerUser()
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 })
+  }
+
   const { jobId } = await params
   if (!jobId) {
     return NextResponse.json({ error: "Job ID is required" }, { status: 400 })
   }
-
-  const supabase = getSupabaseServer()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const supabaseAdmin = createAdminClient()
+  const supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
   const { data: job, error: fetchError } = await supabaseAdmin
     .from("analysis_jobs")
@@ -123,8 +125,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .single()
 
   if (fetchError || !job) {
-    console.error(`[API /job-status/${jobId}] Error fetching authorized job:`, fetchError)
-    return NextResponse.json({ error: "Job not found." }, { status: 404 })
+    console.error(`[API /job-status/${jobId}] Error fetching job:`, fetchError)
+    return NextResponse.json({ error: "Job not found or database error." }, { status: 404 })
   }
 
   let updatedFields: Partial<AnalysisJob> = {}
@@ -138,7 +140,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .from("analysis_jobs")
         .update(updatedFields)
         .eq("id", jobId)
-        .eq("user_id", user.id)
       if (preAiUpdateError) throw preAiUpdateError
       currentJobState = { ...currentJobState, ...updatedFields }
 
@@ -151,12 +152,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .from("analysis_jobs")
         .update(updatedFields)
         .eq("id", jobId)
-        .eq("user_id", user.id)
         .select("*")
         .single()
 
       if (updateError) {
-        console.error(`[Job ${jobId}] Error updating authorized job in DB after processing:`, updateError)
+        console.error(`[Job ${jobId}] Error updating job in DB after processing:`, updateError)
         return NextResponse.json({ error: `Failed to save final updates: ${updateError.message}` }, { status: 500 })
       }
       currentJobState = finalUpdatedJob || currentJobState
@@ -170,9 +170,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .from("analysis_jobs")
         .update({ status: "failed", error_message: `Job status processing error: ${getErrorMessage(error)}` })
         .eq("id", jobId)
-        .eq("user_id", user.id)
     } catch (dbUpdateError) {
-      console.error(`[API /job-status/${jobId}] Failed to update authorized job status to failed in DB:`, dbUpdateError)
+      console.error(`[API /job-status/${jobId}] Failed to update job status to failed in DB:`, dbUpdateError)
     }
     return NextResponse.json({ error: `Job status processing error: ${getErrorMessage(error)}` }, { status: 500 })
   }

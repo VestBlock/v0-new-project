@@ -1077,7 +1077,11 @@ export function DisputeLetterGenerator({
     if (!letterContent) return
     const printWindow = window.open("", "_blank")
     if (printWindow) {
-      printWindow.document.write(`<pre style="white-space: pre-wrap; font-family: monospace;">${letterContent}</pre>`)
+      const pre = printWindow.document.createElement("pre")
+      pre.style.whiteSpace = "pre-wrap"
+      pre.style.fontFamily = "monospace"
+      pre.textContent = letterContent
+      printWindow.document.body.appendChild(pre)
       printWindow.document.close()
       printWindow.focus()
       printWindow.print()

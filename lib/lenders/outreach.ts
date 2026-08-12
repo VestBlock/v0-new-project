@@ -2,7 +2,7 @@ import { CATEGORY_LABELS } from '@/lib/lenders/constants'
 import type { GeneratedLenderOutreachBundle, LenderRecord } from '@/lib/lenders/types'
 
 const OUTREACH_SIGNATURE = 'Robert Sanders\nVestBlock\nacquisitions@vestblock.io'
-export const LENDER_OUTREACH_TEMPLATE_VERSION = 'vestblock-lender-refresh-2026-06-11'
+export const LENDER_OUTREACH_TEMPLATE_VERSION = 'vestblock-lender-network-2026-07-20'
 
 function bulletList(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n')
@@ -109,7 +109,7 @@ export function generateLenderOutreach(lender: LenderRecord): GeneratedLenderOut
   const subject = `VestBlock deals matched to your ${label} lending criteria`
   const followupSubject = `Quick follow-up on your VestBlock lending box`
   const complianceNote =
-    'VestBlock positions referrals based on fit, readiness, and truthful borrower information. We do not promise approvals or misrepresent borrower files.'
+    'VestBlock positions referrals based on fit, readiness, and truthful borrower information. We do not promise approvals or misrepresent borrower files. If this is not relevant, reply opt out and we will not contact you again.'
 
   return {
     generatedWith: 'template',

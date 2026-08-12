@@ -17,7 +17,7 @@ This is the cleanup checklist for turning the current large worktree into a main
 - `app/`, `components/`, `lib/`, `db/migrations/`, `contracts/`, `scripts/`, `public/`, `supabase/`, `test/`, and `tests/` when they are part of the app, automation, contracts, QA, or public website.
 - `docs/VESTBLOCK_CURRENT_SYSTEM.md` as the source of truth.
 - `.agents/skills/vestblock/` as local operating instructions for Codex-powered QA, revenue operations, outreach, and improvement loops.
-- PostHog analytics because it is actively wired into payments, leads, chat, uploads, dashboards, and health checks.
+- PostHog analytics has been removed from the application runtime. Remove any leftover platform environment variables before enabling a replacement analytics provider.
 
 ## Archive
 

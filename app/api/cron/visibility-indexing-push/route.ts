@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 
 import { runVisibilityIndexingPush } from '@/lib/seo/indexingPush'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
+import { logEvent } from '@/lib/system/logEvent'
 
 function parsePositiveIntParam(value: string | null) {
   if (!value) return undefined
@@ -34,6 +35,13 @@ export async function GET(request: Request) {
       inspectLimit: parsePositiveIntParam(url.searchParams.get('inspectLimit')),
       urls: parseUrlList(url.searchParams.get('urls')),
     })
+    if (!dryRun) {
+      await logEvent({
+        eventType: 'admin_action',
+        entityType: 'visibility_indexing_push',
+        metadata: { source: 'visibility-indexing-push', ...result },
+      })
+    }
 
     return NextResponse.json(result, { status: result.ok || result.dryRun ? 200 : 207 })
   } catch (error) {

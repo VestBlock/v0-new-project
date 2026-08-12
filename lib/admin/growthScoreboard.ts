@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
+import { countUniqueProviderAcceptedSends } from '@/lib/outreach/delivery-status'
 import { logEvent } from '@/lib/system/logEvent'
 
 type LeadRow = {
@@ -29,6 +30,7 @@ type OutreachMessageRow = {
 
 type OutreachSendEventRow = {
   id: string
+  outreach_message_id?: string | null
   channel?: string | null
   status?: string | null
   created_at?: string | null
@@ -133,12 +135,11 @@ export function computeHardScoreboard(input: {
     trailing30FundingPayments.reduce((sum, payment) => sum + Number(payment.amount_paid || 0), 0)
   const monthlyRevenueTarget = 100000
   const newLeads24h = input.leads.filter((lead) => isWithinHours(lead.created_at, 24)).length
-  const leadEmailSends24h = input.outreachSendEvents.filter(
-    (event) =>
-      String(event.status || '').toLowerCase() === 'sent' &&
-      String(event.channel || '').toLowerCase() === 'email' &&
-      isWithinHours(event.created_at, 24)
-  ).length
+  const leadEmailSends24h = countUniqueProviderAcceptedSends(
+    input.outreachSendEvents.filter(
+      (event) => String(event.channel || '').toLowerCase() === 'email' && isWithinHours(event.created_at, 24)
+    )
+  )
   const lenderOutreach24h = input.lenderOutreachMessages.filter(
     (message) =>
       String(message.status || '').toLowerCase() === 'sent' &&
@@ -224,7 +225,7 @@ export function computeHardScoreboard(input: {
   const hardScoreboardTargets = {
     monthlyRevenue: monthlyRevenueTarget,
     newLeads24h: 10,
-    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 50),
+    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 500),
     partnerOutreach24h: 6,
     replySignals7d: 7,
     bookedOrWon7d: 3,
@@ -308,7 +309,7 @@ export async function loadGrowthScoreboardTables(admin: SupabaseClient<any, any,
       .limit(1000),
     admin
       .from('outreach_send_events')
-      .select('id,channel,status,created_at')
+      .select('id,outreach_message_id,channel,status,created_at')
       .limit(5000),
     admin
       .from('lenders')

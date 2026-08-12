@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-14",
+  "lastUpdated": "2026-08-10",
   "boardName": "VestBlock Agent Board",
   "primeDirective": "Make VestBlock easier to trust, buy from, follow up with, discover, and operate.",
   "readFirst": [
@@ -71,6 +71,60 @@
       "owns": ["pitch decks", "PDFs", "screenshots", "graphics", "proof packets", "social drafts"]
     }
   ],
+  "githubToolbelt": {
+    "catalog": "docs/VESTBLOCK_GITHUB_TOOLBELT.md",
+    "localRoot": "vendor/toolbelt",
+    "sources": [
+      {
+        "name": "Strix",
+        "repository": "usestrix/strix",
+        "localPath": "vendor/toolbelt/strix",
+        "commit": "7cc9fa9faa01",
+        "mode": "reference-runtime-gated",
+        "directors": ["DealVault Director", "Funding Director", "Performance Director", "Security Director"]
+      },
+      {
+        "name": "Open Generative AI",
+        "repository": "Anil-matcha/Open-Generative-AI",
+        "localPath": "vendor/toolbelt/open-generative-ai",
+        "commit": "2f71b75264f8",
+        "mode": "reference-runtime-gated",
+        "directors": ["Conversion Director", "Design Director", "DealVault Director", "Content Asset Director"]
+      },
+      {
+        "name": "OpenSEO",
+        "repository": "every-app/open-seo",
+        "localPath": "vendor/toolbelt/open-seo",
+        "commit": "edc2c07af215",
+        "mode": "reference-mcp-and-spend-gated",
+        "directors": ["Revenue Director", "Conversion Director", "Visibility Director", "Outreach Director"]
+      },
+      {
+        "name": "I Have ADHD",
+        "repository": "ayghri/i-have-adhd",
+        "localPath": "vendor/toolbelt/i-have-adhd",
+        "commit": "2ed064090711",
+        "mode": "global-skill-explicit-invocation",
+        "directors": ["Chair", "Outreach Director"]
+      },
+      {
+        "name": "No AI Slop",
+        "repository": "petergyang/no-ai-slop",
+        "localPath": "vendor/toolbelt/no-ai-slop",
+        "commit": "d30eddb9e045",
+        "mode": "global-skill-task-triggered",
+        "directors": ["Revenue Director", "Conversion Director", "Design Director", "Visibility Director", "Outreach Director", "Funding Director", "Content Asset Director"]
+      },
+      {
+        "name": "Open Notebook",
+        "repository": "lfnovo/open-notebook",
+        "localPath": "vendor/toolbelt/open-notebook",
+        "commit": "a7de90d38aaf",
+        "mode": "reference-deployment-and-data-gated",
+        "directors": ["Chair", "Revenue Director", "Visibility Director", "DealVault Director", "Funding Director", "Security Director", "Content Asset Director"]
+      }
+    ]
+  },
   "delegationRules": [
     "Use explorer agents for independent read-only investigations.",
     "Use worker agents only when file ownership is clear and disjoint.",

@@ -47,7 +47,82 @@ const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
 ]);
 
 function getFromEmail() {
-  return process.env.FROM_EMAIL || process.env.RESEND_EMAIL || 'acquisitions@vestblock.io';
+  return (
+    process.env.OUTREACH_FROM_EMAIL ||
+    process.env.GOOGLE_WORKSPACE_SENDER ||
+    process.env.FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
+    'acquisitions@vestblock.io'
+  );
+}
+
+function getReplyToEmail() {
+  return process.env.OUTREACH_REPLY_TO_EMAIL || 'acquisitions@vestblock.io';
+}
+
+function hasGoogleWorkspaceConfig() {
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REFRESH_TOKEN
+  );
+}
+
+function encodeBase64Url(value: string) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+async function sendEmailWithGoogle(input: SendEmailInput) {
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN || '',
+      grant_type: 'refresh_token',
+    }),
+  });
+  const tokenData = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenData.access_token) {
+    throw new Error(
+      typeof tokenData?.error_description === 'string'
+        ? tokenData.error_description
+        : `Google token refresh failed with ${tokenResponse.status}.`
+    );
+  }
+
+  const mime = [
+    `From: VestBlock <${getFromEmail()}>`,
+    `Reply-To: ${getReplyToEmail()}`,
+    `To: ${input.to}`,
+    `Subject: ${input.subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    '',
+    input.html,
+  ].join('\r\n');
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ raw: encodeBase64Url(mime) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.error?.message === 'string'
+        ? data.error.message
+        : `Gmail send failed with ${response.status}.`
+    );
+  }
+  return { id: (data.id as string | undefined) || null };
 }
 
 function getLeadOpsAlertEmail() {
@@ -223,7 +298,7 @@ function getDisputeMethodGuidance(letterType?: string | null) {
 
 async function recordEmailEvent(
   input: SendEmailInput,
-  status: 'sent' | 'failed' | 'skipped',
+  status: 'accepted' | 'sent' | 'failed' | 'skipped',
   providerMessageId?: string | null,
   errorMessage?: string | null
 ) {
@@ -261,13 +336,41 @@ export async function sendEmail(input: SendEmailInput) {
     };
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    await recordEmailEvent(input, 'skipped', null, 'RESEND_API_KEY is not configured.');
+  if (!hasGoogleWorkspaceConfig() && !process.env.RESEND_API_KEY) {
+    await recordEmailEvent(input, 'skipped', null, 'No email provider is configured.');
     return {
       ok: false,
       skipped: true,
-      error: 'RESEND_API_KEY is not configured.',
+      error: 'No email provider is configured.',
     };
+  }
+
+  let googleError: string | null = null;
+  if (hasGoogleWorkspaceConfig()) {
+    try {
+      const data = await sendEmailWithGoogle(input);
+      await recordEmailEvent(input, 'accepted', data.id);
+      await logEvent({
+        eventType: 'email_sent',
+        actorUserId: input.userId,
+        entityType: 'email',
+        entityId: data.id,
+        metadata: { subject: input.subject, eventType: input.eventType, to: input.to, provider: 'gmail' },
+      });
+      return { ok: true, id: data.id, provider: 'gmail' };
+    } catch (error) {
+      googleError = error instanceof Error ? error.message : String(error);
+      if (!process.env.RESEND_API_KEY) {
+        await recordEmailEvent(input, 'failed', null, googleError);
+        await logEvent({
+          eventType: 'email_failed',
+          actorUserId: input.userId,
+          entityType: 'email',
+          metadata: { subject: input.subject, eventType: input.eventType, message: googleError, provider: 'gmail' },
+        });
+        return { ok: false, error: googleError, provider: 'gmail' };
+      }
+    }
   }
 
   try {
@@ -277,6 +380,7 @@ export async function sendEmail(input: SendEmailInput) {
       to: input.to,
       subject: input.subject,
       html: input.html,
+      replyTo: getReplyToEmail(),
     });
 
     if (error) {
@@ -288,10 +392,10 @@ export async function sendEmail(input: SendEmailInput) {
         entityType: 'email',
         metadata: { subject: input.subject, eventType: input.eventType, message },
       });
-      return { ok: false, error: message };
+      return { ok: false, error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message, provider: 'resend' };
     }
 
-    await recordEmailEvent(input, 'sent', data?.id ?? null);
+    await recordEmailEvent(input, 'accepted', data?.id ?? null);
     await logEvent({
       eventType: 'email_sent',
       actorUserId: input.userId,
@@ -303,7 +407,7 @@ export async function sendEmail(input: SendEmailInput) {
         to: input.to,
       },
     });
-    return { ok: true, id: data?.id };
+    return { ok: true, id: data?.id, provider: 'resend' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await recordEmailEvent(input, 'failed', null, message);
@@ -313,7 +417,7 @@ export async function sendEmail(input: SendEmailInput) {
       entityType: 'email',
       metadata: { subject: input.subject, eventType: input.eventType, message },
     });
-    return { ok: false, error: message };
+    return { ok: false, error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message, provider: 'resend' };
   }
 }
 
@@ -582,6 +686,10 @@ export async function sendLeadOutreachSentAlertEmail(details: {
   sourcePath?: string | null;
   deliveryMode?: 'auto' | 'manual' | 'queue' | null;
 }) {
+  if (details.deliveryMode === 'queue' && process.env.OUTREACH_PER_MESSAGE_ALERTS !== 'true') {
+    return { ok: true, skipped: true, provider: 'none' as const, id: null };
+  }
+
   const adminUrl = details.leadId
     ? `${getSiteUrl()}/admin/leads/${details.leadId}`
     : `${getSiteUrl()}/admin/leads`;

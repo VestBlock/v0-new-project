@@ -1,6 +1,6 @@
 # VestBlock Agent Board
 
-Last updated: 2026-05-14
+Last updated: 2026-08-10
 
 This is the operating board for improving VestBlock without re-discovering the whole repo every time. It turns “use more agents” into a disciplined system: each director owns a layer, starts from known files, and verifies results before claiming progress.
 
@@ -108,6 +108,7 @@ VestBlock wins by becoming easier to trust, easier to buy from, easier to follow
 
 ## What Other Skills Help VestBlock
 
+- GitHub strategy toolbelt: use `docs/VESTBLOCK_GITHUB_TOOLBELT.md` to route Strix, Open Generative AI, OpenSEO, I Have ADHD, No AI Slop, and Open Notebook to the appropriate director with their activation gates.
 - GitHub: branch hygiene, PR summaries, CI fixes, review comments.
 - Vercel: deploys, logs, env checks, cron/debug, route verification.
 - Gmail: inbox triage, reply detection, bounce review, follow-up drafting.
@@ -116,6 +117,26 @@ VestBlock wins by becoming easier to trust, easier to buy from, easier to follow
 - Presentations/Documents/PDF/Image: pitch decks, sales packets, demo agreements, graphics.
 - Security skills: threat models, privacy reviews, safe env handling.
 - Skill creator/plugin creator: turn repeatable workflows into reusable Codex skills or plugins.
+
+## GitHub Toolbelt By Director
+
+| Director | Preferred sources |
+| --- | --- |
+| Chair | I Have ADHD, Open Notebook |
+| Revenue | OpenSEO, Open Notebook, No AI Slop |
+| Conversion | OpenSEO, Open Generative AI, No AI Slop |
+| Design | Open Generative AI, No AI Slop |
+| Visibility | OpenSEO, Open Notebook, No AI Slop |
+| Outreach | OpenSEO, No AI Slop, I Have ADHD |
+| DealVault | Strix, Open Notebook, Open Generative AI |
+| Funding | Open Notebook, Strix, No AI Slop |
+| Performance | Strix |
+| Security | Strix, Open Notebook |
+| Content Asset | Open Generative AI, Open Notebook, No AI Slop |
+
+This is a selection map, not blanket permission. Live scans, paid data calls,
+provider uploads, publishing, sends, deploys, and production writes keep their
+existing approval and verification gates.
 
 ## Board Output Format
 

@@ -1,4 +1,7 @@
 import { adminTaskDueDates, createAdminTask, createLeadFollowupTask } from '@/lib/admin/tasks'
+import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
+import { isStrategyEngineAutoApprovalAllowed } from '@/lib/admin/strategyLeadProvenance'
 import { sendEmail, sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision, isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
 import { DEFAULT_GOOGLE_PLACES_NICHES } from '@/lib/leads/constants'
@@ -11,6 +14,7 @@ import { searchSamOpportunities } from '@/lib/leads/connectors/sam'
 import { searchWeakWebPresenceBusinesses } from '@/lib/leads/connectors/weak-web-presence'
 import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
 import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { buildOutreachV2EmailDraft, getOutreachV2DailyTarget, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import { classifyLeadRevenueCampaign, getRevenueCampaignAllocation, REVENUE_CAMPAIGN_ORDER, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { isOutscraperApproved } from '@/lib/leads/sourceCostGovernor'
@@ -19,19 +23,20 @@ import { discoverMarkets, markMarketRunResult, pickDiscoveryTermsForMarket, upda
 import {
   insertOutreachSendEvent,
   listEmailOutreachForSendQueue,
+  listLeadEmailFollowupsDue,
   listLeadsForEmailEnrichment,
   listLeadsForScoring,
-  listLeadsNeedingFollowup,
   listLeadsNeedingOutreach,
   listSuppressions,
   updateLeadRecord,
   updateOutreachMessage,
 } from '@/lib/leads/repository'
 import { enrichLeadContactEmail, enrichNormalizedLeadContact, generateAndStoreOutreachForLead, ingestNormalizedLeads, scoreAndPersistLead } from '@/lib/leads/service'
-import type { LeadRecord, TargetMarketRecord } from '@/lib/leads/types'
+import type { LeadRecord, OutreachMessageRecord, TargetMarketRecord } from '@/lib/leads/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
 type MarketConfig = {
   id?: string
@@ -46,6 +51,8 @@ type MarketConfig = {
 
 type LeadAutomationOptions = {
   dryRun?: boolean
+  followupLimit?: number
+  excludeSourcePatterns?: string[]
   scrapeLimitPerSource?: number
   outreachGenerationLimit?: number
   sendLimit?: number
@@ -182,6 +189,11 @@ function envBool(name: string, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
 }
 
+function strategyEngineAllowsAutoApproval(lead: LeadRecord) {
+  const isSellerLead = lead.category === 'seller_lead' || lead.lead_type === 'sell_house'
+  return !isSellerLead || isStrategyEngineAutoApprovalAllowed(lead)
+}
+
 function envMs(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed >= 1000 ? parsed : fallback
@@ -196,7 +208,7 @@ function getLeadDailyTarget() {
   if (isOutreachV2Enabled()) {
     return getOutreachV2DailyTarget()
   }
-  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 50))
+  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 500))
 }
 
 async function getLeadEmailSentCountLast24h() {
@@ -206,7 +218,7 @@ async function getLeadEmailSentCountLast24h() {
     .from('outreach_send_events')
     .select('id', { count: 'exact', head: true })
     .eq('channel', 'email')
-    .eq('status', 'sent')
+    .in('status', ['accepted', 'sent'])
     .gte('created_at', since)
 
   if (error) throw error
@@ -1407,18 +1419,27 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const startedAtMs = options.startedAtMs || Date.now()
   const budgetMs = options.budgetMs || envMs('LEADS_CRON_BUDGET_MS', 45000)
   const dailyTarget = getLeadDailyTarget()
-  const requestedSendLimit = options.sendLimit || (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 100))
+  const requestedSendLimit = options.sendLimit || (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 500))
   const sentLast24h = isOutreachV2Enabled() ? await getLeadEmailSentCountLast24h() : 0
   const targetGap24h = isOutreachV2Enabled() ? Math.max(0, dailyTarget - sentLast24h) : requestedSendLimit
-  const sendLimit = isOutreachV2Enabled() ? Math.min(requestedSendLimit, targetGap24h) : requestedSendLimit
+  const uncappedSendLimit = isOutreachV2Enabled() ? Math.min(requestedSendLimit, targetGap24h) : requestedSendLimit
   const autoSendApproved = envBool('AUTO_SEND_ENABLED', envBool('LEADS_AUTO_SEND_APPROVED', false))
   const queueMultiplier = envInt('LEADS_DAILY_SEND_QUEUE_MULTIPLIER', 10)
   const manualContactFormTaskLimit = envInt('LEADS_CONTACT_FORM_TASK_LIMIT_PER_RUN', 15)
   const providerFailureStopThreshold = envInt('LEADS_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
+  const outboundReadiness = getOutboundProviderReadiness()
+  const replyCaptureReadiness = getReplyCaptureReadiness()
+  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
+    provider: outboundReadiness.defaultProvider,
+    allowControlledTrial: true,
+  })
+  const sendLimit = Math.min(
+    uncappedSendLimit,
+    deliveryCircuitBreaker.maxBatchSize || Number.POSITIVE_INFINITY
+  )
   const queue = await listEmailOutreachForSendQueue(sendLimit * queueMultiplier)
   const suppressions = await listSuppressions().catch(() => [])
-  const autoSendEnabled = autoSendApproved
-  const outboundReadiness = getOutboundProviderReadiness()
+  const autoSendEnabled = autoSendApproved && deliveryCircuitBreaker.allowed && replyCaptureReadiness.ready
   const sendResults: Array<{ leadId: string; status: string; provider?: string; detail?: string }> = []
   const skipReasonCounts = new Map<string, number>()
   const sentServiceCounts = new Map<string, number>()
@@ -1461,6 +1482,32 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         blockedReason: 'missing_mailing_address',
         outboundProvider: outboundReadiness.defaultProvider,
       },
+    })
+  }
+
+  if (!options.dryRun && autoSendApproved && !deliveryCircuitBreaker.allowed) {
+    await createAdminTask({
+      title: 'Outbound email paused by delivery-quality circuit breaker',
+      description: `Provider evidence blocked autonomous outreach.\n\nReason: ${deliveryCircuitBreaker.reason || 'Delivery quality is outside the safe range.'}\nEvidence window: ${deliveryCircuitBreaker.windowDays} days\nFinalized messages: ${deliveryCircuitBreaker.sampleSize}\nDelivered: ${deliveryCircuitBreaker.delivered}\nBounced: ${deliveryCircuitBreaker.bounced}\nSuppressed: ${deliveryCircuitBreaker.suppressed}\nComplained: ${deliveryCircuitBreaker.complained}\nFailed: ${deliveryCircuitBreaker.failed}\nBad delivery rate: ${(deliveryCircuitBreaker.badRate * 100).toFixed(1)}%\n\nKeep autonomous sending paused until contact quality is repaired and a controlled test batch passes.`,
+      taskType: 'outreach_delivery_circuit_breaker',
+      priority: 'urgent',
+      entityType: 'lead_send_queue',
+      entityId: `delivery-circuit-${new Date().toISOString().slice(0, 10)}`,
+      dueAt: adminTaskDueDates.now(),
+      metadata: deliveryCircuitBreaker,
+    })
+  }
+
+  if (!options.dryRun && autoSendApproved && !replyCaptureReadiness.ready) {
+    await createAdminTask({
+      title: 'Connect reply capture before seller outreach resumes',
+      description: `${replyCaptureReadiness.reason}\n\nSeller auto-send is paused because replies cannot be ingested, classified, or attributed to their strategy lane. Configure Microsoft Graph reply ingestion before spending more lead inventory.`,
+      taskType: 'outreach_reply_capture_blocker',
+      priority: 'urgent',
+      entityType: 'lead_send_queue',
+      entityId: 'reply_capture_disconnected',
+      dueAt: adminTaskDueDates.now(),
+      metadata: replyCaptureReadiness,
     })
   }
 
@@ -1609,6 +1656,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       autoSendEnabled &&
       outboundReadiness.mailingAddressConfigured &&
       effectiveEligible &&
+      strategyEngineAllowsAutoApproval(currentLead) &&
       currentRow.status === 'needs_review'
     ) {
       const approvedAt = new Date().toISOString()
@@ -1658,13 +1706,18 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       !options.dryRun &&
       outboundReadiness.mailingAddressConfigured &&
       effectiveEligible &&
+      strategyEngineAllowsAutoApproval(currentLead) &&
       currentRow.status === 'approved'
 
     if (!canSend) {
       const contactFormUrls = getLeadContactFormUrls(currentLead)
       const reason =
-        !autoSendEnabled
+        !autoSendApproved
           ? 'auto_send_disabled'
+          : !deliveryCircuitBreaker.allowed
+            ? 'delivery_circuit_blocked'
+            : !replyCaptureReadiness.ready
+              ? 'reply_capture_disconnected'
           : options.dryRun
             ? 'dry_run'
             : !outboundReadiness.mailingAddressConfigured
@@ -1672,7 +1725,9 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
               : decision.reason === 'missing_email' && contactFormUrls.length
                 ? 'contact_form_available'
                 : currentRow.status !== 'approved'
-                  ? decision.reason || 'manual_review_required'
+                  ? !strategyEngineAllowsAutoApproval(currentLead)
+                    ? 'strategy_review_required'
+                    : decision.reason || 'manual_review_required'
                   : allowVerifiedPublicEmail
                     ? 'verified_public_email_pending_send'
                     : decision.reason || 'manual_review_required'
@@ -1719,6 +1774,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     }
 
     await updateOutreachMessage(currentRow.id, { status: 'queued', send_provider: null, send_error: null })
+    const revenueCampaign = classifyLeadRevenueCampaign(currentLead, currentRow.subject || '')
     await insertOutreachSendEvent({
       leadId: currentLead.id,
       outreachMessageId: currentRow.id,
@@ -1746,7 +1802,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         updateLeadRecord(currentLead.id, {
           status: 'contacted',
           outreach_status: 'sent',
-          delivery_status: 'sent',
+          delivery_status: 'accepted',
           last_contacted_at: new Date().toISOString(),
           next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         }),
@@ -1755,7 +1811,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           outreachMessageId: currentRow.id,
           channel: 'email',
           provider: sendResult.provider,
-          status: 'sent',
+          status: 'accepted',
           recipient: currentLead.email,
           subject: currentRow.subject,
           metadata: { providerMessageId: sendResult.providerMessageId || null },
@@ -1776,6 +1832,27 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           sourcePath: currentLead.source_url || currentLead.source || null,
           deliveryMode: 'queue',
         }),
+        recordOutboundEnrollment({
+          strategyKey: revenueCampaign.key,
+          channel: 'email',
+          status: 'accepted',
+          messageId: currentRow.id,
+          recipient: currentLead.email,
+          leadId: currentLead.id,
+          market: getLeadMarketKey(currentLead),
+          propertyAddress: currentLead.property_address,
+          nextActionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          metadata: {
+            provider: sendResult.provider,
+            providerMessageId: sendResult.providerMessageId || null,
+            campaignLabel: revenueCampaign.label,
+          },
+        }).catch(() => null),
+        recordStrategyDeliveryOutcome({
+          leadId: currentLead.id,
+          messageId: currentRow.id,
+          status: 'accepted',
+        }).catch(() => null),
       ])
       sendResults.push({ leadId: currentLead.id, status: 'sent', provider: sendResult.provider })
       incrementCount(sentServiceCounts, classifyOutreachService(currentLead, currentRow.subject || ''))
@@ -1806,6 +1883,22 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         errorMessage: sendResult.error,
         metadata: { reason: sendResult.error || 'send_failed' },
       })
+      await recordOutboundEnrollment({
+        strategyKey: revenueCampaign.key,
+        channel: 'email',
+        status: 'failed',
+        messageId: currentRow.id,
+        recipient: currentLead.email,
+        leadId: currentLead.id,
+        market: getLeadMarketKey(currentLead),
+        propertyAddress: currentLead.property_address,
+        metadata: { provider: sendResult.provider, error: sendResult.error || 'send_failed' },
+      }).catch(() => null)
+      await recordStrategyDeliveryOutcome({
+        leadId: currentLead.id,
+        messageId: currentRow.id,
+        status: 'failed',
+      }).catch(() => null)
       sendResults.push({
         leadId: currentLead.id,
         status: 'failed',
@@ -1833,7 +1926,8 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const sendQueueDigestItems = [
     `Daily email target: ${dailyTarget}`,
     `Already sent in last 24 hours: ${sentLast24h}`,
-    `Remaining quality send cap this run: ${sendLimit}`,
+    `Remaining quality send cap before delivery guardrail: ${uncappedSendLimit}`,
+    `Effective send cap this run: ${sendLimit}`,
     `Email-ready candidates reviewed: ${emailReadyQueue.length}`,
     `Manual contact-form leads routed to tasks: ${manualContactFormQueue.length}${manualContactFormTaskCount ? ` (${manualContactFormTaskCount} new tasks)` : ''}`,
     `Blocked no-email candidates held out of email sending: ${blockedEmailQueue.length}`,
@@ -1858,6 +1952,9 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         .join(', ') || 'None'
     }`,
     `Auto-send enabled: ${autoSendEnabled ? 'Yes' : 'No'}`,
+    `Reply capture ready: ${replyCaptureReadiness.ready ? 'Yes' : 'No'}${replyCaptureReadiness.reason ? ` (${replyCaptureReadiness.reason})` : ''}`,
+    `Delivery circuit breaker: ${deliveryCircuitBreaker.mode}${deliveryCircuitBreaker.reason ? ` (${deliveryCircuitBreaker.reason})` : ''}`,
+    `Provider-confirmed delivery: ${deliveryCircuitBreaker.delivered}/${deliveryCircuitBreaker.sampleSize}; bad rate ${(deliveryCircuitBreaker.badRate * 100).toFixed(1)}%`,
     `Mailing address configured: ${outboundReadiness.mailingAddressConfigured ? 'Yes' : 'No'}`,
     `Outbound provider: ${outboundReadiness.defaultProvider}`,
   ]
@@ -1934,6 +2031,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     sentLast24hBeforeRun: sentLast24h,
     targetGap24hBeforeRun: targetGap24h,
     requestedSendLimit,
+    uncappedSendLimit,
     effectiveSendLimit: sendLimit,
     approvedCount: queue.filter((item) => item.status === 'approved').length + autoApprovedCount,
     autoApprovedCount,
@@ -1950,6 +2048,8 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     skipReasonCounts: Object.fromEntries(skipReasonCounts.entries()),
     providerFailureCount,
     circuitBreakerTripped,
+    deliveryCircuitBreaker,
+    replyCaptureReadiness,
     mailingAddressConfigured: outboundReadiness.mailingAddressConfigured,
     outboundProvider: outboundReadiness.defaultProvider,
     digestPreview: options.dryRun ? sendQueueDigestItems : undefined,
@@ -1979,6 +2079,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
   })
 
   const remainingAfterFirstSend = Math.max(0, target - firstSend.sentCount)
+  const controlledTrialCompleted = firstSend.deliveryCircuitBreaker.mode === 'controlled_trial'
 
   const firstOutreach =
     remainingAfterFirstSend > 0 && getRemainingBudgetMs(startedAtMs, budgetMs) > 12000
@@ -1991,7 +2092,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
       : null
 
   const secondSend =
-    remainingAfterFirstSend > 0 && getRemainingBudgetMs(startedAtMs, budgetMs) > 8000
+    remainingAfterFirstSend > 0 && !controlledTrialCompleted && getRemainingBudgetMs(startedAtMs, budgetMs) > 8000
       ? await runDailyLeadSendQueue({
           ...options,
           sendLimit: remainingAfterFirstSend,
@@ -2022,6 +2123,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 
   if (
     (!options.dryRun || shouldRunRefillDuringDryRun()) &&
+    !controlledTrialCompleted &&
     refillEnabled &&
     remainingAfterSecondSend > 0 &&
     getRemainingBudgetMs(startedAtMs, budgetMs) > 18000 &&
@@ -2129,18 +2231,146 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 }
 
 export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) {
-  const dueFollowups = await listLeadsNeedingFollowup(100)
+  const limit = options.followupLimit || envInt('LEADS_DAILY_FOLLOWUP_SEND_LIMIT', 20)
+  const replyCaptureReadiness = getReplyCaptureReadiness()
+  if (!options.dryRun && !replyCaptureReadiness.ready) {
+    return {
+      ok: false,
+      blocked: true,
+      blocker: replyCaptureReadiness.reason,
+      followupCount: 0,
+      followupItems: [],
+      acceptedCount: 0,
+      results: [],
+    }
+  }
+  const dueFollowups = await listLeadEmailFollowupsDue(limit, {
+    excludeSourcePatterns: options.excludeSourcePatterns,
+  })
   const followupItems: string[] = []
-  for (const lead of dueFollowups.slice(0, envInt('LEADS_DAILY_FOLLOWUP_TASK_LIMIT', 30))) {
-    await createLeadFollowupTask({
-      leadId: lead.id,
-      leadType: lead.lead_type,
-      name: lead.name || lead.business_name,
-      email: lead.email,
-      sourcePath: lead.source_url,
-      immediate: true,
-    })
-    followupItems.push(`${leadLabel(lead)} — ${lead.best_offer || lead.category || lead.lead_type}`)
+  const results: Array<{ leadId: string; label: string; status: string; error?: string | null }> = []
+  for (const { lead, initialMessage } of dueFollowups) {
+    const address = String(lead.property_address || '').trim()
+    const firstName = String(lead.name || lead.business_name || '').trim().split(/\s+/)[0] || 'there'
+    const strategy = lead.market_segment || classifyLeadRevenueCampaign(lead).key
+    const contactInfo = (lead.contact_info || {}) as Record<string, unknown>
+    const listingAgent =
+      String(contactInfo.contactRole || '').toLowerCase() === 'listing_agent' ||
+      String(lead.source || '').toLowerCase().includes('homeharvest_stale_listing')
+    const complianceNote = 'If you would rather not receive further follow-up, reply unsubscribe and we will close the conversation.'
+    const followupSubject = address
+      ? listingAgent
+        ? `Still open to options on ${address}?`
+        : `Following up about ${address}`
+      : 'Following up on your property'
+    const followupBody = listingAgent
+      ? `Hi ${firstName},\n\nI wanted to check back on ${address || 'the listing I emailed about'}. Is it still active, and would the seller consider another purchase path if the numbers and protections worked?\n\nWe can review a standard cash or financed purchase, seller financing, taking over existing financing when appropriate, or a hybrid that combines cash at closing with terms. We are not asking you to discount the seller blindly, and your commission remains part of any serious structure.\n\nIf creative terms are off the table, reply \"standard only.\" If the property is no longer available, \"closed\" is enough. If the seller is open, their priority between price, cash at closing, and timing will tell us what to underwrite.\n\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`
+      : `Hi ${firstName},\n\nI wanted to follow up about ${address || 'your property'}. VestBlock can review more than one path, including a straightforward purchase, seller financing, taking over existing financing when appropriate, or a hybrid based on the mortgage and your goals. Nothing is assumed, and any option would require clear written terms, title review, and your approval.\n\nIf selling is still worth a conversation, reply with the outcome you would want from the property. If the timing is not right, a short reply is enough and I will update our notes.\n\nRobert Sanders\nVestBlock\nacquisitions@vestblock.io`
+    const message: OutreachMessageRecord = {
+      ...initialMessage,
+      subject: followupSubject,
+      body: followupBody,
+      compliance_note: complianceNote,
+    }
+    const qualityIssue = validateOutreachMessageQuality({ lead, message })
+    if (qualityIssue) {
+      results.push({ leadId: lead.id, label: leadLabel(lead), status: 'quality_blocked', error: qualityIssue })
+      if (!options.dryRun) {
+        await createLeadFollowupTask({
+          leadId: lead.id,
+          leadType: lead.lead_type,
+          name: lead.name || lead.business_name,
+          email: lead.email,
+          sourcePath: lead.source_url,
+          immediate: true,
+        })
+      }
+      continue
+    }
+
+    if (options.dryRun) {
+      results.push({ leadId: lead.id, label: leadLabel(lead), status: 'would_send' })
+      followupItems.push(`${leadLabel(lead)} — ${strategy}`)
+      continue
+    }
+
+    const sendResult = await sendLeadOutreachEmail({ lead, message })
+    const now = new Date().toISOString()
+    if (!sendResult.ok) {
+      await insertOutreachSendEvent({
+        leadId: lead.id,
+        outreachMessageId: initialMessage.id,
+        channel: 'email',
+        provider: sendResult.provider,
+        status: 'failed',
+        recipient: lead.email,
+        subject: message.subject,
+        errorMessage: sendResult.error || 'Follow-up send failed.',
+        metadata: { sequenceStep: 2, initialMessageId: initialMessage.id, strategyKey: strategy },
+      })
+      await updateLeadRecord(lead.id, { next_follow_up_at: null })
+      await createAdminTask({
+        title: `Seller follow-up failed: ${leadLabel(lead)}`,
+        description: `The guarded second-touch email was not accepted by the provider. ${sendResult.error || 'Review the provider and recipient before retrying.'}`,
+        taskType: 'seller_followup_send_failed',
+        priority: 'high',
+        entityType: 'lead',
+        entityId: lead.id,
+        dueAt: adminTaskDueDates.now(),
+        metadata: { sequenceStep: 2, initialMessageId: initialMessage.id, provider: sendResult.provider },
+      }).catch(() => null)
+      results.push({ leadId: lead.id, label: leadLabel(lead), status: 'failed', error: sendResult.error || null })
+      continue
+    }
+
+    await Promise.all([
+      insertOutreachSendEvent({
+        leadId: lead.id,
+        outreachMessageId: initialMessage.id,
+        channel: 'email',
+        provider: sendResult.provider,
+        status: 'accepted',
+        recipient: lead.email,
+        subject: message.subject,
+        metadata: {
+          sequenceStep: 2,
+          initialMessageId: initialMessage.id,
+          strategyKey: strategy,
+          providerMessageId: sendResult.providerMessageId || null,
+        },
+      }),
+      updateLeadRecord(lead.id, {
+        outreach_status: 'sent',
+        delivery_status: 'accepted',
+        last_contacted_at: now,
+        next_follow_up_at: null,
+      }),
+      recordOutboundEnrollment({
+        strategyKey: strategy,
+        channel: 'email',
+        status: 'accepted',
+        messageId: `${initialMessage.id}:followup:2`,
+        recipient: lead.email,
+        leadId: lead.id,
+        market: [lead.city, lead.state].filter(Boolean).join(', '),
+        propertyAddress: lead.property_address,
+        nextActionAt: null,
+        metadata: {
+          sequenceStep: 2,
+          initialMessageId: initialMessage.id,
+          provider: sendResult.provider,
+          providerMessageId: sendResult.providerMessageId || null,
+        },
+      }),
+      logEvent({
+        eventType: 'email_sent',
+        entityType: 'lead',
+        entityId: lead.id,
+        metadata: { action: 'seller_followup_accepted', sequenceStep: 2, provider: sendResult.provider, strategyKey: strategy },
+      }),
+    ])
+    followupItems.push(`${leadLabel(lead)} — ${strategy}`)
+    results.push({ leadId: lead.id, label: leadLabel(lead), status: 'accepted' })
   }
 
   if (!options.dryRun) {
@@ -2156,6 +2386,8 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
     ok: true,
     followupCount: followupItems.length,
     followupItems,
+    acceptedCount: results.filter((item) => item.status === 'accepted').length,
+    results,
   }
 }
 

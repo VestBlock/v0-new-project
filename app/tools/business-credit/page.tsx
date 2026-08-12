@@ -63,7 +63,7 @@ type RunResponse = {
   runId: string;
 };
 
-type RoadmapRow = { pdf_path: any };
+type RoadmapRow = { id: string; pdf_path: string | null; created_at?: string | null };
 
 /* ---------------- Helpers ---------------- */
 
@@ -361,6 +361,8 @@ export default function BusinessCreditPage() {
   };
 
   const handleRegenerate = async (id: string) => {
+    if (!user?.id) return;
+
     try {
       //   setIsRunning(true);
       setRegenId(id);
@@ -385,7 +387,7 @@ export default function BusinessCreditPage() {
       const { data: rows } = await supabase
         .from('business_roadmaps')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setHistory(rows || []);
 
@@ -723,10 +725,11 @@ export default function BusinessCreditPage() {
                           '<!doctype html><html><body style="background:transparent;color:#94a3b8;padding:24px">Run the tool to see your roadmap.</body></html>'
                         }
                       /> */}
-                      <div
-                        className="p-5"
-                        dangerouslySetInnerHTML={{
-                          __html: `<!doctype html><html><head><meta charset="utf-8"/>
+                      <iframe
+                        title="Business credit roadmap preview"
+                        className="h-[60vh] w-full border-0 bg-white"
+                        sandbox=""
+                        srcDoc={`<!doctype html><html><head><meta charset="utf-8"/>
 <style>
 :root{--bg:#0b1220;--text:#e5e7eb;--muted:#94a3b8;--card:#0f172a}
   body{font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:0;padding:28px}
@@ -736,8 +739,7 @@ export default function BusinessCreditPage() {
   li{margin:4px 0}
   .muted{color:#555}
   .chip{display:inline-block;padding:2px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;margin-left:6px;color:#555}
-</style></head><body> ${result.html}</body></html>`,
-                        }}
+</style></head><body> ${result.html}</body></html>`}
                       />
                     </div>
                   )}

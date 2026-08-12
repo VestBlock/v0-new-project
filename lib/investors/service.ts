@@ -1,12 +1,15 @@
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
+import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { discoverInvestorsForMarket } from '@/lib/investors/discovery'
 import { sendInvestorOutreachEmail } from '@/lib/investors/outbound'
 import { scoreExistingInvestor } from '@/lib/investors/scoring'
 import {
   finishInvestorAutomationRun,
+  generateInvestorFollowup,
   generateInvestorOutreach,
   insertInvestorEngagementEvent,
   listApprovedInvestorEmailOutreach,
+  listInvestorOutreachForAutoApproval,
   listInvestorsForScoring,
   listInvestorsNeedingFollowup,
   listInvestorsNeedingOutreach,
@@ -20,6 +23,10 @@ import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/par
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { evaluateInvestorAutoApproval } from '@/lib/investors/automationCore'
+import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -164,7 +171,10 @@ export async function runDailyInvestorOutreach(limit = 50) {
 }
 
 export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boolean } = {}) {
-  const autoSend = ['1', 'true', 'yes', 'on'].includes(String(process.env.INVESTOR_AUTO_SEND_ENABLED || '').toLowerCase())
+  const autoSendRequested = ['1', 'true', 'yes', 'on'].includes(String(process.env.INVESTOR_AUTO_SEND_ENABLED || '').toLowerCase())
+  const deliveryCircuitBreaker = autoSendRequested ? await getDeliveryCircuitBreaker() : null
+  const replyCapture = getReplyCaptureReadiness()
+  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
   const run = await startInvestorAutomationRun({
     runType: 'outreach_send',
     sourceKey: 'investor_outreach_messages',
@@ -235,6 +245,11 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         sent_at: now,
         send_provider: sent.provider,
         send_error: null,
+        metadata_json: {
+          ...(row.metadata_json || {}),
+          providerMessageId: sent.providerMessageId || null,
+          providerAcceptedAt: now,
+        },
       })
       await updateInvestorRecord(investor.id, {
         relationship_stage: 'contacted',
@@ -255,11 +270,26 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         entityId: investor.id,
         metadata: { action: 'investor_outreach_sent', messageId: row.id, provider: sent.provider },
       })
-      results.push({ investorId: investor.id, name: investor.display_name, status: 'sent' })
+      await recordOutboundEnrollment({
+        strategyKey: 'investor-network',
+        channel: 'email',
+        status: 'accepted',
+        messageId: row.id,
+        recipient: investor.contact_email,
+        market: investor.markets?.[0] || null,
+        nextActionAt: adminTaskDueDates.days(4),
+        metadata: {
+          investorId: investor.id,
+          investorType: investor.primary_investor_type,
+          provider: sent.provider,
+          providerMessageId: sent.providerMessageId || null,
+        },
+      }).catch(() => null)
+      results.push({ investorId: investor.id, name: investor.display_name, status: 'accepted' })
     }
 
     await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: results.length })
-    return { ok: true, count: results.length, results, autoSendEnabled: autoSend }
+    return { ok: true, count: results.length, results, autoSendEnabled: autoSend, autoSendRequested, deliveryCircuitBreaker, replyCapture }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',
@@ -269,7 +299,53 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
   }
 }
 
-export async function runDailyInvestorFollowup(limit = 30) {
+export async function runDailyInvestorApproval(limit = 25, options: { dryRun?: boolean } = {}) {
+  const minimumScore = envInt('INVESTOR_AUTO_APPROVE_MIN_SCORE', 45)
+  const candidates = await listInvestorOutreachForAutoApproval(limit)
+  const results: Array<{ investorId: string | null; name: string; status: string; reason: string }> = []
+  for (const message of candidates) {
+    const investor = message.investor_profiles as InvestorProfileRecord | null
+    const decision = evaluateInvestorAutoApproval({
+      investor,
+      message,
+      templateVersion: INVESTOR_OUTREACH_TEMPLATE_VERSION,
+      minimumScore,
+    })
+    if (!decision.approved || !investor) {
+      results.push({ investorId: investor?.id || null, name: investor?.display_name || 'Unknown investor', status: 'blocked', reason: decision.reason })
+      continue
+    }
+    if (!options.dryRun) {
+      await updateInvestorOutreachMessage(message.id, {
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        send_error: null,
+      })
+      await updateInvestorRecord(investor.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+      await logEvent({
+        eventType: 'outreach_approved',
+        entityType: 'investor_profile',
+        entityId: investor.id,
+        metadata: { messageId: message.id, templateVersion: INVESTOR_OUTREACH_TEMPLATE_VERSION, minimumScore },
+      })
+    }
+    results.push({
+      investorId: investor.id,
+      name: investor.display_name,
+      status: options.dryRun ? 'would_approve' : 'approved',
+      reason: decision.reason,
+    })
+  }
+  return {
+    ok: true,
+    count: results.filter((result) => ['approved', 'would_approve'].includes(result.status)).length,
+    reviewed: results.length,
+    minimumScore,
+    results,
+  }
+}
+
+export async function runDailyInvestorFollowup(limit = 30, options: { dryRun?: boolean } = {}) {
   const run = await startInvestorAutomationRun({
     runType: 'followup',
     sourceKey: 'investor_profiles',
@@ -280,29 +356,34 @@ export async function runDailyInvestorFollowup(limit = 30) {
     const investors = await listInvestorsNeedingFollowup(limit)
     const results: Array<{ investorId: string; name: string; action: string }> = []
     for (const investor of investors) {
-      await createAdminTask({
-        title: `Investor follow-up: ${investor.display_name}`,
-        description:
-          'Review investor relationship status and collect missing buy box, lending needs, disposition needs, deal submissions, or capital partner fit.',
-        taskType: 'investor_relationship_followup',
-        assignedTo: investor.owner_user_id || null,
-        priority: investor.relationship_stage === 'responded' ? 'high' : 'normal',
-        entityType: 'investor_profile',
-        entityId: investor.id,
-        dueAt: adminTaskDueDates.now(),
-        metadata: {
-          investorId: investor.id,
-          sequence: investor.assigned_sequence,
-          relationshipStage: investor.relationship_stage,
-        },
-      }).catch(() => null)
+      if (['responded', 'qualified', 'active_buyer', 'active_borrower', 'active_partner', 'revenue_opportunity'].includes(investor.relationship_stage)) {
+        if (!options.dryRun) {
+          await createAdminTask({
+            title: `Investor relationship follow-up: ${investor.display_name}`,
+            description: 'This investor or partner has replied or qualified. Capture the buy box, lending need, disposition need, or submission path manually instead of sending another automated email.',
+            taskType: 'investor_relationship_followup',
+            assignedTo: investor.owner_user_id || null,
+            priority: 'high',
+            entityType: 'investor_profile',
+            entityId: investor.id,
+            dueAt: adminTaskDueDates.now(),
+            metadata: { investorId: investor.id, sequence: investor.assigned_sequence, relationshipStage: investor.relationship_stage },
+          }).catch(() => null)
+          await updateInvestorRecord(investor.id, { next_follow_up_at: null })
+        }
+        results.push({ investorId: investor.id, name: investor.display_name, action: 'manual_relationship_followup' })
+        continue
+      }
 
-      await updateInvestorRecord(investor.id, {
-        relationship_stage: investor.relationship_stage === 'responded' ? 'followup_due' : investor.relationship_stage,
-        outreach_status: investor.outreach_status === 'sent' ? 'followup_due' : investor.outreach_status,
-        next_follow_up_at: adminTaskDueDates.days(5),
-      })
-      results.push({ investorId: investor.id, name: investor.display_name, action: 'followup_queued' })
+      if (!options.dryRun) {
+        await generateInvestorFollowup(investor)
+        await updateInvestorRecord(investor.id, {
+          relationship_stage: 'contacted',
+          outreach_status: 'needs_review',
+          next_follow_up_at: null,
+        })
+      }
+      results.push({ investorId: investor.id, name: investor.display_name, action: options.dryRun ? 'would_generate_followup' : 'followup_generated' })
     }
 
     await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: results.length })

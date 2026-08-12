@@ -1,16 +1,21 @@
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
+import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { DEFAULT_BUYER_DISCOVERY_MARKETS, DEFAULT_BUYER_DISCOVERY_NICHES } from '@/lib/buyers/constants'
 import { listMarketsForExpansionLane, pickDiscoveryTermsForMarket } from '@/lib/leads/marketExpansion'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import {
   finishBuyerOutreachRun,
   listApprovedBuyerEmailOutreach,
+  listBuyerOutreachForAutoApproval,
   updateBuyerOutreachMessage,
   updateBuyerPerformance,
   updateBuyerRecord,
   startBuyerOutreachRun,
 } from '@/lib/buyers/repository'
+import { evaluateBuyerAutoApproval } from '@/lib/buyers/automationCore'
+import { BUYER_OUTREACH_TEMPLATE_VERSION } from '@/lib/buyers/outreach'
 import {
   discoverAndIngestBuyersForMarket,
   runDailyBuyerFollowup,
@@ -19,7 +24,10 @@ import {
   runDailyBuyerScoring,
 } from '@/lib/buyers/service'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { runQualifiedSellerBuyerRouting } from '@/lib/buyers/qualifiedSellerRouting'
 import type { BuyerRecord } from '@/lib/buyers/types'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 
 function envInt(name: string, fallback: number) {
@@ -39,13 +47,20 @@ function buildDigestHtml(title: string, items: string[]) {
 }
 
 async function sendAdminDigest(subject: string, title: string, items: string[]) {
-  if (!process.env.ADMIN_ALERT_EMAIL || items.length === 0) return
-  await sendEmail({
-    to: process.env.ADMIN_ALERT_EMAIL,
+  const recipient = (
+    process.env.OPERATIONS_REPORT_EMAIL ||
+    process.env.OUTREACH_ALERT_EMAIL ||
+    process.env.ACQUISITIONS_ALERT_EMAIL ||
+    process.env.ADMIN_ALERT_EMAIL ||
+    'acquisitions@vestblock.io'
+  ).trim()
+  if (!recipient || items.length === 0) return { ok: false, skipped: true }
+  return sendEmail({
+    to: recipient,
     subject,
     html: buildDigestHtml(title, items),
     eventType: 'admin_lead_followup',
-  }).catch(() => null)
+  })
 }
 
 export async function runDailyBuyerDiscovery(options: { dryRun?: boolean } = {}) {
@@ -107,8 +122,26 @@ export async function runDailyBuyerDiscovery(options: { dryRun?: boolean } = {})
 }
 
 export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean } = {}) {
-  const autoSend = envBool('BUYER_AUTO_SEND_ENABLED', true)
-  const approved = await listApprovedBuyerEmailOutreach(limit)
+  const autoSendRequested = envBool('BUYER_AUTO_SEND_ENABLED', false)
+  const deliveryCircuitBreaker = autoSendRequested
+    ? await getDeliveryCircuitBreaker({ provider: 'gmail', allowControlledTrial: true })
+    : null
+  const replyCapture = getReplyCaptureReadiness()
+  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
+  const dailyLimit = envInt('BUYERS_DAILY_SEND_LIMIT', 25)
+  const admin = createAdminClient()
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count: sentLast24h, error: countError } = await admin
+    .from('buyer_outreach_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'sent')
+    .gte('sent_at', since)
+  if (countError) throw countError
+
+  const remaining = Math.max(0, dailyLimit - (sentLast24h || 0))
+  const circuitLimit = deliveryCircuitBreaker?.maxBatchSize || Number.POSITIVE_INFINITY
+  const effectiveLimit = Math.min(limit, remaining, circuitLimit)
+  const approved = effectiveLimit > 0 ? await listApprovedBuyerEmailOutreach(effectiveLimit) : []
   const results: Array<{ buyerId: string; name: string; status: string }> = []
 
   for (const row of approved) {
@@ -171,12 +204,19 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
       sent_at: new Date().toISOString(),
       send_provider: sent.provider,
       send_error: null,
+      metadata_json: {
+        ...(row.metadata_json || {}),
+        providerMessageId: sent.providerMessageId || null,
+        providerAcceptedAt: new Date().toISOString(),
+      },
     })
+    const isFollowup = row.channel === 'email_followup'
+    const nextActionAt = isFollowup ? adminTaskDueDates.days(7) : adminTaskDueDates.days(4)
     await updateBuyerRecord(buyer.id, {
       relationship_stage: 'contacted',
       outreach_status: 'sent',
       last_contacted_at: new Date().toISOString(),
-      next_follow_up_at: adminTaskDueDates.days(4),
+      next_follow_up_at: isFollowup ? null : nextActionAt,
     })
     await updateBuyerPerformance(buyer.id, {
       outreach_sent_count: ((buyer.metadata_json?.outreachSentCount as number) || 0) + 1,
@@ -188,17 +228,184 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
       entityId: buyer.id,
       metadata: { messageId: row.id, provider: sent.provider },
     })
-    results.push({ buyerId: buyer.id, name: buyer.name, status: 'sent' })
+    await recordOutboundEnrollment({
+      strategyKey: 'buyer-network',
+      channel: 'email',
+      status: 'accepted',
+      messageId: row.id,
+      recipient: buyer.contact_email,
+      market: [buyer.headquarters_city, buyer.headquarters_state].filter(Boolean).join(', '),
+      nextActionAt,
+      metadata: {
+        buyerId: buyer.id,
+        buyerCategory: buyer.category,
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+      },
+    }).catch(() => null)
+    results.push({ buyerId: buyer.id, name: buyer.name, status: 'accepted' })
   }
 
-  return { ok: true, count: results.length, results, autoSendEnabled: autoSend }
+  return {
+    ok: true,
+    count: results.length,
+    results,
+    autoSendEnabled: autoSend,
+    autoSendRequested,
+    deliveryCircuitBreaker,
+    replyCapture,
+    dailyLimit,
+    sentLast24h: sentLast24h || 0,
+    remainingBeforeRun: remaining,
+  }
+}
+
+export async function runDailyBuyerApproval(
+  limit = 20,
+  options: { dryRun?: boolean } = {}
+) {
+  const minimumScore = envInt('BUYER_AUTO_APPROVE_MIN_SCORE', 40)
+  const candidates = await listBuyerOutreachForAutoApproval(limit)
+  const results: Array<{ buyerId: string | null; name: string; status: string; reason: string }> = []
+
+  for (const message of candidates) {
+    const buyer = message.buyers as BuyerRecord | null
+    const decision = evaluateBuyerAutoApproval({
+      buyer,
+      message,
+      templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
+      minimumScore,
+    })
+
+    if (!decision.approved || !buyer) {
+      results.push({
+        buyerId: buyer?.id || null,
+        name: buyer?.name || 'Unknown buyer',
+        status: 'blocked',
+        reason: decision.reason,
+      })
+      continue
+    }
+
+    if (!options.dryRun) {
+      const approvedAt = new Date().toISOString()
+      await updateBuyerOutreachMessage(message.id, {
+        status: 'approved',
+        approved_at: approvedAt,
+        send_error: null,
+      })
+      await updateBuyerRecord(buyer.id, {
+        outreach_status: 'approved',
+        relationship_stage: 'outreach_ready',
+      })
+      await logEvent({
+        eventType: 'outreach_approved',
+        entityType: 'buyer',
+        entityId: buyer.id,
+        metadata: {
+          messageId: message.id,
+          templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
+          minimumScore,
+          approvalMode: 'guarded_automation',
+        },
+      })
+    }
+
+    results.push({
+      buyerId: buyer.id,
+      name: buyer.name,
+      status: options.dryRun ? 'would_approve' : 'approved',
+      reason: decision.reason,
+    })
+  }
+
+  return {
+    ok: true,
+    count: results.filter((result) => ['approved', 'would_approve'].includes(result.status)).length,
+    reviewed: results.length,
+    minimumScore,
+    results,
+  }
+}
+
+async function runBuyerStage<T>(name: string, task: () => Promise<T>) {
+  try {
+    return { ok: true as const, name, result: await task() }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await logEvent({
+      eventType: 'admin_action',
+      entityType: 'buyer_pipeline',
+      entityId: name,
+      metadata: { action: 'buyer_automation_stage_failed', stage: name, error: message },
+    }).catch(() => null)
+    return { ok: false as const, name, error: message }
+  }
 }
 
 export async function runDailyBuyerPipeline(options: { dryRun?: boolean } = {}) {
-  const discovery = await runDailyBuyerDiscovery({ dryRun: options.dryRun })
-  const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyBuyerScoring(envInt('BUYERS_DAILY_SCORE_LIMIT', 90))
-  const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyBuyerOutreach(envInt('BUYERS_DAILY_OUTREACH_LIMIT', 30))
-  const followup = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyBuyerFollowup(envInt('BUYERS_DAILY_FOLLOWUP_LIMIT', 25))
-  const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyBuyerPerformanceRollup()
-  return { ok: true, discovery, scoring, outreach, followup, performance }
+  const dryRun = Boolean(options.dryRun)
+  const pipelineRun = await startBuyerOutreachRun({
+    runType: 'daily_pipeline',
+    sourceKey: 'vestblock_buyer_pipeline',
+    requestParams: {
+      dryRun,
+      sendLimit: envInt('BUYERS_SEND_LIMIT_PER_RUN', 10),
+      dailyLimit: envInt('BUYERS_DAILY_SEND_LIMIT', 25),
+    },
+  })
+
+  try {
+    const discovery = await runBuyerStage('discovery', () => runDailyBuyerDiscovery({ dryRun }))
+    const scoring = await runBuyerStage('scoring', () =>
+      dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyBuyerScoring(envInt('BUYERS_DAILY_SCORE_LIMIT', 90))
+    )
+    const outreach = await runBuyerStage('outreach', () =>
+      runDailyBuyerOutreach(envInt('BUYERS_DAILY_OUTREACH_LIMIT', 30), { dryRun })
+    )
+    const followup = await runBuyerStage('followup', () =>
+      runDailyBuyerFollowup(envInt('BUYERS_DAILY_FOLLOWUP_LIMIT', 25), { dryRun })
+    )
+    const approval = await runBuyerStage('approval', () =>
+      runDailyBuyerApproval(envInt('BUYERS_DAILY_APPROVAL_LIMIT', 20), { dryRun })
+    )
+    const send = await runBuyerStage('send', () =>
+      runDailyBuyerSend(envInt('BUYERS_SEND_LIMIT_PER_RUN', 10), { dryRun })
+    )
+    const performance = await runBuyerStage('performance', () =>
+      dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyBuyerPerformanceRollup()
+    )
+    const sellerRouting = await runBuyerStage('seller_routing', () =>
+      runQualifiedSellerBuyerRouting(envInt('BUYER_ROUTING_DAILY_LIMIT', 25), { dryRun })
+    )
+    const stages = { discovery, scoring, outreach, followup, approval, send, performance, sellerRouting }
+    const ok = Object.values(stages).every((stage) => stage.ok)
+    const partial = Object.values(stages).some((stage) => !stage.ok)
+    const sendCount = send.ok
+      ? Number(send.result.results?.filter((result) => result.status === (dryRun ? 'would_send' : 'accepted')).length || 0)
+      : 0
+    const failedStages = Object.values(stages)
+      .filter((stage) => !stage.ok)
+      .map((stage) => stage.name)
+
+    await finishBuyerOutreachRun(pipelineRun.id, {
+      status: ok ? 'completed' : 'partial',
+      resultCount: sendCount,
+      errorMessage: failedStages.length ? `Failed stages: ${failedStages.join(', ')}` : null,
+    })
+
+    return {
+      ok,
+      partial,
+      runId: pipelineRun.id,
+      stages,
+    }
+  } catch (error) {
+    await finishBuyerOutreachRun(pipelineRun.id, {
+      status: 'failed',
+      resultCount: 0,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }).catch(() => null)
+    throw error
+  }
 }

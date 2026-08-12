@@ -6,7 +6,7 @@ import path from 'node:path'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const dailyTarget = Number.parseInt(process.env.LEADS_TARGET_EMAILS_PER_DAY || '50', 10)
+const dailyTarget = Number.parseInt(process.env.LEADS_TARGET_EMAILS_PER_DAY || '500', 10)
 const monthlyRevenueTarget = Number.parseInt(process.env.VESTBLOCK_MONTHLY_REVENUE_TARGET || '100000', 10)
 const now = Date.now()
 
@@ -628,7 +628,7 @@ async function main() {
     const lead = leadById.get(event.lead_id)
     const serviceKey = lead ? classifyLeadService(lead) : null
     if (!serviceKey || !serviceStats[serviceKey]) continue
-    if (lower(event.channel) !== 'email' || lower(event.status) !== 'sent') continue
+    if (lower(event.channel) !== 'email' || !['accepted', 'sent'].includes(lower(event.status))) continue
     if (withinHours(event.created_at, 24)) serviceStats[serviceKey].sent24h += 1
     if (withinDays(event.created_at, 30)) serviceStats[serviceKey].sent30d += 1
   }
@@ -706,7 +706,10 @@ async function main() {
   }
 
   const leadEmails24h = outreachSendEvents.filter(
-    (event) => lower(event.status) === 'sent' && lower(event.channel) === 'email' && withinHours(event.created_at, 24)
+    (event) =>
+      ['accepted', 'sent'].includes(lower(event.status)) &&
+      lower(event.channel) === 'email' &&
+      withinHours(event.created_at, 24)
   ).length
   const sendReady = outreachMessages.filter(
     (message) => lower(message.channel) === 'email' && ['approved', 'queued'].includes(lower(message.status))

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { useChat } from "@ai-sdk/react"
+import { useVestBlockChat } from "@/hooks/use-vestblock-chat"
 import type { FinancialGoal } from "@/components/financial-goals-selector"
 import { predefinedGoals } from "@/components/financial-goals-selector"
 import { Loader2, AlertTriangle, Target, MessageSquare, FileText } from "lucide-react"
@@ -61,7 +61,7 @@ interface UserRoadmap {
   user_id: string
   financial_goal_id?: string
   roadmap_data: { steps: RoadmapStepData[] }
-  created_at: string
+  created_at?: string | null
 }
 
 export default function UserHubPage() {
@@ -86,10 +86,9 @@ export default function UserHubPage() {
     error: chatError,
     setMessages,
     setInput,
-  } = useChat({
+  } = useVestBlockChat({
     id: chatSessionId,
     api: "/api/chat",
-    streamProtocol: "text",
     body: {
       creditScore: userProfile?.credit_score,
       financialGoal: userProfile?.financial_goal
@@ -193,7 +192,6 @@ export default function UserHubPage() {
     }
 
     if (user) fetchData()
-    else if (!authLoading) setIsLoadingProfileAndRoadmap(false)
   }, [user, authLoading, isAuthenticated, supabase, router])
 
   const handleGenerateRoadmap = async () => {
@@ -256,18 +254,7 @@ Can you give me more details or advice on this?`
     setActiveTab("chat")
   }
 
-  if (isLoadingProfileAndRoadmap || authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        
-        <main className="flex-grow flex items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
-        </main>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated || !user) {
+  if (!authLoading && (!isAuthenticated || !user)) {
     return (
       <div className="min-h-screen bg-background">
         
@@ -276,6 +263,17 @@ Can you give me more details or advice on this?`
           <Button onClick={() => router.push("/login?redirect=/user-hub")} className="mt-4">
             Go to Login
           </Button>
+        </main>
+      </div>
+    )
+  }
+
+  if (isLoadingProfileAndRoadmap || authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        
+        <main className="flex-grow flex items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-cyan-500" />
         </main>
       </div>
     )
@@ -322,7 +320,7 @@ Can you give me more details or advice on this?`
   }
 
   const access = getAccessProfile({
-    email: user.email,
+    email: user?.email,
     role: userProfile?.role,
     is_subscribed: userProfile?.is_subscribed,
     paypal_order_product: userProfile?.paypal_order_product,

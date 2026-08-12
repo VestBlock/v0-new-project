@@ -132,6 +132,29 @@ export type InvestorProfileRecord = {
   updated_at: string
 }
 
+export type InvestorOutreachMessageRecord = {
+  id: string
+  investor_profile_id: string
+  investor_contact_id: string | null
+  sequence_code: InvestorSequenceCode
+  step_number: number
+  channel: 'email' | 'linkedin_dm' | 'facebook_dm' | 'phone_script' | 'sms'
+  subject: string | null
+  body: string
+  cta: string | null
+  status: 'draft' | 'needs_review' | 'approved' | 'queued' | 'sent' | 'failed' | 'archived'
+  generated_with: string | null
+  approved_at: string | null
+  approved_by_user_id: string | null
+  sent_at: string | null
+  send_provider: string | null
+  send_error: string | null
+  last_generated_at: string | null
+  metadata_json: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 export type InvestorTransactionInput = {
   propertyAddress?: string | null
   city?: string | null

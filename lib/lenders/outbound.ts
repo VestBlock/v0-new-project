@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import type { LenderOutreachMessageRecord, LenderRecord } from '@/lib/lenders/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
 type SendLenderEmailInput = {
   lender: LenderRecord
@@ -28,6 +29,18 @@ function getSender() {
 
 function getResendSender() {
   return process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || process.env.RESEND_EMAIL || DEFAULT_OUTREACH_SENDER
+}
+
+function getReplyToEmail() {
+  return process.env.OUTREACH_REPLY_TO_EMAIL || DEFAULT_OUTREACH_SENDER
+}
+
+function buildOutreachBody(message: LenderOutreachMessageRecord) {
+  const body = String(message.body || '').trim()
+  const compliance = String(
+    message.compliance_note || 'If this is not relevant, reply and we will not contact you again.'
+  ).trim()
+  return body.toLowerCase().includes(compliance.toLowerCase()) ? body : `${body}\n\n${compliance}`
 }
 
 function hasGmailConfig() {
@@ -78,12 +91,13 @@ async function sendWithGmail(input: SendLenderEmailInput): Promise<SendLenderEma
 
   const mime = [
     `From: VestBlock <${getSender()}>`,
+    `Reply-To: ${getReplyToEmail()}`,
     `To: ${recipient}`,
     `Subject: ${input.message.subject || 'VestBlock partnership note'}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     '',
-    input.message.body,
+    buildOutreachBody(input.message),
   ].join('\r\n')
 
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
@@ -118,7 +132,8 @@ async function sendWithResend(input: SendLenderEmailInput): Promise<SendLenderEm
     from: getResendSender(),
     to: recipient,
     subject: input.message.subject || 'VestBlock partnership note',
-    text: input.message.body,
+    text: buildOutreachBody(input.message),
+    replyTo: getReplyToEmail(),
   })
 
   if (error) {
@@ -129,6 +144,10 @@ async function sendWithResend(input: SendLenderEmailInput): Promise<SendLenderEm
 }
 
 export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Promise<SendLenderEmailResult> {
+  const replyCapture = getReplyCaptureReadiness()
+  if (!replyCapture.ready) {
+    return { ok: false, provider: 'none', error: replyCapture.reason || 'Reply capture is disconnected.' }
+  }
   if (!isUsableContactEmail(input.lender.contact_email)) {
     return { ok: false, provider: 'none', error: 'Lender does not have a usable contact email.' }
   }

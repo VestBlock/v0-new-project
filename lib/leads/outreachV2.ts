@@ -87,7 +87,7 @@ const PLATFORM_DOMAINS = new Set([
   'webador.com',
 ])
 const BAD_STATUSES = new Set(['closed', 'closed_won', 'closed_lost', 'disqualified', 'do_not_contact'])
-const BAD_DELIVERY_STATUSES = new Set(['bounced', 'suppressed', 'failed'])
+const BAD_DELIVERY_STATUSES = new Set(['bounced', 'complained', 'suppressed', 'failed'])
 const PUBLIC_OR_LOW_FIT_TERMS = [
   'uscis',
   'field office',
@@ -275,7 +275,7 @@ export function isOutreachV2Enabled() {
 }
 
 export function getOutreachV2DailyTarget() {
-  return envInt('OUTREACH_V2_DAILY_QUALITY_TARGET', envInt('LEADS_TARGET_EMAILS_PER_DAY', 50))
+  return envInt('OUTREACH_V2_DAILY_QUALITY_TARGET', envInt('LEADS_TARGET_EMAILS_PER_DAY', 500))
 }
 
 function textFromUnknown(value: unknown) {

@@ -9,6 +9,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
 const visibilityClusters = [
+  'seller-solutions',
   'dealvault',
   'search-visibility',
   'ai-receptionist',

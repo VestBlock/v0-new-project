@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { type NextRequest, NextResponse, after } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { persistPropertyBuyerMatches } from '@/lib/buyers/service';
@@ -204,11 +204,8 @@ export async function POST(request: NextRequest) {
 
     const summary = `${normalizedPropertyAddress || 'Unknown property'}; path ${preferredSalePathLabel}; timeline ${data.timelineToSell || 'not specified'}; rough value ${roughEstimate.estimateValue ? `$${roughEstimate.estimateValue.toLocaleString()}` : data.estimatedValue || 'unknown'} (${roughEstimate.confidenceLabel}); mortgage ${data.mortgageBalance || 'unknown'}. ${roughEstimate.buyerPacketSummary}`;
 
-    // Operator notification is the email intake alert (sendIntakeAlert below);
-    // SMS/Twilio was removed 2026-07-02 — no Twilio account exists.
     const followUpTasks: Array<Promise<unknown>> = [
       runNewLeadAutomation({
-        sendIntakeAlert: true,
         leadId: unifiedLead.id,
         leadType: 'sell_house',
         name: data.name,
@@ -264,22 +261,31 @@ export async function POST(request: NextRequest) {
       }),
     ];
 
-    // after() keeps the serverless function alive until these finish. The previous
-    // fire-and-forget pattern let Vercel freeze the lambda after the response,
-    // silently dropping the operator alert, buyer matching, and lead automation.
-    after(async () => {
-      const results = await Promise.allSettled(followUpTasks);
-      const rejected = results.filter((result) => result.status === 'rejected');
-      if (rejected.length > 0) {
-        console.error('Seller lead follow-up tasks failed:', rejected);
-      }
+    // Vercel may stop work after the response is returned. Keep lead routing in
+    // the request lifecycle so a successful response means the automation ran.
+    const followUpResults = await Promise.allSettled(followUpTasks);
+    const failedFollowUps = followUpResults.flatMap((result, index) => {
+      if (result.status === 'fulfilled') return [];
+      return [{
+        task: index === 0 ? 'lead_automation' : 'buyer_matching',
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      }];
     });
+
+    if (failedFollowUps.length > 0) {
+      console.error('Seller lead follow-up tasks failed:', failedFollowUps);
+    }
 
     return NextResponse.json({
       success: true,
       leadId: unifiedLead.id,
       message: 'Lead submitted successfully',
       roughEstimate,
+      automation: {
+        status: failedFollowUps.length === 0 ? 'completed' : 'partial',
+        completed: followUpResults.length - failedFollowUps.length,
+        failed: failedFollowUps,
+      },
     });
   } catch (error) {
     console.error('API error:', error);

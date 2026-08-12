@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -134,7 +133,6 @@ export function SellPage({ market }: SellPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState("")
-  const [showMoreDetails, setShowMoreDetails] = useState(false)
 
   const [formData, setFormData] = useState(() => getInitialFormData(market))
 
@@ -146,13 +144,6 @@ export function SellPage({ market }: SellPageProps) {
       !QUERY_PREFILL_FIELDS.some((field) => params.has(field)) &&
       !TRACKING_PARAMS.some((field) => params.has(field))
     ) return
-
-    // If a link prefills detail fields, open the optional section so the values are visible.
-    const detailFields = [
-      "propertyType", "bedrooms", "bathrooms", "estimatedValue", "askingPrice",
-      "mortgageBalance", "liensOrTaxes", "occupancyStatus",
-    ]
-    if (detailFields.some((field) => params.get(field))) setShowMoreDetails(true)
 
     setFormData((current) => {
       const next = { ...current }
@@ -270,7 +261,7 @@ export function SellPage({ market }: SellPageProps) {
 
           <div className="container mx-auto relative z-10">
             <motion.div
-              initial={market ? false : { opacity: 0, y: 30 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               className="text-center max-w-4xl mx-auto"
@@ -348,7 +339,7 @@ export function SellPage({ market }: SellPageProps) {
         <section id="lead-form" className="py-20 px-4 bg-gradient-to-b from-background to-muted/10">
           <div className="container mx-auto max-w-2xl">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
@@ -384,22 +375,7 @@ export function SellPage({ market }: SellPageProps) {
                         <p className="mt-2 text-sm text-muted-foreground">
                           The property details go to our acquisitions review first, then the follow-up is shaped around fast cash,
                           creative structure, novation, or another partner conversation based on the timeline and condition.
-                          Expect a follow-up within one business day.
                         </p>
-                      </div>
-                      <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-left">
-                        <p className="font-medium text-foreground">While you wait</p>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Want a rough read on your own numbers first? Run the free property analyzer — it estimates value ranges,
-                          repair impact, and likely sale paths in a couple of minutes.
-                        </p>
-                        <Link
-                          href="/property-analyzer"
-                          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/20"
-                        >
-                          <TrendingUp className="h-4 w-4" />
-                          Run the property analyzer
-                        </Link>
                       </div>
                     </motion.div>
                   ) : (
@@ -531,95 +507,14 @@ export function SellPage({ market }: SellPageProps) {
                         </div>
                       </div>
 
-                      {/* Condition and timeline stay up front: they drive routing and cost two clicks */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="propertyCondition" className="text-sm font-medium">
-                            Property Condition
-                          </Label>
-                          <Select
-                            value={formData.propertyCondition}
-                            onValueChange={(value) => handleInputChange("propertyCondition", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Condition" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PROPERTY_CONDITIONS.map((condition) => (
-                                <SelectItem key={condition} value={condition}>
-                                  {condition}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="timelineToSell" className="text-sm font-medium">
-                            Timeline to Sell
-                          </Label>
-                          <Select
-                            value={formData.timelineToSell}
-                            onValueChange={(value) => handleInputChange("timelineToSell", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Timeline" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIMELINES.map((timeline) => (
-                                <SelectItem key={timeline} value={timeline}>
-                                  {timeline}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="preferredSalePath" className="text-sm font-medium">
-                          Preferred Sale Path
-                        </Label>
-                        <Select
-                          value={formData.preferredSalePath}
-                          onValueChange={(value) => handleInputChange("preferredSalePath", value)}
-                        >
-                          <SelectTrigger className="bg-background/50">
-                            <SelectValue placeholder="Select Sale Path" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SELLER_REVIEW_PATHS.map((path) => (
-                              <SelectItem key={path.value} value={path.value}>
-                                {path.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Choose what you want reviewed first. VestBlock may still recommend a different route after looking at the property, payoff, timing, and buyer interest.
+                      <details className="group rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <summary className="cursor-pointer select-none text-sm font-semibold text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                          Add property, loan, and timing details (optional)
+                        </summary>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          These details help us compare cash, creative, novation, and partner paths before we call.
                         </p>
-                      </div>
-
-                      {/* Everything below is optional and collapsed so the form reads short */}
-                      <button
-                        type="button"
-                        onClick={() => setShowMoreDetails((current) => !current)}
-                        aria-expanded={showMoreDetails}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-left transition-colors hover:bg-cyan-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                      >
-                        <span>
-                          <span className="block text-sm font-medium text-cyan-100">
-                            {showMoreDetails ? "Hide extra property details" : "Add property & payoff details (optional)"}
-                          </span>
-                          <span className="mt-0.5 block text-xs font-normal text-slate-400">
-                            Beds, baths, value, payoff, and situation — speeds up your review, but you can skip it.
-                          </span>
-                        </span>
-                        <span className="text-lg font-semibold text-cyan-300">{showMoreDetails ? "−" : "+"}</span>
-                      </button>
-
-                      {showMoreDetails ? (
-                        <>
+                        <div className="mt-5 space-y-6">
                       {/* Property Type and Occupancy */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -689,6 +584,51 @@ export function SellPage({ market }: SellPageProps) {
                             onChange={(e) => handleInputChange("bathrooms", e.target.value)}
                             className="bg-background/50"
                           />
+                        </div>
+                      </div>
+
+                      {/* Property Condition and Timeline */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="propertyCondition" className="text-sm font-medium">
+                            Property Condition
+                          </Label>
+                          <Select
+                            value={formData.propertyCondition}
+                            onValueChange={(value) => handleInputChange("propertyCondition", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Condition" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PROPERTY_CONDITIONS.map((condition) => (
+                                <SelectItem key={condition} value={condition}>
+                                  {condition}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="timelineToSell" className="text-sm font-medium">
+                            Timeline to Sell
+                          </Label>
+                          <Select
+                            value={formData.timelineToSell}
+                            onValueChange={(value) => handleInputChange("timelineToSell", value)}
+                          >
+                            <SelectTrigger className="bg-background/50">
+                              <SelectValue placeholder="Select Timeline" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIMELINES.map((timeline) => (
+                                <SelectItem key={timeline} value={timeline}>
+                                  {timeline}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
 
@@ -770,6 +710,30 @@ export function SellPage({ market }: SellPageProps) {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor="preferredSalePath" className="text-sm font-medium">
+                          Preferred Sale Path
+                        </Label>
+                        <Select
+                          value={formData.preferredSalePath}
+                          onValueChange={(value) => handleInputChange("preferredSalePath", value)}
+                        >
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Select Sale Path" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SELLER_REVIEW_PATHS.map((path) => (
+                              <SelectItem key={path.value} value={path.value}>
+                                {path.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Choose what you want reviewed first. VestBlock may still recommend a different route after looking at the property, payoff, timing, and buyer interest.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
                         <Label htmlFor="notes" className="text-sm font-medium">
                           Anything Else We Should Know?
                         </Label>
@@ -782,24 +746,8 @@ export function SellPage({ market }: SellPageProps) {
                           rows={4}
                         />
                       </div>
-                        </>
-                      ) : null}
-
-                      {/* Trust microcopy: answer the silent objections right before commitment */}
-                      <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 sm:grid-cols-3">
-                        <p className="flex items-center gap-2 text-xs text-slate-300">
-                          <Shield className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
-                          No fees, no obligation
-                        </p>
-                        <p className="flex items-center gap-2 text-xs text-slate-300">
-                          <Phone className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
-                          Follow-up within 1 business day
-                        </p>
-                        <p className="flex items-center gap-2 text-xs text-slate-300">
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
-                          Your info is never sold
-                        </p>
-                      </div>
+                        </div>
+                      </details>
 
                       {/* Submit Button */}
                       <Button
@@ -832,7 +780,7 @@ export function SellPage({ market }: SellPageProps) {
         <section className="py-20 px-4">
           <div className="container mx-auto">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
@@ -848,7 +796,7 @@ export function SellPage({ market }: SellPageProps) {
 
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               <motion.div
-                initial={{ opacity: 0, y: 30 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
                 viewport={{ once: true }}
@@ -867,7 +815,7 @@ export function SellPage({ market }: SellPageProps) {
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 30 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
                 viewport={{ once: true }}
@@ -886,7 +834,7 @@ export function SellPage({ market }: SellPageProps) {
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 30 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.3 }}
                 viewport={{ once: true }}
@@ -914,7 +862,7 @@ export function SellPage({ market }: SellPageProps) {
         <section className="py-20 px-4 bg-gradient-to-b from-muted/10 to-background">
           <div className="container mx-auto">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
@@ -927,7 +875,7 @@ export function SellPage({ market }: SellPageProps) {
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 viewport={{ once: true }}
@@ -943,7 +891,7 @@ export function SellPage({ market }: SellPageProps) {
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
                 viewport={{ once: true }}
@@ -959,7 +907,7 @@ export function SellPage({ market }: SellPageProps) {
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
                 viewport={{ once: true }}
@@ -975,7 +923,7 @@ export function SellPage({ market }: SellPageProps) {
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
                 viewport={{ once: true }}

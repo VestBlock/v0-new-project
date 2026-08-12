@@ -17,6 +17,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
+function getSafeRedirectTarget(value: string | null, fallback: string) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return fallback;
+  }
+
+  return value;
+}
+
 function RegisterPageContent() {
   const defaultRedirectTarget = '/dashboard/services';
   const searchParams = useSearchParams();
@@ -26,7 +34,7 @@ function RegisterPageContent() {
   const [fullName, setFullName] = useState('');
   const { signUp, isLoading, authError, isAuthenticated } = useAuth();
   const router = useRouter();
-  const redirectTarget = searchParams.get('redirect') || defaultRedirectTarget;
+  const redirectTarget = getSafeRedirectTarget(searchParams.get('redirect'), defaultRedirectTarget);
 
   useEffect(() => {
     if (prefilledEmail) {

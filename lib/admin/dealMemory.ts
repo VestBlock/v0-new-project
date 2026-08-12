@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createAdminClient } from '../supabase/admin'
 import type { RoughPropertyEstimate } from '../property/roughEstimate'
 import type { PropertyOpportunityAnalysis } from '../property/opportunityAnalysis'
+import type { PropertyMapLinks } from '../property/mapLinks'
 
 type AnyRow = Record<string, any>
 
@@ -138,6 +139,7 @@ function propertyAnalysisRecord(input: {
   form: AnyRow
   estimate: RoughPropertyEstimate
   opportunity: PropertyOpportunityAnalysis
+  mapLinks?: PropertyMapLinks | null
   analysisSource?: string
   createdAt?: string
 }): PropertyAnalysisMemoryRecord {
@@ -177,6 +179,7 @@ function propertyAnalysisRecord(input: {
       signalScore: input.opportunity.signalScore,
       riskFlags: input.opportunity.riskFlags,
       selectedCompCount: input.opportunity.comparables.usedCount,
+      mapLinks: input.mapLinks || null,
     },
   }
 }
@@ -319,6 +322,7 @@ export async function recordPropertyAnalysisRun(input: {
   form: AnyRow
   estimate: RoughPropertyEstimate
   opportunity: PropertyOpportunityAnalysis
+  mapLinks?: PropertyMapLinks | null
   analysisSource?: string
   leadId?: string | null
 }): Promise<PropertyAnalysisPersistResult> {
@@ -338,6 +342,7 @@ export async function recordPropertyAnalysisRun(input: {
       spread: record.spread,
       primaryRoute: record.primaryRouteLabel,
       signalScore: input.opportunity.signalScore?.score ?? null,
+      mapLinks: input.mapLinks || null,
     },
   })
 

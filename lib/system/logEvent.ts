@@ -50,6 +50,8 @@ export type SystemEventType =
   | 'buyer_outreach_sent'
   | 'buyer_packet_generated'
   | 'buyer_packet_sent'
+  | 'buyer_packet_provider_accepted'
+  | 'qualified_seller_buyer_routing'
   | 'admin_action';
 
 type LogEventInput = {

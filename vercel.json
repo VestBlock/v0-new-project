@@ -1,13 +1,61 @@
 {
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "crons": [
-    {
-      "path": "/api/cron/command-center-autopilot",
-      "schedule": "0 */4 * * *"
-    },
     {
       "path": "/api/cron/boss-daily-loop",
       "schedule": "0 14,17,20,23 * * *"
+    },
+    {
+      "path": "/api/cron/daily-ops-report",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/strategy-engine",
+      "schedule": "30 13,19 * * *"
+    },
+    {
+      "path": "/api/cron/strategy-source-orchestrator",
+      "schedule": "0 11,18 * * *"
+    },
+    {
+      "path": "/api/cron/seller-followup?excludeDealMachine=true",
+      "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/cron/partner-network-pipeline",
+      "schedule": "15 15 * * *"
+    },
+    {
+      "path": "/api/cron/linkedin-task-queue?limit=40",
+      "schedule": "45 15 * * *"
+    },
+    {
+      "path": "/api/cron/mailbox-sync",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/attom-enrichment?limit=10&mode=smart",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/improvement-review",
+      "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/cron/aeo-site-audit",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/entity-seo-expansion",
+      "schedule": "15 10 * * *"
+    },
+    {
+      "path": "/api/cron/visibility-aeo-publisher?limit=2",
+      "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/cron/visibility-indexing-push?inspectLimit=5",
+      "schedule": "0 12 * * *"
     }
   ]
 }
