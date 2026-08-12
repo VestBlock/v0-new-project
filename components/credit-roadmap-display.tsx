@@ -5,7 +5,7 @@ import type React from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Info, Zap, TrendingUp, Target, ShieldCheck, FileWarning, UserCheck, History } from "lucide-react"
+import { Info, Zap, TrendingUp, Target, ShieldCheck, FileWarning, UserCheck, History, type LucideIcon } from "lucide-react"
 import type { RoadmapStep } from "@/types/supabase" // Ensure this path is correct
 
 interface CreditRoadmapDisplayProps {
@@ -13,7 +13,7 @@ interface CreditRoadmapDisplayProps {
   // onStepStatusChange?: (stepId: string, newStatus: RoadmapStep['status']) => void; // For future progress tracking
 }
 
-const categoryIcons: Record<RoadmapStep["category"], React.ElementType> = {
+const categoryIcons: Record<RoadmapStep["category"], LucideIcon> = {
   "Credit Utilization": Zap,
   "Debt Management": TrendingUp,
   "Payment History": History,

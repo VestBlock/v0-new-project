@@ -789,36 +789,155 @@
 
   .vb-dealvault-banner { border: 1px solid rgba(183,255,60,0.62); background: linear-gradient(115deg, #b7ff3c 0%, #d2ff83 43%, #a9ed3a 100%); color: #11130f; box-shadow: 0 24px 70px rgba(183,255,60,0.08); }
   .vb-final-cta { background: radial-gradient(circle at 78% 30%, rgba(183,255,60,0.08), transparent 25%); }
+
+  /* Homepage film: the DOM carries the decision language while the canvas carries the spatial story. */
+  .vb-hero-stage {
+    --hero-progress: 0;
+    min-height: 1880px;
+    height: 322svh;
+    background: #080a08;
+  }
+
+  .vb-hero-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 67% 44%, rgba(180,255,56,0.08), transparent 25%),
+      linear-gradient(102deg, rgba(8,10,8,0.92) 0%, rgba(8,10,8,0.59) 44%, rgba(8,10,8,0.14) 72%, rgba(8,10,8,0.72) 100%);
+  }
+
+  .vb-hero-stage::after {
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(8,10,8,0.26), transparent 18%, transparent 78%, rgba(8,10,8,0.82));
+  }
+
+  .vb-hero-film-field,
+  .vb-hero-film,
+  .vb-hero-film-loading {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .vb-hero-film-field {
+    z-index: -1;
+    background:
+      radial-gradient(circle at 72% 48%, rgba(183,255,60,0.09), transparent 28%),
+      repeating-linear-gradient(90deg, transparent 0 79px, rgba(203,222,170,0.035) 80px),
+      linear-gradient(180deg, #0b0e0a 0%, #080a08 88%);
+  }
+
+  .vb-hero-film { z-index: 0; }
+  .vb-hero-film-canvas { position: sticky !important; top: 4rem; display: block; width: 100% !important; height: calc(100svh - 4rem) !important; }
+  .vb-hero-film-loading { z-index: 0; background: radial-gradient(ellipse at 71% 49%, rgba(183,255,60,0.07), transparent 27%); }
+  .vb-hero-mark-mask {
+    position: absolute;
+    top: clamp(5rem, 13vh, 9rem);
+    right: clamp(2rem, 7vw, 9rem);
+    z-index: 1;
+    width: min(43vw, 39rem);
+    aspect-ratio: 1;
+    pointer-events: none;
+    opacity: calc(1 - (var(--hero-progress) * 3.5));
+    filter: contrast(1.08) saturate(1.04) drop-shadow(0 2.4rem 4rem rgba(0,0,0,0.52));
+    transform: perspective(1200px) translate3d(calc(var(--hero-progress) * 7vw), calc(var(--hero-progress) * -7vh), 0) rotateY(calc(-13deg + (var(--hero-progress) * 28deg))) rotateX(calc(4deg - (var(--hero-progress) * 11deg))) scale(calc(1 - (var(--hero-progress) * 0.19)));
+    transform-origin: 50% 50%;
+    will-change: transform, opacity;
+  }
+  .vb-hero-mark-mask::before { content: ""; position: absolute; inset: 17% 10% 17% 10%; z-index: -1; border: 1px solid rgba(183,255,60,0.22); box-shadow: inset 0 0 3rem rgba(183,255,60,0.08), 0 0 5rem rgba(183,255,60,0.06); transform: skewY(-6deg); }
+  .vb-hero-mark-mask img { object-fit: contain; mix-blend-mode: screen; }
+
+  .vb-hero-pin {
+    position: sticky;
+    top: 4rem;
+    z-index: 2;
+    height: calc(100svh - 4rem);
+    min-height: 42rem;
+  }
+
+  .vb-hero-inner {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    padding-top: clamp(2.5rem, 6vh, 5.5rem);
+    padding-bottom: clamp(4.5rem, 10vh, 8rem);
+  }
+
+  .vb-hero-copy { width: min(100%, 42rem); }
+  .vb-hero-kicker { color: #9a9e92; font-size: 0.66rem; font-weight: 700; }
+  .vb-hero-scene-heading { min-height: 18rem; }
+  .vb-hero-scene-label { display: flex; align-items: center; gap: 0.75rem; margin: 0; color: #9da590; font: 700 0.61rem/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; letter-spacing: 0.17em; text-transform: uppercase; }
+  .vb-hero-scene-label span { color: #b7ff3c; }
+  .vb-hero-scene-label i { display: block; width: 2.2rem; height: 1px; background: linear-gradient(90deg, #b7ff3c, transparent); }
+  .vb-hero-title { max-width: 9.6ch; margin-top: 1.3rem; font-size: clamp(3.25rem, 6.7vw, 7.25rem); font-weight: 570; letter-spacing: -0.078em; line-height: 0.88; text-wrap: balance; color: #f3efe6; }
+  .vb-hero-title-mask { display: block; transform-origin: 0 100%; animation: vb-film-type-reveal 680ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .vb-hero-scene-detail { min-height: 3.9rem; animation: vb-film-detail-reveal 560ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  @keyframes vb-film-type-reveal { from { opacity: 0; clip-path: inset(0 0 100% 0); transform: translate3d(0, 24px, 0) skewY(2deg); } to { opacity: 1; clip-path: inset(0); transform: translate3d(0, 0, 0) skewY(0); } }
+  @keyframes vb-film-detail-reveal { from { opacity: 0; transform: translate3d(0, 9px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+
+  .vb-hero-spatial-readout {
+    position: absolute;
+    right: clamp(1.25rem, 5.4vw, 6.6rem);
+    bottom: clamp(4rem, 12vh, 8.4rem);
+    z-index: 3;
+    width: min(16rem, 21vw);
+    color: #c5cbbd;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+  }
+  .vb-spatial-readout-top, .vb-spatial-readout-bottom { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.54rem; font-weight: 700; color: #828a7b; }
+  .vb-spatial-readout-core { display: flex; align-items: center; gap: 0.7rem; margin: 0.75rem 0; border-top: 1px solid rgba(213,230,193,0.25); border-bottom: 1px solid rgba(213,230,193,0.14); padding: 0.9rem 0; }
+  .vb-spatial-readout-core strong, .vb-spatial-readout-core span { display: block; }
+  .vb-spatial-readout-core strong { color: #eef1e9; font-size: 0.65rem; }
+  .vb-spatial-readout-core div span { margin-top: 0.27rem; color: #939b8a; font-size: 0.54rem; }
+  .vb-spatial-readout-pulse { width: 0.44rem; height: 0.44rem; flex: 0 0 auto; border-radius: 50%; background: #b7ff3c; box-shadow: 0 0 16px rgba(183,255,60,0.82); }
+  .vb-spatial-readout-bottom span:last-child { color: #b7ff3c; }
+
+  .vb-hero-scene-meter { position: absolute; right: clamp(1.25rem, 1.8vw, 2.75rem); top: 50%; z-index: 3; display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; transform: translateY(-50%); color: #555d50; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; text-transform: uppercase; letter-spacing: 0.12em; }
+  .vb-hero-scene-meter li { display: grid; grid-template-columns: 1.25rem 1px auto; align-items: center; gap: 0.45rem; font-size: 0.5rem; transition: color 260ms ease; }
+  .vb-hero-scene-meter li i { display: block; height: 1px; width: 0.8rem; background: currentColor; transition: width 260ms ease, background-color 260ms ease; }
+  .vb-hero-scene-meter li strong { display: none; font-size: 0.5rem; font-weight: 700; }
+  .vb-hero-scene-meter li.is-complete { color: #879777; }
+  .vb-hero-scene-meter li.is-active { color: #dfe8d9; }
+  .vb-hero-scene-meter li.is-active i { width: 2.35rem; background: #b7ff3c; }
+  .vb-hero-scene-meter li.is-active strong { display: block; }
+
+  .vb-hero-scroll-cue { left: 0; bottom: clamp(1.7rem, 4.2vh, 3rem); transform: none; color: #969e90; }
+  .vb-hero-scroll-cue svg { color: #b7ff3c; }
 }
 
 @media (max-width: 1023px) {
-  .vb-hero-stage { min-height: auto; }
-  .vb-hero-object-wrap { order: -1; }
-  .vb-hero-object-wrap { max-width: 42rem; }
-  .vb-hero-object-stage { height: clamp(18.5rem, 68vw, 30rem); }
-  .vb-hero-scroll-cue { display: none; }
+  .vb-hero-stage { height: auto; min-height: 0; }
+  .vb-hero-stage::before { inset: 0 0 auto auto; width: min(21rem, 76vw); height: 24rem; opacity: 0.42; background: url("/brand/vestblock-monogram.png") center/contain no-repeat; filter: drop-shadow(0 0 2.7rem rgba(183,255,60,0.17)); }
+  .vb-hero-stage::after { background: linear-gradient(180deg, rgba(8,10,8,0.18), rgba(8,10,8,0.7) 42%, #080a08 80%); }
+  .vb-hero-film-field { background: radial-gradient(ellipse at 70% 5%, rgba(183,255,60,0.09), transparent 23%), #080a08; }
+  .vb-hero-film { display: none; }
+  .vb-hero-mark-mask { display: none; }
+  .vb-hero-pin { position: relative; top: auto; height: auto; min-height: 0; }
+  .vb-hero-inner { min-height: 0; display: block; padding-top: clamp(13.5rem, 37vw, 18.5rem); padding-bottom: 3.5rem; }
+  .vb-hero-copy { width: min(100%, 42rem); }
+  .vb-hero-scene-heading { min-height: 16.4rem; }
+  .vb-hero-spatial-readout, .vb-hero-scene-meter, .vb-hero-scroll-cue { display: none; }
   .vb-path-rail { grid-template-columns: 1fr; }
   .vb-path-card { min-height: 25rem; }
   .vb-path-card-art { height: 8.5rem; }
 }
 
 @media (max-width: 639px) {
-  .vb-hero-title { margin-top: 1.5rem; font-size: clamp(3.05rem, 14.5vw, 5rem); }
+  .vb-hero-inner { padding-top: 11.75rem; }
+  .vb-hero-stage::before { width: 17rem; height: 19rem; opacity: 0.35; }
+  .vb-hero-title { margin-top: 1.1rem; font-size: clamp(3.05rem, 14.5vw, 5rem); }
   .vb-hero-lede { margin-top: 1.2rem; }
-  .vb-hero-object-stage { height: 18rem; }
-  .vb-monogram-object { width: 55%; }
-  .vb-hero-object-meta-bottom { display: none; }
-  .vb-hero-object-caption { padding-inline: 0.8rem; }
-  .vb-hero-object-caption p { display: none; }
-  .vb-object-callout { font-size: 0.49rem; }
-  .vb-object-callout small { font-size: 0.48rem; }
-  .vb-object-callout-capital { left: 4%; top: 30%; }
-  .vb-object-callout-deals { right: 3%; top: 45%; }
-  .vb-object-callout-opportunity { left: 8%; bottom: 16%; }
-  .vb-callout-line { width: 2.7rem; }
-  .vb-object-callout-capital .vb-callout-line { left: 5.4rem; }
-  .vb-object-callout-deals .vb-callout-line { right: 5.6rem; }
-  .vb-object-callout-opportunity .vb-callout-line { left: 7rem; }
+  .vb-hero-scene-heading { min-height: 17.25rem; }
+  .vb-hero-scene-label { font-size: 0.55rem; }
+  .vb-hero-scene-detail { min-height: 4.8rem; }
   .vb-path-card { min-height: 23rem; }
   .vb-path-card h3 { max-width: 13ch; }
   .vb-proof-console { min-height: 25rem; }
@@ -828,8 +947,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .vb-hero-stage { height: auto; min-height: 0; }
+  .vb-hero-pin { position: relative; top: auto; height: auto; min-height: 0; }
+  .vb-hero-inner { min-height: 0; display: block; padding-top: clamp(13.5rem, 37vw, 18.5rem); padding-bottom: 3.5rem; }
   .vb-hero-stage, .vb-hero-aurora, .vb-hero-grid, .vb-hero-object-stage, .vb-monogram-object, .vb-monogram-sheen { transform: none; transition: none; }
   .vb-reveal { animation: none; }
+  .vb-hero-title-mask, .vb-hero-scene-detail { animation: none; }
   .vb-scroll-cue-ring i { animation: none; }
   .vb-path-card:hover, .vb-lane-tab:hover { transform: none; }
 }

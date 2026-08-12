@@ -28,6 +28,7 @@ import {
   Sparkles,
   Target,
   Users,
+  type LucideIcon,
 } from "lucide-react"
 
 import { BrandMark } from "@/components/brand-logo"
@@ -45,7 +46,7 @@ type Props = {
   initialBossBriefing: ComponentProps<typeof CommandCenterClient>["initialBossBriefing"]
 }
 
-const areaCopy: Record<FounderArea, { label: string; icon: React.ElementType }> = {
+const areaCopy: Record<FounderArea, { label: string; icon: LucideIcon }> = {
   today: { label: "Today", icon: Gauge },
   pipeline: { label: "Pipeline", icon: BriefcaseBusiness },
   growth: { label: "Growth", icon: Rocket },
@@ -84,7 +85,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   )
 }
 
-function Heading({ icon: Icon, title, hint }: { icon: React.ElementType; title: string; hint?: string }) {
+function Heading({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint?: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2.5">
