@@ -49,11 +49,10 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/sell', label: 'Opportunities' },
-    { href: '/property-analyzer', label: 'Analyzer' },
-    { href: '/get-started', label: 'Partners' },
+    { href: '/funding', label: 'Capital' },
+    { href: '/sell', label: 'Deals' },
+    { href: '/get-started', label: 'Opportunity' },
     { href: '/dealvault', label: 'DealVault' },
-    { href: '/real-estate-funding', label: 'Capital' },
   ];
 
   const isActiveLink = (href: string) => {
@@ -115,7 +114,7 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}>
+            <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu className="h-6 w-6" />
               <span className="sr-only">Toggle Menu</span>
             </Button>
@@ -161,7 +160,7 @@ export function Navigation() {
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Join Network
+                        Get Started
                       </Link>
                     </>
                   ) : (
@@ -204,7 +203,7 @@ export function Navigation() {
               href="/get-started"
               className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
             >
-              Start an opportunity
+              Get started
             </Link>
           ) : isAuthenticated ? (
             <DropdownMenu>
@@ -264,7 +263,7 @@ export function Navigation() {
                 <Link href="/login?redirect=/dashboard/services">Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/get-started">Start an opportunity</Link>
+                <Link href="/get-started">Get started</Link>
               </Button>
             </nav>
           )}

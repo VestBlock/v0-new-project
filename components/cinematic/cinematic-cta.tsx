@@ -16,14 +16,14 @@ export function CinematicCta() {
         transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
         className="vb-closing__content"
       >
-        <h2 id="closing-title">Start with the opportunity you need to move.</h2>
+        <h2 id="closing-title">Tell VestBlock what you are working toward.</h2>
         <div>
           <Link href="/get-started" className="vb-button vb-button--primary">
-            Choose an entry path
+            Find your next move
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link href="/sell" className="vb-button vb-button--quiet">
-            Submit a property
+          <Link href="#platform-path" className="vb-button vb-button--quiet">
+            Review the three paths
           </Link>
         </div>
       </motion.div>

@@ -20,7 +20,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
+    default: `${vestBlockSiteName} - Find Your Next Move`,
     template: `%s | ${vestBlockSiteName}`,
   },
   description: vestBlockDefaultDescription,
@@ -30,7 +30,11 @@ export const metadata: Metadata = {
   applicationName: vestBlockSiteName,
   authors: [{ name: vestBlockSiteName, url: absoluteUrl('/') }],
   keywords: [
-    'real estate partner network',
+    'business capital preparation',
+    'capital readiness',
+    'business acquisition opportunities',
+    'deal pathways',
+    'business growth resources',
     'seller property review',
     'buyer buy box network',
     'private lender network',
@@ -45,20 +49,20 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: vestBlockSiteName,
     url: absoluteUrl('/'),
-    title: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
+    title: `${vestBlockSiteName} - Find Your Next Move`,
     description: vestBlockDefaultDescription,
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock real estate partner network preview',
+        alt: 'VestBlock Capital, Deals, and Opportunity platform preview',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
+    title: `${vestBlockSiteName} - Find Your Next Move`,
     description: vestBlockDefaultDescription,
     images: [absoluteUrl('/opengraph-image')],
   },

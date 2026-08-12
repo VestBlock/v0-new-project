@@ -11,15 +11,19 @@ import {
   organizationJsonLd,
   websiteJsonLd,
   homepageFaqJsonLd,
-  realEstatePartnerServiceJsonLd,
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
+  title: 'Capital, Deals, and Opportunity | VestBlock',
   description:
-    'VestBlock helps real-estate owners, capital partners, and execution teams prepare opportunities, assess fit, route qualified conversations, and maintain private DealVault records.',
+    'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place. Find your next move.',
   keywords: [
-    'real estate partner network',
+    'business capital preparation',
+    'capital readiness',
+    'business acquisition opportunities',
+    'deal evaluation',
+    'business growth resources',
+    'strategic opportunities',
     'real estate opportunity network',
     'seller property review',
     'buyer buy box network',
@@ -33,24 +37,24 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
+    title: 'Capital, Deals, and Opportunity | VestBlock',
     description:
-      'A real-estate platform for preparing opportunities, assessing fit, routing qualified conversations, and maintaining DealVault records.',
+      'Capital access, deal pathways, and opportunities to build, acquire, or grow—organized around a clear next move.',
     url: absoluteUrl('/'),
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock social preview with logo and real estate partner network message',
+        alt: 'VestBlock Capital, Deals, and Opportunity social preview',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
+    title: 'Capital, Deals, and Opportunity | VestBlock',
     description:
-      'Prepare real-estate opportunities, assess fit, route qualified conversations, and maintain DealVault records.',
+      'Capital access, deal pathways, and opportunities to build, acquire, or grow—organized around a clear next move.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
@@ -65,7 +69,6 @@ export default function HomePage() {
             organizationJsonLd(),
             websiteJsonLd(),
             homepageFaqJsonLd(),
-            realEstatePartnerServiceJsonLd(),
           ]),
         }}
       />

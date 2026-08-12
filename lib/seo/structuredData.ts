@@ -43,7 +43,7 @@ export function organizationJsonLd() {
     name: vestBlockSiteName,
     url: absoluteUrl('/'),
     description:
-      'VestBlock is a real estate partner network connecting property sellers, buyers, lenders, developers, contractors, and operators through property review, partner introductions, DealVault records, and funding-ready next steps.',
+      'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place, with DealVault records supporting agreements, milestones, and active work.',
     sameAs: vestBlockSameAs,
     areaServed: 'US',
     contactPoint: {
@@ -53,6 +53,12 @@ export function organizationJsonLd() {
       areaServed: 'US',
     },
     knowsAbout: [
+      'business capital preparation',
+      'capital readiness',
+      'business acquisition opportunities',
+      'deal evaluation',
+      'business growth resources',
+      'strategic partner introductions',
       'real estate partner introductions',
       'seller property review',
       'buyer buy box criteria matching',
@@ -370,7 +376,7 @@ export function homepageFaqJsonLd() {
         name: 'What is VestBlock?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'VestBlock is a real estate intake, referral, and record-keeping platform that connects property sellers, buyers, and lenders through structured review. It also provides DealVault, a blockchain-backed record product for agreement milestones, payout ledgers, and deal records.',
+          text: 'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place. It helps people and businesses organize relevant information, compare possible paths, and identify a clear next step. DealVault supports active work with connected agreement, milestone, and payout records.',
         },
       },
       {
@@ -394,7 +400,7 @@ export function homepageFaqJsonLd() {
         name: 'Who should use VestBlock?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'VestBlock is designed for property sellers looking to explore sale options, real estate buyers sharing acquisition criteria, private lenders wanting to receive matched deal flow, and deal operators who need cleaner records through DealVault. Supporting services are available for funding prep, business credit, and AI reception.',
+          text: 'VestBlock is for people and businesses working to build, fund, acquire, improve, or grow. This includes business owners preparing for capital, property sellers and buyers, investors, lenders, builders, service partners, and teams that need clearer agreements and records through DealVault.',
         },
       },
       {
@@ -426,7 +432,7 @@ export function homepageFaqJsonLd() {
         name: 'Does VestBlock guarantee deals, closings, or funding?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'No. VestBlock is a real estate intake, referral, and record-keeping platform, not a lender, buyer, or closing agent. It does not guarantee deal volume, closings, approvals, funding terms, or investment returns. Referrals are subject to match quality, criteria fit, and review by both parties.',
+          text: 'No. VestBlock helps organize preparation, options, information, and appropriate next steps. It is not a lender, buyer, closing agent, legal adviser, tax adviser, or investment adviser. It does not guarantee deal volume, closings, approvals, funding terms, rankings, revenue, or investment returns.',
         },
       },
     ],

@@ -1,7 +1,7 @@
 export const vestBlockSiteName = 'VestBlock';
 
 export const vestBlockDefaultDescription =
-  'VestBlock connects sellers, buyers, lenders, developers, contractors, operators, and capital partners around real estate opportunities, DealVault records, and AEO/SEO Booster support.';
+  'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place, with DealVault records supporting active work.';
 
 export function getSiteUrl() {
   const configured = (

@@ -10,7 +10,7 @@ const records = [
   },
   {
     title: "Milestone history",
-    body: "Keep submissions, review checkpoints, introductions, and project milestones connected to the opportunity they belong to.",
+    body: "Keep submissions, review checkpoints, introductions, and project milestones connected to the work they belong to.",
     icon: GitBranch,
   },
   {
@@ -28,7 +28,7 @@ export function DealVaultProofSection() {
           <p className="vb-dealvault__label">DealVault</p>
           <h2 id="dealvault-title">Keep the record that supports the work.</h2>
           <p>
-            DealVault keeps agreements, milestones, and payout references connected to the opportunity while sensitive
+            DealVault keeps agreements, milestones, and payout references connected to the active work while sensitive
             material remains private.
           </p>
           <div className="vb-dealvault__actions">
