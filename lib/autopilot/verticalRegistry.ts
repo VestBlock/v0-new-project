@@ -1,0 +1,542 @@
+export const BUSINESS_VERTICALS = [
+  'business_capital',
+  'real_estate_capital',
+  'capital_partners',
+  'seller_opportunities',
+  'buyers_investors',
+  'development_partners',
+  'opportunity_service_partners',
+  'dealvault',
+  'growth_visibility_services',
+] as const;
+
+export type BusinessVertical = (typeof BUSINESS_VERTICALS)[number];
+
+export const ACQUISITION_CHANNELS = [
+  'email',
+  'organic_search',
+  'ai_search',
+  'social',
+  'partnerships',
+  'referrals',
+  'direct',
+  'paid_media',
+  'events',
+  'in_product',
+] as const;
+
+export type AcquisitionChannel = (typeof ACQUISITION_CHANNELS)[number];
+
+export const STRATEGY_TYPES = [
+  'research',
+  'acquisition',
+  'activation',
+  'conversion',
+  'partner_development',
+  'retention',
+  'reactivation',
+  'content',
+] as const;
+
+export type StrategyType = (typeof STRATEGY_TYPES)[number];
+
+export const OUTREACH_CHANNELS = [
+  'outlook_graph',
+  'resend_permissioned',
+  'manual_networking',
+  'compliant_phone',
+  'consented_sms',
+  'direct_mail',
+  'partner_referral',
+  'buyer_alert',
+  'in_app',
+  'educational_content',
+  'seo_inbound',
+  'events_webinars',
+  'buffer_social',
+] as const;
+
+export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
+
+type VerticalRegistryEntry = {
+  label: string;
+  offer: string;
+  icp: string;
+  decisionMaker: string;
+  problem: string;
+  buyingMoment: string;
+  triggers: string[];
+  qualifications: string[];
+  disqualifiers: string[];
+  approvedProof: string[];
+  claimLimitations: string[];
+  offerLadder: string[];
+  primaryCta: string;
+  secondaryCta: string;
+  lawfulLeadSources: Array<{ source: string; lineageRequired: string }>;
+  channelMix: AcquisitionChannel[];
+  contentPillars: string[];
+  outreachAngles: string[];
+  objectionHandling: string[];
+  kpis: string[];
+  costBoundaries: string[];
+  compliance: string[];
+  approvalMode: 'human_required';
+  killCriteria: string[];
+};
+
+export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalRegistryEntry> = {
+  business_capital: {
+    label: 'Business capital',
+    offer: 'Organize a business funding request, assess readiness, and identify appropriate next steps.',
+    icp: 'Established U.S. business owners seeking working capital or preparation help.',
+    decisionMaker: 'Owner, founder, or finance lead.',
+    problem: 'The owner does not know which funding path fits or whether the file is ready.',
+    buyingMoment: 'A near-term inventory, payroll, equipment, expansion, or cash-flow need.',
+    triggers: ['Documented capital need', 'Upcoming use-of-funds deadline'],
+    qualifications: ['Operating business', 'Consent to review submitted business information'],
+    disqualifiers: ['Guaranteed-approval expectation', 'Request to misstate financial information'],
+    approvedProof: ['Readiness inputs received', 'Documented partner criteria'],
+    claimLimitations: ['No approval, rate, timeline, or proceeds guarantee'],
+    offerLadder: ['Free eligibility check', 'Funding readiness guidance', 'Human-reviewed funding preparation'],
+    primaryCta: 'Check business funding paths',
+    secondaryCta: 'Review funding readiness',
+    lawfulLeadSources: [
+      { source: 'First-party funding inquiries', lineageRequired: 'Consent timestamp, form source, and requested purpose' },
+      { source: 'Consented partner referrals', lineageRequired: 'Referrer, consent basis, and date' },
+    ],
+    channelMix: ['organic_search', 'ai_search', 'referrals', 'email'],
+    contentPillars: ['Funding readiness', 'Use-of-funds preparation', 'Responsible qualification'],
+    outreachAngles: ['Clarify the file before an application', 'Match the request to stated criteria'],
+    objectionHandling: ['Explain that VestBlock prepares and routes; third parties decide'],
+    kpis: ['qualified funding profiles', 'completed readiness reviews', 'attributed funded outcomes'],
+    costBoundaries: ['No paid lead purchase without approval', 'No provider spend outside a documented cap'],
+    compliance: ['Consent required', 'No misleading credit or approval claims', 'Honor suppression immediately'],
+    approvalMode: 'human_required',
+    killCriteria: ['Complaint or consent failure', 'Unverifiable approval claim', 'Cost per qualified profile exceeds approved cap'],
+  },
+  real_estate_capital: {
+    label: 'Real-estate capital',
+    offer: 'Prepare an investment-property financing scenario for criteria-based lender review.',
+    icp: 'Property investors and operators with a specific rental, bridge, rehab, or acquisition scenario.',
+    decisionMaker: 'Borrower, sponsor, acquisition lead, or property owner.',
+    problem: 'Property and borrower facts are incomplete or poorly matched to lender criteria.',
+    buyingMoment: 'A property is identified and the financing or refinance timeline is active.',
+    triggers: ['Address and use of funds known', 'Closing or refinance window identified'],
+    qualifications: ['Verifiable property scenario', 'Borrower authorizes review'],
+    disqualifiers: ['No identifiable property or purpose', 'Expectation of guaranteed terms'],
+    approvedProof: ['Complete scenario intake', 'Current lender criteria and recorded introduction'],
+    claimLimitations: ['Terms are estimates until a lender underwrites and approves'],
+    offerLadder: ['Scenario intake', 'Capital-fit review', 'Approved partner introduction'],
+    primaryCta: 'Review a financing scenario',
+    secondaryCta: 'Prepare the property file',
+    lawfulLeadSources: [
+      { source: 'First-party property funding requests', lineageRequired: 'Submitted-by identity, consent, property source, and timestamp' },
+      { source: 'Consented professional referrals', lineageRequired: 'Referral relationship, purpose, and consent record' },
+    ],
+    channelMix: ['partnerships', 'referrals', 'organic_search', 'email'],
+    contentPillars: ['DSCR fundamentals', 'Property-file preparation', 'Lender-fit questions'],
+    outreachAngles: ['Make the scenario easier to underwrite', 'Surface constraints before an introduction'],
+    objectionHandling: ['Separate a preliminary fit review from a lender commitment'],
+    kpis: ['complete scenarios', 'qualified lender matches', 'introduced files reaching underwriting'],
+    costBoundaries: ['No appraisal or third-party order without approval', 'No paid acquisition without a per-file cap'],
+    compliance: ['No loan commitment language', 'Consent and suppression required', 'Property facts must retain source'],
+    approvalMode: 'human_required',
+    killCriteria: ['Material fact cannot be verified', 'Lender criteria are stale', 'Borrower withdraws consent'],
+  },
+  capital_partners: {
+    label: 'Capital partners',
+    offer: 'Keep lender criteria current and route suitable opportunities for human review.',
+    icp: 'Private, bridge, DSCR, hard-money, and business-capital providers with a defined box.',
+    decisionMaker: 'Lender, broker, relationship manager, or credit lead.',
+    problem: 'Partners receive incomplete or off-criteria files and VestBlock lacks current appetite data.',
+    buyingMoment: 'A lender wants qualified flow in specific markets, products, or loan sizes.',
+    triggers: ['New or changed lending box', 'Demonstrated capacity for introductions'],
+    qualifications: ['Identity and business verified', 'Criteria and exclusions documented'],
+    disqualifiers: ['Unlicensed activity where licensing is required', 'Refusal to state material criteria'],
+    approvedProof: ['Confirmed criteria timestamp', 'Recorded match disposition'],
+    claimLimitations: ['A network profile does not imply endorsement or guaranteed deal flow'],
+    offerLadder: ['Criteria profile', 'Human-reviewed match', 'Measured partner relationship'],
+    primaryCta: 'Share lending criteria',
+    secondaryCta: 'Update an existing profile',
+    lawfulLeadSources: [
+      { source: 'Public business directories and licensing records', lineageRequired: 'Source URL, access date, jurisdiction, and business purpose' },
+      { source: 'First-party partner applications', lineageRequired: 'Consent, submitted criteria, and timestamp' },
+    ],
+    channelMix: ['partnerships', 'email', 'referrals', 'events'],
+    contentPillars: ['Criteria clarity', 'Complete file preparation', 'Partner outcome learning'],
+    outreachAngles: ['Receive fewer off-box files', 'Keep criteria attached to every introduction'],
+    objectionHandling: ['Explain approval control, suppression, and no-volume guarantee'],
+    kpis: ['verified partner profiles', 'accepted matches', 'partner reply and disposition rate'],
+    costBoundaries: ['No purchased contact list without provenance review', 'No referral expense without written approval'],
+    compliance: ['Business-purpose outreach only', 'Licensing claims verified', 'Suppression honored'],
+    approvalMode: 'human_required',
+    killCriteria: ['Licensing or identity concern', 'Repeated nonresponse after approved sequence', 'Material complaint'],
+  },
+  seller_opportunities: {
+    label: 'Seller opportunities',
+    offer: 'Review a property owner’s situation and route a responsible next step.',
+    icp: 'Property owners who have requested review or are lawfully reachable about a documented property situation.',
+    decisionMaker: 'Owner or authorized representative.',
+    problem: 'The owner needs clarity on timing, condition, price, payoff, or available sale paths.',
+    buyingMoment: 'A sale, inherited property, vacancy, distress, relocation, or timing decision becomes active.',
+    triggers: ['Owner inquiry', 'Lawful public property signal with approved contact basis'],
+    qualifications: ['Ownership or authority can be established', 'Property context has traceable sources'],
+    disqualifiers: ['Do-not-contact signal', 'Unverifiable ownership', 'Coercive or deceptive framing'],
+    approvedProof: ['Owner-provided facts', 'Cited public records', 'Documented analysis assumptions'],
+    claimLimitations: ['No price, closing, or outcome guarantee; estimates require verification'],
+    offerLadder: ['Property review', 'Human follow-up', 'Qualified buyer or partner path'],
+    primaryCta: 'Submit a property',
+    secondaryCta: 'Review the selling options',
+    lawfulLeadSources: [
+      { source: 'First-party seller inquiries', lineageRequired: 'Consent, source path, property, and timestamp' },
+      { source: 'Approved public property records', lineageRequired: 'Jurisdiction, record URL/file, retrieval date, and contact-basis review' },
+    ],
+    channelMix: ['direct', 'organic_search', 'email', 'referrals'],
+    contentPillars: ['Sale-path education', 'Property fact gathering', 'Transparent next steps'],
+    outreachAngles: ['Start with the owner’s timing and constraints', 'Offer a review without a price promise'],
+    objectionHandling: ['Explain identity, source, purpose, and opt-out immediately'],
+    kpis: ['qualified owner conversations', 'complete property reviews', 'consented next steps'],
+    costBoundaries: ['Source costs require an approved cap', 'No paid media launch without approval'],
+    compliance: ['TCPA/CAN-SPAM and state rules reviewed', 'No pressure tactics', 'Immediate suppression'],
+    approvalMode: 'human_required',
+    killCriteria: ['Opt-out or complaint', 'Ownership uncertainty', 'Source lineage missing'],
+  },
+  buyers_investors: {
+    label: 'Buyers and investors',
+    offer: 'Maintain verified buy boxes and introduce suitable opportunities for review.',
+    icp: 'Active cash buyers, landlords, funds, and investor acquisition teams.',
+    decisionMaker: 'Principal, acquisitions lead, or authorized buyer representative.',
+    problem: 'Buyer appetite is vague or stale, creating low-quality introductions.',
+    buyingMoment: 'The buyer has deployable capacity and current market/asset criteria.',
+    triggers: ['New or updated buy box', 'Recent verified acquisition activity'],
+    qualifications: ['Criteria and no-go items documented', 'Identity and capacity evidence appropriate to the stage'],
+    disqualifiers: ['No clear buy box', 'Misrepresentation of funds or authority'],
+    approvedProof: ['Confirmed criteria', 'Recorded introduction and disposition'],
+    claimLimitations: ['Verification status is time-bound and not a guarantee to close'],
+    offerLadder: ['Buy-box profile', 'Human-reviewed introduction', 'DealVault record for active work'],
+    primaryCta: 'Share a buy box',
+    secondaryCta: 'Update buying criteria',
+    lawfulLeadSources: [
+      { source: 'First-party buyer applications', lineageRequired: 'Consent, criteria, verification state, and timestamp' },
+      { source: 'Public business/property records', lineageRequired: 'Source, access date, inference label, and confirmation status' },
+    ],
+    channelMix: ['email', 'partnerships', 'referrals', 'events'],
+    contentPillars: ['Buy-box clarity', 'Deal evidence', 'Close-readiness'],
+    outreachAngles: ['See fewer off-criteria opportunities', 'Confirm the criteria before an introduction'],
+    objectionHandling: ['Make verification state and no-volume promise explicit'],
+    kpis: ['confirmed buy boxes', 'accepted matches', 'introduced deals reaching diligence'],
+    costBoundaries: ['No list spend without provenance', 'No distribution fee without written terms'],
+    compliance: ['Business-purpose outreach', 'Suppression honored', 'Proof claims time-stamped'],
+    approvalMode: 'human_required',
+    killCriteria: ['Stale or unconfirmed criteria', 'Identity concern', 'Repeated mismatch complaints'],
+  },
+  development_partners: {
+    label: 'Development partners',
+    offer: 'Connect qualified wholesalers, acquisition teams, builders, contractors, and developers around a defined project need.',
+    icp: 'Operators with a clear market, asset, construction, acquisition, or development role.',
+    decisionMaker: 'Principal, acquisitions manager, development lead, or operations lead.',
+    problem: 'Projects stall because role, capacity, market, and delivery expectations are unclear.',
+    buyingMoment: 'A project or acquisition pipeline needs a specific capable partner.',
+    triggers: ['Defined project need', 'Verified capacity or relevant track record'],
+    qualifications: ['Role and market fit', 'Required license/insurance evidence where applicable'],
+    disqualifiers: ['Unverified credentials', 'Undefined role or compensation expectation'],
+    approvedProof: ['Credential state', 'Project-specific scope', 'Recorded milestone outcome'],
+    claimLimitations: ['Partner listing is not a warranty of work, licensure, or results'],
+    offerLadder: ['Partner profile', 'Project-fit review', 'DealVault milestone record'],
+    primaryCta: 'Share project fit',
+    secondaryCta: 'Request a partner review',
+    lawfulLeadSources: [
+      { source: 'First-party partner intake', lineageRequired: 'Consent, role, markets, credential status, and date' },
+      { source: 'Licensing and public business directories', lineageRequired: 'Authority URL, access date, jurisdiction, and verification status' },
+    ],
+    channelMix: ['partnerships', 'referrals', 'email', 'events'],
+    contentPillars: ['Role clarity', 'Project readiness', 'Milestone accountability'],
+    outreachAngles: ['Match role and capacity before an introduction', 'Keep project expectations visible'],
+    objectionHandling: ['Explain verification limits and direct contracting responsibility'],
+    kpis: ['verified partners', 'accepted project matches', 'milestones completed'],
+    costBoundaries: ['No referral payout without written terms', 'No sourcing spend outside approved market cap'],
+    compliance: ['Verify regulated credentials', 'Disclose referral relationships', 'Honor suppression'],
+    approvalMode: 'human_required',
+    killCriteria: ['Credential lapse', 'Material performance complaint', 'Scope or compensation remains undefined'],
+  },
+  opportunity_service_partners: {
+    label: 'Opportunity and service partners',
+    offer: 'Curate credible programs and service partners around a specific customer need.',
+    icp: 'Organizations offering grants, education, professional, operational, or business support with clear terms.',
+    decisionMaker: 'Program manager, partnership lead, or service-business owner.',
+    problem: 'Customers face a noisy resource market with unclear eligibility and quality.',
+    buyingMoment: 'A verified resource fills a recurring gap in a VestBlock customer journey.',
+    triggers: ['Documented customer need', 'Current program or service terms available'],
+    qualifications: ['Terms and identity verifiable', 'Referral disclosure accepted'],
+    disqualifiers: ['Guaranteed outcome claims', 'Opaque pricing or unverifiable program'],
+    approvedProof: ['Original source terms', 'Current partner profile', 'Measured referred outcome'],
+    claimLimitations: ['Availability, eligibility, and third-party outcomes can change'],
+    offerLadder: ['Curated listing', 'Customer-fit review', 'Approved referral relationship'],
+    primaryCta: 'Share a credible resource',
+    secondaryCta: 'Review partner requirements',
+    lawfulLeadSources: [
+      { source: 'Original program and provider sites', lineageRequired: 'Canonical URL, retrieval date, terms version, and operator review' },
+      { source: 'First-party partner applications', lineageRequired: 'Consent, business identity, terms, and disclosures' },
+    ],
+    channelMix: ['partnerships', 'organic_search', 'ai_search', 'referrals'],
+    contentPillars: ['Eligibility clarity', 'Resource comparison', 'Transparent partner disclosure'],
+    outreachAngles: ['Place the resource where the need is explicit', 'Measure useful referrals instead of listing volume'],
+    objectionHandling: ['Explain curation standards, disclosures, and no-placement guarantee'],
+    kpis: ['verified resources', 'qualified referrals', 'reported customer value'],
+    costBoundaries: ['No paid placement without disclosure and approval', 'No unbounded affiliate spend'],
+    compliance: ['Disclose compensation', 'Do not restate unverified claims', 'Retire stale programs'],
+    approvalMode: 'human_required',
+    killCriteria: ['Terms cannot be verified', 'Misleading claim or complaint', 'Program becomes unavailable'],
+  },
+  dealvault: {
+    label: 'DealVault',
+    offer: 'Keep agreements, proof, payouts, and milestones organized around an active transaction.',
+    icp: 'Partner-heavy real-estate and service teams that need a clearer audit trail.',
+    decisionMaker: 'Principal, operations lead, transaction lead, or project manager.',
+    problem: 'Teams lose clarity after an introduction because records, splits, and milestones are fragmented.',
+    buyingMoment: 'An active agreement or project needs shared accountability and proof.',
+    triggers: ['Multiple parties or milestones', 'Need for proof or payout visibility'],
+    qualifications: ['Defined use case and authorized participants', 'Private data can remain off-chain'],
+    disqualifiers: ['Expectation that software replaces counsel, escrow, title, or compliance'],
+    approvedProof: ['Live contract metadata', 'Verified test transaction', 'Sample certificate with non-sensitive data'],
+    claimLimitations: ['No custody of funds and no replacement for required legal or regulated services'],
+    offerLadder: ['Public demo', 'Private use-case review', 'Approved pilot'],
+    primaryCta: 'Request a private demo',
+    secondaryCta: 'See the proof trail',
+    lawfulLeadSources: [
+      { source: 'First-party demo requests', lineageRequired: 'Consent, company, use case, and source path' },
+      { source: 'Consented partner introductions', lineageRequired: 'Referrer, relationship, purpose, and consent' },
+    ],
+    channelMix: ['in_product', 'partnerships', 'referrals', 'email'],
+    contentPillars: ['Proof records', 'Payout visibility', 'Milestone accountability'],
+    outreachAngles: ['Make the record clear after the introduction', 'Keep private documents private while proving events'],
+    objectionHandling: ['Explain data boundaries, no wallet requirement for review, and legal limits'],
+    kpis: ['qualified demos', 'approved pilots', 'active records with completed milestones'],
+    costBoundaries: ['No chain transaction or deployment without approval', 'Pilot scope and support cap required'],
+    compliance: ['No private data on-chain', 'No custody claims', 'Participant authorization required'],
+    approvalMode: 'human_required',
+    killCriteria: ['Private data exposure risk', 'Legal/custody misunderstanding', 'Pilot lacks an accountable owner'],
+  },
+  growth_visibility_services: {
+    label: 'Growth and visibility services',
+    offer: 'Improve useful discovery, authority, and conversion with attributable, reviewable work.',
+    icp: 'Established businesses with a clear offer, accountable owner, and measurable growth goal.',
+    decisionMaker: 'Founder, marketing lead, or revenue lead.',
+    problem: 'Content, SEO, PR, social, or advertising activity is disconnected from qualified outcomes.',
+    buyingMoment: 'A business has a defined offer and needs measurable discovery or conversion improvement.',
+    triggers: ['Baseline analytics available', 'Specific audience and conversion action defined'],
+    qualifications: ['Truthful proof and claims inventory', 'Measurement owner and budget boundary'],
+    disqualifiers: ['Fabricated proof', 'Guaranteed ranking/revenue request', 'No measurement access'],
+    approvedProof: ['Published asset inventory', 'Verified search/analytics data', 'Attributable qualified actions'],
+    claimLimitations: ['No ranking, coverage, ad approval, lead, or revenue guarantee'],
+    offerLadder: ['Visibility audit', 'Measured improvement sprint', 'Approval-gated ongoing program'],
+    primaryCta: 'Request a visibility review',
+    secondaryCta: 'See what will be measured',
+    lawfulLeadSources: [
+      { source: 'First-party service inquiries', lineageRequired: 'Consent, business goal, site, and source path' },
+      { source: 'Public business sites for account research', lineageRequired: 'Source URL, access date, business relevance, and outreach basis' },
+    ],
+    channelMix: ['organic_search', 'ai_search', 'partnerships', 'paid_media', 'social'],
+    contentPillars: ['Useful discovery', 'Proof and trust', 'Conversion clarity', 'Attribution'],
+    outreachAngles: ['Measure qualified actions, not publishing volume', 'Fix existing evidence before expanding'],
+    objectionHandling: ['Set the baseline, claim limits, approval gates, and evaluation window upfront'],
+    kpis: ['qualified organic actions', 'conversion rate', 'attributed opportunities and revenue'],
+    costBoundaries: ['No ad spend without campaign approval', 'Provider and media caps recorded before launch'],
+    compliance: ['Truthful claims and proof', 'Platform policy review', 'Consent and suppression for outreach'],
+    approvalMode: 'human_required',
+    killCriteria: ['Unverifiable claim', 'Tracking remains unavailable', 'Spend exceeds approved cap', 'Platform policy rejection persists'],
+  },
+};
+
+type VerticalStrategyDecision = {
+  differentiation: string;
+  evidenceQualityTarget: 'verified_primary' | 'verified_first_party' | 'mixed_verified';
+  evidenceFreshnessDays: number;
+  primaryChannel: OutreachChannel;
+  secondaryChannel: OutreachChannel;
+  channelsToAvoid: string[];
+  channelRationale: string;
+  requiredData: string[];
+  expectedCost: string;
+  expectedOutcome: string;
+  confidence: number;
+  attributionModel: 'first_touch_plus_position_based' | 'first_touch_plus_last_touch' | 'account_position_based';
+  nextExperiment: string;
+  portfolioRole: 'backlog';
+  approvalRequirements: string[];
+};
+
+export const VERTICAL_STRATEGY_DECISIONS: Record<BusinessVertical, VerticalStrategyDecision> = {
+  business_capital: {
+    differentiation: 'Readiness and use-of-funds clarity before a criteria-based introduction, with no approval promise.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'resend_permissioned',
+    channelsToAvoid: ['cold SMS', 'purchased consumer lists', 'approval-claim paid ads'],
+    channelRationale: 'Intent-led education earns the first request; permissioned lifecycle email can finish an incomplete readiness file.',
+    requiredData: ['consent timestamp', 'business operating state', 'use of funds', 'timeline', 'readiness inputs', 'source attribution'],
+    expectedCost: '$0-$20 per completed readiness follow-up before any approved media spend',
+    expectedOutcome: 'More complete, consented funding profiles that can be evaluated against current criteria.',
+    confidence: 76,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Compare an eligibility-first page with a document-readiness checklist on completed profiles, not clicks.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['claim review', 'consent verified', 'current partner criteria', 'cost cap approved'],
+  },
+  real_estate_capital: {
+    differentiation: 'Property and borrower facts are normalized before a lender sees the scenario.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'partner_referral',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['cold SMS', 'rate advertising without current terms', 'bulk borrower blasts'],
+    channelRationale: 'Trusted property professionals surface active scenarios; Outlook supports a human, file-specific follow-up.',
+    requiredData: ['property identifier', 'purpose', 'timeline', 'borrower consent', 'scenario assumptions', 'lender criteria timestamp'],
+    expectedCost: '$0-$35 per human-reviewed scenario excluding third-party reports',
+    expectedOutcome: 'Complete property-capital scenarios reaching a qualified lender review.',
+    confidence: 78,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Test a one-page scenario completeness score with two consented referral partners.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['borrower consent', 'fact-source review', 'lender criteria current', 'no commitment language'],
+  },
+  capital_partners: {
+    differentiation: 'VestBlock measures match disposition and keeps each lender box timestamped instead of promising volume.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'outlook_graph',
+    secondaryChannel: 'manual_networking',
+    channelsToAvoid: ['cold SMS', 'generic newsletter enrollment', 'unlicensed deal-flow claims'],
+    channelRationale: 'A lender-criteria conversation is high-context and should come from a named operator, followed by manual relationship work.',
+    requiredData: ['business identity', 'licensing status where applicable', 'product box', 'markets', 'exclusions', 'criteria confirmed date'],
+    expectedCost: '$0-$15 per verified partner profile using owned tools',
+    expectedOutcome: 'Current lender criteria and faster disposition on suitable introductions.',
+    confidence: 82,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Ask a small verified lender set to confirm one product box through a five-field criteria update.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['business-purpose basis', 'identity/licensing check', 'manual message review', 'suppression check'],
+  },
+  seller_opportunities: {
+    differentiation: 'Fact-sourced property review begins with timing and options, not pressure or an unverified offer.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'direct_mail',
+    channelsToAvoid: ['cold SMS', 'ringless voicemail', 'distress-shaming copy', 'automated consumer calls'],
+    channelRationale: 'Inbound preserves clear intent; where a documented property basis exists, direct mail is slower but easier to explain and audit.',
+    requiredData: ['ownership evidence', 'source URL or record', 'retrieval date', 'property context', 'contact basis', 'suppression state'],
+    expectedCost: '$0 inbound; direct-mail pilot capped at $1.25 per approved piece',
+    expectedOutcome: 'Qualified owner conversations and complete property reviews without complaint-driven volume.',
+    confidence: 67,
+    attributionModel: 'first_touch_plus_last_touch',
+    nextExperiment: 'Compare an options-review letter with a property-facts-check letter on qualified replies from one approved county source.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['contact-basis review', 'ownership confidence', 'copy approval', 'mail count and cost approval'],
+  },
+  buyers_investors: {
+    differentiation: 'Verified buy boxes and time-stamped appetite make every opportunity alert more relevant.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'buyer_alert',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['unsolicited SMS', 'unqualified deal blasts', 'claims of exclusive inventory'],
+    channelRationale: 'Permissioned alerts fit active buy boxes; Outlook handles criteria confirmation and high-value exceptions.',
+    requiredData: ['buyer identity', 'buy box', 'markets', 'asset types', 'price bands', 'capacity state', 'alert consent'],
+    expectedCost: 'Under $0.10 per permissioned alert plus operator review',
+    expectedOutcome: 'Higher accepted-match and diligence rates with fewer off-criteria alerts.',
+    confidence: 84,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Refresh ten existing buy boxes, then compare criteria-matched alerts with generic market alerts.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['buy box current', 'alert permission', 'deal facts verified', 'distribution count approved'],
+  },
+  development_partners: {
+    differentiation: 'Project role, market, capacity, and credential evidence are matched before an introduction.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 60,
+    primaryChannel: 'outlook_graph',
+    secondaryChannel: 'manual_networking',
+    channelsToAvoid: ['bulk contractor blasts', 'cold SMS', 'unverified licensing claims'],
+    channelRationale: 'Project partnerships are narrow, relationship-driven, and require a human explanation of scope and verification limits.',
+    requiredData: ['role', 'markets', 'project need', 'capacity evidence', 'license/insurance state', 'compensation expectations'],
+    expectedCost: '$0-$25 per verified project-fit conversation',
+    expectedOutcome: 'Accepted partner matches that move to a defined scope or milestone.',
+    confidence: 74,
+    attributionModel: 'account_position_based',
+    nextExperiment: 'Run a manual five-partner fit review for one defined builder or contractor need.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['credential review', 'scope owner', 'relationship disclosure', 'message approval'],
+  },
+  opportunity_service_partners: {
+    differentiation: 'Resources are admitted by current terms and measurable customer usefulness, not listing volume.',
+    evidenceQualityTarget: 'verified_primary',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'partner_referral',
+    secondaryChannel: 'educational_content',
+    channelsToAvoid: ['paid placement without disclosure', 'guaranteed-benefit claims', 'cold SMS'],
+    channelRationale: 'Trusted introductions establish fit, while source-linked education lets users evaluate eligibility before referral.',
+    requiredData: ['canonical terms URL', 'terms date', 'eligibility', 'pricing or compensation disclosure', 'customer need', 'outcome feedback'],
+    expectedCost: '$0-$20 per verified resource review',
+    expectedOutcome: 'Qualified referrals to current, transparent resources with reported customer value.',
+    confidence: 71,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Validate one recurring customer need against three primary-source resources and measure qualified referral completion.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['terms verified', 'compensation disclosed', 'claims review', 'referral approval'],
+  },
+  dealvault: {
+    differentiation: 'DealVault keeps private documents private while making approved milestones, proofs, and payout records easier to audit.',
+    evidenceQualityTarget: 'verified_first_party',
+    evidenceFreshnessDays: 30,
+    primaryChannel: 'in_app',
+    secondaryChannel: 'outlook_graph',
+    channelsToAvoid: ['wallet-airdrop promotion', 'custody language', 'mass software-demo blasts'],
+    channelRationale: 'The strongest moment is an active multi-party workflow; a human demo can qualify more complex use cases.',
+    requiredData: ['authorized participants', 'use case', 'agreement state', 'milestones', 'privacy boundary', 'accountable pilot owner'],
+    expectedCost: '$0 for in-product activation; operator time for approved demos',
+    expectedOutcome: 'Qualified pilots with active records and completed milestones.',
+    confidence: 79,
+    attributionModel: 'first_touch_plus_last_touch',
+    nextExperiment: 'Offer a private proof-trail review at the moment an introduced opportunity becomes multi-party.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['participant authorization', 'privacy review', 'pilot scope', 'no chain write without approval'],
+  },
+  growth_visibility_services: {
+    differentiation: 'Visibility work is tied to qualified actions and revenue evidence instead of content volume or ranking promises.',
+    evidenceQualityTarget: 'mixed_verified',
+    evidenceFreshnessDays: 14,
+    primaryChannel: 'seo_inbound',
+    secondaryChannel: 'buffer_social',
+    channelsToAvoid: ['cold SMS', 'automated social DMs', 'ad spend without measurement and approval'],
+    channelRationale: 'Search captures explicit need; VestBlock-owned social profiles distribute proof and education without impersonation or list buying.',
+    requiredData: ['offer', 'audience', 'claim inventory', 'baseline', 'conversion event', 'source attribution', 'budget boundary'],
+    expectedCost: '$0 owned distribution before any approved media or provider budget',
+    expectedOutcome: 'More qualified discovery actions with defensible source-to-opportunity attribution.',
+    confidence: 73,
+    attributionModel: 'first_touch_plus_position_based',
+    nextExperiment: 'Publish one proof-backed service answer and compare qualified actions with the prior 28-day baseline.',
+    portfolioRole: 'backlog',
+    approvalRequirements: ['proof review', 'platform-policy review', 'measurement live', 'publish or spend approval'],
+  },
+};
+
+export function getVerticalScorecard(vertical: BusinessVertical) {
+  const definition = VERTICAL_REGISTRY[vertical];
+  return {
+    ...definition,
+    ...VERTICAL_STRATEGY_DECISIONS[vertical],
+    persona: definition.icp,
+    eligibility: definition.qualifications,
+    requiredProof: definition.approvedProof,
+    successMetrics: definition.kpis,
+    stopConditions: definition.killCriteria,
+    complianceRequirements: definition.compliance,
+  };
+}
+
+export function getVerticalDefinition(vertical: BusinessVertical) {
+  return VERTICAL_REGISTRY[vertical];
+}

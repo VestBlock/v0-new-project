@@ -14,8 +14,24 @@ export default function CapitalPage() {
     <PathwayPage
       eyebrow="Find capital"
       title="Capital for the move in front of you."
-      body="Start with the kind of capital you need. VestBlock routes you into the existing funding and readiness systems built for that decision."
+      body="Start with the kind of capital you need. VestBlock helps organize the request, check the fit, and identify a responsible next step."
       event={analyticsEvents.capitalFlowStarted}
+      outcome="A funding direction you can evaluate before applying."
+      whatYouProvide={[
+        "The business or property purpose and amount requested",
+        "Timing, revenue or property details, and current readiness",
+        "The constraints that could affect lender fit",
+      ]}
+      whatHappensNext={[
+        "VestBlock organizes the request and highlights missing information.",
+        "Relevant funding or readiness paths are compared without promising approval.",
+        "You choose whether to continue, prepare the file, or speak with a partner.",
+      ]}
+      proofPoints={[
+        "Clear inputs before an introduction",
+        "Lender criteria stay attached to the review",
+        "No promise of approval, rate, or proceeds",
+      ]}
       primary={{
         eyebrow: "Business capital",
         title: "Check business funding paths.",

@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
@@ -55,7 +55,7 @@ export function LoginPageClient() {
       <Card className="mx-auto w-full max-w-md border-white/10 bg-[#0e1114] shadow-none">
         <CardHeader>
           <p className="vb-eyebrow">Your VestBlock workspace</p>
-          <CardTitle className="text-3xl font-medium tracking-tight">Pick up where you left off.</CardTitle>
+          <h1 className="text-3xl font-medium tracking-tight">Pick up where you left off.</h1>
           <CardDescription>
             Open saved capital requests, deal work, opportunities, and DealVault records.
           </CardDescription>
@@ -79,11 +79,11 @@ export function LoginPageClient() {
             <div className="grid gap-2">
               <div className="flex items-center">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" passHref>
-                  <Button variant="link" className="ml-auto inline-block text-sm">
+                <Button asChild variant="link" className="ml-auto inline-flex px-0 text-sm">
+                  <Link href="/forgot-password">
                     Forgot your password?
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
               <Input
                 id="password"
@@ -107,18 +107,17 @@ export function LoginPageClient() {
           </form>
           <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{" "}
-            <Link
-              href={
-                redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
-                  : `/register?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ""}`
-              }
-              passHref
-            >
-              <Button variant="link" className="p-0">
+            <Button asChild variant="link" className="min-h-11 px-1">
+              <Link
+                href={
+                  redirectTarget && redirectTarget !== defaultRedirectTarget
+                    ? `/register?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
+                    : `/register?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ""}`
+                }
+              >
                 Sign up
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

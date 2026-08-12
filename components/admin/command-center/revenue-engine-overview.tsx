@@ -1,11 +1,11 @@
 "use client"
 
-import { AlertTriangle, ArrowUpRight, BriefcaseBusiness, Building2, CircleDollarSign, Gauge, Handshake, ShieldCheck } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, BriefcaseBusiness, Building2, CircleDollarSign, Gauge, Handshake, ShieldCheck, type LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { RevenueExecutiveSnapshot, RevenueLane } from "@/lib/revenue-engine/types"
 
-const LANE_ICON: Record<RevenueLane, React.ElementType> = {
+const LANE_ICON: Record<RevenueLane, LucideIcon> = {
   deals: Building2,
   capital: CircleDollarSign,
   partners: Handshake,

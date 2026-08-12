@@ -184,7 +184,7 @@ export default function DealVaultDemoRecordPage() {
         <section className="grid gap-8 lg:grid-cols-[1.05fr_.95fr] lg:items-start">
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
-              <Badge className="bg-cyan-600 text-white">Buyer-ready demo</Badge>
+              <Badge className="bg-[#b7ff3c] text-[#11130f]">Demo record</Badge>
               <Badge variant="outline">No wallet required</Badge>
               <Badge variant="outline">Proof-first record</Badge>
             </div>
@@ -201,7 +201,7 @@ export default function DealVaultDemoRecordPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
+              <Button asChild size="lg" className="bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                 <Link href="/dealvault/demo#dealvault-demo">
                   Request A Private Demo
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -221,10 +221,10 @@ export default function DealVaultDemoRecordPage() {
             </p>
           </div>
 
-          <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+          <Card className="premium-card min-w-0 border-[#b7ff3c]/20 bg-[#b7ff3c]/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-cyan-600" />
+                <ShieldCheck className="h-5 w-5 text-[#b7ff3c]" />
                 Demo package snapshot
               </CardTitle>
               <CardDescription>
@@ -249,9 +249,9 @@ export default function DealVaultDemoRecordPage() {
             const Icon = card.icon;
 
             return (
-              <Card key={card.title} className="premium-card border-cyan-500/15">
+              <Card key={card.title} className="premium-card border-[#b7ff3c]/15">
                 <CardHeader>
-                  <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600">
+                  <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-[#b7ff3c]/10 text-[#b7ff3c]">
                     <Icon className="h-5 w-5" />
                   </div>
                   <CardTitle className="text-lg">{card.title}</CardTitle>
@@ -263,10 +263,10 @@ export default function DealVaultDemoRecordPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[.95fr_1.05fr]">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Fingerprint className="h-5 w-5 text-cyan-600" />
+                <Fingerprint className="h-5 w-5 text-[#b7ff3c]" />
                 The proof fingerprint
               </CardTitle>
               <CardDescription>
@@ -274,8 +274,8 @@ export default function DealVaultDemoRecordPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.05] p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-600">
+              <div className="min-w-0 rounded-2xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/[0.05] p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[#b7ff3c]">
                   SHA-256 hash
                 </p>
                 <p className="mt-3 break-all font-mono text-sm text-muted-foreground">
@@ -284,7 +284,7 @@ export default function DealVaultDemoRecordPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
+                <Button asChild className="bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                   <a href={demoPackage.pdf.publicPath} target="_blank" rel="noopener noreferrer">
                     Download PDF
                     <Download className="ml-2 h-4 w-4" />
@@ -317,7 +317,7 @@ export default function DealVaultDemoRecordPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle>What the buyer should understand</CardTitle>
               <CardDescription>
@@ -331,7 +331,7 @@ export default function DealVaultDemoRecordPage() {
                   key={step.title}
                   className="flex gap-4 rounded-xl border border-white/10 bg-background/70 p-4"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-sm font-bold text-cyan-600">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#b7ff3c]/10 text-sm font-bold text-[#b7ff3c]">
                     {step.label}
                   </div>
                   <div>
@@ -345,10 +345,10 @@ export default function DealVaultDemoRecordPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-2">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ReceiptText className="h-5 w-5 text-cyan-600" />
+                <ReceiptText className="h-5 w-5 text-[#b7ff3c]" />
                 Example payout visibility
               </CardTitle>
               <CardDescription>
@@ -368,10 +368,10 @@ export default function DealVaultDemoRecordPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-cyan-600" />
+                <CheckCircle2 className="h-5 w-5 text-[#b7ff3c]" />
                 Example milestone trail
               </CardTitle>
               <CardDescription>
@@ -382,7 +382,7 @@ export default function DealVaultDemoRecordPage() {
               {demoPackage.milestones.map((milestone) => (
                 <div key={milestone.title} className="rounded-xl border border-white/10 bg-background/70 p-4">
                   <div className="flex items-start gap-3">
-                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b7ff3c]" />
                     <div>
                       <p className="font-semibold">{milestone.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -397,7 +397,7 @@ export default function DealVaultDemoRecordPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-[1.08fr_.92fr]">
-          <Card className="premium-card border-cyan-500/20">
+          <Card className="premium-card border-[#b7ff3c]/20">
             <CardHeader>
               <CardTitle>Certificate-ready output</CardTitle>
               <CardDescription>
@@ -414,7 +414,7 @@ export default function DealVaultDemoRecordPage() {
                   className="h-auto w-full"
                 />
               </div>
-              <Button asChild className="w-full bg-cyan-600 hover:bg-cyan-700">
+              <Button asChild className="w-full bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                 <a
                   href={demoPackage.certificate.pdfPath}
                   target="_blank"
@@ -427,9 +427,9 @@ export default function DealVaultDemoRecordPage() {
             </CardContent>
           </Card>
 
-          <Card className="premium-card border-cyan-500/20 bg-cyan-500/5">
+          <Card className="premium-card border-[#b7ff3c]/20 bg-[#b7ff3c]/5">
             <CardHeader>
-              <Badge className="w-fit bg-cyan-600 text-white">
+              <Badge className="w-fit bg-[#b7ff3c] text-[#11130f]">
                 <Sparkles className="mr-1 h-3.5 w-3.5" />
                 Sales takeaway
               </Badge>
@@ -449,7 +449,7 @@ export default function DealVaultDemoRecordPage() {
                 The blockchain record helps verify the event history, while private application
                 records keep sensitive documents off-chain.
               </p>
-              <Button asChild size="lg" className="w-full bg-cyan-600 hover:bg-cyan-700">
+              <Button asChild size="lg" className="w-full bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]">
                 <Link href="/dealvault/demo#dealvault-demo">
                   Request A Private Demo
                   <ArrowRight className="ml-2 h-4 w-4" />

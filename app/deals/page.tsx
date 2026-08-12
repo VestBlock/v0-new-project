@@ -14,8 +14,24 @@ export default function DealsPage() {
     <PathwayPage
       eyebrow="Find deals"
       title="Enter the deal from the right side."
-      body="Source, analyze, sell, buy, or document an opportunity through the VestBlock workflow built for your role."
+      body="Source, analyze, sell, buy, or document an opportunity from the perspective that matches your role."
       event={analyticsEvents.dealFlowStarted}
+      outcome="A property decision grounded in criteria, math, and next actions."
+      whatYouProvide={[
+        "The address or market and the property facts you know",
+        "Your role, timing, price expectations, or buy box",
+        "Known condition, financing, title, or partner constraints",
+      ]}
+      whatHappensNext={[
+        "VestBlock separates facts, estimates, and unanswered questions.",
+        "The opportunity is compared with the relevant buyer, lender, or partner criteria.",
+        "You decide whether to investigate, submit, introduce, or document the deal.",
+      ]}
+      proofPoints={[
+        "Independent verification remains required",
+        "Estimates are identified as estimates",
+        "DealVault records milestones without exposing private documents",
+      ]}
       primary={{
         eyebrow: "Deal discovery",
         title: "Explore property opportunities.",

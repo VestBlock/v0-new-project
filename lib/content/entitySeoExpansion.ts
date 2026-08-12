@@ -1096,7 +1096,7 @@ export async function runEntitySeoExpansion(options: EntitySeoExpansionOptions =
       }))
     )
 
-    const autoPublishEnabled = parseBoolEnv('ENTITY_SEO_AUTO_PUBLISH_ENABLED', true)
+    const autoPublishEnabled = parseBoolEnv('ENTITY_SEO_AUTO_PUBLISH_ENABLED', false)
     const autoPublishLimit = parseIntEnv('ENTITY_SEO_AUTO_PUBLISH_LIMIT', 3)
     const toPublish = autoPublishEnabled
       ? finalCandidates.filter((candidate) => candidate.safeAutoPublish).slice(0, autoPublishLimit)

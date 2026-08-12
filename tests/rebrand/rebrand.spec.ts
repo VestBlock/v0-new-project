@@ -3,16 +3,13 @@ import { expect, test, type Page } from '@playwright/test';
 function watchRuntimeErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => {
-    if (error.message.includes('posthog')) return;
     if (error.message.includes('due to access control checks')) return;
     errors.push(error.message);
   });
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      if (message.text().includes('posthog')) return;
       if (message.text().startsWith('Failed to fetch RSC payload')) return;
       const location = message.location().url;
-      if (location.includes('posthog')) return;
       errors.push(`${message.text()}${location ? ` @ ${location}` : ''}`);
     }
   });

@@ -83,7 +83,7 @@ export function DealVaultPilotInterestForm() {
   };
 
   return (
-    <Card id="dealvault-demo" className="border-cyan-500/20">
+    <Card id="dealvault-demo" className="min-w-0 border-[#b7ff3c]/20">
       <CardHeader>
         <CardTitle>Request A Private DealVault Demo</CardTitle>
         <CardDescription>
@@ -94,7 +94,7 @@ export function DealVaultPilotInterestForm() {
       <CardContent>
         <form onSubmit={submitInterest} className="space-y-5">
           {submissionState ? (
-            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
+            <div className="min-w-0 rounded-xl border border-[#b7ff3c]/20 bg-[#b7ff3c]/5 p-4 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">
                 Demo request saved for {submissionState.companyName}
               </p>
@@ -209,7 +209,7 @@ export function DealVaultPilotInterestForm() {
             />
           </div>
 
-          <Button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-700" disabled={isSubmitting}>
+          <Button type="submit" className="w-full bg-[#b7ff3c] text-[#11130f] hover:bg-[#cbff75]" disabled={isSubmitting}>
             {isSubmitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

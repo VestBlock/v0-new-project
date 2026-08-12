@@ -1,11 +1,23 @@
 import { registerUserDocument } from "@/lib/documents/service"
+import { getServerUser } from "@/lib/auth/admin"
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
   try {
-    const { html, fileName, userId } = await req.json()
+    const user = await getServerUser()
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
-    if (!html || !fileName) {
+    const { html, fileName } = await req.json()
+
+    if (
+      typeof html !== "string" ||
+      !html ||
+      html.length > 500_000 ||
+      typeof fileName !== "string" ||
+      !/^[a-z0-9][a-z0-9._ -]{0,119}$/i.test(fileName)
+    ) {
       return NextResponse.json(
         {
           error: "Missing required parameters",
@@ -39,6 +51,7 @@ export async function POST(req: Request) {
         name: fileName,
         async: false,
       }),
+      signal: AbortSignal.timeout(20_000),
     })
 
     if (!response.ok) {
@@ -47,7 +60,6 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "Failed to generate PDF",
-          details: error,
         },
         { status: response.status },
       )
@@ -60,17 +72,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: data.error.message || "PDF.co returned an error.",
-          details: data.error.details,
         },
         { status: data.error.status || 500 },
       )
     }
 
-    // If userId is provided, save the PDF URL to the user's account
-    if (userId) {
-      try {
+    try {
         await registerUserDocument({
-          userId,
+          userId: user.id,
           documentName: fileName,
           documentUrl: data.url,
           documentType: "dispute_letter",
@@ -79,11 +88,8 @@ export async function POST(req: Request) {
             source: "generate-pdf",
           },
         })
-      } catch (dbError) {
+    } catch (dbError) {
         console.error("Supabase error saving document:", dbError)
-        // Non-critical error for the PDF generation itself, but good to log
-        // You might decide if this should return an error to the client or not
-      }
     }
 
     return NextResponse.json({ url: data.url })
@@ -92,7 +98,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Failed to generate PDF",
-        details: error.message,
       },
       { status: 500 },
     )

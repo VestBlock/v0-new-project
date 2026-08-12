@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-10T22:42:36.794Z",
+  "generatedAt": "2026-08-11T21:43:18.947Z",
   "repositoryRoot": "/Users/mrsanders/VestBlock Codex Sync/Codex Folder",
   "counts": {
-    "total": 363,
+    "total": 404,
     "byRecommendation": {
-      "KEEP": 135,
-      "MODERNIZE": 157,
-      "MERGE": 51,
+      "KEEP": 160,
+      "MODERNIZE": 168,
+      "MERGE": 56,
       "REPLACE": 0,
       "ARCHIVE": 20,
       "REMOVE": 0
@@ -14,15 +14,15 @@
     "byFamily": {
       "buyer acquisition and matching": 26,
       "capital acquisition": 19,
-      "growth and content": 27,
+      "growth and content": 28,
       "legacy government opportunity": 7,
       "lender and capital matching": 17,
-      "operating control plane": 9,
+      "operating control plane": 17,
       "partner acquisition": 23,
-      "payments and DealVault": 12,
-      "real-estate acquisition": 69,
-      "shared outreach": 39,
-      "supporting operations": 107,
+      "payments and DealVault": 13,
+      "real-estate acquisition": 70,
+      "shared outreach": 44,
+      "supporting operations": 132,
       "workflow infrastructure": 8
     }
   },
@@ -37,7 +37,7 @@
         "schedule": "0 14,17,20,23 * * *"
       }
     ],
-    "packageScriptCount": 165
+    "packageScriptCount": 218
   },
   "records": [
     {
@@ -140,6 +140,7 @@
         "entity_seo_opportunities",
         "funding_payments",
         "improvement_insights",
+        "improvement_runs",
         "investor_automation_runs",
         "investor_follow_up_tasks",
         "investor_profiles",
@@ -169,12 +170,15 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/dailyOperatingLoop.ts",
@@ -193,6 +197,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/admin/operatingLoopCore.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
@@ -200,7 +206,8 @@
         "lib/leads/revenueCampaigns.ts",
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
-        "lib/leads/source-keys.ts"
+        "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts"
       ],
       "currentStatus": "scheduled in vercel.json",
       "lastKnownUse": {
@@ -780,13 +787,16 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "SAM.gov",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/autonomousOperatingSystem.ts",
@@ -801,6 +811,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
         "lib/admin/operatingLoopCore.ts",
@@ -810,6 +822,7 @@
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
         "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
         "lib/property/builderDisposition.ts",
         "lib/property/dealAnalyzerMath.ts",
         "lib/property/formulas.ts",
@@ -4779,55 +4792,16 @@
       "trigger": [
         "POST /api/paypal-webhook"
       ],
-      "input": [
-        "environment: ACQUISITIONS_ALERT_EMAIL",
-        "environment: ADMIN_ALERT_EMAIL",
-        "environment: ALLOW_CONTACT_ADMIN_ALERTS",
-        "environment: FROM_EMAIL",
-        "environment: LEAD_OPS_ALERT_EMAIL",
-        "environment: NEXT_PUBLIC_ADMIN_EMAIL",
-        "environment: NEXT_PUBLIC_SITE_URL",
-        "environment: NEXT_PUBLIC_SUPABASE_URL",
-        "environment: OUTREACH_ALERT_EMAIL",
-        "environment: RESEND_API_KEY",
-        "environment: RESEND_EMAIL",
-        "environment: SUPABASE_SERVICE_ROLE_KEY",
-        "environment: SUPABASE_URL",
-        "environment: WEB_HOST_URL",
-        "module: @/lib/admin/tasks",
-        "module: @/lib/payments/paymentAutomation",
-        "module: @/lib/supabase/admin",
-        "module: @/lib/system/logEvent"
-      ],
+      "input": [],
       "output": [
-        "database insert",
-        "database update",
-        "external message send"
+        "Return value, status response, or downstream module effect; inspect before migration."
       ],
-      "databaseDependencies": [
-        "admin_activity",
-        "admin_tasks",
-        "email_events",
-        "funding_strategy_requests",
-        "payments",
-        "user_profiles"
-      ],
-      "apiDependencies": [
-        "www.annualcreditreport.com",
-        "www.vestblock.io"
-      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
       "externalService": [
-        "PayPal",
-        "Resend",
-        "Supabase"
+        "PayPal"
       ],
-      "dependencyFiles": [
-        "lib/admin/tasks.ts",
-        "lib/payments/paymentAutomation.ts",
-        "lib/supabase/admin.ts",
-        "lib/system/logEvent.ts",
-        "lib/email/sendEmail.ts"
-      ],
+      "dependencyFiles": [],
       "currentStatus": "externally callable webhook; provider configuration unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-20T12:30:08-05:00",
@@ -4927,8 +4901,17 @@
         "GET/POST /api/webhooks/dealmachine"
       ],
       "input": [
+        "environment: ADMIN_ALERT_EMAIL",
+        "environment: ADMIN_EMAILS",
         "environment: DEALMACHINE_WEBHOOK_SECRET",
+        "environment: NEXT_PUBLIC_ADMIN_EMAIL",
+        "environment: NEXT_PUBLIC_ADMIN_EMAILS",
+        "environment: NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
         "environment: NODE_ENV",
+        "environment: SUPABASE_ANON_KEY",
+        "environment: SUPABASE_URL",
+        "module: @/lib/auth/admin",
         "module: @/lib/dealmachine/webhooks"
       ],
       "output": [
@@ -4937,16 +4920,19 @@
       "databaseDependencies": [],
       "apiDependencies": [],
       "externalService": [
-        "DealMachine"
+        "DealMachine",
+        "Supabase"
       ],
       "dependencyFiles": [
+        "lib/auth/admin.ts",
         "lib/dealmachine/webhooks.ts",
+        "lib/auth/admin-emails.ts",
         "scripts/lib/dealmachine-export-jobs.mjs"
       ],
       "currentStatus": "externally callable webhook; provider configuration unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T01:38:01.009Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
@@ -4955,6 +4941,58 @@
       ],
       "recommendation": "MODERNIZE",
       "family": "real-estate acquisition"
+    },
+    {
+      "name": "Resend",
+      "path": "app/api/webhooks/resend/route.ts",
+      "purpose": "Resend operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "POST /api/webhooks/resend"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: RESEND_API_KEY",
+        "environment: RESEND_WEBHOOK_SECRET",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: @/lib/email/inboundOperations",
+        "module: @/lib/supabase/admin"
+      ],
+      "output": [
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "command_center_events",
+        "command_center_outbound_enrollments",
+        "command_center_reply_memory",
+        "lead_suppressions",
+        "leads",
+        "outreach_send_events",
+        "provider_delivery_events"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Resend",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/email/inboundOperations.ts",
+        "lib/supabase/admin.ts",
+        "lib/email/replyClassification.ts"
+      ],
+      "currentStatus": "externally callable webhook; provider configuration unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     },
     {
       "name": "000 FULL SETUP",
@@ -5727,6 +5765,35 @@
       "family": "buyer acquisition and matching"
     },
     {
+      "name": "057 Protect Profile Privileges",
+      "path": "db/migrations/057-protect-profile-privileges.sql",
+      "purpose": "057 Protect Profile Privileges operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "PayPal",
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
       "name": "Deploy Vestblock",
       "path": "deploy-vestblock.command",
       "purpose": "Deploy Vestblock operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
@@ -5860,13 +5927,16 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "SAM.gov",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/cityScenarioStrategyCatalog.ts",
@@ -5880,6 +5950,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/supabase/admin.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
@@ -5889,6 +5961,7 @@
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
         "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
         "lib/property/builderDisposition.ts",
         "lib/property/dealAnalyzerMath.ts",
         "lib/property/formulas.ts",
@@ -5896,7 +5969,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-18T10:25:50-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
@@ -5959,6 +6032,7 @@
         "entity_seo_opportunities",
         "funding_payments",
         "improvement_insights",
+        "improvement_runs",
         "investor_automation_runs",
         "investor_follow_up_tasks",
         "investor_profiles",
@@ -5988,13 +6062,16 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "SAM.gov",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/bossAgent.ts",
@@ -6011,6 +6088,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/admin/operatingLoopCore.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
@@ -6019,6 +6098,7 @@
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
         "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
         "lib/property/builderDisposition.ts",
         "lib/property/dealAnalyzerMath.ts",
         "lib/property/formulas.ts",
@@ -6077,7 +6157,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -6105,7 +6185,7 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -6137,7 +6217,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -6712,6 +6792,429 @@
       "family": "supporting operations"
     },
     {
+      "name": "Cockpit",
+      "path": "lib/autopilot/cockpit.ts",
+      "purpose": "Cockpit operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "environment: BUSINESS_MAILING_ADDRESS",
+        "environment: COMPANY_MAILING_ADDRESS",
+        "environment: FROM_EMAIL",
+        "environment: GOOGLE_CLIENT_ID",
+        "environment: GOOGLE_CLIENT_SECRET",
+        "environment: GOOGLE_REFRESH_TOKEN",
+        "environment: GOOGLE_WORKSPACE_SENDER",
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: OPENAI_ADS_API_KEY",
+        "environment: OUTREACH_FROM_EMAIL",
+        "environment: OUTREACH_MAILING_ADDRESS",
+        "environment: PUBLIC_BUSINESS_ADDRESS",
+        "environment: RESEND_API_KEY",
+        "environment: RESEND_EMAIL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ./openAiAds",
+        "module: ./strategyEngine",
+        "module: @/config/autonomy-policies.json",
+        "module: @/config/provider-verification.json",
+        "module: @/lib/admin/commandCenter",
+        "module: @/lib/improvement/types",
+        "module: @/lib/supabase/admin"
+      ],
+      "output": [
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "buyer_matches",
+        "buyer_outreach_messages",
+        "buyer_outreach_runs",
+        "buyers",
+        "command_center_events",
+        "command_center_jobs",
+        "command_center_reply_memory",
+        "command_center_strategy_runs",
+        "command_center_suppression_decisions",
+        "content_assets",
+        "daily_growth_reports",
+        "deal_pipeline_items",
+        "entity_seo_opportunities",
+        "experiment_results",
+        "funding_payments",
+        "improvement_runs",
+        "investor_automation_runs",
+        "investor_follow_up_tasks",
+        "investor_profiles",
+        "lead_suppressions",
+        "leads",
+        "lender_matches",
+        "lender_outreach_messages",
+        "lender_outreach_runs",
+        "lenders",
+        "osint_research_checklists",
+        "outreach_messages",
+        "outreach_send_events",
+        "payments",
+        "pr_outreach_log",
+        "pr_pitch_drafts",
+        "pr_targets",
+        "property_analysis_runs",
+        "property_buyer_packet_sends",
+        "property_buyer_packets",
+        "scrape_runs",
+        "strategy_updates",
+        "target_markets"
+      ],
+      "apiDependencies": [
+        "api.ads.openai.com",
+        "gmail.googleapis.com",
+        "oauth2.googleapis.com"
+      ],
+      "externalService": [
+        "DealMachine",
+        "Google",
+        "HomeHarvest",
+        "Inngest",
+        "Instantly",
+        "OpenAI",
+        "Outscraper",
+        "PayPal",
+        "Resend",
+        "SAM.gov",
+        "Sentry",
+        "Supabase",
+        "Vercel"
+      ],
+      "dependencyFiles": [
+        "lib/autopilot/openAiAds.ts",
+        "lib/autopilot/strategyEngine.ts",
+        "config/autonomy-policies.json",
+        "config/provider-verification.json",
+        "lib/admin/commandCenter.ts",
+        "lib/improvement/types.ts",
+        "lib/supabase/admin.ts",
+        "lib/autopilot/verticalRegistry.ts",
+        "lib/admin/autonomousOperatingCore.ts",
+        "lib/admin/dealMemory.ts",
+        "lib/admin/operatingArchitecture.ts",
+        "lib/admin/operatingLoops.ts",
+        "lib/investors/pipeline.ts",
+        "lib/leads/outbound.ts",
+        "lib/leads/outboundEligibility.ts",
+        "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
+        "lib/property/opportunityAnalysis.ts",
+        "lib/property/roughEstimate.ts",
+        "lib/admin/operatingLoopCore.ts",
+        "lib/investors/builderStrategy.ts",
+        "lib/investors/types.ts",
+        "lib/leads/revenueCampaigns.ts",
+        "lib/leads/types.ts",
+        "lib/outreach/email-quality.ts",
+        "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
+        "lib/property/builderDisposition.ts",
+        "lib/property/dealAnalyzerMath.ts",
+        "lib/property/formulas.ts",
+        "lib/leads/outreachV2.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "OpenAiAds",
+      "path": "lib/autopilot/openAiAds.ts",
+      "purpose": "OpenAiAds operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "environment: OPENAI_ADS_API_KEY"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "api.ads.openai.com"
+      ],
+      "externalService": [
+        "OpenAI"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "ProviderAdapters",
+      "path": "lib/autopilot/providerAdapters.ts",
+      "purpose": "ProviderAdapters operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "Repository",
+      "path": "lib/autopilot/repository.ts",
+      "purpose": "Repository operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "environment: BUSINESS_MAILING_ADDRESS",
+        "environment: COMPANY_MAILING_ADDRESS",
+        "environment: FROM_EMAIL",
+        "environment: GOOGLE_CLIENT_ID",
+        "environment: GOOGLE_CLIENT_SECRET",
+        "environment: GOOGLE_REFRESH_TOKEN",
+        "environment: GOOGLE_WORKSPACE_SENDER",
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: OPENAI_ADS_API_KEY",
+        "environment: OUTREACH_FROM_EMAIL",
+        "environment: OUTREACH_MAILING_ADDRESS",
+        "environment: PUBLIC_BUSINESS_ADDRESS",
+        "environment: RESEND_API_KEY",
+        "environment: RESEND_EMAIL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ./cockpit",
+        "module: ./strategyEngine",
+        "module: ./verticalRegistry",
+        "module: @/lib/admin/commandCenter",
+        "module: @/lib/improvement/repository",
+        "module: @/lib/supabase/admin"
+      ],
+      "output": [
+        "database delete",
+        "database insert",
+        "database update",
+        "database upsert",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "buyer_matches",
+        "buyer_outreach_messages",
+        "buyer_outreach_runs",
+        "buyers",
+        "command_center_events",
+        "command_center_jobs",
+        "command_center_reply_memory",
+        "command_center_strategy_runs",
+        "command_center_suppression_decisions",
+        "content_assets",
+        "daily_growth_reports",
+        "daily_operator_reports",
+        "deal_pipeline_items",
+        "entity_seo_opportunities",
+        "experiment_results",
+        "funding_payments",
+        "improvement_insights",
+        "improvement_runs",
+        "investor_automation_runs",
+        "investor_follow_up_tasks",
+        "investor_profiles",
+        "lead_suppressions",
+        "leads",
+        "lender_matches",
+        "lender_outreach_messages",
+        "lender_outreach_runs",
+        "lenders",
+        "market_performance_snapshots",
+        "method_performance_snapshots",
+        "osint_research_checklists",
+        "outreach_messages",
+        "outreach_send_events",
+        "outreach_variants",
+        "payments",
+        "pr_outreach_log",
+        "pr_pitch_drafts",
+        "pr_targets",
+        "prompt_versions",
+        "property_analysis_runs",
+        "property_buyer_packet_sends",
+        "property_buyer_packets",
+        "research_briefs",
+        "score_adjustments",
+        "scrape_runs",
+        "strategy_updates",
+        "target_markets"
+      ],
+      "apiDependencies": [
+        "api.ads.openai.com",
+        "gmail.googleapis.com",
+        "oauth2.googleapis.com"
+      ],
+      "externalService": [
+        "DealMachine",
+        "Google",
+        "HomeHarvest",
+        "Inngest",
+        "Instantly",
+        "OpenAI",
+        "Outscraper",
+        "PayPal",
+        "Resend",
+        "SAM.gov",
+        "Sentry",
+        "Supabase",
+        "Vercel"
+      ],
+      "dependencyFiles": [
+        "lib/autopilot/cockpit.ts",
+        "lib/autopilot/strategyEngine.ts",
+        "lib/autopilot/verticalRegistry.ts",
+        "lib/admin/commandCenter.ts",
+        "lib/improvement/repository.ts",
+        "lib/supabase/admin.ts",
+        "lib/autopilot/openAiAds.ts",
+        "config/autonomy-policies.json",
+        "config/provider-verification.json",
+        "lib/improvement/types.ts",
+        "lib/admin/autonomousOperatingCore.ts",
+        "lib/admin/dealMemory.ts",
+        "lib/admin/operatingArchitecture.ts",
+        "lib/admin/operatingLoops.ts",
+        "lib/investors/pipeline.ts",
+        "lib/leads/outbound.ts",
+        "lib/leads/outboundEligibility.ts",
+        "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
+        "lib/property/opportunityAnalysis.ts",
+        "lib/property/roughEstimate.ts",
+        "lib/admin/operatingLoopCore.ts",
+        "lib/investors/builderStrategy.ts",
+        "lib/investors/types.ts",
+        "lib/leads/revenueCampaigns.ts",
+        "lib/leads/types.ts",
+        "lib/outreach/email-quality.ts",
+        "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
+        "lib/property/builderDisposition.ts",
+        "lib/property/dealAnalyzerMath.ts",
+        "lib/property/formulas.ts",
+        "lib/leads/outreachV2.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "StrategyEngine",
+      "path": "lib/autopilot/strategyEngine.ts",
+      "purpose": "StrategyEngine operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "module: ./verticalRegistry"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [
+        "lib/autopilot/verticalRegistry.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "VerticalRegistry",
+      "path": "lib/autopilot/verticalRegistry.ts",
+      "purpose": "VerticalRegistry operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
       "name": "FundingCompliance",
       "path": "lib/business-readiness/fundingCompliance.ts",
       "purpose": "FundingCompliance operation in the capital acquisition family; confirm exact owner and intended outcome before migration.",
@@ -6866,7 +7369,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-05-09T16:49:12-05:00",
+        "value": "2026-08-11T14:50:24-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports deal matching and conversion.",
@@ -7413,7 +7916,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "May produce traffic and intent; retain only when attribution is observable.",
@@ -7542,7 +8045,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T14:50:24-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "May produce traffic and intent; retain only when attribution is observable.",
@@ -7682,6 +8185,34 @@
       "family": "capital acquisition"
     },
     {
+      "name": "Outreach Guard",
+      "path": "lib/crm/outreach-guard.ts",
+      "purpose": "Outreach Guard operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T21:32:49.857Z",
+        "basis": "file modification time; runtime use unconfirmed"
+      },
+      "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other shared outreach records for consolidation."
+      ],
+      "recommendation": "MERGE",
+      "family": "shared outreach"
+    },
+    {
       "name": "Webhooks",
       "path": "lib/dealmachine/webhooks.ts",
       "purpose": "Webhooks operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
@@ -7706,8 +8237,8 @@
       ],
       "currentStatus": "externally callable webhook; provider configuration unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T01:52:28.410Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
@@ -7749,6 +8280,80 @@
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
         "value": "2026-05-09T16:49:12-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other shared outreach records for consolidation."
+      ],
+      "recommendation": "MERGE",
+      "family": "shared outreach"
+    },
+    {
+      "name": "InboundOperations",
+      "path": "lib/email/inboundOperations.ts",
+      "purpose": "InboundOperations operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "module: ./replyClassification"
+      ],
+      "output": [
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "command_center_events",
+        "command_center_outbound_enrollments",
+        "command_center_reply_memory",
+        "lead_suppressions",
+        "leads",
+        "outreach_send_events",
+        "provider_delivery_events"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Resend",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/email/replyClassification.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other shared outreach records for consolidation."
+      ],
+      "recommendation": "MERGE",
+      "family": "shared outreach"
+    },
+    {
+      "name": "ReplyClassification",
+      "path": "lib/email/replyClassification.ts",
+      "purpose": "ReplyClassification operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "external message send"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -8146,24 +8751,20 @@
         "environment: NEXT_PUBLIC_SUPABASE_ANON_KEY",
         "environment: NEXT_PUBLIC_SUPABASE_URL",
         "environment: SUPABASE_ANON_KEY",
-        "environment: SUPABASE_SERVICE_ROLE_KEY",
         "environment: SUPABASE_URL",
         "module: @/lib/auth/admin"
       ],
       "output": [
         "Return value, status response, or downstream module effect; inspect before migration."
       ],
-      "databaseDependencies": [
-        "user_profiles"
-      ],
+      "databaseDependencies": [],
       "apiDependencies": [],
       "externalService": [
         "Supabase"
       ],
       "dependencyFiles": [
         "lib/auth/admin.ts",
-        "lib/auth/admin-emails.ts",
-        "lib/supabase/admin.ts"
+        "lib/auth/admin-emails.ts"
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
@@ -8484,7 +9085,7 @@
       ],
       "currentStatus": "registered Inngest workflow code; cloud registration unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Shared execution infrastructure; removal can break customer and internal workflows.",
@@ -8494,6 +9095,32 @@
       ],
       "recommendation": "KEEP",
       "family": "workflow infrastructure"
+    },
+    {
+      "name": "SourceRegistry",
+      "path": "lib/intelligence/sourceRegistry.ts",
+      "purpose": "SourceRegistry operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T21:42:34.678Z",
+        "basis": "file modification time; runtime use unconfirmed"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     },
     {
       "name": "Automation",
@@ -9414,7 +10041,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-17T21:13:34-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -9804,7 +10431,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -9889,7 +10516,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -10431,7 +11058,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-17T21:13:34-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -10609,7 +11236,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -11273,7 +11900,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-05-09T16:49:12-05:00",
+        "value": "2026-08-11T14:50:24-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports capital qualification, referral, and monetization.",
@@ -11979,8 +12606,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:03.933Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12011,8 +12638,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:24:14.180Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12050,8 +12677,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:03.933Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12078,8 +12705,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:03.932Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12112,8 +12739,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:02:18.714Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12146,8 +12773,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:43.131Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12174,8 +12801,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:02:18.715Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12206,8 +12833,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:54.452Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12240,8 +12867,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:21:03.934Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12294,8 +12921,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:24:14.181Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12326,8 +12953,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:02:18.714Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12354,8 +12981,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:19:54.795Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -12463,7 +13090,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-17T20:11:44-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports deal matching and conversion.",
@@ -12593,7 +13220,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -12621,7 +13248,7 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-17T20:11:44-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -12815,6 +13442,74 @@
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
       "duplicates": [],
       "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "AutomationRegistry",
+      "path": "lib/revenue-engine/automationRegistry.ts",
+      "purpose": "AutomationRegistry operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "module: ./types"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "DealMachine",
+        "Inngest",
+        "PayPal",
+        "Vercel"
+      ],
+      "dependencyFiles": [
+        "lib/revenue-engine/types.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Pipeline",
+      "path": "lib/revenue-engine/pipeline.ts",
+      "purpose": "Pipeline operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "module: ./types"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "Inngest",
+        "Vercel"
+      ],
+      "dependencyFiles": [
+        "lib/revenue-engine/types.ts"
+      ],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [],
+      "recommendation": "MODERNIZE",
       "family": "supporting operations"
     },
     {
@@ -13341,8 +14036,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-08-10T21:50:29.310Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
@@ -13431,20 +14126,18 @@
         "OpenAI",
         "Outscraper",
         "PayPal",
-        "PostHog",
         "RentCast",
         "Resend",
         "SAM.gov",
         "Sentry",
         "Supabase",
-        "Twilio",
         "Vercel"
       ],
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-08-10T22:42:20.332Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
@@ -13480,7 +14173,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T17:41:42-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
@@ -13526,7 +14219,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "May produce traffic and intent; retain only when attribution is observable.",
@@ -13556,7 +14249,7 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -13780,8 +14473,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T02:47:26.955Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -13816,8 +14509,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T02:48:37.817Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -13832,7 +14525,8 @@
       "path": "scripts/dealmachine-direct-contact-extract.mjs",
       "purpose": "Dealmachine Direct Contact Extract operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: distress:dealmachine:direct-contact-extract",
+        "manual package script: distress:dealmachine:direct-contact-extract:stage"
       ],
       "input": [],
       "output": [
@@ -13846,7 +14540,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-19T12:59:12-05:00",
         "basis": "last git commit touching file"
@@ -13864,7 +14558,7 @@
       "path": "scripts/dealmachine-direct-contact-probe.mjs",
       "purpose": "Dealmachine Direct Contact Probe operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: distress:dealmachine:direct-contact-probe"
       ],
       "input": [],
       "output": [
@@ -13878,7 +14572,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-18T13:56:08-05:00",
         "basis": "last git commit touching file"
@@ -13914,8 +14608,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T19:32:52.494Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -13930,7 +14624,7 @@
       "path": "scripts/dealmachine-export-doctor.mjs",
       "purpose": "Dealmachine Export Doctor operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: dealmachine:export-doctor"
       ],
       "input": [],
       "output": [
@@ -13942,7 +14636,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T18:05:58-05:00",
         "basis": "last git commit touching file"
@@ -13960,7 +14654,9 @@
       "path": "scripts/dealmachine-export-download.mjs",
       "purpose": "Dealmachine Export Download operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: dealmachine:download-export",
+        "manual package script: dealmachine:download-export:apply",
+        "manual package script: dealmachine:gmail-auth-url"
       ],
       "input": [
         "environment: DEALMACHINE_ACCOUNT_EMAIL",
@@ -13987,7 +14683,7 @@
         "Google"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T18:50:15-05:00",
         "basis": "last git commit touching file"
@@ -14025,8 +14721,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-06T20:40:22.998Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14057,7 +14753,7 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-17T19:28:22-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14093,8 +14789,8 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T20:08:08.580Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14137,7 +14833,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14153,7 +14849,7 @@
       "path": "scripts/dealmachine-export-pipeline.mjs",
       "purpose": "Dealmachine Export Pipeline operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:export-pipeline"
       ],
       "input": [
         "environment: DEALMACHINE_EXPORT_EMAIL"
@@ -14167,7 +14863,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -14205,7 +14901,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T22:19:22-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14235,8 +14931,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T19:34:35.694Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14270,7 +14966,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T19:21:35-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14300,7 +14996,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-15T13:14:19-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14335,8 +15031,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-20T18:09:47.168Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14468,7 +15164,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-19T21:28:24-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14508,7 +15204,7 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-06-09T14:31:14-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14624,7 +15320,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T18:50:15-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14658,8 +15354,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-07T02:53:56.183Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14726,8 +15422,8 @@
       ],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T18:01:48.030Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -14759,7 +15455,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T22:19:22-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -14769,6 +15465,45 @@
       ],
       "recommendation": "MODERNIZE",
       "family": "real-estate acquisition"
+    },
+    {
+      "name": "Demand Match Lane",
+      "path": "scripts/demand-match-lane.mjs",
+      "purpose": "Demand Match Lane operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: outreach:demand-match"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ./shared-email-quality.mjs"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [
+        "buyer_buy_boxes"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "DealMachine",
+        "Sentry",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "scripts/shared-email-quality.mjs"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-07-02T17:57:46-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [],
+      "recommendation": "MODERNIZE",
+      "family": "supporting operations"
     },
     {
       "name": "DeployDealVault",
@@ -14846,7 +15581,7 @@
       "path": "scripts/direct-mail-batch.mjs",
       "purpose": "Direct Mail Batch operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:direct-mail-batch"
       ],
       "input": [
         "module: ./shared-email-quality.mjs"
@@ -14863,7 +15598,7 @@
       "dependencyFiles": [
         "scripts/shared-email-quality.mjs"
       ],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -14926,7 +15661,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -15097,6 +15832,40 @@
       "family": "shared outreach"
     },
     {
+      "name": "Export Obsidian Strategy Vault",
+      "path": "scripts/export-obsidian-strategy-vault.mjs",
+      "purpose": "Export Obsidian Strategy Vault operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: obsidian:vault:export"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_KEY",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "environment: VESTBLOCK_OBSIDIAN_VAULT"
+      ],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
       "name": "Export Outreach Quarantine",
       "path": "scripts/export-outreach-quarantine.mjs",
       "purpose": "Export Outreach Quarantine operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
@@ -15183,7 +15952,9 @@
       "path": "scripts/fresh-lead-loading-loop.mjs",
       "purpose": "Fresh Lead Loading Loop operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: leads:fresh-loop",
+        "manual package script: leads:fresh-loop:verify",
+        "manual package script: leads:fresh-loop:with-dealmachine"
       ],
       "input": [
         "environment: DEALMACHINE_WEB_TOKEN",
@@ -15206,9 +15977,9 @@
       "dependencyFiles": [
         "scripts/lib/dealmachine-strategy-learning.mjs"
       ],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -15222,7 +15993,7 @@
       "path": "scripts/generate-portfolio-buyer-packet.mjs",
       "purpose": "Generate Portfolio Buyer Packet operation in the buyer acquisition and matching family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: portfolio:milwaukee-10-unit:buyer-packet"
       ],
       "input": [],
       "output": [
@@ -15234,7 +16005,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T20:25:27-05:00",
         "basis": "last git commit touching file"
@@ -15252,7 +16023,7 @@
       "path": "scripts/generate-redacted-buyer-packet.mjs",
       "purpose": "Generate Redacted Buyer Packet operation in the buyer acquisition and matching family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: portfolio:milwaukee-10-unit:packets"
       ],
       "input": [],
       "output": [
@@ -15264,7 +16035,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T17:41:42-05:00",
         "basis": "last git commit touching file"
@@ -15317,6 +16088,87 @@
       "family": "supporting operations"
     },
     {
+      "name": "Gmail Reply Sync",
+      "path": "scripts/gmail-reply-sync.ts",
+      "purpose": "Gmail Reply Sync operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: outreach:reply-sync"
+      ],
+      "input": [
+        "environment: FROM_EMAIL",
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ../lib/email/inboundOperations",
+        "module: ../lib/email/replyClassification"
+      ],
+      "output": [
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "command_center_events",
+        "command_center_outbound_enrollments",
+        "command_center_reply_memory",
+        "lead_suppressions",
+        "leads",
+        "outreach_send_events",
+        "provider_delivery_events"
+      ],
+      "apiDependencies": [
+        "gmail.googleapis.com",
+        "oauth2.googleapis.com"
+      ],
+      "externalService": [
+        "DealMachine",
+        "Google",
+        "Resend",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/email/inboundOperations.ts",
+        "lib/email/replyClassification.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Vestblock Monitor.Gs",
+      "path": "scripts/google-ads/vestblock-monitor.gs.js",
+      "purpose": "Vestblock Monitor.Gs operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
       "name": "Homeharvest Listings",
       "path": "scripts/homeharvest-listings.py",
       "purpose": "Homeharvest Listings operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
@@ -15351,7 +16203,7 @@
       "path": "scripts/import-outsourced-real-estate-leads.mjs",
       "purpose": "Import Outsourced Real Estate Leads operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: leads:import-outsourced-real-estate"
       ],
       "input": [],
       "output": [
@@ -15370,7 +16222,7 @@
         "Supabase"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-18T13:23:50-05:00",
         "basis": "last git commit touching file"
@@ -15386,7 +16238,7 @@
       "path": "scripts/import-stale-listing-seller-leads.mjs",
       "purpose": "Import Stale Listing Seller Leads operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: leads:import-stale-listings"
       ],
       "input": [],
       "output": [
@@ -15404,7 +16256,7 @@
         "Supabase"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-18T13:23:50-05:00",
         "basis": "last git commit touching file"
@@ -15466,8 +16318,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-20T18:11:44.800Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -15496,7 +16348,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -15605,7 +16457,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-20T13:43:21-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -15688,7 +16540,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-13T23:51:19-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -15808,8 +16660,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T19:44:28.254Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -15838,8 +16690,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T19:32:52.459Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -15847,6 +16699,40 @@
         "Review against other real-estate acquisition records for consolidation."
       ],
       "recommendation": "MODERNIZE",
+      "family": "real-estate acquisition"
+    },
+    {
+      "name": "Listing Postmortem Drafts",
+      "path": "scripts/listing-postmortem-drafts.mjs",
+      "purpose": "Listing Postmortem Drafts operation in the real-estate acquisition family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: outreach:postmortem-drafts"
+      ],
+      "input": [
+        "module: ./shared-email-quality.mjs"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "Sentry"
+      ],
+      "dependencyFiles": [
+        "scripts/shared-email-quality.mjs"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-07-02T18:44:06-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [
+        "Review against other real-estate acquisition records for consolidation."
+      ],
+      "recommendation": "KEEP",
       "family": "real-estate acquisition"
     },
     {
@@ -15908,6 +16794,90 @@
       "family": "real-estate acquisition"
     },
     {
+      "name": "Log Offer Outcome",
+      "path": "scripts/log-offer-outcome.mjs",
+      "purpose": "Log Offer Outcome operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: outreach:log-offer-outcome"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL"
+      ],
+      "output": [
+        "database insert"
+      ],
+      "databaseDependencies": [
+        "command_center_events"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-07-02T15:27:16-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Log Reply",
+      "path": "scripts/log-reply.ts",
+      "purpose": "Log Reply operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: outreach:log-reply"
+      ],
+      "input": [
+        "environment: FROM_EMAIL",
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ../lib/email/inboundOperations",
+        "module: ../lib/email/replyClassification"
+      ],
+      "output": [
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "command_center_events",
+        "command_center_outbound_enrollments",
+        "command_center_reply_memory",
+        "lead_suppressions",
+        "leads",
+        "outreach_send_events",
+        "provider_delivery_events"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Resend",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/email/inboundOperations.ts",
+        "lib/email/replyClassification.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
       "name": "Major Market Source Harvest",
       "path": "scripts/major-market-source-harvest.mjs",
       "purpose": "Major Market Source Harvest operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
@@ -15954,7 +16924,7 @@
       "path": "scripts/outreach-autopilot.mjs",
       "purpose": "Outreach Autopilot operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:autopilot"
       ],
       "input": [
         "environment: OUTREACH_DAILY_CAP",
@@ -15970,7 +16940,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -15988,7 +16958,7 @@
       "path": "scripts/outreach-learning-audit.mjs",
       "purpose": "Outreach Learning Audit operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:learning-audit"
       ],
       "input": [],
       "output": [
@@ -16000,7 +16970,7 @@
         "DealMachine"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -16157,7 +17127,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T17:41:42-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -16203,7 +17173,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-13T23:51:19-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -16233,7 +17203,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-08T14:34:20-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -16286,7 +17256,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T21:13:34-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -16323,8 +17293,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-06T20:16:46.165Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
@@ -16353,8 +17323,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-06T20:16:51.307Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
@@ -16391,8 +17361,8 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-06T20:25:55.568Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
@@ -16401,6 +17371,32 @@
       ],
       "recommendation": "KEEP",
       "family": "real-estate acquisition"
+    },
+    {
+      "name": "Probe N8n Preview Bridge",
+      "path": "scripts/probe-n8n-preview-bridge.mjs",
+      "purpose": "Probe N8n Preview Bridge operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:n8n-live-preview"
+      ],
+      "input": [],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     },
     {
       "name": "Process Gmail Bounces",
@@ -16454,7 +17450,7 @@
       "path": "scripts/reactivation-queue.mjs",
       "purpose": "Reactivation Queue operation in the workflow infrastructure family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:reactivation-queue"
       ],
       "input": [],
       "output": [
@@ -16464,7 +17460,7 @@
       "apiDependencies": [],
       "externalService": [],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -16516,7 +17512,7 @@
       "path": "scripts/resource-strategy-planner.mjs",
       "purpose": "Resource Strategy Planner operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: revenue:resource-plan"
       ],
       "input": [
         "environment: DEALMACHINE_EXPORT_EMAIL"
@@ -16534,7 +17530,7 @@
         "Supabase"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T18:50:15-05:00",
         "basis": "last git commit touching file"
@@ -16582,7 +17578,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -16610,7 +17606,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T17:41:42-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -16640,7 +17636,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-13T23:51:19-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -16763,7 +17759,8 @@
       "path": "scripts/send-reactivation-batch.mjs",
       "purpose": "Send Reactivation Batch operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:send-reactivation",
+        "manual package script: outreach:send-reactivation:live"
       ],
       "input": [
         "environment: BUSINESS_MAILING_ADDRESS",
@@ -16782,7 +17779,7 @@
         "Resend"
       ],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T15:27:16-05:00",
         "basis": "last git commit touching file"
@@ -16898,7 +17895,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-22T13:46:03-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
@@ -16941,7 +17938,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -17000,7 +17997,8 @@
       "path": "scripts/sync-check.mjs",
       "purpose": "Sync Check operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: deploy:web:prod",
+        "manual package script: sync:check"
       ],
       "input": [],
       "output": [
@@ -17010,7 +18008,7 @@
       "apiDependencies": [],
       "externalService": [],
       "dependencyFiles": [],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-02T17:53:15-05:00",
         "basis": "last git commit touching file"
@@ -17020,6 +18018,121 @@
       "duplicates": [],
       "recommendation": "KEEP",
       "family": "supporting operations"
+    },
+    {
+      "name": "Test Autopilot Calendar",
+      "path": "scripts/test-autopilot-calendar.mjs",
+      "purpose": "Test Autopilot Calendar operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:autopilot-calendar"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "output": [
+        "database delete",
+        "database insert",
+        "database update"
+      ],
+      "databaseDependencies": [
+        "content_assets"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
+    },
+    {
+      "name": "Test Autopilot Content Provider",
+      "path": "scripts/test-autopilot-content-provider.mjs",
+      "purpose": "Test Autopilot Content Provider operation in the growth and content family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:autopilot-content-provider"
+      ],
+      "input": [
+        "environment: OPENAI_API_KEY",
+        "environment: OPENAI_CONTENT_MODEL",
+        "environment: OPENAI_IMAGE_MODEL"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "OpenAI"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "May produce traffic and intent; retain only when attribution is observable.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other growth and content records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "growth and content"
+    },
+    {
+      "name": "Test Autopilot Strategy",
+      "path": "scripts/test-autopilot-strategy.ts",
+      "purpose": "Test Autopilot Strategy operation in the operating control plane family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:autopilot-strategy",
+        "manual package script: test:autopilot-strategy:live"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "module: ../lib/autopilot/strategyEngine",
+        "module: ../lib/autopilot/verticalRegistry"
+      ],
+      "output": [
+        "database delete",
+        "database insert"
+      ],
+      "databaseDependencies": [
+        "command_center_strategy_runs",
+        "experiment_results",
+        "strategy_updates"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/autopilot/strategyEngine.ts",
+        "lib/autopilot/verticalRegistry.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other operating control plane records for consolidation."
+      ],
+      "recommendation": "MODERNIZE",
+      "family": "operating control plane"
     },
     {
       "name": "Test Command Center Autopilot",
@@ -17047,7 +18160,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T22:19:22-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Coordinates prioritization, approvals, observability, and founder attention.",
@@ -17138,13 +18251,16 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "SAM.gov",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/commandCenter.ts",
@@ -17157,6 +18273,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/supabase/admin.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
@@ -17167,6 +18285,7 @@
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
         "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts",
         "lib/property/builderDisposition.ts",
         "lib/property/dealAnalyzerMath.ts",
         "lib/property/formulas.ts",
@@ -17184,6 +18303,41 @@
       ],
       "recommendation": "MODERNIZE",
       "family": "operating control plane"
+    },
+    {
+      "name": "Test Crm Foundation",
+      "path": "scripts/test-crm-foundation.ts",
+      "purpose": "Test Crm Foundation operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:crm-foundation"
+      ],
+      "input": [
+        "environment: CRM_IDENTITY_HASH_SECRET",
+        "module: ../lib/crm/attribution",
+        "module: ../lib/crm/identity",
+        "module: ../lib/crm/outreach-guard"
+      ],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [
+        "lib/crm/attribution.ts",
+        "lib/crm/identity.ts",
+        "lib/crm/outreach-guard.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T21:32:49.857Z",
+        "basis": "file modification time; runtime use unconfirmed"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     },
     {
       "name": "Test Deal Analyzer Math",
@@ -17256,6 +18410,213 @@
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-06-17T17:41:42-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test Email Operations",
+      "path": "scripts/test-email-operations.ts",
+      "purpose": "Test Email Operations operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:email-operations",
+        "manual package script: test:email-operations:live"
+      ],
+      "input": [
+        "environment: NEXT_PUBLIC_SUPABASE_URL",
+        "environment: SUPABASE_SERVICE_ROLE_KEY",
+        "environment: SUPABASE_URL",
+        "module: ../lib/email/inboundOperations",
+        "module: ../lib/email/replyClassification"
+      ],
+      "output": [
+        "database delete",
+        "database insert",
+        "database update",
+        "external message send"
+      ],
+      "databaseDependencies": [
+        "admin_tasks",
+        "command_center_events",
+        "command_center_outbound_enrollments",
+        "command_center_reply_memory",
+        "lead_suppressions",
+        "leads",
+        "outreach_send_events",
+        "provider_delivery_events"
+      ],
+      "apiDependencies": [],
+      "externalService": [
+        "Resend",
+        "Supabase"
+      ],
+      "dependencyFiles": [
+        "lib/email/inboundOperations.ts",
+        "lib/email/replyClassification.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other shared outreach records for consolidation."
+      ],
+      "recommendation": "MERGE",
+      "family": "shared outreach"
+    },
+    {
+      "name": "Test Google Ads Monitor",
+      "path": "scripts/test-google-ads-monitor.mjs",
+      "purpose": "Test Google Ads Monitor operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:google-ads-monitor"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test Intelligence Signals",
+      "path": "scripts/test-intelligence-signals.ts",
+      "purpose": "Test Intelligence Signals operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:intelligence-signals"
+      ],
+      "input": [
+        "module: ../lib/intelligence/sourceRegistry"
+      ],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "example.gov",
+        "mirror.example"
+      ],
+      "externalService": [],
+      "dependencyFiles": [
+        "lib/intelligence/sourceRegistry.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T21:42:35.137Z",
+        "basis": "file modification time; runtime use unconfirmed"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test N8n Provider Bridge",
+      "path": "scripts/test-n8n-provider-bridge.ts",
+      "purpose": "Test N8n Provider Bridge operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:n8n-provider-bridge"
+      ],
+      "input": [
+        "environment: N8N_WEBHOOK_SECRET",
+        "environment: N8N_WEBHOOK_URL",
+        "module: ../lib/autopilot/providerAdapters"
+      ],
+      "output": [
+        "database update"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "vestblock.app.n8n.cloud"
+      ],
+      "externalService": [],
+      "dependencyFiles": [
+        "lib/autopilot/providerAdapters.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test Obsidian Strategy Vault",
+      "path": "scripts/test-obsidian-strategy-vault.mjs",
+      "purpose": "Test Obsidian Strategy Vault operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:obsidian-vault"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test Openai Ads Readonly",
+      "path": "scripts/test-openai-ads-readonly.ts",
+      "purpose": "Test Openai Ads Readonly operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:openai-ads-readonly"
+      ],
+      "input": [
+        "environment: OPENAI_ADS_API_KEY",
+        "module: ../lib/autopilot/openAiAds"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "api.ads.openai.com"
+      ],
+      "externalService": [
+        "OpenAI"
+      ],
+      "dependencyFiles": [
+        "lib/autopilot/openAiAds.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -17339,12 +18700,15 @@
         "DealMachine",
         "Google",
         "HomeHarvest",
+        "Inngest",
         "Instantly",
         "OpenAI",
         "Outscraper",
+        "PayPal",
         "Resend",
         "Sentry",
-        "Supabase"
+        "Supabase",
+        "Vercel"
       ],
       "dependencyFiles": [
         "lib/admin/operatingArchitecture.ts",
@@ -17356,6 +18720,8 @@
         "lib/leads/outbound.ts",
         "lib/leads/outboundEligibility.ts",
         "lib/leads/sourceCostGovernor.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/types.ts",
         "lib/supabase/admin.ts",
         "lib/property/opportunityAnalysis.ts",
         "lib/property/roughEstimate.ts",
@@ -17365,7 +18731,8 @@
         "lib/leads/revenueCampaigns.ts",
         "lib/leads/types.ts",
         "lib/outreach/email-quality.ts",
-        "lib/leads/source-keys.ts"
+        "lib/leads/source-keys.ts",
+        "lib/revenue-engine/automationRegistry.ts"
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
@@ -17401,7 +18768,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T16:38:55-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -17409,6 +18776,41 @@
       "duplicates": [],
       "recommendation": "KEEP",
       "family": "supporting operations"
+    },
+    {
+      "name": "Test Payment Order Binding",
+      "path": "scripts/test-payment-order-binding.ts",
+      "purpose": "Test Payment Order Binding operation in the payments and DealVault family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:payment-order-binding"
+      ],
+      "input": [
+        "module: ../lib/payments/paypalOrderBinding"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "PayPal"
+      ],
+      "dependencyFiles": [
+        "lib/payments/paypalOrderBinding.ts",
+        "lib/payments/products.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T14:50:24-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Supports revenue collection, deal execution, or transaction records.",
+      "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
+      "duplicates": [
+        "Review against other payments and DealVault records for consolidation."
+      ],
+      "recommendation": "KEEP",
+      "family": "payments and DealVault"
     },
     {
       "name": "Test Property Intelligence Phase1",
@@ -17431,8 +18833,8 @@
       "dependencyFiles": [],
       "currentStatus": "library/support code; runtime caller requires tracing",
       "lastKnownUse": {
-        "value": "2026-07-07T02:24:14.183Z",
-        "basis": "file modification time; runtime use unconfirmed"
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
       "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
@@ -17478,7 +18880,7 @@
       ],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-07-02T15:27:16-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Directly supports property discovery, seller intent, and deal creation.",
@@ -17488,6 +18890,80 @@
       ],
       "recommendation": "MODERNIZE",
       "family": "real-estate acquisition"
+    },
+    {
+      "name": "Test Revenue Engine",
+      "path": "scripts/test-revenue-engine.ts",
+      "purpose": "Test Revenue Engine operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:revenue-engine"
+      ],
+      "input": [
+        "module: ../lib/revenue-engine/automationRegistry",
+        "module: ../lib/revenue-engine/executiveSnapshot",
+        "module: ../lib/revenue-engine/pipeline",
+        "module: ../lib/revenue-engine/scoring",
+        "module: ../lib/revenue-engine/types"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "DealMachine",
+        "Inngest",
+        "PayPal",
+        "Vercel"
+      ],
+      "dependencyFiles": [
+        "lib/revenue-engine/automationRegistry.ts",
+        "lib/revenue-engine/executiveSnapshot.ts",
+        "lib/revenue-engine/pipeline.ts",
+        "lib/revenue-engine/scoring.ts",
+        "lib/revenue-engine/types.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Test Server Document Processor",
+      "path": "scripts/test-server-document-processor.ts",
+      "purpose": "Test Server Document Processor operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: test:server-document-processor"
+      ],
+      "input": [
+        "module: ../lib/server-document-processor"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [
+        "lib/server-document-processor.ts",
+        "lib/pdf/parse.ts"
+      ],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-06-17T17:50:34-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     },
     {
       "name": "Test Source Cost Governor",
@@ -17526,11 +19002,39 @@
       "family": "supporting operations"
     },
     {
+      "name": "Validate Revenue Campaigns",
+      "path": "scripts/validate-revenue-campaigns.ts",
+      "purpose": "Validate Revenue Campaigns operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: campaigns:validate"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Moves qualified leads into conversations when consent and suppression controls hold.",
+      "riskIfRemoved": "MEDIUM — callers and data writes must move to the shared replacement before disablement.",
+      "duplicates": [
+        "Review against other shared outreach records for consolidation."
+      ],
+      "recommendation": "MERGE",
+      "family": "shared outreach"
+    },
+    {
       "name": "Verify Email Batch",
       "path": "scripts/verify-email-batch.mjs",
       "purpose": "Verify Email Batch operation in the shared outreach family; confirm exact owner and intended outcome before migration.",
       "trigger": [
-        "Imported caller, shell scheduler, or manual invocation; trace required"
+        "manual package script: outreach:verify-emails"
       ],
       "input": [
         "environment: ZEROBOUNCE_API_KEY",
@@ -17549,7 +19053,7 @@
       "dependencyFiles": [
         "scripts/shared-email-quality.mjs"
       ],
-      "currentStatus": "library/support code; runtime caller requires tracing",
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
         "value": "2026-07-03T10:38:29-05:00",
         "basis": "last git commit touching file"
@@ -17609,6 +19113,171 @@
       "family": "payments and DealVault"
     },
     {
+      "name": "Vestblock Credential Readiness",
+      "path": "scripts/vestblock-credential-readiness.mjs",
+      "purpose": "Vestblock Credential Readiness operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: credentials:check"
+      ],
+      "input": [
+        "environment: BUFFER_API_KEY",
+        "environment: BUFFER_FACEBOOK_CHANNEL_ID",
+        "environment: GOOGLE_CLIENT_ID",
+        "environment: GOOGLE_CLIENT_SECRET",
+        "environment: GOOGLE_REFRESH_TOKEN",
+        "environment: GOOGLE_SEARCH_CONSOLE_REFRESH_TOKEN",
+        "environment: GOOGLE_SEARCH_CONSOLE_SITE_URL",
+        "environment: MICROSOFT_GRAPH_CLIENT_ID",
+        "environment: MICROSOFT_GRAPH_CLIENT_SECRET",
+        "environment: MICROSOFT_TENANT_ID",
+        "environment: OPENAI_ADS_API_KEY",
+        "environment: OPENAI_API_KEY",
+        "environment: OUTLOOK_ACQUISITIONS_MAILBOX",
+        "environment: PAYPAL_CLIENT_ID",
+        "environment: PAYPAL_CLIENT_SECRET",
+        "environment: PAYPAL_ENV",
+        "environment: PAYPAL_MODE",
+        "environment: RESEND_API_KEY",
+        "environment: SENTRY_AUTH_TOKEN"
+      ],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "api-m.paypal.com",
+        "api-m.sandbox.paypal.com",
+        "api.ads.openai.com",
+        "api.buffer.com",
+        "api.openai.com",
+        "api.resend.com",
+        "gmail.googleapis.com",
+        "graph.microsoft.com",
+        "login.microsoftonline.com",
+        "oauth2.googleapis.com",
+        "sentry.io",
+        "www.googleapis.com"
+      ],
+      "externalService": [
+        "Apify",
+        "DealMachine",
+        "Google",
+        "Hunter",
+        "Instantly",
+        "OpenAI",
+        "Outscraper",
+        "PayPal",
+        "RentCast",
+        "Resend",
+        "SAM.gov",
+        "Sentry",
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Vestblock Obsidian Agent",
+      "path": "scripts/vestblock-obsidian-agent.mjs",
+      "purpose": "Vestblock Obsidian Agent operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: obsidian:agent"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Vestblock Resend Webhook Sync",
+      "path": "scripts/vestblock-resend-webhook-sync.mjs",
+      "purpose": "Vestblock Resend Webhook Sync operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [
+        "environment: RESEND_API_KEY"
+      ],
+      "output": [
+        "filesystem rename",
+        "filesystem rm",
+        "filesystem writeFile"
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [
+        "api.resend.com",
+        "vestblock.io"
+      ],
+      "externalService": [
+        "Resend"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "externally callable webhook; provider configuration unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-08-11T11:15:35-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "HIGH — external callers, financial state, authentication, or synchronization may depend on it.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
+      "name": "Vestblock Strategy Rotation",
+      "path": "scripts/vestblock-strategy-rotation.mjs",
+      "purpose": "Vestblock Strategy Rotation operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "manual package script: sellers:strategy-rotation",
+        "manual package script: sellers:strategy-rotation:build",
+        "manual package script: sellers:strategy-rotation:count",
+        "manual package script: sellers:strategy-rotation:export"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "DealMachine"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
+      "lastKnownUse": {
+        "value": "2026-07-02T15:27:16-05:00",
+        "basis": "last git commit touching file"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
+    },
+    {
       "name": "Vestblock Tax Code Rotation",
       "path": "scripts/vestblock-tax-code-rotation.mjs",
       "purpose": "Vestblock Tax Code Rotation operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
@@ -17627,7 +19296,7 @@
       "dependencyFiles": [],
       "currentStatus": "manual/package-script entry point; external scheduling unconfirmed",
       "lastKnownUse": {
-        "value": "2026-06-17T18:05:58-05:00",
+        "value": "2026-08-11T11:15:35-05:00",
         "basis": "last git commit touching file"
       },
       "businessValue": "Potential supporting value; requires owner and usage confirmation.",
@@ -17847,6 +19516,34 @@
       ],
       "recommendation": "KEEP",
       "family": "payments and DealVault"
+    },
+    {
+      "name": "20260811205707 Vestblock Crm Outcomes And Governance",
+      "path": "supabase/migrations/20260811205707_vestblock_crm_outcomes_and_governance.sql",
+      "purpose": "20260811205707 Vestblock Crm Outcomes And Governance operation in the supporting operations family; confirm exact owner and intended outcome before migration.",
+      "trigger": [
+        "Imported caller, shell scheduler, or manual invocation; trace required"
+      ],
+      "input": [],
+      "output": [
+        "Return value, status response, or downstream module effect; inspect before migration."
+      ],
+      "databaseDependencies": [],
+      "apiDependencies": [],
+      "externalService": [
+        "Supabase"
+      ],
+      "dependencyFiles": [],
+      "currentStatus": "library/support code; runtime caller requires tracing",
+      "lastKnownUse": {
+        "value": "2026-08-11T21:32:49.857Z",
+        "basis": "file modification time; runtime use unconfirmed"
+      },
+      "businessValue": "Potential supporting value; requires owner and usage confirmation.",
+      "riskIfRemoved": "UNKNOWN — trace runtime callers and data writes before changing status.",
+      "duplicates": [],
+      "recommendation": "KEEP",
+      "family": "supporting operations"
     }
   ]
 }

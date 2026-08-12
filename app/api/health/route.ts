@@ -3,13 +3,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { analyticsServerEnabled } from '@/lib/analytics/server';
+import { analyticsServerStatus } from '@/lib/analytics/server';
 
 export async function GET() {
   const startedAt = Date.now();
   const services = {
-    analytics: analyticsServerEnabled(),
-    supabase: false,
+    analytics: analyticsServerStatus(),
+    supabase: 'degraded' as 'reachable' | 'degraded',
   };
 
   try {
@@ -23,7 +23,7 @@ export async function GET() {
       throw error;
     }
 
-    services.supabase = true;
+    services.supabase = 'reachable';
 
     return NextResponse.json({
       ok: true,

@@ -11,8 +11,6 @@ import {
 import { getSupabaseClient } from '@/lib/supabase/client';
 import {
   captureClientEvent,
-  identifyClientUser,
-  resetClientAnalytics,
 } from '@/lib/analytics/client';
 import { analyticsEvents } from '@/lib/analytics/events';
 import type { User, Session } from '@supabase/supabase-js';
@@ -182,25 +180,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [fetchUserProfile, supabase]);
-
-  useEffect(() => {
-    if (user) {
-      identifyClientUser(user.id, {
-        email: user.email || null,
-        full_name: userProfile?.full_name || null,
-        role: userProfile?.role || null,
-        subscribed: Boolean(userProfile?.is_subscribed),
-      });
-      return;
-    }
-
-    resetClientAnalytics();
-  }, [
-    user,
-    userProfile?.full_name,
-    userProfile?.is_subscribed,
-    userProfile?.role,
-  ]);
 
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);

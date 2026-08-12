@@ -8,6 +8,14 @@ const ROOT = process.cwd()
 const SKILLS_COMMIT = 'a1dc48e68138490d522c04cbf5822214c6eb1202'
 const DEFAULT_VAULT = path.join(os.homedir(), 'Documents', 'VestBlock Strategy Vault')
 const SENSITIVE_KEY = /(address|email|phone|password|secret|token|credential)/i
+const SENSITIVE_TEXT_PATTERNS = [
+  { label: 'email', pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
+  { label: 'phone', pattern: /(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g },
+  { label: 'ssn', pattern: /\b\d{3}-\d{2}-\d{4}\b/g },
+  { label: 'street address', pattern: /\b\d{1,6}\s+(?:[A-Z0-9.'-]+\s+){0,5}(?:STREET|ST|ROAD|RD|AVENUE|AVE|BOULEVARD|BLVD|DRIVE|DR|LANE|LN|COURT|CT|WAY)\b/gi },
+  { label: 'credential', pattern: /\b(?:sk|phx|phs)_[A-Za-z0-9_-]{12,}\b/g },
+  { label: 'bearer credential', pattern: /\bBearer\s+[A-Za-z0-9._~-]{12,}\b/gi },
+]
 
 const argValue = (name) => {
   const index = process.argv.indexOf(name)
@@ -16,11 +24,17 @@ const argValue = (name) => {
 const hasArg = (name) => process.argv.includes(name)
 const clean = (value, fallback = '') =>
   value === null || value === undefined ? fallback : String(value).replace(/\r?\n/g, ' ').trim() || fallback
-const yaml = (value) => JSON.stringify(clean(value))
-const md = (value, fallback = 'Not recorded.') => clean(value, fallback)
+const redactSensitiveText = (value) =>
+  SENSITIVE_TEXT_PATTERNS.reduce(
+    (result, entry) => result.replace(entry.pattern, `[REDACTED ${entry.label.toUpperCase()}]`),
+    String(value ?? '')
+  )
+const exportClean = (value, fallback = '') => redactSensitiveText(clean(value, fallback))
+const yaml = (value) => JSON.stringify(exportClean(value))
+const md = (value, fallback = 'Not recorded.') => exportClean(value, fallback)
 const hash = (value, length = 12) => crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, length)
 const slug = (value) =>
-  clean(value, 'untitled').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 72) || 'untitled'
+  exportClean(value, 'untitled').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 72) || 'untitled'
 
 function resolveVaultPath(input) {
   const value = clean(input || process.env.VESTBLOCK_OBSIDIAN_VAULT || DEFAULT_VAULT)
@@ -35,7 +49,9 @@ function resolveVaultPath(input) {
 function atomicWrite(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   const temporary = `${filePath}.tmp-${process.pid}`
-  fs.writeFileSync(temporary, content, 'utf8')
+  const safeContent = redactSensitiveText(content)
+  assertNoSensitiveText(safeContent, path.basename(filePath))
+  fs.writeFileSync(temporary, safeContent, 'utf8')
   fs.renameSync(temporary, filePath)
 }
 
@@ -58,8 +74,23 @@ function frontmatter(values) {
 }
 
 function bullets(values, fallback) {
-  const entries = Array.isArray(values) ? values.map((value) => clean(value)).filter(Boolean) : []
+  const entries = Array.isArray(values) ? values.map((value) => exportClean(value)).filter(Boolean) : []
   return entries.length ? entries.map((value) => `- ${value}`).join('\n') : `- ${fallback}`
+}
+
+function evidenceBullets(values) {
+  if (!Array.isArray(values) || values.length === 0) return '- No evidence recorded.'
+  return values
+    .map((value) => {
+      if (!value || typeof value !== 'object') return `- ${md(value)}`
+      const quality = md(value.quality, 'unknown')
+      const source = md(value.source, 'source unavailable')
+      const metric = md(value.metric, 'observation')
+      const measured = md(value.value, 'not recorded')
+      const caveat = value.caveat ? ` Caveat: ${md(value.caveat)}` : ''
+      return `- **${metric}:** ${measured} · ${source} · ${quality}.${caveat}`
+    })
+    .join('\n')
 }
 
 function assertNoSensitiveKeys(value, context) {
@@ -67,6 +98,17 @@ function assertNoSensitiveKeys(value, context) {
   for (const [key, nested] of Object.entries(value)) {
     if (SENSITIVE_KEY.test(key)) throw new Error(`Sensitive field blocked in ${context}: ${key}`)
     assertNoSensitiveKeys(nested, context)
+  }
+}
+
+function assertNoSensitiveText(value, context) {
+  for (const entry of SENSITIVE_TEXT_PATTERNS) {
+    entry.pattern.lastIndex = 0
+    if (entry.pattern.test(String(value))) {
+      entry.pattern.lastIndex = 0
+      throw new Error(`Sensitive ${entry.label} value blocked in ${context}`)
+    }
+    entry.pattern.lastIndex = 0
   }
 }
 
@@ -101,10 +143,11 @@ function fixtureSnapshot() {
       id: 'fixture-strategy', title: 'Fixture strategy for exporter validation', target_key: 'fixture:strategy',
       risk_level: 'low', approval_status: 'queued', created_at: '2026-08-10T00:00:00.000Z', updated_at: '2026-08-10T00:00:00.000Z',
       proposed_change_json: {
-        vertical: 'seo', status: 'candidate', hypothesis: 'Validate the exporter without touching live data.',
+        schemaVersion: 2, vertical: 'growth_visibility_services', status: 'candidate', hypothesis: 'Validate the exporter without touching live data.',
         tactic: 'Generate a temporary vault and run structural checks.', targetAudience: 'VestBlock operator',
         expectedOutcome: 'A valid local test vault.', primaryKpi: 'valid files', secondaryKpis: ['valid canvas', 'valid links'],
-        evidence: ['Controlled fixture'], confidence: 100, score: { total: 100, formula: 'fixture' },
+        evidence: [{ source: 'fixture', metric: 'redaction check', value: 'jane@example.com at 123 Main Street', quality: 'partial' }],
+        evidenceState: 'partial', portfolioRole: 'backlog', confidence: 100, score: { total: 100, formula: 'fixture' },
       },
     }],
   }
@@ -129,16 +172,17 @@ function strategyNote(row) {
   const value = row.proposed_change_json || {}
   const score = value.score || {}
   const title = md(value.name || row.title, 'Untitled strategy')
-  const vertical = clean(value.vertical, 'unclassified')
+  const vertical = exportClean(value.vertical, 'unclassified')
   return {
     title,
     body: [
       frontmatter({
         title, type: 'strategy', tags: ['vestblock', 'strategy', `vertical/${vertical}`], vertical,
-        status: clean(value.status, 'candidate'), approval: clean(row.approval_status, 'queued'),
-        risk: clean(value.risk || row.risk_level, 'unknown'), score: Number(score.total || 0),
-        confidence: Number(value.confidence || 0), created: clean(row.created_at || value.dateCreated),
-        updated: clean(row.updated_at || row.created_at), source_id: clean(row.id),
+        status: exportClean(value.status, 'candidate'), approval: exportClean(row.approval_status, 'queued'),
+        portfolio_role: exportClean(value.portfolioRole, 'backlog'), evidence_state: exportClean(value.evidenceState, 'unknown'),
+        risk: exportClean(value.risk || row.risk_level, 'unknown'), score: Number(score.total || 0),
+        confidence: Number(value.confidence || 0), created: exportClean(row.created_at || value.dateCreated),
+        updated: exportClean(row.updated_at || row.created_at), source_id: exportClean(row.id),
       }),
       `# ${title}`, '',
       '> [!info] Derived decision record',
@@ -147,7 +191,7 @@ function strategyNote(row) {
       `**Hypothesis:** ${md(value.hypothesis || row.rationale)}`, '',
       `**Problem:** ${md(value.problem)}`, '',
       `**Audience:** ${md(value.targetAudience)}`, '',
-      `**Channel:** ${md(value.channel)}`, '',
+      `**Channels:** ${Array.isArray(value.channels) ? value.channels.map((item) => md(item)).join(', ') : md(value.channel)}`, '',
       `**Tactic:** ${md(value.tactic)}`, '',
       `**Expected outcome:** ${md(value.expectedOutcome)}`, '',
       '## Measurement', '',
@@ -155,7 +199,11 @@ function strategyNote(row) {
       '**Secondary KPIs**', bullets(value.secondaryKpis, 'No secondary KPI recorded.'), '',
       `**Score:** ${Number(score.total || 0)}/100`, '',
       `**Formula:** ${md(score.formula)}`, '',
-      '## Evidence', '', bullets(value.evidence, 'No evidence recorded.'), '',
+      '## Evidence', '', evidenceBullets(value.evidence), '',
+      '## Authority', '',
+      `- Evidence state: **${md(value.evidenceState, 'unknown')}**`,
+      `- Portfolio role: **${md(value.portfolioRole, 'backlog')}**`,
+      '- Launch, send, publish, and spend authority: **not granted**', '',
       '## Learning memory', '',
       `**Result:** ${md(value.result)}`, '',
       `**Lesson:** ${md(value.lesson)}`, '',
@@ -169,7 +217,7 @@ function experimentNote(row) {
   const allowed = ['leads', 'replies', 'opportunities', 'conversions', 'revenue', 'measuredAt']
   const metrics = Object.fromEntries(allowed.filter((key) => row.metrics_json?.[key] !== undefined).map((key) => [key, row.metrics_json[key]]))
   assertNoSensitiveKeys(metrics, `experiment ${row.id || row.experiment_key}`)
-  const title = clean(row.experiment_key || row.id, 'Untitled experiment')
+  const title = exportClean(row.experiment_key || row.id, 'Untitled experiment')
   return [
     frontmatter({
       title, type: 'experiment', tags: ['vestblock', 'experiment'], category: clean(row.category),
@@ -234,7 +282,7 @@ function generateVault(vaultPath, snapshot) {
     if (clean(row.approval_status, 'queued') === 'queued') queuedLinks.push(link)
   }
   for (const row of snapshot.experiments) {
-    const title = clean(row.experiment_key || row.id, 'experiment')
+    const title = exportClean(row.experiment_key || row.id, 'experiment')
     const relative = `Experiments/${slug(title)}--${hash(row.id || title)}.md`
     atomicWrite(path.join(vaultPath, relative), experimentNote(row))
     generatedFiles.push(relative)

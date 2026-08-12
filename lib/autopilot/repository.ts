@@ -11,10 +11,19 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { AutopilotCockpitSnapshot } from './cockpit'
 import {
   createStrategyObject,
+  normalizeStoredStrategy,
+  selectStrategyPortfolio,
   strategyTargetKey,
   type StrategyCandidateInput,
+  type StrategyEvidence,
   type VestBlockStrategy,
 } from './strategyEngine'
+import {
+  BUSINESS_VERTICALS,
+  getVerticalScorecard,
+  VERTICAL_REGISTRY,
+  type BusinessVertical,
+} from './verticalRegistry'
 
 function weekKey(date = new Date()) {
   const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -36,98 +45,118 @@ export function buildWeeklyStrategyCandidates(
     data.routingQueue.find((item) => item.label === 'Buyer matches open')?.count || 0
   const lenderMatches =
     data.routingQueue.find((item) => item.label === 'Lender matches open')?.count || 0
+  const observedAt = data.generatedAt || now
+  const liveQuality = data.liveDataReachable ? 'verified' : 'missing'
+  const evidenceByVertical: Record<BusinessVertical, StrategyEvidence[]> = {
+    business_capital: [
+      { source: 'funding_profiles', metric: 'qualified funding profiles', value: null, observedAt, quality: 'missing', caveat: 'No vertical-specific funding profile aggregate is present in the current Command Center snapshot.' },
+    ],
+    real_estate_capital: [
+      { source: 'funding_recommendations', metric: 'qualified real-estate capital requests', value: null, observedAt, quality: 'missing', caveat: 'No real-estate funding recommendation aggregate is present in the current snapshot.' },
+    ],
+    capital_partners: [
+      { source: 'command_center.summary', metric: 'active capital and opportunity partners', value: data.summary.activePartners, observedAt, quality: liveQuality, caveat: 'The aggregate includes more than lender partners; confirm the capital-partner subset.' },
+      { source: 'command_center.routingQueue', metric: 'open lender matches', value: lenderMatches, observedAt, quality: liveQuality, caveat: null },
+    ],
+    seller_opportunities: [
+      { source: 'command_center.summary', metric: 'seller and network reply signals, 7d', value: data.summary.replySignals7d, observedAt, quality: liveQuality, caveat: 'Confirm seller attribution before claiming this entire count.' },
+      { source: 'command_center.inbox', metric: 'hot replies', value: hotReplies, observedAt, quality: liveQuality, caveat: null },
+    ],
+    buyers_investors: [
+      { source: 'command_center.routingQueue', metric: 'open buyer matches', value: buyerMatches, observedAt, quality: liveQuality, caveat: null },
+      { source: 'command_center.dealPipeline', metric: 'packet-ready opportunities', value: data.dealPipeline.totals.packetReady, observedAt, quality: liveQuality, caveat: null },
+    ],
+    development_partners: [
+      { source: 'command_center.summary', metric: 'builder and development partners', value: data.summary.builderPartners, observedAt, quality: liveQuality, caveat: 'Verify current capacity and credentials before an introduction.' },
+    ],
+    opportunity_service_partners: [
+      { source: 'command_center.summary', metric: 'partner records ready for research', value: data.summary.partnerResearchReady, observedAt, quality: liveQuality, caveat: 'Research-ready does not mean approved or contactable.' },
+    ],
+    dealvault: [
+      { source: 'command_center.dealPipeline', metric: 'active deals that may need records', value: data.dealPipeline.totals.activeDeals, observedAt, quality: data.liveDataReachable ? 'partial' : 'missing', caveat: 'This is a deal-pipeline proxy, not active DealVault usage.' },
+    ],
+    growth_visibility_services: [
+      { source: 'content_assets', metric: 'published assets', value: cockpit.content.published, observedAt, quality: liveQuality, caveat: 'Published does not establish indexation or conversion.' },
+      { source: 'search_console', metric: 'measurement readiness', value: cockpit.growth.seo.searchConsole, observedAt, quality: cockpit.growth.seo.searchConsole === 'ready' ? 'verified' : 'partial', caveat: cockpit.growth.seo.searchConsole === 'ready' ? null : 'Search Console is not fully ready.' },
+    ],
+  }
 
-  const inputs: StrategyCandidateInput[] = [
-    {
-      name: 'Work active replies before adding outreach volume',
-      vertical: 'email_outreach',
-      hypothesis:
-        'Routing current reply signals and overdue follow-ups before increasing send volume will improve opportunity quality and reduce avoidable follow-up loss.',
-      targetAudience: 'Current seller, buyer, lender, and partner conversations',
-      problem: `${hotReplies} hot replies and ${data.summary.replySignals7d} reply signals are visible while ${data.overdueTasks.length} operator tasks are overdue.`,
-      tactic: 'Prioritize correlated positive replies, assign a human next step, and clear due follow-ups before starting a new volume batch.',
-      channel: 'email and Command Center inbox',
-      expectedOutcome: 'More qualified conversations move into Deals, Capital, or Partners without increasing send risk.',
-      primaryKpi: 'qualified replies moved to an opportunity',
-      secondaryKpis: ['reply-to-task time', 'follow-ups completed', 'suppression compliance'],
-      cost: 'Existing team time; no new media spend',
-      risk: 'low',
-      confidence: 78,
-      evidence: [
-        `${data.summary.replySignals7d} reply signals in the current seven-day window`,
-        `${hotReplies} hot replies visible now`,
-        `${data.overdueTasks.length} overdue operator tasks`,
-      ],
-      score: {
-        expectedImpact: 82,
-        confidence: 78,
-        cost: 12,
-        timeToResult: 92,
-        executionDifficulty: 22,
-        risk: 14,
-      },
-    },
-    {
-      name: 'Convert ready deal evidence into matched conversations',
-      vertical: 'real_estate_buyers',
-      hypothesis:
-        'Working packet-ready deals and open buyer/lender matches before sourcing more properties will move money closer with less operational waste.',
-      targetAudience: 'Confirmed buyers, lenders, and active property opportunities',
-      problem: `${data.dealPipeline.totals.packetReady} packets are ready with ${buyerMatches} buyer matches and ${lenderMatches} lender matches open.`,
-      tactic: 'Complete missing evidence, approve the strongest matches, and record every introduction against the source opportunity.',
-      channel: 'Deal pipeline and partner outreach',
-      expectedOutcome: 'More packet-ready opportunities reach engaged, underwriting, contract, or funded stages.',
-      primaryKpi: 'matched opportunities reaching engaged status',
-      secondaryKpis: ['packets sent', 'buyer replies', 'lender replies', 'attributed revenue'],
-      cost: 'Existing data and operator time',
-      risk: 'medium',
-      confidence: 70,
-      evidence: [
-        `${data.dealPipeline.totals.activeDeals} active deals`,
-        `${data.dealPipeline.totals.packetReady} packet-ready deals`,
-        `${buyerMatches} open buyer matches and ${lenderMatches} open lender matches`,
-      ],
-      score: {
-        expectedImpact: 88,
-        confidence: 70,
-        cost: 18,
-        timeToResult: 78,
-        executionDifficulty: 42,
-        risk: 35,
-      },
-    },
-    {
-      name: 'Refresh measurable content before creating another page family',
-      vertical: 'seo',
-      hypothesis:
-        'Refreshing existing assets with known indexing or conversion gaps will produce better evidence than adding another large unmeasured page family.',
-      targetAudience: 'Searchers evaluating VestBlock funding, deal, and partner resources',
-      problem: `${cockpit.content.published} assets are published and ${cockpit.content.refreshNeeded} are explicitly marked for refresh.`,
-      tactic: 'Prioritize refresh-needed assets, improve one title/meta/internal-link package, and measure impressions, clicks, CTR, and qualified actions.',
-      channel: 'SEO and AEO',
-      expectedOutcome: 'Higher qualified discovery from existing useful pages without thin programmatic expansion.',
-      primaryKpi: 'qualified organic actions per refreshed page',
-      secondaryKpis: ['indexed pages', 'impressions', 'CTR', 'internal-link coverage'],
-      cost: 'Existing content and Codex review time',
-      risk: 'low',
-      confidence: cockpit.growth.seo.searchConsole === 'ready' ? 76 : 58,
-      evidence: [
-        `${cockpit.content.published} published content assets`,
-        `${cockpit.content.refreshNeeded} assets marked refresh needed`,
-        `Search Console connection is ${cockpit.growth.seo.searchConsole}`,
-      ],
-      score: {
-        expectedImpact: 68,
-        confidence: cockpit.growth.seo.searchConsole === 'ready' ? 76 : 58,
-        cost: 20,
-        timeToResult: 55,
-        executionDifficulty: 32,
-        risk: 18,
-      },
-    },
-  ]
+  const inputs: StrategyCandidateInput[] = BUSINESS_VERTICALS.map((vertical, index) => {
+    const definition = VERTICAL_REGISTRY[vertical]
+    const scorecard = getVerticalScorecard(vertical)
+    const evidence = evidenceByVertical[vertical]
+    const researchRequired = evidence.every((item) => item.quality === 'missing')
+      ? [`Connect a reliable ${definition.kpis[0]} aggregate with source lineage.`, 'Record the current baseline and one attributable outcome before promotion.']
+      : evidence.some((item) => item.quality !== 'verified')
+        ? ['Verify proxy metrics against the vertical-specific source before launch.']
+        : []
+    const signalTotal = evidence.reduce((sum, item) => sum + (typeof item.value === 'number' ? item.value : 0), 0)
+    const confidence = researchRequired ? 28 : evidence.some((item) => item.quality === 'verified') ? 72 : 54
+    const evidenceQuality = Math.round(
+      evidence.reduce((sum, item) => sum + (item.quality === 'verified' ? 90 : item.quality === 'partial' ? 55 : 0), 0) /
+      Math.max(1, evidence.length)
+    )
+    const verticalHistory = cockpit.strategyMemory.experiments.filter((experiment) =>
+      [experiment.metrics.vertical, experiment.metrics.strategyVertical].includes(vertical)
+    )
+    const historicalPerformance = verticalHistory.length === 0
+      ? 45
+      : Math.round((verticalHistory.filter((experiment) => experiment.winner).length / verticalHistory.length) * 100)
 
-  return inputs.map((input) => createStrategyObject(input, now))
+    return {
+      name: researchRequired
+        ? `Research the ${definition.label.toLowerCase()} baseline`
+        : `Advance one measured ${definition.label.toLowerCase()} opportunity`,
+      vertical,
+      strategyType: researchRequired ? 'research' : vertical.includes('partner') ? 'partner_development' : 'conversion',
+      channels: definition.channelMix,
+      hypothesis: researchRequired
+        ? `A trustworthy baseline is required before VestBlock can choose a ${definition.label.toLowerCase()} growth strategy.`
+        : `Working the strongest current ${definition.label.toLowerCase()} signal with a human-reviewed next step will create better evidence than increasing unqualified volume.`,
+      targetAudience: definition.icp,
+      problem: researchRequired
+        ? `The current operating snapshot does not contain a reliable vertical-specific baseline for ${definition.label.toLowerCase()}.`
+        : `${evidence.map((item) => `${item.metric}: ${String(item.value)}`).join('; ')}.`,
+      tactic: researchRequired
+        ? 'Create a read-only research task that identifies the system of record, metric owner, source lineage, baseline, and evaluation window.'
+        : `Review the strongest evidence, apply the vertical qualifications and disqualifiers, then prepare one operator-approved ${definition.primaryCta.toLowerCase()} action.`,
+      channel: definition.channelMix.join(', '),
+      expectedOutcome: researchRequired
+        ? 'A verified baseline and a decision about whether this vertical should enter the active portfolio.'
+        : `One attributable ${definition.kpis[0]} outcome without granting launch authority.`,
+      primaryKpi: definition.kpis[0],
+      secondaryKpis: definition.kpis.slice(1),
+      cost: 'Operator review using existing data; $0 media spend',
+      risk: vertical === 'seller_opportunities' || vertical.includes('capital') ? 'medium' : 'low',
+      confidence,
+      evidence,
+      evidenceState: researchRequired ? 'research_required' : evidence.some((item) => item.quality === 'verified') ? 'sufficient' : 'partial',
+      researchRequired,
+      outreachAngles: definition.outreachAngles,
+      implementationActions: researchRequired
+        ? researchRequired
+        : ['Verify evidence and source lineage.', 'Select one qualified record for human review.', 'Prepare the next action as a draft.', 'Record disposition and attributable outcome.'],
+      costBoundary: definition.costBoundaries.join(' '),
+      attributionKeys: ['strategy_id', 'vertical', 'source_record_id', 'campaign_run_id', 'outcome_id'],
+      evaluationWindowDays: vertical === 'growth_visibility_services' ? 30 : 14,
+      killCriteria: definition.killCriteria,
+      score: {
+        expectedImpact: Math.min(88, 58 + Math.min(20, signalTotal) + (index % 3)),
+        confidence,
+        cost: researchRequired ? 8 : 15,
+        timeToResult: researchRequired ? 72 : 70,
+        executionDifficulty: researchRequired ? 25 : 38,
+        risk: vertical === 'seller_opportunities' || vertical.includes('capital') ? 42 : 24,
+        evidenceQuality,
+        strategicFit: scorecard.confidence,
+        availableAudience: Math.min(88, researchRequired ? 28 : 48 + Math.min(40, signalTotal)),
+        historicalPerformance,
+        complianceRisk: vertical === 'seller_opportunities' ? 58 : vertical.includes('capital') ? 46 : 28,
+      },
+    }
+  })
+
+  return selectStrategyPortfolio(inputs.map((input) => createStrategyObject(input, now)))
 }
 
 export async function createVestBlockStrategies(
@@ -172,7 +201,11 @@ export async function createCampaignFromStrategy(strategyId: string, actorUserId
     throw new Error('Approve the strategy before building a campaign.')
   }
 
-  const strategy = update.proposed_change_json as unknown as VestBlockStrategy
+  const strategy = normalizeStoredStrategy(update.proposed_change_json)
+  if (!strategy) throw new Error('Strategy schema is invalid.')
+  if (strategy.evidenceState === 'research_required') {
+    throw new Error('Complete the research task before building a campaign.')
+  }
   const admin = createAdminClient()
   const { data: existing, error: existingError } = await admin
     .from('command_center_strategy_runs')
@@ -191,14 +224,21 @@ export async function createCampaignFromStrategy(strategyId: string, actorUserId
       strategy_name: strategy.name || update.title,
       status: 'planned',
       source_provider: 'vestblock',
-      cost_guardrail_status: strategy.risk === 'high' ? 'approval_required' : 'allowed',
+      cost_guardrail_status: 'approval_required',
       metadata_json: {
         strategyUpdateId: update.id,
         vertical: strategy.vertical,
         channel: strategy.channel,
+        channels: strategy.channels,
+        strategyType: strategy.strategyType,
+        portfolioRole: strategy.portfolioRole,
+        evidenceState: strategy.evidenceState,
         primaryKpi: strategy.primaryKpi,
         expectedOutcome: strategy.expectedOutcome,
         actorUserId,
+        approval: strategy.approval,
+        costBoundary: strategy.implementation.costBoundary,
+        attributionKeys: strategy.measurement.attributionKeys,
         launchAuthority: 'not_granted',
       },
     })
@@ -230,7 +270,8 @@ export async function recordStrategyResult(input: {
 }) {
   const update = await getStrategyUpdate(input.strategyId)
   if (update.target_type !== 'vestblock_strategy') throw new Error('Strategy is not an Autopilot strategy.')
-  const strategy = update.proposed_change_json as unknown as VestBlockStrategy
+  const strategy = normalizeStoredStrategy(update.proposed_change_json)
+  if (!strategy) throw new Error('Strategy schema is invalid.')
   const now = new Date().toISOString()
   const result = `${input.leads} leads, ${input.replies} replies, ${input.opportunities} opportunities, ${input.conversions} conversions, $${input.revenue.toFixed(2)} revenue.`
   const measured: VestBlockStrategy = {

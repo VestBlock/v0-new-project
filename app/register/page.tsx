@@ -9,7 +9,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,7 +56,7 @@ function RegisterPageContent() {
       <Card className="mx-auto w-full max-w-md border-white/10 bg-[#0e1114] shadow-none">
         <CardHeader>
           <p className="vb-eyebrow">Start your VestBlock workspace</p>
-          <CardTitle className="text-3xl font-medium tracking-tight">Keep your next move in one place.</CardTitle>
+          <h1 className="text-3xl font-medium tracking-tight">Keep your next move in one place.</h1>
           <CardDescription>
             Save capital requests, deal work, opportunities, and DealVault activity.
           </CardDescription>
@@ -119,18 +118,17 @@ function RegisterPageContent() {
           </form>
           <div className="mt-4 text-center text-sm">
             Already have an account?{' '}
-            <Link
-              href={
-                redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/login?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
-                  : `/login?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ''}`
-              }
-              passHref
-            >
-              <Button variant="link" className="p-0">
+            <Button asChild variant="link" className="min-h-11 px-1">
+              <Link
+                href={
+                  redirectTarget && redirectTarget !== defaultRedirectTarget
+                    ? `/login?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
+                    : `/login?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ''}`
+                }
+              >
                 Sign in
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

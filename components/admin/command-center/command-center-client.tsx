@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Signal,
+  type LucideIcon,
 } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
@@ -185,7 +186,7 @@ function PanelShell({
   )
 }
 
-function PanelTitle({ icon: Icon, title, hint }: { icon: React.ElementType; title: string; hint?: string }) {
+function PanelTitle({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint?: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">

@@ -165,6 +165,7 @@ export async function runBossRetrospective(current: CommandCenterData): Promise<
   const now = captureKpiSnapshot(current)
   const lessons: BossLesson[] = []
   const reviewedTaskIds: string[] = []
+  let retrospectiveRunId: string | null = null
 
   for (const [key, batch] of batches) {
     const allDone = batch.every((task) => ['completed', 'dismissed'].includes(String(task.status || '').toLowerCase()))
@@ -216,11 +217,28 @@ export async function runBossRetrospective(current: CommandCenterData): Promise<
     lessons.push(lesson)
     reviewedTaskIds.push(...batch.map((task) => task.id))
 
-    // Persist the lesson to the existing improvement_insights table
-    await admin.from('improvement_insights').insert({
-      run_id: null,
+    if (!retrospectiveRunId) {
+      const { data: run, error: runError } = await admin
+        .from('improvement_runs')
+        .insert({
+          run_type: 'daily_review',
+          status: 'running',
+          window_started_at: now.at,
+          window_ended_at: new Date().toISOString(),
+          summary_json: { source: 'boss_retrospective', candidateBatches: batches.size },
+          data_sources_json: ['admin_tasks', 'command_center'],
+        })
+        .select('id')
+        .single()
+      if (runError || !run) throw new Error(runError?.message || 'Unable to create retrospective run.')
+      retrospectiveRunId = run.id
+    }
+
+    // Persist the lesson against a valid run and the schema-supported severity.
+    const { error: insightError } = await admin.from('improvement_insights').insert({
+      run_id: retrospectiveRunId,
       category: 'boss_agent',
-      severity: adjustment >= 0 ? 'info' : 'warning',
+      severity: adjustment >= 0 ? 'info' : 'watch',
       title: `Boss retrospective: ${playName}`,
       summary,
       supporting_data: { lesson },
@@ -228,6 +246,21 @@ export async function runBossRetrospective(current: CommandCenterData): Promise<
       confidence: before ? 0.7 : 0.3,
       auto_applied: true,
     })
+    if (insightError) throw new Error(`Unable to persist retrospective lesson: ${insightError.message}`)
+  }
+
+  if (retrospectiveRunId) {
+    const { error: finishError } = await admin
+      .from('improvement_runs')
+      .update({
+        status: 'completed',
+        summary_json: { source: 'boss_retrospective', reviewed: lessons.length },
+        auto_applied_count: 0,
+        queued_count: lessons.length,
+        window_ended_at: new Date().toISOString(),
+      })
+      .eq('id', retrospectiveRunId)
+    if (finishError) throw new Error(`Unable to complete retrospective run: ${finishError.message}`)
   }
 
   // Mark reviewed tasks so they are not re-scored

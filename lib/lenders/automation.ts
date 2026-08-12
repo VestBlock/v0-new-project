@@ -107,7 +107,7 @@ export async function runDailyLenderDiscovery(options: { dryRun?: boolean } = {}
 }
 
 export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean } = {}) {
-  const autoSend = envBool('LENDER_AUTO_SEND_ENABLED', true)
+  const autoSend = envBool('LENDER_AUTO_SEND_ENABLED', false)
   const approved = await listApprovedLenderEmailOutreach(limit)
   const results: Array<{ lenderId: string; name: string; status: string }> = []
 

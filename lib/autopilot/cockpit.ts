@@ -6,7 +6,7 @@ import type { CommandCenterData } from '@/lib/admin/commandCenter'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { StrategyUpdateRecord } from '@/lib/improvement/types'
 import { getOpenAiAdsOverview, type OpenAiAdsOverview } from './openAiAds'
-import type { VestBlockStrategy } from './strategyEngine'
+import { normalizeStoredStrategy, type VestBlockStrategy } from './strategyEngine'
 
 export type AutonomyMode = 'off' | 'suggest' | 'approve' | 'auto'
 
@@ -94,9 +94,7 @@ function boolEnv(name: string) {
 }
 
 function parseStrategy(row: StrategyUpdateRecord): VestBlockStrategy | null {
-  const value = row.proposed_change_json
-  if (!value || value.schemaVersion !== 1 || typeof value.name !== 'string') return null
-  return value as unknown as VestBlockStrategy
+  return normalizeStoredStrategy(row.proposed_change_json)
 }
 
 async function safeRows(query: PromiseLike<{ data: AnyRow[] | null; error: { message?: string } | null }>) {
