@@ -1,8 +1,10 @@
 # VestBlock Gate 3 — Homepage and Next-Move Funnel
 
-Status: **PASS — ready for owner approval; not deployed**
+Status: **PASS — approved by owner; not deployed**
 
 Prepared: August 12, 2026
+
+Owner approval recorded: August 12, 2026
 
 Branch: `codex/operation-rebrand-final`
 
@@ -87,12 +89,10 @@ No public outreach, unattended sending, ad spend, payment, blockchain, or deploy
 
 ## Remaining blockers and approval boundary
 
-There is no Gate 3 implementation blocker. Production still serves the preserved Gate 0 release because this gate does not authorize deployment.
+There is no Gate 3 implementation blocker. The owner approved Gate 3 and authorized Gate 4 work. Production still serves the preserved Gate 0 release because this approval does not authorize deployment, real outreach, unattended sending, or ad spend.
 
-Exact owner action: review Gate 3 and reply **“approve Gate 3”** to authorize work on Gate 4. This approval does not authorize production deployment, real outreach, unattended sending, or ad spend.
-
-Gate commit: the focused commit containing this report and the files above. See Git history and the gate handoff for its exact SHA.
+Gate implementation commit: `77f07278506f06ea8a46c5061019e5144d497051`.
 
 ## Verdict
 
-**PASS — Gate 3 is complete, verified, committed at the gate boundary, and awaiting owner approval.**
+**PASS — Gate 3 is complete, verified, committed, and owner-approved. Gate 4A is authorized.**
