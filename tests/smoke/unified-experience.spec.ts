@@ -15,8 +15,9 @@ test.describe('unified VestBlock experience', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByRole('heading', { level: 1, name: /find your next move/i })).toBeVisible();
-    await expect(page.getByAltText('VestBlock VB monogram')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /find the move before it becomes obvious/i })).toBeVisible();
+    await expect(page.getByText(/VestBlock \/ decision infrastructure/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: /choose a direction/i })).toBeVisible();
     await expect(page.locator('canvas')).toHaveCount(0);
     await expect(page.getByText(/machinery|existing workflow|rebrand/i)).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
