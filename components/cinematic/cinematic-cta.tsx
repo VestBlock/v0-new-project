@@ -9,7 +9,6 @@ export function CinematicCta() {
 
   return (
     <section className="vb-closing" aria-labelledby="closing-title">
-      <div className="vb-closing__contour" aria-hidden="true" />
       <motion.div
         initial={false}
         whileInView={reduce ? undefined : { opacity: 1, y: 0 }}

@@ -26,7 +26,12 @@ export function LenisProvider() {
     })
 
     // Keep ScrollTrigger's measurements in lockstep with Lenis
-    lenis.on("scroll", ScrollTrigger.update)
+    const handleScroll = () => {
+      ScrollTrigger.update()
+      window.dispatchEvent(new Event("vestblock:scroll-state"))
+    }
+
+    lenis.on("scroll", handleScroll)
 
     const update = (time: number) => {
       lenis.raf(time * 1000)
@@ -36,6 +41,7 @@ export function LenisProvider() {
 
     return () => {
       gsap.ticker.remove(update)
+      lenis.off("scroll", handleScroll)
       lenis.destroy()
     }
   }, [])

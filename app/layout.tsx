@@ -20,7 +20,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${vestBlockSiteName} - Real Estate Partner Network`,
+    default: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
     template: `%s | ${vestBlockSiteName}`,
   },
   description: vestBlockDefaultDescription,
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: vestBlockSiteName,
     url: absoluteUrl('/'),
-    title: `${vestBlockSiteName} - Real Estate Partner Network`,
+    title: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
     description: vestBlockDefaultDescription,
     images: [
       {
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${vestBlockSiteName} - Real Estate Partner Network`,
+    title: `${vestBlockSiteName} - Real Estate Opportunity Platform`,
     description: vestBlockDefaultDescription,
     images: [absoluteUrl('/opengraph-image')],
   },

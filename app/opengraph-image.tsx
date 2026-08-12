@@ -118,7 +118,7 @@ export default function OpenGraphImage() {
                     fontWeight: 700,
                   }}
                 >
-                  Real estate partner network
+                  Real estate opportunity platform
                 </div>
               </div>
             </div>
