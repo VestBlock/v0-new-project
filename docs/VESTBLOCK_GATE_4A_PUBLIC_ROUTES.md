@@ -1,8 +1,10 @@
 # VestBlock Gate 4A — Public Routes and Conversion Journeys
 
-Status: **PASS — awaiting owner approval; not deployed**
+Status: **PASS — approved by owner; not deployed**
 
 Prepared: August 12, 2026
+
+Owner approval recorded: August 12, 2026
 
 Branch: `codex/operation-rebrand-final`
 
@@ -75,10 +77,10 @@ The full build retains pre-existing non-blocking lint warnings outside Gate 4A. 
 
 ## Approval boundary
 
-Gate 4A is complete but is not deployed. It did not trigger public outreach, ad spend, payment, blockchain writes, or unattended sending. The only external message was the controlled transactional roadmap to VestBlock's internal mailbox.
+Gate 4A is complete and owner-approved but is not deployed. It did not trigger public outreach, ad spend, payment, blockchain writes, or unattended sending. The only external message was the controlled transactional roadmap to VestBlock's internal mailbox.
 
-Gate 4B may begin only after explicit owner approval of Gate 4A. Production deployment remains reserved for Gate 9, and external outreach remains reserved for Gate 10.
+Gate 4B is authorized. Production deployment remains reserved for Gate 9, and external outreach remains reserved for Gate 10.
 
 ## Verdict
 
-**PASS — Gate 4A is implemented and verified. Awaiting owner approval before Gate 4B.**
+**PASS — Gate 4A is implemented, verified, committed, and owner-approved. Gate 4B is authorized.**
