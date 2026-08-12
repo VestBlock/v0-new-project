@@ -103,7 +103,7 @@ export function OsmPropertyMap({ properties, selectedId, onSelect, publicMode }:
           marker.addTo(layerRef.current)
           bounds.push([lat, lng])
         }
-        if (bounds.length) mapRef.current.fitBounds(bounds, { padding: [34, 34], maxZoom: 12 })
+        if (bounds.length) mapRef.current.fitBounds(bounds, { padding: [34, 34], maxZoom: publicMode ? 8 : 12 })
       })
       .catch(() => setFailed(true))
     return () => {

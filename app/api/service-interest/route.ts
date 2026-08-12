@@ -9,6 +9,7 @@ import {
 } from '@/lib/services/financialSkillsets';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { queueGrowthServiceRequest } from '@/lib/inngest/events';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
 const serviceInterestSchema = z.object({
   packageKey: z.enum(financialSkillsetPackageKeys),
@@ -24,7 +25,10 @@ const serviceInterestSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const parsed = serviceInterestSchema.safeParse(await req.json());
+  const guard = guardPublicMutation(req, { scope: 'service-interest', maxRequests: 5 });
+  if (guard) return guard;
+
+  const parsed = serviceInterestSchema.safeParse(await req.json().catch(() => ({})));
 
   if (!parsed.success) {
     return NextResponse.json(

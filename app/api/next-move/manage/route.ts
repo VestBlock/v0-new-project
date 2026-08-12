@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hashLifecycleToken } from '@/lib/next-move/security'
 import { isSameOriginPublicMutation } from '@/lib/next-move/security'
+import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 async function findRecord(token: string) {
   if (token.length < 32 || token.length > 128) return null
@@ -18,6 +19,8 @@ async function findRecord(token: string) {
 
 export async function POST(request: Request) {
   if (!isSameOriginPublicMutation(request)) return NextResponse.json({ error: 'Cross-site requests are not allowed.' }, { status: 403 })
+  const guard = guardPublicMutation(request, { scope: 'next-move-manage', maxRequests: 12 })
+  if (guard) return guard
   const body = await request.json().catch(() => null) as { token?: string; action?: string } | null
   const token = String(body?.token || '')
   const record = await findRecord(token)

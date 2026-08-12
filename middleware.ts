@@ -13,7 +13,6 @@ const protectedAdminApis = [
 ];
 
 const protectedAuthenticatedApis = [
-  '/api/ai-assistant-request',
   '/api/chat',
   '/api/chat-with-analysis',
   '/api/generate-roadmap',
@@ -388,7 +387,6 @@ export const config = {
     '/tools/my-dispute-letters/:path*',
     '/user-hub/:path*',
     '/api/admin/:path*',
-    '/api/ai-assistant-request/:path*',
     '/api/chat/:path*',
     '/api/chat-with-analysis/:path*',
     '/api/generate-roadmap/:path*',

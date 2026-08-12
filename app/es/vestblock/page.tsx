@@ -26,7 +26,7 @@ import { vestblockAeoTopics } from '@/lib/aeo/topics';
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
-  title: 'Financiamiento Para Negocios En Espanol | VestBlock',
+  title: 'Financiamiento Para Negocios En Espanol',
   description:
     'VestBlock ayuda a duenos de negocio que hablan espanol a preparar documentos, credito comercial y pasos de financiamiento comercial.',
   alternates: {

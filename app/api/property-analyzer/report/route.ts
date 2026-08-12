@@ -8,6 +8,7 @@ import {
   type AnalyzerReportType,
 } from '@/lib/property/reportGenerator'
 import { buildBuyerPacketFileName, buildPremiumBuyerPacketPdf } from '@/lib/property/buyerPacketPdf'
+import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 const reportSchema = z.object({
   reportType: z.enum(['investor', 'buyer', 'lender', 'builder', 'assignment_contract']),
@@ -26,6 +27,9 @@ function fileStem(reportType: AnalyzerReportType) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'property-analyzer-report', maxRequests: 12, maxBodyBytes: 2 * 1024 * 1024 })
+  if (guard) return guard
+
   try {
     const parsed = reportSchema.safeParse(await request.json().catch(() => ({})))
 

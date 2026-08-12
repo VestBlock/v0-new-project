@@ -15,6 +15,7 @@ import {
 import { queueGrowthServiceRequest } from '@/lib/inngest/events';
 import { captureServerEvent } from '@/lib/analytics/server';
 import { analyticsEvents } from '@/lib/analytics/events';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
 const aiAssistantRequestSchema = z.object({
   packageKey: z.enum(automationPackageKeys),
@@ -31,8 +32,11 @@ const aiAssistantRequestSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const guard = guardPublicMutation(req, { scope: 'ai-assistant-request', maxRequests: 5 });
+  if (guard) return guard;
+
   try {
-    const parsed = aiAssistantRequestSchema.safeParse(await req.json());
+    const parsed = aiAssistantRequestSchema.safeParse(await req.json().catch(() => ({})));
 
     if (!parsed.success) {
       return NextResponse.json(

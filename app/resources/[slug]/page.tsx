@@ -79,8 +79,13 @@ export async function generateMetadata({
     };
   }
 
+  const metadataTitle = (asset.seo_title || asset.title).replace(
+    /\s*\|\s*VestBlock$/i,
+    ''
+  );
+
   return {
-    title: asset.seo_title || asset.title,
+    title: metadataTitle,
     description: asset.meta_description || asset.excerpt || undefined,
     alternates: {
       canonical: `/resources/${asset.slug}`,

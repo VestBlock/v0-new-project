@@ -7,6 +7,7 @@ import { buildRoughPropertyEstimate } from '@/lib/property/roughEstimate'
 import { buildPropertyOpportunityAnalysis } from '@/lib/property/opportunityAnalysis'
 import { buildPropertyMapLinks } from '@/lib/property/mapLinks'
 import { recordPropertyAnalysisRun } from '@/lib/admin/dealMemory'
+import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 const compFieldSchema = z.union([z.string(), z.number()]).optional().transform((value) => {
   if (value === undefined || value === null) return ''
@@ -106,6 +107,9 @@ function envBool(name: string, fallback = false) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'property-analyzer', maxRequests: 20, maxBodyBytes: 512 * 1024 })
+  if (guard) return guard
+
   try {
     const parsed = analyzerSchema.safeParse(await request.json().catch(() => ({})))
 

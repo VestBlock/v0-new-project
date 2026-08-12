@@ -73,7 +73,7 @@ export function PublicDealHunter() {
             {selected ? (
               <>
                 <div>
-                  <div className="text-lg font-semibold text-white">{selected.property_address || 'Property record'}</div>
+                  <div className="text-lg font-semibold text-white">Opportunity near {selected.city || 'a target market'}</div>
                   <div className="text-sm text-slate-400">{[selected.city, selected.state, selected.zip_code].filter(Boolean).join(', ')}</div>
                 </div>
                 <Badge className={tone(selected.deal_scores?.[0]?.score || 0)}>Lead score {selected.deal_scores?.[0]?.score || 0}/100</Badge>
@@ -94,7 +94,7 @@ export function PublicDealHunter() {
 
       <Card className="border-slate-800 bg-slate-950/70">
         <CardContent className="p-4 text-sm text-slate-400">
-          Data comes from public records, user uploads, and open-source research. Results may be incomplete or outdated. Users are responsible for complying with privacy laws, TCPA, CAN-SPAM, Fair Housing, and local real estate rules. VestBlock does not guarantee owner contact accuracy.
+          This public view deliberately obscures exact property identity and map location. Data comes from public records, user uploads, and open-source research and may be incomplete or outdated. Exact records remain subject to operator review, privacy controls, Fair Housing, and applicable real-estate rules.
         </CardContent>
       </Card>
     </div>

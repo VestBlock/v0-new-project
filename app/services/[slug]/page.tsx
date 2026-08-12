@@ -41,7 +41,7 @@ export async function generateMetadata({
   }
 
   return {
-    title: page.seoTitle,
+    title: page.seoTitle.replace(/\s*\|\s*VestBlock$/i, ''),
     description: page.metaDescription,
     alternates: {
       canonical: `/services/${page.slug}`,

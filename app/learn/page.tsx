@@ -19,9 +19,9 @@ import {
 import { RevenuePathLinks } from '@/components/marketing/revenue-path-links';
 
 export const metadata: Metadata = {
-  title: 'Real Estate Operations, Funding, And DealVault Guides | VestBlock',
+  title: 'Capital, Deals, And Opportunity Guides',
   description:
-    'Practical VestBlock guides for real estate operations, DealVault proof records, funding preparation, credit tools, and lead capture.',
+    'Practical VestBlock guides for capital preparation, property and business deals, credit education, business growth, DealVault records, and lead capture.',
 };
 
 function topicsByCluster() {
@@ -47,12 +47,12 @@ export default function LearnPage() {
           </Badge>
           <div className="max-w-3xl space-y-3">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Practical guides for getting found, capturing leads, and keeping cleaner proof records
+              Practical guides for capital, deals, and the next opportunity
             </h1>
             <p className="text-lg text-muted-foreground">
               Short, useful explainers that connect real buyer questions to
-              VestBlock services: real estate operations, AI receptionist, DealVault,
-              funding prep, and website lead capture. No fake shortcuts or thin clutter.
+              VestBlock paths: capital preparation, real estate and business deals,
+              credit education, AI assistance, DealVault, and business visibility.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

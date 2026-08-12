@@ -4,7 +4,7 @@ import { GetStartedPage } from '@/components/get-started-page';
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
-  title: 'Get Started With VestBlock',
+  title: 'Choose Your VestBlock Path',
   description:
     'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
   alternates: {

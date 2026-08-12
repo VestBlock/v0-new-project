@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { LENDER_CATEGORY_TO_TYPE } from '@/lib/lenders/constants'
 import { upsertLender, updateLenderRecord } from '@/lib/lenders/repository'
 import type { LenderCategory } from '@/lib/lenders/types'
+import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 const lenderSignupSchema = z.object({
   companyName: z.string().trim().min(2).max(200),
@@ -50,6 +51,9 @@ function parseStates(value: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'lender-signup', maxRequests: 4 })
+  if (guard) return guard
+
   try {
     const payload = await request.json().catch(() => ({}))
     const parsed = lenderSignupSchema.safeParse(payload)
@@ -117,7 +121,7 @@ export async function POST(request: NextRequest) {
       outreach_status: 'responded',
     })
 
-    return NextResponse.json({ success: true, lenderId: lender.id })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Lender signup error:', error)
     return NextResponse.json({ error: 'Unable to save lender signup right now.' }, { status: 500 })

@@ -44,6 +44,7 @@
     "test:attom-strategies": "node scripts/test-attom-strategies.cjs",
     "audit:supabase": "node --env-file=.env.local scripts/supabase-live-audit.mjs",
     "audit:platform": "node --env-file=.env.local scripts/platform-capability-audit.mjs",
+    "audit:gate4-matrix": "node scripts/gate4-closure-matrix.mjs",
     "audit:seo:live": "node --env-file=.env.local scripts/live-seo-audit.mjs",
     "supabase:push": "node --env-file=.env.local scripts/supabase-db-push.mjs",
     "supabase:push:dry-run": "node --env-file=.env.local scripts/supabase-db-push.mjs --dry-run",

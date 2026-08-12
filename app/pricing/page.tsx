@@ -30,9 +30,9 @@ import { faqPageJsonLd, breadcrumbJsonLd } from '@/lib/seo/structuredData';
 import { pricingFaqs } from '@/lib/seo/faqContent';
 
 export const metadata: Metadata = {
-  title: 'VestBlock Real Estate Deal Pricing',
+  title: 'Plans And Pricing',
   description:
-    'Compare VestBlock pricing and starting points for seller property review, real estate funding review, DealVault, and supporting services.',
+    'Compare VestBlock pricing and free starting points across Capital, Deals, and Opportunity—including funding preparation, property review, DealVault, and business growth services.',
   alternates: {
     canonical: '/pricing',
   },
@@ -156,14 +156,14 @@ export default function PricingPage() {
           <div className="space-y-5">
             <Badge className="w-fit bg-cyan-600 text-white">Pricing</Badge>
             <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-5xl">
-              Pricing built around real estate deal movement.
+              Pricing that starts with your next move—not a product bundle.
             </h1>
             <p className="max-w-3xl text-lg text-muted-foreground">
-              Start with property review, real estate funding fit, or DealVault. Use AI reception, business funding prep, and credit support only when they help the deal move.
+              Begin with a free Capital, Deals, or Opportunity route. Add a paid review, operating system, or DealVault plan only when the scope and next outcome are clear.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
-                <Link href="/get-started">
+                <Link href="/next-move">
                   Choose Path
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -181,14 +181,14 @@ export default function PricingPage() {
                 How VestBlock pricing works
               </CardTitle>
               <CardDescription>
-                Choose the service that moves the real estate conversation first, then add support only when it helps the buyer, seller, lender, or operator move forward.
+                Choose the lane that matches the decision first, then add support only when it moves the underlying goal forward.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Seller Property Review and Real Estate Funding are the front-door routes for active deal conversations.</p>
-              <p>DealVault is the premium product for teams that need agreement records, payout clarity, and milestone proof.</p>
-              <p>AI Receptionist supports real estate teams that need better lead capture, booking, or response speed.</p>
-              <p>Custom setup and deeper support are best handled after the property, buyer, lender, or funding goal is clear.</p>
+              <p><strong>Capital:</strong> funding readiness, business credit preparation, grants, and real-estate capital review.</p>
+              <p><strong>Deals:</strong> property and business acquisition paths, buyer and lender criteria, and DealVault records.</p>
+              <p><strong>Opportunity:</strong> credit education, business setup, income paths, AI assistance, and visibility systems.</p>
+              <p>Custom setup and deeper support begin only after the goal, fit, scope, and limitations are clear.</p>
             </CardContent>
           </Card>
         </section>
@@ -206,7 +206,7 @@ export default function PricingPage() {
               </p>
             </div>
             <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
-              <Link href="/get-started">
+                <Link href="/next-move">
                 Choose My Path
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

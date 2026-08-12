@@ -55,7 +55,7 @@ function getServicesByKeys(keys: readonly string[]) {
 }
 
 export const metadata: Metadata = {
-  title: 'VestBlock Services',
+  title: 'Services',
   description:
     'Compare VestBlock services for seller property review, buyer and lender routing, developer and contractor partners, DealVault records, funding review, and member visibility support.',
   alternates: {

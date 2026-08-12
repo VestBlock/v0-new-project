@@ -30,7 +30,6 @@ export default function FundingPage() {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionResult, setSubmissionResult] = useState<null | {
-    leadId: string | null
     name: string
     businessType: string
     fundingAmount: string
@@ -125,7 +124,6 @@ export default function FundingPage() {
       })
 
       setSubmissionResult({
-        leadId: data.leadId || null,
         name: formData.name,
         businessType: formData.business_type,
         fundingAmount: formData.funding_amount,

@@ -269,6 +269,78 @@ export async function listPropertyIntelligence(filters: PropertyIntelligenceFilt
   }
 }
 
+/**
+ * Small, privacy-safe public summary. The operator query above intentionally
+ * remains richer; this avoids joining owner records and unbounded signal sets
+ * on an unauthenticated page.
+ */
+export async function listPublicPropertyOpportunities(limit = 24) {
+  const admin = createAdminClient()
+  const cappedLimit = Math.max(1, Math.min(limit, 50))
+  const { data: scoreRows, error: scoreError } = await admin
+    .from('deal_scores')
+    .select('property_intelligence_record_id,score,reason_codes,explanation,recommended_next_action')
+    .gte('score', 55)
+    .order('score', { ascending: false })
+    .limit(cappedLimit)
+
+  if (scoreError) throw scoreError
+  const ids = Array.from(new Set((scoreRows || []).map((row) => row.property_intelligence_record_id).filter(Boolean)))
+  if (!ids.length) return { properties: [], summary: summarizeProperties([]) }
+
+  const [{ data: records, error: recordsError }, { data: signals, error: signalsError }] = await Promise.all([
+    admin.from('property_intelligence_records')
+      .select('id,city,state,latitude,longitude,is_vacant_lot,vacant_lot_confidence')
+      .in('id', ids),
+    admin.from('property_signals')
+      .select('property_intelligence_record_id,signal_type,signal_label,confidence_score')
+      .in('property_intelligence_record_id', ids)
+      .order('confidence_score', { ascending: false })
+      .limit(cappedLimit * 3),
+  ])
+
+  if (recordsError) throw recordsError
+  if (signalsError) throw signalsError
+
+  const recordById = new Map((records || []).map((record) => [record.id, record]))
+  const signalsById = new Map<string, typeof signals>()
+  for (const signal of signals || []) {
+    const values = signalsById.get(signal.property_intelligence_record_id) || []
+    if (values.length < 3) values.push(signal)
+    signalsById.set(signal.property_intelligence_record_id, values)
+  }
+
+  const properties = (scoreRows || []).flatMap((score, index) => {
+    const record = recordById.get(score.property_intelligence_record_id)
+    if (!record) return []
+    return [{
+      id: `public-opportunity-${index + 1}`,
+      property_address: 'Property opportunity',
+      city: record.city,
+      state: record.state,
+      zip_code: null,
+      latitude: typeof record.latitude === 'number' ? Number(record.latitude.toFixed(2)) : null,
+      longitude: typeof record.longitude === 'number' ? Number(record.longitude.toFixed(2)) : null,
+      is_vacant_lot: record.is_vacant_lot,
+      vacant_lot_confidence: record.vacant_lot_confidence,
+      owner_entities: null,
+      property_signals: (signalsById.get(record.id) || []).map((signal) => ({
+        signal_type: signal.signal_type,
+        signal_label: signal.signal_label,
+        confidence_score: signal.confidence_score,
+      })),
+      deal_scores: [{
+        score: score.score,
+        reason_codes: score.reason_codes,
+        explanation: score.explanation,
+        recommended_next_action: score.recommended_next_action,
+      }],
+    } as PropertyIntelligenceRecord]
+  })
+
+  return { properties, summary: summarizeProperties(properties) }
+}
+
 async function listAttomLeadFallback(filters: PropertyIntelligenceFilters) {
   const admin = createAdminClient()
   const { data, error } = await admin

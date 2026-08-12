@@ -28,7 +28,14 @@ export function isSameOriginPublicMutation(request: Request) {
   if (!origin) return true
 
   try {
-    return new URL(origin).origin === new URL(request.url).origin
+    const originUrl = new URL(origin)
+    const requestUrl = new URL(request.url)
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const host = forwardedHost || request.headers.get('host')
+    const forwardedProtocol = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    const protocol = forwardedProtocol ? `${forwardedProtocol}:` : requestUrl.protocol
+
+    return originUrl.origin === requestUrl.origin || Boolean(host && originUrl.origin === `${protocol}//${host}`)
   } catch {
     return false
   }

@@ -10,6 +10,7 @@ import { getFundingProducts } from '@/lib/funding/repository';
 import { generatePublicFundingRecommendation } from '@/lib/funding/publicFundingRecommendation';
 import { captureServerEvent } from '@/lib/analytics/server';
 import { analyticsEvents } from '@/lib/analytics/events';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
 const fundingLeadSchema = z.object({
   name: z.string().trim().min(2).max(140),
@@ -37,7 +38,10 @@ const fundingLeadSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const parsed = fundingLeadSchema.safeParse(await req.json());
+  const guard = guardPublicMutation(req, { scope: 'funding-lead', maxRequests: 5 });
+  if (guard) return guard;
+
+  const parsed = fundingLeadSchema.safeParse(await req.json().catch(() => ({})));
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -156,7 +160,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     success: true,
-    leadId: lead.id,
     fundingPlan: {
       confidence: fundingPlan.confidence,
       readiness: fundingPlan.readiness,

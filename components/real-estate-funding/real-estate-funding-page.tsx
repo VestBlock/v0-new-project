@@ -190,7 +190,6 @@ export function RealEstateFundingPage() {
       })
 
       if (!response.ok) throw new Error("Failed to submit")
-      const result = await response.json()
 
       // Track form submission conversion
       if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -203,9 +202,6 @@ export function RealEstateFundingPage() {
 
       const thanksParams = new URLSearchParams()
       thanksParams.set("loanType", loanType)
-      if (result?.leadId) {
-        thanksParams.set("leadId", result.leadId)
-      }
 
       router.push(`/real-estate-funding/thanks?${thanksParams.toString()}`)
     } catch (_error) {

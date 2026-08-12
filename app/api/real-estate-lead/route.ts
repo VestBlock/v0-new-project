@@ -1,7 +1,50 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { runNewLeadAutomation } from "@/lib/leads/leadAutomation"
 import { persistPropertyBuyerMatches } from "@/lib/buyers/service"
+import { guardPublicMutation } from "@/lib/security/public-mutation"
+
+const optionalText = (max: number) => z.string().trim().max(max).optional().default('')
+
+const realEstateLeadSchema = z.object({
+  loanType: z.enum(['dscr', 'hard-money']),
+  fullName: z.string().trim().min(2).max(140),
+  email: z.string().trim().email().max(320),
+  phone: z.string().trim().min(7).max(40),
+  creditScoreRange: optionalText(80),
+  requestedLoanAmount: optionalText(80),
+  availableLiquidity: optionalText(80),
+  vestingOrEntityName: optionalText(160),
+  fundingGoal: optionalText(500),
+  entity: optionalText(160),
+  propertyAddress: z.string().trim().min(3).max(260),
+  propertyType: optionalText(120),
+  purchasePrice: optionalText(80),
+  estimatedValue: optionalText(80),
+  expectedRent: optionalText(80),
+  occupancy: optionalText(120),
+  downPaymentLtv: optionalText(80),
+  taxesInsuranceHoa: optionalText(120),
+  closingDate: optionalText(80),
+  notes: optionalText(1600),
+  experienceLevel: optionalText(120),
+  rehabBudget: optionalText(80),
+  arv: optionalText(80),
+  exitStrategy: optionalText(160),
+  closingTimeline: optionalText(120),
+  fundsNeeded: optionalText(120),
+  purchaseContractStatus: optionalText(120),
+  contractorReady: optionalText(120),
+}).superRefine((data, context) => {
+  const required = data.loanType === 'dscr'
+    ? ['creditScoreRange', 'entity', 'propertyType', 'purchasePrice', 'expectedRent', 'occupancy', 'downPaymentLtv', 'closingDate'] as const
+    : ['experienceLevel', 'purchasePrice', 'rehabBudget', 'arv', 'exitStrategy', 'closingTimeline', 'fundsNeeded'] as const
+
+  for (const field of required) {
+    if (!data[field]) context.addIssue({ code: 'custom', path: [field], message: 'Required field.' })
+  }
+})
 
 function parseCurrency(value?: string | number | null) {
   if (value === null || value === undefined) return null
@@ -44,8 +87,18 @@ function buildPropertyAddress(address?: string | null, city?: string | null, sta
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'real-estate-lead', maxRequests: 5 })
+  if (guard) return guard
+
   try {
-    const data = await request.json()
+    const parsed = realEstateLeadSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Check the real-estate funding form and try again.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const data = parsed.data
 
     const {
       loanType,
@@ -79,52 +132,6 @@ export async function POST(request: NextRequest) {
       purchaseContractStatus,
       contractorReady
     } = data
-
-    if (!loanType || !fullName || !email || !phone || !propertyAddress) {
-      return NextResponse.json(
-        { error: 'Missing required lead fields.' },
-        { status: 400 }
-      )
-    }
-
-    if (loanType !== 'dscr' && loanType !== 'hard-money') {
-      return NextResponse.json(
-        { error: 'Invalid real estate funding type.' },
-        { status: 400 }
-      )
-    }
-
-    if (
-      loanType === 'dscr' &&
-      (!entity ||
-        !propertyType ||
-        !purchasePrice ||
-        !expectedRent ||
-        !occupancy ||
-        !downPaymentLtv ||
-        !closingDate)
-    ) {
-      return NextResponse.json(
-        { error: 'Missing required DSCR loan fields.' },
-        { status: 400 }
-      )
-    }
-
-    if (
-      loanType === 'hard-money' &&
-      (!experienceLevel ||
-        !purchasePrice ||
-        !rehabBudget ||
-        !arv ||
-        !exitStrategy ||
-        !closingTimeline ||
-        !fundsNeeded)
-    ) {
-      return NextResponse.json(
-        { error: 'Missing required hard money loan fields.' },
-        { status: 400 }
-      )
-    }
 
     const supabaseAdmin = createAdminClient()
     const normalizedPropertyAddress = buildPropertyAddress(propertyAddress, null, null)
@@ -253,11 +260,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ success: true, leadId: lead.id })
-  } catch (error: any) {
+    return NextResponse.json({ success: true })
+  } catch (error) {
     console.error("Real estate lead submission error:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to submit lead" },
+      { error: "Unable to save your funding request right now." },
       { status: 500 }
     )
   }

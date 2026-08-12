@@ -15,6 +15,7 @@ import {
 import { ensureSignupGrowthSystem } from '@/lib/auth/signup-growth-system'
 import { sendUserSignupGrowthSystemReadyEmail } from '@/lib/email/sendEmail'
 import type { BuyerCategory } from '@/lib/buyers/types'
+import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 const buyerSignupSchema = z.object({
   companyName: z.string().trim().min(2).max(200),
@@ -94,6 +95,9 @@ function splitMarketParts(markets: string[]) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'buyer-signup', maxRequests: 4 })
+  if (guard) return guard
+
   try {
     const payload = await request.json().catch(() => ({}))
     const parsed = buyerSignupSchema.safeParse(payload)
@@ -236,10 +240,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      buyerId: buyer.id,
       growthSystemReady: Boolean(growthSystemResult.ok),
       growthSystemCreated: Boolean(growthSystemResult.created),
-      growthSystemLeadId: growthSystemResult.leadId || null,
       growthSystemEmailSent: Boolean(emailResult?.ok),
       registerUrl: `/register?redirect=${encodeURIComponent('/dashboard/services')}&email=${encodeURIComponent(data.email)}`,
       loginUrl: `/login?redirect=${encodeURIComponent('/dashboard/services')}&email=${encodeURIComponent(data.email)}`,

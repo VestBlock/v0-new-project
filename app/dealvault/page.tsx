@@ -38,7 +38,7 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'DealVault By VestBlock | Premium Proof, Payout, and Milestone Tracking',
+  title: 'DealVault Proof, Payout, And Milestone Tracking',
   description:
     'DealVault by VestBlock gives teams cleaner agreement records, payout tracking, and milestone audit trails with live blockchain proof records behind them.',
   alternates: {

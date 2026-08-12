@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,8 +20,11 @@ const pilotInterestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const guard = guardPublicMutation(request, { scope: 'dealvault-pilot-interest', maxRequests: 5 });
+  if (guard) return guard;
+
   try {
-    const parsed = pilotInterestSchema.safeParse(await request.json());
+    const parsed = pilotInterestSchema.safeParse(await request.json().catch(() => ({})));
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest) {
       console.error('[dealvault-pilot-interest] automation failed:', automationError);
     });
 
-    return NextResponse.json({ success: true, leadId: lead.id });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[dealvault-pilot-interest] unexpected error:', error);
     return NextResponse.json({ error: 'Unable to submit demo request.' }, { status: 500 });

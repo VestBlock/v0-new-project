@@ -25,7 +25,7 @@ import {
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
-  title: 'DealFlow Growth Support | VestBlock Real Estate Deal Support',
+  title: 'DealFlow Growth Support For Real Estate Operators',
   description:
     'VestBlock DealFlow Growth Support combines seller intake, buyer and lender criteria review, DealVault records, response support, and follow-through support for real estate operators.',
   alternates: {

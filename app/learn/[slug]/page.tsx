@@ -61,7 +61,7 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
+    title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'}`,
     description: topic.metaDescription,
     alternates: {
       canonical: `/learn/${topic.slug}`,

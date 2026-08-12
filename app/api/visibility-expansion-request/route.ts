@@ -16,6 +16,7 @@ import {
 import { queueGrowthServiceRequest } from '@/lib/inngest/events';
 import { captureServerEvent } from '@/lib/analytics/server';
 import { analyticsEvents } from '@/lib/analytics/events';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
 const visibilityExpansionRequestSchema = z.object({
   packageKey: z.enum(visibilityExpansionPackageKeys),
@@ -33,8 +34,11 @@ const visibilityExpansionRequestSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const guard = guardPublicMutation(req, { scope: 'visibility-expansion-request', maxRequests: 5 });
+  if (guard) return guard;
+
   try {
-    const parsed = visibilityExpansionRequestSchema.safeParse(await req.json());
+    const parsed = visibilityExpansionRequestSchema.safeParse(await req.json().catch(() => ({})));
 
     if (!parsed.success) {
       return NextResponse.json(

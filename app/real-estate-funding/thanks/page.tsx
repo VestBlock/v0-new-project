@@ -10,7 +10,6 @@ import { buildPartnerReferralPath, partnerReferralDefinitions } from "@/lib/part
 
 function RealEstateFundingThanksContent() {
   const searchParams = useSearchParams()
-  const leadId = searchParams.get("leadId")
   const loanType = searchParams.get("loanType") || "dscr"
   const partnerOptions =
     loanType === "hard-money"
@@ -82,7 +81,6 @@ function RealEstateFundingThanksContent() {
                     href={buildPartnerReferralPath({
                       partnerKey: partner.key,
                       source: "real-estate-funding-thanks",
-                      leadId,
                       loanType,
                       service: "real_estate_funding",
                     })}

@@ -17,7 +17,7 @@ import {
 } from '@/lib/business-readiness/fundingCompliance';
 
 export const metadata: Metadata = {
-  title: 'Business Setup For Funding And Grants | VestBlock',
+  title: 'Business Setup For Funding And Grants',
   description:
     'Prepare your business for funding, grants, business credit, and lender review with VestBlock business setup tools.',
   alternates: {

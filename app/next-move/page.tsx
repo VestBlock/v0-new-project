@@ -3,7 +3,7 @@ import { NextMoveQuestionnaire } from "@/components/next-move/next-move-question
 import { nextMoveFocuses, type NextMoveFocus } from "@/lib/next-move/types"
 
 export const metadata: Metadata = {
-  title: "Free Next-Move Questionnaire | VestBlock",
+  title: "Free Next-Move Questionnaire",
   description: "Answer a few focused questions and receive a free educational VestBlock analysis with an ordered 7, 30, 60, and 90-day roadmap.",
   alternates: { canonical: "/next-move" },
 }

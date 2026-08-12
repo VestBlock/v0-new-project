@@ -2,34 +2,38 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { persistPropertyBuyerMatches } from '@/lib/buyers/service';
 import { buildRoughPropertyEstimate, parseCurrencyAmount } from '@/lib/property/roughEstimate';
+import { guardPublicMutation } from '@/lib/security/public-mutation';
 
-interface LeadFormData {
-  propertyAddress: string;
-  city: string;
-  state: string;
-  name: string;
-  email?: string;
-  phone: string;
-  propertyType?: string;
-  bedrooms?: string;
-  bathrooms?: string;
-  propertyCondition?: string;
-  timelineToSell?: string;
-  estimatedValue?: string;
-  askingPrice?: string;
-  mortgageBalance?: string;
-  liensOrTaxes?: string;
-  occupancyStatus?: string;
-  bestTimeToCall?: string;
-  preferredSalePath?: string;
-  notes?: string;
-  reasonForSelling?: string;
-  attribution?: Record<string, string>;
-}
+const sellerText = (max: number) => z.string().trim().max(max).optional().default('');
+
+const sellLeadSchema = z.object({
+  propertyAddress: z.string().trim().min(3).max(260),
+  city: z.string().trim().min(2).max(120),
+  state: z.string().trim().min(2).max(80),
+  name: z.string().trim().min(2).max(140),
+  email: z.string().trim().email().max(320).optional().or(z.literal('')),
+  phone: z.string().trim().min(7).max(40),
+  propertyType: sellerText(120),
+  bedrooms: sellerText(20),
+  bathrooms: sellerText(20),
+  propertyCondition: sellerText(120),
+  timelineToSell: sellerText(120),
+  estimatedValue: sellerText(80),
+  askingPrice: sellerText(80),
+  mortgageBalance: sellerText(80),
+  liensOrTaxes: sellerText(80),
+  occupancyStatus: sellerText(120),
+  bestTimeToCall: sellerText(120),
+  preferredSalePath: z.enum(['fast_cash', 'creative_structure', 'novation', 'not_sure']).optional().default('not_sure'),
+  notes: sellerText(1600),
+  reasonForSelling: sellerText(1000),
+  attribution: z.record(z.string(), z.string().trim().max(500)).optional().default({}),
+});
 
 const sellerSalePathLabels: Record<string, string> = {
   fast_cash: 'Fast cash buyer review',
@@ -48,16 +52,18 @@ function buildPropertyAddress(address?: string | null, city?: string | null, sta
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const data: LeadFormData = await request.json();
+  const guard = guardPublicMutation(request, { scope: 'sell-lead', maxRequests: 5 });
+  if (guard) return guard;
 
-    // Validate required fields
-    if (!data.propertyAddress || !data.city || !data.state || !data.name || !data.phone) {
+  try {
+    const parsed = sellLeadSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Check the seller review form and try again.', details: parsed.error.flatten() },
         { status: 400 }
       );
     }
+    const data = parsed.data;
 
     const supabaseAdmin = createAdminClient();
     const normalizedPropertyAddress = buildPropertyAddress(
@@ -278,13 +284,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      leadId: unifiedLead.id,
       message: 'Lead submitted successfully',
       roughEstimate,
       automation: {
-        status: failedFollowUps.length === 0 ? 'completed' : 'partial',
-        completed: followUpResults.length - failedFollowUps.length,
-        failed: failedFollowUps,
+        status: failedFollowUps.length === 0 ? 'completed' : 'queued_for_review',
       },
     });
   } catch (error) {
