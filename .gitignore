@@ -33,21 +33,24 @@ spy_daily_signal.pine
 spy_swing_conservative_strategy.pine
 spy_swing_strategy.pine
 
-
-# local command-center runtime memory and generated buyer packets
-/data/command-center/
-/data/property-portfolios/
-/reports/
 # local revenue/outreach operating data; keep scripts and docs tracked, not raw exports
 /data/distress-leads/
 /data/distress-sources/
 /data/stale-listings/
 /data/operating-loops/
 /data/outreach-suppressions.json
-/data/dm-exports/**/*.csv
 /data/dm-exports/*.csv
-/data/direct-seller-batches/
-/.npm-cache/
+/data/buyer-opportunities/
+/data/buyer-outreach/
+/data/command-center/
+/data/dm-exports/
+/data/institutional-buyers/
+/data/preforeclosure-county/
+/data/property-portfolios/
+/data/property-visuals/
+/logs/
+/ops/
+/reports/
 /data/buffer/*results-*.json
 /data/buffer/vestblock-facebook-90-day-calendar.*
 /data/partnership-targets*.csv
@@ -80,6 +83,12 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# private, generated local operating artifacts and visual-review evidence
+/.codex-*/
+/.impeccable/review/
+/.impeccable/mocks/
+/supabase/.temp/
 
 # typescript
 *.tsbuildinfo
