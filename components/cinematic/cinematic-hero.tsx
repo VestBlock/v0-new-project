@@ -2,61 +2,56 @@
 
 import { useEffect, useRef } from "react"
 import Link from "next/link"
-import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, FileSearch, Landmark, MapPinned } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 const reviewLayers = [
-  { icon: MapPinned, label: "Property context", detail: "asset, use, timing, and diligence inputs" },
-  { icon: Landmark, label: "Capital path", detail: "requirements, criteria, and counterparties" },
-  { icon: FileSearch, label: "Decision record", detail: "materials, next steps, and DealVault history" },
+  { label: "Property", detail: "asset context and diligence" },
+  { label: "Capital", detail: "criteria and requirements" },
+  { label: "Execution", detail: "the next qualified action" },
 ]
 
 export function CinematicHero() {
   const sectionRef = useRef<HTMLElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const reduceMotion = useReducedMotion()
+  const sceneRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (reduceMotion || !sectionRef.current || !imageRef.current) return
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduceMotion || !sectionRef.current || !imageRef.current || !sceneRef.current) return
 
     gsap.registerPlugin(ScrollTrigger)
     const ctx = gsap.context(() => {
-      gsap.fromTo(
-        imageRef.current,
-        { scale: 1.04, yPercent: 0 },
-        {
-          scale: 1.14,
-          yPercent: 6,
-          ease: "none",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top top",
-            end: "bottom top",
-            scrub: true,
-          },
-        },
-      )
+      const scene = sceneRef.current!
+      const sceneItems = scene.querySelectorAll<HTMLElement>("[data-scene-item]")
+      const route = scene.querySelector<SVGPathElement>("[data-scene-route]")
 
-      if (contentRef.current) {
-        gsap.to(contentRef.current, {
-          yPercent: -10,
-          opacity: 0.18,
-          ease: "none",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "18% top",
-            end: "76% top",
-            scrub: true,
-          },
-        })
-      }
+      gsap.set(sceneItems, { opacity: 0, y: 18 })
+      if (route) gsap.set(route, { strokeDashoffset: 1 })
+
+      const introduction = gsap.timeline({ defaults: { ease: "power3.out" } })
+      introduction
+        .to(scene, { opacity: 1, duration: 0.42 })
+        .to(route, { strokeDashoffset: 0, duration: 1.3 }, 0.08)
+        .to(sceneItems, { opacity: 1, y: 0, duration: 0.58, stagger: 0.12 }, 0.35)
+
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top top",
+          end: "bottom top",
+          scrub: true,
+        },
+      })
+        .to(imageRef.current, { scale: 1.1, yPercent: 5, ease: "none" }, 0)
+        .to(scene, { yPercent: 12, scale: 1.035, opacity: 0.72, ease: "none" }, 0)
+        .to(contentRef.current, { yPercent: -9, opacity: 0.18, ease: "none" }, 0.08)
     }, sectionRef)
 
     return () => ctx.revert()
-  }, [reduceMotion])
+  }, [])
 
   return (
     <section ref={sectionRef} className="vb-cinematic-hero" aria-labelledby="homepage-hero-title">
@@ -74,90 +69,73 @@ export function CinematicHero() {
       </div>
 
       <div className="vb-cinematic-hero__grade" aria-hidden="true" />
-      <div className="vb-cinematic-hero__site-line" aria-hidden="true">
-        <span />
+
+      <div ref={sceneRef} className="vb-hero-scene" aria-hidden="true">
+        <svg className="vb-hero-scene__drawing" viewBox="0 0 640 680" fill="none" preserveAspectRatio="xMidYMid meet">
+          <path className="vb-hero-scene__parcel" d="M116 118L514 72L572 492L198 590L76 362L116 118Z" />
+          <path
+            data-scene-route
+            className="vb-hero-scene__route"
+            d="M168 438C238 397 279 375 338 334C396 294 442 251 500 194"
+            pathLength="1"
+          />
+          <circle className="vb-hero-scene__origin" cx="168" cy="438" r="7" />
+          <circle className="vb-hero-scene__origin vb-hero-scene__origin--middle" cx="338" cy="334" r="7" />
+          <circle className="vb-hero-scene__origin vb-hero-scene__origin--end" cx="500" cy="194" r="7" />
+        </svg>
+        <div data-scene-item className="vb-hero-scene__caption vb-hero-scene__caption--property">
+          <span>01</span>
+          <strong>Property context</strong>
+          <small>asset · timing · record</small>
+        </div>
+        <div data-scene-item className="vb-hero-scene__caption vb-hero-scene__caption--capital">
+          <span>02</span>
+          <strong>Capital criteria</strong>
+          <small>terms · fit · diligence</small>
+        </div>
+        <div data-scene-item className="vb-hero-scene__caption vb-hero-scene__caption--route">
+          <span>03</span>
+          <strong>Qualified route</strong>
+          <small>counterparty · next action</small>
+        </div>
       </div>
 
       <div ref={contentRef} className="vb-cinematic-hero__content">
-        <motion.div
-          initial={false}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="vb-cinematic-hero__title-block"
-        >
-          <p className="vb-cinematic-hero__statement">Capital moves through the built environment.</p>
-          <h1 id="homepage-hero-title">
-            See the property, the capital path, and the next decision.
-          </h1>
+        <div className="vb-cinematic-hero__title-block">
+          <h1 id="homepage-hero-title">One clear path from property context to capital and execution.</h1>
           <p className="vb-cinematic-hero__lede">
-            VestBlock gives real-estate participants a structured way to prepare an opportunity: property context,
-            diligence materials, capital requirements, counterparty fit, and a durable DealVault record.
+            VestBlock helps owners, capital partners, and execution teams prepare an opportunity, assess fit, and carry
+            the record forward with the facts each next conversation needs.
           </p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={false}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
-          className="vb-cinematic-hero__actions"
-        >
+        <div className="vb-cinematic-hero__actions">
           <Link href="/sell" className="vb-button vb-button--primary">
-            Review an opportunity
+            Prepare an opportunity
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link href="/get-started" className="vb-button vb-button--quiet">
-            Build a partner profile
+            Choose your entry path
           </Link>
-        </motion.div>
+        </div>
 
-        <motion.ol
-          initial={false}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          className="vb-cinematic-hero__review-layers"
-          aria-label="How VestBlock organizes an opportunity"
-        >
-          {reviewLayers.map((layer, index) => {
-            const Icon = layer.icon
-            return (
-              <li key={layer.label}>
-                <span className="vb-cinematic-hero__layer-index">0{index + 1}</span>
-                <Icon aria-hidden="true" />
-                <span>
-                  <strong>{layer.label}</strong>
-                  <small>{layer.detail}</small>
-                </span>
-              </li>
-            )
-          })}
-        </motion.ol>
+        <ol className="vb-cinematic-hero__review-layers" aria-label="How VestBlock organizes an opportunity">
+          {reviewLayers.map((layer, index) => (
+            <li key={layer.label}>
+              <span className="vb-cinematic-hero__layer-index">0{index + 1}</span>
+              <span>
+                <strong>{layer.label}</strong>
+                <small>{layer.detail}</small>
+              </span>
+            </li>
+          ))}
+        </ol>
       </div>
 
-      <aside className="vb-cinematic-hero__record" aria-label="Illustrative opportunity preparation frame">
-        <span className="vb-cinematic-hero__record-rule" aria-hidden="true" />
-        <p>Illustrative preparation frame</p>
-        <dl>
-          <div>
-            <dt>Asset</dt>
-            <dd>Context assembled</dd>
-          </div>
-          <div>
-            <dt>Capital</dt>
-            <dd>Criteria mapped</dd>
-          </div>
-          <div>
-            <dt>Record</dt>
-            <dd>DealVault ready</dd>
-          </div>
-        </dl>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/vestblock-mark-transparent.png" alt="" aria-hidden="true" />
-      </aside>
-
-      <div className="vb-cinematic-hero__scroll-cue" aria-hidden="true">
-        <span>Scroll to follow the capital thread</span>
+      <a className="vb-cinematic-hero__scroll-cue" href="#platform-path">
+        <span>Explore the decision path</span>
         <i />
-      </div>
+      </a>
     </section>
   )
 }

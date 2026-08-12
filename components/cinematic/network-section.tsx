@@ -1,57 +1,66 @@
-"use client"
-
 import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
-import { motion, useReducedMotion } from "framer-motion"
 
-const participants = [
-  { role: "Property owners", input: "Asset context and timing", action: "Submit a property", href: "/sell" },
-  { role: "Buyers and investors", input: "Acquisition criteria", action: "Share a buy box", href: "/buyers" },
-  { role: "Lenders and capital partners", input: "Program and risk criteria", action: "Join the lender network", href: "/lenders" },
-  { role: "Operators", input: "Markets, capacity, and execution fit", action: "Build a partner profile", href: "/get-started" },
-  { role: "Developers and contractors", input: "Project scope and availability", action: "Share operating capacity", href: "/get-started" },
-  { role: "Acquisition teams", input: "Market coverage and mandate", action: "Map your criteria", href: "/get-started" },
+const routes = [
+  {
+    number: "01",
+    title: "Property and intent",
+    people: "Owners, sellers, and acquisition teams",
+    detail: "Establish what the property is, what needs to happen next, and the information available for review.",
+    action: "Prepare a property",
+    href: "/sell",
+  },
+  {
+    number: "02",
+    title: "Capital and deal fit",
+    people: "Buyers, investors, lenders, and capital partners",
+    detail: "Set the buy box, program criteria, capital requirement, risk parameters, and conditions for an informed conversation.",
+    action: "Share decision criteria",
+    href: "/get-started",
+  },
+  {
+    number: "03",
+    title: "Execution and continuity",
+    people: "Operators, developers, contractors, and advisors",
+    detail: "Connect operating capacity to the opportunity, then keep the approved next step and supporting record in context.",
+    action: "Build a partner profile",
+    href: "/get-started",
+  },
 ]
 
 export function NetworkSection() {
-  const reduce = useReducedMotion()
-
   return (
     <section className="vb-network" aria-labelledby="network-title">
       <div className="vb-section-shell">
         <div className="vb-section-intro vb-section-intro--split">
-          <h2 id="network-title">A useful network starts with criteria, not a directory.</h2>
+          <h2 id="network-title">A platform that connects the people needed to move an opportunity forward.</h2>
           <p>
-            Every participant enters with a different question. VestBlock gives that question structure so the right
-            opportunity reaches the right conversation with less unnecessary circulation.
+            The property record stays at the center. Each participant adds the criteria, capacity, or decision needed for
+            the next responsible action.
           </p>
         </div>
 
-        <div className="vb-network__ledger" role="list" aria-label="VestBlock network entry paths">
-          <div className="vb-network__ledger-head" aria-hidden="true">
-            <span>Participant</span>
-            <span>Information that matters</span>
-            <span>Start here</span>
+        <div className="vb-network__map">
+          <div className="vb-network__record" aria-hidden="true">
+            <span>Shared opportunity record</span>
+            <strong>Property facts travel with the decision.</strong>
           </div>
-          {participants.map((participant, index) => (
-            <motion.div
-              key={participant.role}
-              role="listitem"
-              initial={false}
-              whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-8%" }}
-              transition={{ duration: 0.48, delay: (index % 3) * 0.06, ease: [0.22, 1, 0.36, 1] }}
-              className="vb-network__row"
-            >
-              <span className="vb-network__index">0{index + 1}</span>
-              <h3>{participant.role}</h3>
-              <p>{participant.input}</p>
-              <Link href={participant.href}>
-                {participant.action}
-                <ArrowUpRight aria-hidden="true" />
-              </Link>
-            </motion.div>
-          ))}
+          <ol className="vb-network__routes" aria-label="VestBlock participant routes">
+            {routes.map((route) => (
+              <li key={route.number}>
+                <span className="vb-network__index">{route.number}</span>
+                <div>
+                  <p className="vb-network__route-title">{route.title}</p>
+                  <h3>{route.people}</h3>
+                  <p>{route.detail}</p>
+                  <Link href={route.href}>
+                    {route.action}
+                    <ArrowUpRight aria-hidden="true" />
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
     </section>

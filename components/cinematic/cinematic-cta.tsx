@@ -17,11 +17,10 @@ export function CinematicCta() {
         transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
         className="vb-closing__content"
       >
-        <p>VestBlock opportunity preparation</p>
-        <h2 id="closing-title">Bring the next opportunity into focus before the next conversation.</h2>
+        <h2 id="closing-title">Start with the opportunity you need to move.</h2>
         <div>
           <Link href="/get-started" className="vb-button vb-button--primary">
-            Choose your entry point
+            Choose an entry path
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link href="/sell" className="vb-button vb-button--quiet">

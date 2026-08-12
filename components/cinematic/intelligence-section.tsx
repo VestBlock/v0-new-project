@@ -39,10 +39,10 @@ export function IntelligenceSection() {
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="vb-section-intro"
         >
-          <h2 id="intelligence-title">Good decisions need an evidence trail, not a louder dashboard.</h2>
+          <h2 id="intelligence-title">Every next step should begin with the same facts.</h2>
           <p>
-            VestBlock helps participants organize the information a real-estate conversation needs, then retain the
-            material record as the opportunity takes shape. It does not make lending, legal, tax, or investment decisions.
+            VestBlock gives participants a structured record for the property, decision criteria, supporting materials,
+            and approved next action. It does not make lending, legal, tax, or investment decisions.
           </p>
         </motion.div>
 
@@ -54,8 +54,8 @@ export function IntelligenceSection() {
           className="vb-review-sheet"
         >
           <div className="vb-review-sheet__head">
-            <span>Opportunity preparation</span>
-            <span>Illustrative record</span>
+            <span>Opportunity record</span>
+            <span>Illustrative view</span>
           </div>
           <div className="vb-review-sheet__body">
             {reviewFields.map((field, index) => {
@@ -74,7 +74,7 @@ export function IntelligenceSection() {
             })}
           </div>
           <div className="vb-review-sheet__foot">
-            <span>Prepare the next conversation with the facts available.</span>
+            <span>Prepare the next conversation with the record available.</span>
             <span>VestBlock</span>
           </div>
         </motion.div>

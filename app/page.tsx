@@ -15,9 +15,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Connect Real Estate Opportunities With the Right Partners',
+  title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
   description:
-    'VestBlock helps sellers, buyers, lenders, developers, contractors, operators, and capital partners connect around real estate opportunities, DealVault records, and funding-ready next steps.',
+    'VestBlock helps real-estate owners, capital partners, and execution teams prepare opportunities, assess fit, route qualified conversations, and maintain private DealVault records.',
   keywords: [
     'real estate partner network',
     'real estate opportunity network',
@@ -33,9 +33,9 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
+    title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
     description:
-      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners, with DealVault records and funding-ready next steps.',
+      'A real-estate platform for preparing opportunities, assessing fit, routing qualified conversations, and maintaining DealVault records.',
     url: absoluteUrl('/'),
     images: [
       {
@@ -48,9 +48,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
+    title: 'Real Estate Opportunity Intelligence and Execution | VestBlock',
     description:
-      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners.',
+      'Prepare real-estate opportunities, assess fit, route qualified conversations, and maintain DealVault records.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

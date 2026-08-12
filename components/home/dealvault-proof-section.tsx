@@ -26,10 +26,10 @@ export function DealVaultProofSection() {
       <div className="vb-section-shell vb-dealvault__layout">
         <MarketingReveal initial={false} className="vb-dealvault__intro">
           <p className="vb-dealvault__label">DealVault</p>
-          <h2 id="dealvault-title">Keep the facts that support the relationship.</h2>
+          <h2 id="dealvault-title">Keep the record that supports the work.</h2>
           <p>
-            A deal can involve several participants and several versions of the truth. DealVault keeps the supporting
-            record organized around agreements, milestones, and payouts while sensitive material remains private.
+            DealVault keeps agreements, milestones, and payout references connected to the opportunity while sensitive
+            material remains private.
           </p>
           <div className="vb-dealvault__actions">
             <Link href="/dealvault/demo" className="vb-button vb-button--primary">
