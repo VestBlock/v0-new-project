@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react"
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -12,9 +12,11 @@ import {
   Crosshair,
   Flame,
   ListChecks,
+  MailCheck,
   RefreshCw,
   ShieldAlert,
   Signal,
+  Workflow,
 } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
@@ -40,8 +42,8 @@ import type {
 type OperationsViewKey = "copilot" | "property" | "strategy" | "lanes" | "intel" | "activity"
 
 const AGENT_ACCENTS: Record<AgentKey, { dot: string; ring: string; text: string }> = {
-  acquisition: { dot: "bg-cyan-400", ring: "ring-cyan-400/40", text: "text-cyan-300" },
-  outreach: { dot: "bg-blue-400", ring: "ring-blue-400/40", text: "text-blue-300" },
+  acquisition: { dot: "bg-lime-300", ring: "ring-lime-300/40", text: "text-lime-200" },
+  outreach: { dot: "bg-slate-200", ring: "ring-slate-200/40", text: "text-slate-200" },
   routing: { dot: "bg-emerald-400", ring: "ring-emerald-400/40", text: "text-emerald-300" },
   underwriting: { dot: "bg-amber-300", ring: "ring-amber-300/40", text: "text-amber-200" },
   authority: { dot: "bg-violet-400", ring: "ring-violet-400/40", text: "text-violet-300" },
@@ -167,14 +169,17 @@ function statusLabel(status: AgentPanelData["status"]) {
 function PanelShell({
   children,
   className,
+  id,
 }: {
   children: React.ReactNode
   className?: string
+  id?: string
 }) {
   return (
     <section
+      id={id}
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl",
+        "vb-command-panel relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl",
         className
       )}
     >
@@ -187,13 +192,269 @@ function PanelTitle({ icon: Icon, title, hint }: { icon: React.ElementType; titl
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-200">
+        <span className="vb-command-panel__icon flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-200">
           <Icon className="h-3.5 w-3.5" />
         </span>
         <h2 className="text-sm font-semibold text-white">{title}</h2>
       </div>
       {hint ? <p className="vb-mono text-[0.6rem] uppercase tracking-[0.18em] text-slate-500">{hint}</p> : null}
     </div>
+  )
+}
+
+function AutomationHealthPanel({
+  health,
+  strategyExecution,
+  dataIntegrityHold,
+}: {
+  health: CommandCenterData["automationHealth"]
+  strategyExecution: CommandCenterData["strategyExecution"]
+  dataIntegrityHold: boolean
+}) {
+  const statusClass =
+    health.status === "green"
+      ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-100"
+      : health.status === "red"
+        ? "border-rose-400/30 bg-rose-400/[0.09] text-rose-100"
+        : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+  const reportStatus =
+    health.report.delivered === true ? "Delivered" : health.report.delivered === false ? "Failed" : "Not verified"
+  const mailboxStatus = health.mailbox.configured
+    ? health.mailbox.lastStatus || "Connected"
+    : "Disconnected"
+
+  return (
+    <PanelShell className={cn(health.status === "red" && "border-rose-400/25", health.status === "yellow" && "border-amber-300/20")}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <PanelTitle icon={Workflow} title="Automation health" hint={health.latestActivityAt ? `${timeAgo(health.latestActivityAt)} since movement` : "no movement recorded"} />
+          <p className="mt-2 text-sm leading-6 text-slate-300">{health.headline}</p>
+        </div>
+        <span className={cn("vb-mono inline-flex w-fit rounded-full border px-3 py-1 text-[0.6rem] uppercase tracking-[0.15em]", statusClass)}>
+          {health.status === "green" ? "Healthy" : health.status === "red" ? "Critical blocker" : "Needs attention"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3 xl:grid-cols-6">
+        {[
+          { label: "Seller accepted", value: health.metrics24h.sellerSent, helper: "provider · 24h" },
+          { label: "Buyer accepted", value: health.metrics24h.buyerSent, helper: "provider · 24h" },
+          { label: "Lender accepted", value: health.metrics24h.lenderSent, helper: "provider · 24h" },
+          { label: "Replies", value: health.metrics24h.replies, helper: "24h" },
+          { label: "Failed", value: health.metrics24h.failed, helper: "24h" },
+          { label: "Follow-ups", value: health.metrics24h.followupsDue, helper: "due" },
+        ].map((metric, index) => (
+          <div key={metric.label} className={cn("min-w-0 bg-[#0d1119] px-3 py-3", (index === 1 || index === 2) && "hidden sm:block")}>
+            <p className="vb-mono text-[0.56rem] uppercase tracking-[0.13em] text-slate-500">{metric.label}</p>
+            <p className={cn("mt-1 text-xl font-semibold tabular-nums", metric.label === "Failed" && metric.value ? "text-rose-300" : "text-white")}>
+              {metric.value}
+            </p>
+            <p className="text-[0.62rem] text-slate-600">{metric.helper}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 border-l border-white/[0.1] pl-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-white">Provider-confirmed delivery</p>
+            <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">
+              Latest outcome per message over {health.deliveryEvidence.windowDays} days. Accepted is not counted as delivered.
+            </p>
+          </div>
+          <span
+            className={cn(
+              "vb-mono rounded-full border px-2.5 py-1 text-[0.56rem] uppercase tracking-[0.13em]",
+              health.deliveryEvidence.circuitOpen
+                ? "border-rose-400/30 bg-rose-400/[0.08] text-rose-200"
+                : "border-emerald-400/25 bg-emerald-400/[0.07] text-emerald-200"
+            )}
+          >
+            {dataIntegrityHold ? "Data integrity hold" : health.deliveryEvidence.circuitOpen ? "Sending blocked" : "Sending eligible"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3 xl:grid-cols-6">
+          {[
+            { label: "Delivered", value: health.deliveryEvidence.delivered, tone: "text-emerald-300" },
+            { label: "Bounced", value: health.deliveryEvidence.bounced, tone: health.deliveryEvidence.bounced ? "text-rose-300" : "text-white" },
+            { label: "Suppressed", value: health.deliveryEvidence.suppressed, tone: health.deliveryEvidence.suppressed ? "text-rose-300" : "text-white" },
+            { label: "Complaints", value: health.deliveryEvidence.complained, tone: health.deliveryEvidence.complained ? "text-rose-300" : "text-white" },
+            { label: "Failed", value: health.deliveryEvidence.failed, tone: health.deliveryEvidence.failed ? "text-rose-300" : "text-white" },
+            { label: "Bad rate", value: `${(health.deliveryEvidence.badRate * 100).toFixed(1)}%`, tone: health.deliveryEvidence.circuitOpen ? "text-rose-300" : "text-emerald-300" },
+          ].map((metric) => (
+            <div key={metric.label} className="min-w-0 bg-[#0d1119] px-3 py-3">
+              <p className="vb-mono text-[0.56rem] uppercase tracking-[0.13em] text-slate-500">{metric.label}</p>
+              <p className={cn("mt-1 text-lg font-semibold tabular-nums", metric.tone)}>{metric.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 border-l border-white/[0.1] pl-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-white">Strategy execution evidence</p>
+            <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">
+              {strategyExecution.generatedAt
+                ? `${strategyExecution.reportDate || "Latest"} · ${timeAgo(strategyExecution.generatedAt)} ago`
+                : "No engine report stored yet"}
+            </p>
+          </div>
+          <span className={cn(
+            "vb-mono rounded-full border px-2.5 py-1 text-[0.56rem] uppercase tracking-[0.13em]",
+            strategyExecution.status === "completed"
+              ? "border-emerald-400/25 bg-emerald-400/[0.07] text-emerald-200"
+              : strategyExecution.status === "blocked" || strategyExecution.status === "failed"
+                ? "border-rose-400/30 bg-rose-400/[0.08] text-rose-200"
+                : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+          )}>
+            {strategyExecution.dryRun === true ? "Dry run" : strategyExecution.status.replaceAll("_", " ")}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3 xl:grid-cols-6">
+          {[
+            { label: "Cities", value: strategyExecution.citiesAttempted },
+            { label: "Sources", value: strategyExecution.sourcesAttempted },
+            { label: "Discovered", value: strategyExecution.leadsDiscovered },
+            { label: "Qualified", value: strategyExecution.leadsQualified },
+            { label: "Drafted", value: strategyExecution.draftsCreated },
+            { label: "Delivered", value: strategyExecution.delivered },
+          ].map((metric) => (
+            <div key={metric.label} className="min-w-0 bg-[#0d1119] px-3 py-3">
+              <p className="vb-mono text-[0.56rem] uppercase tracking-[0.13em] text-slate-500">{metric.label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums text-white">{metric.value}</p>
+            </div>
+          ))}
+        </div>
+        {strategyExecution.staleCandidateLeadsExcluded > 0 ? (
+          <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
+            {strategyExecution.staleCandidateLeadsExcluded} stale source record{strategyExecution.staleCandidateLeadsExcluded === 1 ? "" : "s"} held out of new first-contact runs.
+          </p>
+        ) : null}
+        {strategyExecution.blockers.length ? (
+          <p className="mt-2 text-[0.68rem] leading-5 text-amber-200/80">{strategyExecution.blockers.join(" · ")}</p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              label: "Mailbox",
+              value: mailboxStatus,
+              detail: health.mailbox.lastSyncAt
+                ? `Last sync ${timeAgo(health.mailbox.lastSyncAt)} ago`
+                : health.mailbox.missing.join(" · ") || health.mailbox.mailbox,
+              ok: health.mailbox.configured && !health.mailbox.lastError,
+              icon: MailCheck,
+            },
+            {
+              label: "Revenue loop",
+              value: health.scheduler.lastRevenueLoopStatus || "Awaiting first trace",
+              detail: health.scheduler.lastRevenueLoopAt
+                ? `Last run ${timeAgo(health.scheduler.lastRevenueLoopAt)} ago · ${health.scheduler.configuredRunsPerDay}/day`
+                : `${health.scheduler.configuredRunsPerDay} scheduled runs/day`,
+              ok: health.scheduler.lastRevenueLoopStatus === "completed",
+              icon: Workflow,
+            },
+            {
+              label: "Daily report",
+              value: reportStatus,
+              detail: health.report.generatedAt
+                ? `${health.report.reportDate || "Latest"} · ${timeAgo(health.report.generatedAt)} ago${health.report.provider ? ` · ${health.report.provider}` : ""}`
+                : "No stored report",
+              ok: health.report.delivered === true,
+              icon: Signal,
+            },
+          ].map((item) => {
+            const Icon = item.icon
+            return (
+              <div key={item.label} className="border-l border-white/[0.08] pl-3">
+                <div className="flex items-center gap-2">
+                  <Icon className={cn("h-3.5 w-3.5", item.ok ? "text-emerald-300" : "text-amber-300")} />
+                  <p className="vb-mono text-[0.58rem] uppercase tracking-[0.13em] text-slate-500">{item.label}</p>
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold capitalize text-white">{item.value.replaceAll("_", " ")}</p>
+                <p className="mt-1 line-clamp-2 text-[0.68rem] leading-5 text-slate-500">{item.detail}</p>
+              </div>
+            )
+          })}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-white">What needs attention</p>
+            <span className="vb-mono text-[0.58rem] uppercase tracking-[0.13em] text-slate-500">{health.blockers.length} open</span>
+          </div>
+          <div className="mt-2 space-y-2">
+            {health.blockers.length ? (
+              health.blockers.slice(0, 3).map((blocker) => (
+                <Link key={blocker.key} href={blocker.href} className="block border-l border-amber-300/30 pl-3 text-xs transition-colors hover:border-cyan-300/50">
+                  <span className={blocker.severity === "critical" ? "font-semibold text-rose-200" : "font-semibold text-amber-100"}>{blocker.title}</span>
+                  <span className="mt-0.5 line-clamp-2 block leading-5 text-slate-500">{blocker.detail}</span>
+                </Link>
+              ))
+            ) : (
+              <p className="border-l border-emerald-400/30 pl-3 text-xs leading-5 text-emerald-100">No automation blockers are open.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </PanelShell>
+  )
+}
+
+function RevenueFunnelPanel({ funnel }: { funnel: CommandCenterData["revenueFunnel"] }) {
+  const badgeClass =
+    funnel.status === "green"
+      ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-100"
+      : funnel.status === "red"
+        ? "border-rose-400/30 bg-rose-400/[0.09] text-rose-100"
+        : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+
+  return (
+    <PanelShell className={cn(funnel.status === "red" && "border-rose-400/20")}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <PanelTitle
+            icon={Crosshair}
+            title="Revenue evidence funnel"
+            hint={funnel.lastVerifiedAt ? `${timeAgo(funnel.lastVerifiedAt)} since evidence` : "no verified movement"}
+          />
+          <p className="mt-2 text-sm leading-6 text-slate-300">{funnel.headline}</p>
+          <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">{funnel.proofStandard}</p>
+        </div>
+        <span className={cn("vb-mono inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-[0.6rem] uppercase tracking-[0.15em]", badgeClass)}>
+          {funnel.status === "green" ? "Converting" : funnel.status === "red" ? "Blocked" : "Building proof"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+        {funnel.stages.map((stage) => (
+          <Link key={stage.key} href={stage.href} className="min-w-0 bg-[#0d1119] px-3 py-3 transition-colors hover:bg-white/[0.04]">
+            <div className="flex items-start justify-between gap-2">
+              <p className="vb-mono text-[0.55rem] uppercase tracking-[0.12em] text-slate-500">{stage.label}</p>
+              <span className={cn("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", stage.status === "green" ? "bg-emerald-400" : stage.status === "red" ? "bg-rose-400" : "bg-amber-300")} />
+            </div>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-white">{stage.count}</p>
+            <p className="mt-0.5 text-[0.6rem] text-slate-600">
+              {stage.conversionFromPrevious === null ? "7-day supply" : `${stage.conversionFromPrevious}% from prior`}
+            </p>
+            <p className="mt-2 line-clamp-2 text-[0.62rem] leading-4 text-slate-500">{stage.evidence}</p>
+          </Link>
+        ))}
+      </div>
+
+      {funnel.blockers.length ? (
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">
+          {funnel.blockers.slice(0, 4).map((blocker) => (
+            <div key={blocker.key} className={cn("border-l pl-3 text-xs leading-5", blocker.severity === "critical" ? "border-rose-400/45 text-rose-100" : "border-amber-300/35 text-amber-100")}>
+              {blocker.detail}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </PanelShell>
   )
 }
 
@@ -245,7 +506,7 @@ function AgentPanel({
       onMouseEnter={() => onFocus(agent.key)}
       onMouseLeave={() => onFocus(null)}
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl transition-all duration-300",
+        "vb-command-agent group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl transition-all duration-300",
         focused && `ring-2 ${accent.ring} border-transparent`
       )}
     >
@@ -611,7 +872,7 @@ export function CommandCenterClient({
                   : "No seller emails were sent."
               )
             }
-            successDescription = `${sent} seller email${sent === 1 ? "" : "s"} sent from the cockpit.`
+            successDescription = `${sent} seller email${sent === 1 ? "" : "s"} accepted by the provider. Delivery will be confirmed separately.`
             if (failed > 0) partialWarning = `${failed} seller send${failed === 1 ? "" : "s"} failed and should be checked in the full queue.`
             break
           }
@@ -628,7 +889,7 @@ export function CommandCenterClient({
               const enrichedInQueueTotal = Number(payload?.enrichedInQueueTotal || 0)
               successDescription = action.dryRun
                 ? `Preview reviewed a ${action.target}-send sprint. ${sentTotal} would send, ${remainingTarget} would remain.`
-                : `${sentTotal} seller email${sentTotal === 1 ? "" : "s"} sent toward the daily cap.`
+                : `${sentTotal} seller email${sentTotal === 1 ? "" : "s"} accepted by the provider toward the daily cap.`
               if (!action.dryRun && remainingTarget > 0) {
                 partialWarning = `${remainingTarget} still short of the sprint target. Auto-approved ${autoApprovedTotal}; enriched ${enrichedInQueueTotal}.`
               }
@@ -701,7 +962,7 @@ export function CommandCenterClient({
             const sent = settledResponses.filter((result) => result.ok).length
             const failed = settledResponses.length - sent
             if (sent === 0) throw new Error("No buyer emails were sent.")
-            successDescription = `${sent} buyer email${sent === 1 ? "" : "s"} sent from the cockpit.`
+            successDescription = `${sent} buyer email${sent === 1 ? "" : "s"} accepted by the provider. Delivery will be confirmed separately.`
             if (failed > 0) partialWarning = `${failed} buyer send${failed === 1 ? "" : "s"} failed and should be reviewed.`
             break
           }
@@ -725,7 +986,7 @@ export function CommandCenterClient({
             const sent = settledResponses.filter((result) => result.ok).length
             const failed = settledResponses.length - sent
             if (sent === 0) throw new Error("No lender emails were sent.")
-            successDescription = `${sent} lender email${sent === 1 ? "" : "s"} sent from the cockpit.`
+            successDescription = `${sent} lender email${sent === 1 ? "" : "s"} accepted by the provider. Delivery will be confirmed separately.`
             if (failed > 0) partialWarning = `${failed} lender send${failed === 1 ? "" : "s"} failed and should be reviewed.`
             break
           }
@@ -754,7 +1015,7 @@ export function CommandCenterClient({
         setRunningActionId(null)
       }
     },
-    [openDockTarget, refresh, router, toast]
+    [handleCommandCenterAuthFailure, openDockTarget, refresh, router, toast]
   )
 
   const coreAgents = data.agents.filter((agent) =>
@@ -763,19 +1024,10 @@ export function CommandCenterClient({
   const supportAgents = data.agents.filter((agent) =>
     ["underwriting", "authority", "qa"].includes(agent.key)
   )
-  const queueByLabel = useMemo(
-    () => new Map(data.routingQueue.map((item) => [item.label, item.count])),
-    [data.routingQueue]
-  )
   const visibleAlerts = data.alerts.filter((alert) => alert.severity !== "info").slice(0, 3)
   const criticalAlerts = visibleAlerts.filter((alert) => alert.severity === "critical")
   const visibleOverdueTasks = data.overdueTasks.slice(0, 3)
   const visibleActivity = data.activity.slice(0, 8)
-  const buyerMatchesOpen = queueByLabel.get("Buyer matches open") ?? 0
-  const lenderMatchesOpen = queueByLabel.get("Lender matches open") ?? 0
-  const leadFollowUpsDue = queueByLabel.get("Lead follow-ups due") ?? 0
-  const partnerFollowUpsDue = queueByLabel.get("Partner follow-ups due") ?? 0
-
   const runIntent = useCallback(
     (intent: CommandIntent | null) => {
       if (!intent) return
@@ -1054,15 +1306,33 @@ export function CommandCenterClient({
     data.agents.find((agent) => agent.key === MODE_TO_AGENT[activeMode]) ||
     data.agents[0]
   const dockCopy = DOCK_COPY[operationsView]
+  const nextPriority = data.priorities[0] || "Review the live queue and choose the highest-leverage next move."
+  const dataIntegrityHold = !data.liveDataReachable
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-cyan-300/80">VestBlock · Operator Cockpit</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white md:text-3xl">Command Center</h1>
+    <div className="vb-command-center space-y-6">
+      <div className="vb-command-center__masthead">
+        <div className="vb-command-center__heading">
+          <p className="vb-command-center__eyebrow vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-cyan-300/80">VestBlock · Operating system</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">Command Center</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">A decision desk for disciplined acquisition, capital, routing, and measured outreach—not a dashboard of decorative activity.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="vb-command-center__decision">
+          <span className="vb-mono text-[0.58rem] uppercase tracking-[0.18em] text-slate-500">Next decision</span>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-100">{nextPriority}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">Generated from the live operating board · {timeAgo(data.generatedAt) || "now"}</p>
+        </div>
+        <div className="vb-command-center__actions flex flex-wrap items-center gap-3">
+          {dataIntegrityHold ? (
+            <button
+              type="button"
+              onClick={() => scrollToSection("source-health")}
+              className="vb-command-center__recovery inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Review data recovery
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() =>
@@ -1076,10 +1346,15 @@ export function CommandCenterClient({
             <Bot className="h-3.5 w-3.5" />
             Codex live
           </button>
-          {criticalAlerts.length ? (
+          {data.automationHealth.status === "red" || criticalAlerts.length ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-200">
               <ShieldAlert className="h-3.5 w-3.5" />
-              {criticalAlerts.length} critical
+              {data.automationHealth.status === "red" ? "Automation blocked" : `${criticalAlerts.length} critical`}
+            </span>
+          ) : data.automationHealth.status === "yellow" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-300/[0.08] px-3 py-1 text-xs font-medium text-amber-100">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Needs attention
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1 text-xs font-medium text-emerald-200">
@@ -1098,6 +1373,9 @@ export function CommandCenterClient({
           </button>
         </div>
       </div>
+
+      <AutomationHealthPanel health={data.automationHealth} strategyExecution={data.strategyExecution} dataIntegrityHold={dataIntegrityHold} />
+      <RevenueFunnelPanel funnel={data.revenueFunnel} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div id="command-deck">
@@ -1165,6 +1443,7 @@ export function CommandCenterClient({
       <CommandCenterOutreachPanel
         queues={data.outreachQueues}
         outboundControl={data.outboundControl}
+        dataIntegrityHold={dataIntegrityHold}
         runningActionId={runningActionId}
         onAction={(action) => void runInlineAction(action)}
       />
@@ -1268,7 +1547,7 @@ export function CommandCenterClient({
                 <span
                   className={cn(
                     "vb-mono rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums",
-                    item.count > 0 ? "bg-cyan-400/10 text-cyan-200" : "bg-white/[0.03] text-slate-600"
+                    item.count > 0 ? "vb-command-queue-count" : "bg-white/[0.03] text-slate-500"
                   )}
                 >
                   {item.count}
@@ -1280,7 +1559,7 @@ export function CommandCenterClient({
       </div>
 
       {!data.liveDataReachable ? (
-        <PanelShell className="border-amber-300/25 bg-amber-300/[0.05]">
+        <PanelShell className="border-amber-300/25 bg-amber-300/[0.05]" id="source-health">
           <PanelTitle icon={ShieldAlert} title="Some data sources unreachable" hint={`${data.dataSourceIssues.length} sources`} />
           <p className="mt-2 text-xs leading-5 text-amber-100/80">
             Some counts may be stale because these sources are currently unavailable:{" "}
@@ -1289,7 +1568,7 @@ export function CommandCenterClient({
         </PanelShell>
       ) : null}
 
-      <PanelShell className="overflow-hidden p-0">
+      <PanelShell className="vb-command-dock overflow-hidden p-0">
         <Tabs value={operationsView} onValueChange={(value) => setOperationsView(value as OperationsViewKey)}>
           <div id="operations-dock" className="border-b border-white/[0.06] px-5 py-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -1439,7 +1718,7 @@ export function CommandCenterClient({
                   {[
                     { label: "Active deals", value: data.dealPipeline.totals.activeDeals },
                     { label: "Packets ready", value: data.dealPipeline.totals.packetReady },
-                    { label: "Packets sent", value: data.dealPipeline.totals.packetSent },
+                    { label: "Packets accepted", value: data.dealPipeline.totals.packetSent },
                     { label: "Buyer replies", value: data.dealPipeline.totals.buyerReplies },
                   ].map((item) => (
                     <div key={item.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">

@@ -47,7 +47,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                       className={cn(
                         'block rounded-lg border border-transparent px-3 py-2 text-sm transition-colors',
                         isActive
-                          ? 'border-cyan-400/30 bg-cyan-400/10 font-medium text-white'
+                          ? 'vb-admin-nav-active border-cyan-400/30 bg-cyan-400/10 font-medium text-white'
                           : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
                       )}
                     >
@@ -86,7 +86,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="vb-admin-shell min-h-screen bg-slate-950 text-slate-50">
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       {mobileOpen ? (
         <div className="fixed inset-0 z-[80] lg:hidden" role="dialog" aria-modal="true" aria-label="Admin navigation">
@@ -96,10 +96,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             className="absolute inset-0 cursor-default bg-slate-950/70 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative h-full w-72 border-r border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/50">
+          <div className="vb-admin-mobile-drawer relative h-full w-72 border-r border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/50">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Radar className="h-4 w-4 text-cyan-300" />
+                <Radar className="h-4 w-4 text-cyan-300 vb-admin-signal" />
                 <p className="text-sm font-semibold text-white">VestBlock Admin</p>
               </div>
               <button
@@ -119,7 +119,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       ) : null}
 
       {/* Top command bar */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-slate-950/85 backdrop-blur-xl">
+      <header className="vb-admin-topbar sticky top-0 z-40 border-b border-white/[0.06] bg-slate-950/85 backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-[1700px] items-center gap-3 px-4 lg:px-6">
           {/* Mobile nav */}
           <button
@@ -132,7 +132,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
 
           <Link href="/admin/command-center" className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10">
+            <span className="vb-admin-mark flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10">
               <Radar className="h-3.5 w-3.5 text-cyan-300" />
             </span>
             <span className="hidden text-sm font-semibold tracking-tight text-white sm:block">VestBlock</span>
@@ -172,7 +172,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="mx-auto flex w-full max-w-[1700px] gap-6 px-4 py-6 lg:px-6">
         {/* Left rail */}
         <aside className="hidden w-60 shrink-0 lg:block">
-          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 backdrop-blur">
+          <div className="vb-admin-rail sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 backdrop-blur">
             <NavLinks pathname={pathname} />
           </div>
         </aside>

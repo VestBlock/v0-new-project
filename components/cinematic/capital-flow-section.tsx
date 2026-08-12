@@ -1,78 +1,78 @@
 "use client"
 
 import { motion, useReducedMotion } from "framer-motion"
-import { Building2, CircleDollarSign, Handshake, ShieldCheck } from "lucide-react"
+import { ArrowDownRight, FileCheck2, Landmark, MapPinned, Scale } from "lucide-react"
 
 const stages = [
-  { label: "Share", title: "Sellers & opportunities", body: "Property details, timing, motivation, and deal context enter through a simple review path.", icon: Building2, tint: "text-cyan-200", ring: "border-cyan-300/30" },
-  { label: "Meet", title: "Buyers & operators", body: "Buyers and operators see opportunities that fit their markets, asset appetite, and capacity.", icon: Handshake, tint: "text-sky-200", ring: "border-sky-300/30" },
-  { label: "Fund", title: "Lenders & capital", body: "Lenders and capital partners receive opportunities aligned with their programs and risk appetite.", icon: CircleDollarSign, tint: "text-amber-200", ring: "border-amber-300/30" },
-  { label: "Verify", title: "Proof & records", body: "DealVault helps members keep agreements, milestones, payouts, and proof organized beyond one transaction.", icon: ShieldCheck, tint: "text-emerald-200", ring: "border-emerald-300/30" },
+  {
+    number: "01",
+    title: "Assemble the asset record",
+    body: "Capture the property, use case, timing, known terms, and diligence materials before the opportunity reaches a counterparty.",
+    outcome: "Outcome: a reviewable property context",
+    icon: MapPinned,
+  },
+  {
+    number: "02",
+    title: "Test the fit",
+    body: "Compare the opportunity with acquisition criteria, operating capacity, and capital requirements so the next introduction has a purpose.",
+    outcome: "Outcome: a defined partner conversation",
+    icon: Scale,
+  },
+  {
+    number: "03",
+    title: "Prepare the capital path",
+    body: "Organize what a lender, buyer, operator, or capital partner needs to assess the request and identify the missing inputs.",
+    outcome: "Outcome: a clearer diligence sequence",
+    icon: Landmark,
+  },
+  {
+    number: "04",
+    title: "Keep the decision record",
+    body: "Maintain material versions, milestones, conversations, and commitments in DealVault as the opportunity moves forward.",
+    outcome: "Outcome: a durable DealVault history",
+    icon: FileCheck2,
+  },
 ]
 
 export function CapitalFlowSection() {
   const reduce = useReducedMotion()
 
   return (
-    <section className="relative px-4 py-24 md:py-32">
-      <div className="container mx-auto max-w-7xl">
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 20 }}
-          whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-          className="mx-auto mb-16 max-w-2xl text-center"
-        >
-          <p className="vb-mono text-xs uppercase tracking-[0.28em] text-amber-200/80">How the network moves</p>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white md:text-5xl">
-            Start with the role. Move toward the right partner.
-          </h2>
-          <p className="mt-4 text-lg leading-8 text-slate-300/85">
-            VestBlock is built for the moments when seller needs, buyer demand, lender programs, operator capacity, and partner trust all need to line up.
+    <section className="vb-capital-sequence" aria-labelledby="capital-sequence-title">
+      <div className="vb-section-shell">
+        <div className="vb-section-intro vb-section-intro--split">
+          <h2 id="capital-sequence-title">Prepare an opportunity in the order it will be reviewed.</h2>
+          <p>
+            Property opportunities move faster when the asset record, the capital question, and the partner criteria are
+            legible before the next conversation begins.
           </p>
-        </motion.div>
+        </div>
 
-        <div className="relative grid gap-5 lg:grid-cols-4">
-          {/* animated flow line (desktop) */}
-          <div className="pointer-events-none absolute left-0 right-0 top-1/2 hidden h-[2px] -translate-y-1/2 overflow-hidden rounded-full lg:block">
-            <div
-              className="h-full w-full"
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent, rgba(34,211,238,0.6), rgba(56,189,248,0.6), rgba(245,158,11,0.6), rgba(16,185,129,0.6), transparent)",
-                backgroundSize: "200% 100%",
-                animation: reduce ? "none" : "vb-ticker 6s linear infinite",
-              }}
-            />
-          </div>
-
+        <ol className="vb-capital-sequence__list">
           {stages.map((stage, index) => {
             const Icon = stage.icon
             return (
-              <motion.div
-                key={stage.label}
-                initial={reduce ? false : { opacity: 0, y: 24 }}
+              <motion.li
+                key={stage.number}
+                initial={false}
                 whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.5, delay: index * 0.12 }}
-                className="relative"
+                viewport={{ once: true, margin: "-10%" }}
+                transition={{ duration: 0.55, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div className="vb-glass relative h-full rounded-[1.6rem] p-6">
-                  <div className="mb-5 flex items-center justify-between">
-                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${stage.ring} bg-slate-950/60 ${stage.tint}`}>
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="vb-mono text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">
-                      0{index + 1} · {stage.label}
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-semibold text-white">{stage.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300/80">{stage.body}</p>
+                <span className="vb-capital-sequence__number">{stage.number}</span>
+                <span className="vb-capital-sequence__icon"><Icon aria-hidden="true" /></span>
+                <div>
+                  <h3>{stage.title}</h3>
+                  <p>{stage.body}</p>
                 </div>
-              </motion.div>
+                <p className="vb-capital-sequence__outcome">
+                  <ArrowDownRight aria-hidden="true" />
+                  {stage.outcome}
+                </p>
+              </motion.li>
             )
           })}
-        </div>
+        </ol>
       </div>
     </section>
   )

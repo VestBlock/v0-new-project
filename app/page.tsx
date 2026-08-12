@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { LenisProvider } from '@/components/cinematic/lenis-provider';
 import { CinematicHero } from '@/components/cinematic/cinematic-hero';
-import { DealflowOperatingSection } from '@/components/home/dealflow-operating-section';
+import { DealJourneySection } from '@/components/cinematic/deal-journey-section';
+import { IntelligenceSection } from '@/components/cinematic/intelligence-section';
+import { NetworkSection } from '@/components/cinematic/network-section';
 import { DealVaultProofSection } from '@/components/home/dealvault-proof-section';
 import { CinematicCta } from '@/components/cinematic/cinematic-cta';
 import { absoluteUrl } from '@/lib/seo/site';
@@ -13,9 +15,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'VestBlock | Real Estate Deal Flow Operating System',
+  title: 'Connect Real Estate Opportunities With the Right Partners',
   description:
-    'VestBlock helps property owners, buyers, lenders, builders, and investors analyze opportunities, route deals, create buyer packets, and move faster with cleaner deal records.',
+    'VestBlock helps sellers, buyers, lenders, developers, contractors, operators, and capital partners connect around real estate opportunities, DealVault records, and funding-ready next steps.',
   keywords: [
     'real estate partner network',
     'real estate opportunity network',
@@ -31,9 +33,9 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'VestBlock | Real Estate Deal Flow Operating System',
+    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
     description:
-      'Analyze properties, route opportunities to the right buyers and capital partners, and keep deal records organized with VestBlock.',
+      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners, with DealVault records and funding-ready next steps.',
     url: absoluteUrl('/'),
     images: [
       {
@@ -46,9 +48,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VestBlock | Real Estate Deal Flow Operating System',
+    title: 'Connect Real Estate Opportunities With the Right Partners | VestBlock',
     description:
-      'A real estate deal-flow operating system for property analysis, buyer matching, funding paths, and deal records.',
+      'A real estate partner network for sellers, buyers, lenders, developers, contractors, operators, and capital partners.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
@@ -69,7 +71,9 @@ export default function HomePage() {
       />
       <LenisProvider />
       <CinematicHero />
-      <DealflowOperatingSection />
+      <DealJourneySection />
+      <IntelligenceSection />
+      <NetworkSection />
       <DealVaultProofSection />
       <CinematicCta />
     </div>

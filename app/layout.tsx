@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
-import { PosthogProvider } from '@/components/providers/posthog-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from '@/components/ui/toaster';
@@ -92,13 +91,11 @@ export default function RootLayout({
         />
         <GoogleAdsProvider />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PosthogProvider>
-            <AuthProvider>
-              <Navigation />
-              <main>{children}</main>
-              <Toaster />
-            </AuthProvider>
-          </PosthogProvider>
+          <AuthProvider>
+            <Navigation />
+            <main>{children}</main>
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

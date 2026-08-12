@@ -1,82 +1,67 @@
 import Link from "next/link"
-import { ArrowRight, FileCheck, GitBranch, ReceiptText, ShieldCheck } from "lucide-react"
+import { ArrowRight, FileCheck2, GitBranch, ReceiptText } from "lucide-react"
 import { MarketingReveal } from "@/components/marketing/reveal"
 
-const features = [
+const records = [
   {
-    title: "Agreement records",
-    body: "Tamper-evident proof of terms, timestamps, and partner commitments without exposing private documents.",
-    icon: FileCheck,
+    title: "Agreement record",
+    body: "Retain the version, terms, timestamps, and permissions associated with a partner commitment without exposing private documents publicly.",
+    icon: FileCheck2,
   },
   {
-    title: "Payout & split tracking",
-    body: "A cleaner ledger for referral, partner, JV, disposition, and operator splits before money becomes a dispute.",
-    icon: ReceiptText,
-  },
-  {
-    title: "Milestone trail",
-    body: "Seller submissions, funding checkpoints, approvals, and project milestones captured in one verifiable history.",
+    title: "Milestone history",
+    body: "Keep submissions, review checkpoints, introductions, and project milestones connected to the opportunity they belong to.",
     icon: GitBranch,
+  },
+  {
+    title: "Payout reference",
+    body: "Document the terms and supporting record for referral, joint-venture, disposition, or operator splits before a disagreement has to be reconstructed.",
+    icon: ReceiptText,
   },
 ]
 
 export function DealVaultProofSection() {
   return (
-    <section className="relative px-4 py-20 md:py-28">
-      <div className="container mx-auto max-w-6xl">
-        <div className="vb-border-beam overflow-hidden rounded-[2rem] border border-violet-300/15 bg-[radial-gradient(circle_at_15%_15%,rgba(139,92,246,0.14),transparent_45%),radial-gradient(circle_at_85%_30%,rgba(34,211,238,0.12),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-7 backdrop-blur-xl md:p-12">
-          <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <MarketingReveal>
-              <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-100">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                DealVault records
-              </div>
-              <h2 className="mt-5 text-3xl font-semibold tracking-tight text-white md:text-5xl">
-                Make every partnership easier to trust.
-              </h2>
-              <p className="mt-4 max-w-xl text-lg leading-8 text-slate-300/90">
-                When a deal moves through sellers, buyers, lenders, operators, or capital partners, DealVault creates
-                proof records around agreements, payouts, and milestones so the relationship can scale with less confusion.
-                Sensitive documents stay private.
-              </p>
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/dealvault/demo"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  See the DealVault Demo
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/dealvault"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                >
-                  How it works
-                </Link>
-              </div>
-            </MarketingReveal>
-
-            <MarketingReveal delay={0.1} className="grid gap-3">
-              {features.map((feature) => {
-                const Icon = feature.icon
-                return (
-                  <div
-                    key={feature.title}
-                    className="flex items-start gap-4 rounded-2xl border border-white/10 bg-slate-950/40 p-5 backdrop-blur-xl"
-                  >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/[0.05] text-cyan-200">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-white">{feature.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-300/85">{feature.body}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </MarketingReveal>
+    <section className="vb-dealvault" aria-labelledby="dealvault-title">
+      <div className="vb-section-shell vb-dealvault__layout">
+        <MarketingReveal initial={false} className="vb-dealvault__intro">
+          <p className="vb-dealvault__label">DealVault</p>
+          <h2 id="dealvault-title">Keep the facts that support the relationship.</h2>
+          <p>
+            A deal can involve several participants and several versions of the truth. DealVault keeps the supporting
+            record organized around agreements, milestones, and payouts while sensitive material remains private.
+          </p>
+          <div className="vb-dealvault__actions">
+            <Link href="/dealvault/demo" className="vb-button vb-button--primary">
+              See the DealVault demo
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/dealvault" className="vb-button vb-button--quiet">
+              How it works
+            </Link>
           </div>
-        </div>
+        </MarketingReveal>
+
+        <MarketingReveal initial={false} delay={0.1} className="vb-dealvault__records">
+          <div className="vb-dealvault__seal" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vestblock-mark-transparent.png" alt="" />
+            <span>record continuity</span>
+          </div>
+          {records.map((record, index) => {
+            const Icon = record.icon
+            return (
+              <article key={record.title}>
+                <span>0{index + 1}</span>
+                <Icon aria-hidden="true" />
+                <div>
+                  <h3>{record.title}</h3>
+                  <p>{record.body}</p>
+                </div>
+              </article>
+            )
+          })}
+        </MarketingReveal>
       </div>
     </section>
   )

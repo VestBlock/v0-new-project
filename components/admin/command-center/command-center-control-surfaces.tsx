@@ -17,7 +17,6 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react"
-import { motion, useReducedMotion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 import type {
@@ -77,6 +76,16 @@ function actionTone(tone?: CommandCenterInlineAction["tone"]) {
   return "border-white/10 bg-white/[0.03] text-slate-200 hover:border-cyan-300/35 hover:text-white"
 }
 
+function isSendAction(action: CommandCenterInlineAction) {
+  return (
+    ("sendNow" in action && action.sendNow) ||
+    action.type === "lead_send_batch" ||
+    action.type === "buyer_send_batch" ||
+    action.type === "lender_send_batch" ||
+    action.type === "lead_throughput_sprint"
+  )
+}
+
 function StreamActionButton({
   action,
   runningActionId,
@@ -87,12 +96,6 @@ function StreamActionButton({
   onAction: (action: CommandCenterInlineAction) => void
 }) {
   const isRunning = runningActionId === action.id
-  const isSendAction =
-    ("sendNow" in action && action.sendNow) ||
-    action.type === "lead_send_batch" ||
-    action.type === "buyer_send_batch" ||
-    action.type === "lender_send_batch"
-
   return (
     <button
       type="button"
@@ -107,7 +110,7 @@ function StreamActionButton({
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : action.type === "navigate" ? (
         <ArrowUpRight className="h-3 w-3 opacity-70" />
-      ) : isSendAction ? (
+      ) : isSendAction(action) ? (
         <Send className="h-3 w-3 opacity-70" />
       ) : (
         <Sparkles className="h-3 w-3 opacity-70" />
@@ -121,11 +124,15 @@ function StreamItemCard({
   item,
   runningActionId,
   onAction,
+  suppressSendActions = false,
 }: {
   item: CommandCenterStreamItem
   runningActionId: string | null
   onAction: (action: CommandCenterInlineAction) => void
+  suppressSendActions?: boolean
 }) {
+  const visibleActions = suppressSendActions ? item.actions.filter((action) => !isSendAction(action)) : item.actions
+
   return (
     <div className={cn("rounded-2xl border px-3 py-3", itemTone(item.priority))}>
       <div className="flex items-start justify-between gap-3">
@@ -146,16 +153,18 @@ function StreamItemCard({
         </span>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {item.actions.map((action) => (
+      {visibleActions.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {visibleActions.map((action) => (
           <StreamActionButton
             key={action.id}
             action={action}
             runningActionId={runningActionId}
             onAction={onAction}
           />
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -926,8 +935,6 @@ export function CommandCenterInboxPanel({
   runningActionId: string | null
   onAction: (action: CommandCenterInlineAction) => void
 }) {
-  const reduce = useReducedMotion()
-
   return (
     <section
       id="inbox-command"
@@ -957,13 +964,9 @@ export function CommandCenterInboxPanel({
       </div>
 
       <div className="mt-4 space-y-4">
-        {sections.map((section, index) => (
-          <motion.div
+        {sections.map((section) => (
+          <div
             key={section.key}
-            initial={reduce ? false : { opacity: 0, y: 12 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-20px" }}
-            transition={{ duration: 0.35, delay: index * 0.04 }}
           >
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{section.title}</p>
@@ -986,7 +989,7 @@ export function CommandCenterInboxPanel({
                 No live items in this lane right now.
               </div>
             )}
-          </motion.div>
+          </div>
         ))}
       </div>
     </section>
@@ -996,16 +999,17 @@ export function CommandCenterInboxPanel({
 export function CommandCenterOutreachPanel({
   queues,
   outboundControl,
+  dataIntegrityHold,
   runningActionId,
   onAction,
 }: {
   queues: CommandCenterQueueCard[]
   outboundControl: CommandCenterOutboundControl
+  dataIntegrityHold: boolean
   runningActionId: string | null
   onAction: (action: CommandCenterInlineAction) => void
 }) {
-  const reduce = useReducedMotion()
-  const liveSprintAction = outboundControl.recommendedSprintTarget
+  const liveSprintAction = !dataIntegrityHold && outboundControl.recommendedSprintTarget
     ? ({
         id: "outbound-governor-live",
         type: "lead_throughput_sprint",
@@ -1049,25 +1053,33 @@ export function CommandCenterOutreachPanel({
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {liveSprintAction ? (
+            {dataIntegrityHold ? (
+              <StreamActionButton
+                action={{ id: "outbound-data-integrity-recovery", type: "navigate", label: "Review data recovery", href: "#source-health", tone: "warning" }}
+                runningActionId={runningActionId}
+                onAction={onAction}
+              />
+            ) : liveSprintAction ? (
               <StreamActionButton
                 action={liveSprintAction}
                 runningActionId={runningActionId}
                 onAction={onAction}
               />
             ) : null}
-            <StreamActionButton
-              action={previewSprintAction}
-              runningActionId={runningActionId}
-              onAction={onAction}
-            />
+            {!dataIntegrityHold ? (
+              <StreamActionButton
+                action={previewSprintAction}
+                runningActionId={runningActionId}
+                onAction={onAction}
+              />
+            ) : null}
           </div>
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {[
             { label: "Daily cap", value: outboundControl.dailyLimit, status: "text-white" },
-            { label: "Sent 24h", value: outboundControl.sent24h, status: outboundControl.sent24h ? "text-emerald-300" : "text-amber-300" },
+            { label: "Accepted 24h", value: outboundControl.sent24h, status: outboundControl.sent24h ? "text-emerald-300" : "text-amber-300" },
             { label: "Remaining", value: outboundControl.remainingToday, status: outboundControl.remainingToday ? "text-cyan-200" : "text-emerald-300" },
             { label: "Email ready", value: outboundControl.emailReady, status: outboundControl.emailReady ? "text-emerald-300" : "text-rose-300" },
             { label: "Needs review", value: outboundControl.needsReview, status: outboundControl.needsReview ? "text-amber-300" : "text-slate-300" },
@@ -1081,9 +1093,11 @@ export function CommandCenterOutreachPanel({
 
         <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-400 xl:grid-cols-2">
           <div className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-950/45 px-3 py-2">
-            <ShieldCheck className={cn("mt-0.5 h-4 w-4", outboundControl.mailingAddressConfigured && outboundControl.autoSendEnabled ? "text-emerald-300" : "text-amber-300")} />
+            <ShieldCheck className={cn("mt-0.5 h-4 w-4", dataIntegrityHold ? "text-rose-300" : outboundControl.mailingAddressConfigured && outboundControl.autoSendEnabled ? "text-emerald-300" : "text-amber-300")} />
             <p>
-              Auto-send {outboundControl.autoSendEnabled ? "on" : "off"} · mailing address {outboundControl.mailingAddressConfigured ? "set" : "missing"}
+              {dataIntegrityHold
+                ? "Data-integrity hold is active. Automatic sends are paused until live source reads recover."
+                : `Auto-send ${outboundControl.autoSendEnabled ? "on" : "off"} · mailing address ${outboundControl.mailingAddressConfigured ? "set" : "missing"}`}
             </p>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-slate-950/45 px-3 py-2">
@@ -1093,13 +1107,9 @@ export function CommandCenterOutreachPanel({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        {queues.map((queue, index) => (
-          <motion.div
+        {queues.map((queue) => (
+          <div
             key={queue.key}
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-20px" }}
-            transition={{ duration: 0.35, delay: index * 0.05 }}
             className="rounded-2xl border border-white/[0.06] bg-slate-950/55 p-4"
           >
             <div className="flex items-start justify-between gap-3">
@@ -1127,7 +1137,7 @@ export function CommandCenterOutreachPanel({
             </div>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {queue.actions.map((action) => (
+              {(dataIntegrityHold ? queue.actions.filter((action) => !isSendAction(action)) : queue.actions).map((action) => (
                 <StreamActionButton
                   key={action.id}
                   action={action}
@@ -1145,6 +1155,7 @@ export function CommandCenterOutreachPanel({
                     item={item}
                     runningActionId={runningActionId}
                     onAction={onAction}
+                    suppressSendActions={dataIntegrityHold}
                   />
                 ))
               ) : (
@@ -1153,7 +1164,7 @@ export function CommandCenterOutreachPanel({
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 
@@ -1161,7 +1172,9 @@ export function CommandCenterOutreachPanel({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 text-cyan-200" />
           <p>
-            Use the inline buttons for quick approvals and sends. For deeper review, the lane links still open the full queue without losing command-center context.
+            {dataIntegrityHold
+              ? "Live data is incomplete, so send controls are intentionally held. Review recovery evidence before resuming outreach."
+              : "Use the inline buttons for quick approvals and sends. For deeper review, the lane links still open the full queue without losing command-center context."}
           </p>
         </div>
       </div>

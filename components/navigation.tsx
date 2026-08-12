@@ -49,13 +49,11 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/sell', label: 'Sell a Property' },
-    { href: '/property-analyzer', label: 'Property Analysis' },
-    { href: '/buyers', label: 'Buyer Network' },
-    { href: '/lenders', label: 'Lender Network' },
-    { href: '/dealvault', label: 'Deal Records' },
-    { href: '/real-estate-funding', label: 'Funding' },
-    { href: '/pricing', label: 'Pricing' },
+    { href: '/sell', label: 'Opportunities' },
+    { href: '/property-analyzer', label: 'Analyzer' },
+    { href: '/get-started', label: 'Partners' },
+    { href: '/dealvault', label: 'DealVault' },
+    { href: '/real-estate-funding', label: 'Capital' },
   ];
 
   const isActiveLink = (href: string) => {
@@ -89,23 +87,23 @@ export function Navigation() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#050913]/85 shadow-[0_10px_40px_rgba(2,6,23,0.22)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#050913]/70">
-      <div className="container flex min-h-16 items-center">
-        <div className="mr-4 flex items-center">
-          <Link href="/" className="group mr-6 flex items-center rounded-full outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/92 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/78">
+      <div className="container flex h-16 items-center">
+        <div className="mr-4 flex min-w-0 items-center">
+          <Link href="/" className="group mr-7 flex items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
+          <nav className="hidden items-center space-x-1 text-sm font-medium lg:flex">
             {mainNavLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'rounded-lg px-3 py-2.5 transition-[color,background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-foreground hover:shadow-[0_0_24px_rgba(34,211,238,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'border-b border-transparent px-3 py-2 transition-[color,border-color] duration-200 ease-out hover:border-[#d7f80b]/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7f80b]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActiveLink(link.href)
-                    ? 'bg-white/[0.10] text-white shadow-[inset_0_0_0_1px_rgba(246,200,96,0.22)]'
-                    : 'text-slate-300/82'
+                    ? 'border-[#d7f80b] text-foreground'
+                    : 'text-foreground/60'
                 )}
               >
                 {link.label}
@@ -117,7 +115,7 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => setIsMobileMenuOpen(true)}>
+            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu className="h-6 w-6" />
               <span className="sr-only">Toggle Menu</span>
             </Button>
@@ -147,7 +145,7 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -155,15 +153,15 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/dashboard/services" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground hover:bg-white/[0.06]">
+                      <Link href="/login?redirect=/dashboard/services" onClick={() => setIsMobileMenuOpen(false)} className="text-foreground">
                         Sign In
                       </Link>
                       <Link
                         href="/get-started"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex min-h-11 items-center rounded-lg bg-[#f6c860] px-3 py-3 font-semibold text-[#08111f] transition-colors hover:bg-[#ffd978]"
+                        className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Start Deal Review
+                        Join Network
                       </Link>
                     </>
                   ) : (
@@ -173,13 +171,13 @@ export function Navigation() {
                           key={link.href}
                           href={link.href}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-colors hover:bg-white/[0.05]"
+                          className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
                         >
                           {link.label}
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 py-3 text-foreground transition-colors hover:bg-white/[0.05]">
+                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
@@ -201,7 +199,14 @@ export function Navigation() {
           </div>
 
           {/* Desktop Auth Section */}
-          {isAuthenticated ? (
+          {isLoading ? (
+            <Link
+              href="/get-started"
+              className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
+            >
+              Start an opportunity
+            </Link>
+          ) : isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -254,12 +259,12 @@ export function Navigation() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <nav aria-label={isLoading ? 'Account actions loading' : 'Account actions'} className="hidden items-center space-x-2 md:flex">
+            <nav className="hidden items-center space-x-2 md:flex">
               <Button variant="ghost" asChild>
                 <Link href="/login?redirect=/dashboard/services">Sign In</Link>
               </Button>
-              <Button asChild className="bg-[#f6c860] text-[#08111f] shadow-[0_12px_30px_rgba(246,200,96,0.28)] hover:bg-[#ffd978]">
-                <Link href="/get-started">Start Deal Review</Link>
+              <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
+                <Link href="/get-started">Start an opportunity</Link>
               </Button>
             </nav>
           )}
