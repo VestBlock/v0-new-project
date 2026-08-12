@@ -51,7 +51,7 @@ export function Navigation() {
   const mainNavLinks = [
     { href: '/funding', label: 'Capital' },
     { href: '/sell', label: 'Deals' },
-    { href: '/get-started', label: 'Opportunity' },
+    { href: '/next-move', label: 'Opportunity' },
     { href: '/dealvault', label: 'DealVault' },
   ];
 
@@ -156,7 +156,7 @@ export function Navigation() {
                         Sign In
                       </Link>
                       <Link
-                        href="/get-started"
+                        href="/next-move"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
@@ -200,7 +200,7 @@ export function Navigation() {
           {/* Desktop Auth Section */}
           {isLoading ? (
             <Link
-              href="/get-started"
+              href="/next-move"
               className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
             >
               Get started
@@ -263,7 +263,7 @@ export function Navigation() {
                 <Link href="/login?redirect=/dashboard/services">Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/get-started">Get started</Link>
+                <Link href="/next-move">Free roadmap</Link>
               </Button>
             </nav>
           )}

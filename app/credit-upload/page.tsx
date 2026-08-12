@@ -375,11 +375,11 @@ function CreditUploadContent() {
         {!isProMember && (
           <Alert>
             <Rocket className="h-4 w-4" />
-            <AlertTitle>Unlock Your Full Potential!</AlertTitle>
+            <AlertTitle>Your free credit starting path is active</AlertTitle>
             <AlertDescription>
-              Upgrade to Pro to access our full suite of AI-powered tools,
-              including the advanced dispute draft builder and personalized
-              financial roadmaps.
+              Credit-report upload, analysis status, foundational recommendations,
+              and your financial roadmap are available with a free account. The
+              advanced dispute workspace is optional paid support.
             </AlertDescription>
             <div className="mt-4">
               <Button
@@ -394,7 +394,7 @@ function CreditUploadContent() {
                   ) : (
                     <Star className="mr-2 h-4 w-4" />
                   )}
-                  Upgrade to Pro - $75
+                  Optional advanced tools - $75
                 </a>
               </Button>
             </div>
@@ -402,8 +402,8 @@ function CreditUploadContent() {
         )}
         <AccessStatusCard
           access={access}
-          title="Upload access"
-          description="Credit upload stays available to signed-in customers, with paid tools unlocked once access is active."
+          title="Foundational credit access"
+          description="Credit upload, analysis status, and foundational roadmap access stay available to signed-in customers. Optional advanced tools are labeled separately."
         />
       </main>
       <main className="pt-32 px-4 pb-16">
@@ -432,7 +432,7 @@ function CreditUploadContent() {
                   Privacy Protected
                 </h3>
                 <p className="text-sm text-green-800 dark:text-green-200">
-                  Your personal information is never shared with third parties
+                  Access is restricted and information is handled under VestBlock&apos;s privacy and security controls
                 </p>
               </Card>
               <Card className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200 dark:from-purple-950 dark:to-violet-950 dark:border-purple-800">

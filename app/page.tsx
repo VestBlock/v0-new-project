@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
 import { LenisProvider } from '@/components/cinematic/lenis-provider';
 import { CinematicHero } from '@/components/cinematic/cinematic-hero';
-import { DealJourneySection } from '@/components/cinematic/deal-journey-section';
-import { IntelligenceSection } from '@/components/cinematic/intelligence-section';
-import { NetworkSection } from '@/components/cinematic/network-section';
+import { HomepageDirectory } from '@/components/home/homepage-directory';
 import { DealVaultProofSection } from '@/components/home/dealvault-proof-section';
+import { TrustSection } from '@/components/home/trust-section';
 import { CinematicCta } from '@/components/cinematic/cinematic-cta';
 import { absoluteUrl } from '@/lib/seo/site';
 import {
@@ -74,10 +73,9 @@ export default function HomePage() {
       />
       <LenisProvider />
       <CinematicHero />
-      <DealJourneySection />
-      <IntelligenceSection />
-      <NetworkSection />
+      <HomepageDirectory />
       <DealVaultProofSection />
+      <TrustSection />
       <CinematicCta />
     </div>
   );

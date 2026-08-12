@@ -60,13 +60,12 @@ The roadmap should be structured as a JSON object with the following keys:
     d.  "category": (string) Categorize the step (e.g., "Credit Health", "Savings & Budgeting", "Debt Management", "Business Foundation", "Legal & Compliance", "Business Planning", "Funding Strategy", "Financial Management (Business)", "Operations & Risk Management", "Investment Strategy", "Income Generation").
     e.  "priority": (string) "High", "Medium", or "Low".
     f.  "estimated_timeline_text": (string) Estimated time to complete (e.g., "1-2 weeks", "3-6 months", "Ongoing").
-    g.  "potential_impact_points": (number, optional) For credit-related goals, estimate potential FICO score point increase (e.g., 10, 25). Omit if not applicable.
-    h.  "detailed_sub_steps": (array of 2-7 sub-step objects) Each sub-step object MUST include:
+    g.  "detailed_sub_steps": (array of 2-7 sub-step objects) Each sub-step object MUST include:
         i.  "id": (string) A unique slug-like ID for the sub-step (e.g., "define-savings-target").
         ii. "title": (string) Actionable title for the sub-step.
         iii. "details": (string, optional) A comprehensive explanation, instructions, examples, or implications for the sub-step. This is where detailed guidance should go.
         iv. "completed": (boolean) Default to false.
-    i.  "resources": (array of 0-5 resource objects, optional) Each resource object MUST include:
+    h.  "resources": (array of 0-5 resource objects, optional) Each resource object MUST include:
         i.  "id": (string) A unique slug-like ID for the resource (e.g., "experian-credit-article").
         ii. "name": (string) Name of the resource (e.g., "Experian Article on Credit Scores", "SBA Guide to Writing a Business Plan", "Sample Cash Flow Template Description").
         iii. "url": (string, optional) A valid URL if it's an online resource. Prefer .gov or reputable .org sites.
@@ -117,6 +116,8 @@ Ensure these business-specific details are woven into the "detailed_sub_steps.de
 Constraints & Focus:
 -   Prioritize actionable advice. Provide specific examples where possible.
 -   If credit score is low and goal is funding-related, initial steps MUST address credit improvement.
+-   Never estimate or promise a credit-score increase, deletion, approval, limit, rate, or timeline.
+-   Explain that issuers and lenders control approval and terms, and that unnecessary applications may produce hard inquiries.
 -   Ensure all string fields are well-written, clear, and encouraging.
 -   The entire response MUST be a single, valid JSON object. Do NOT include any markdown formatting (like \`\`\`) or conversational text outside the JSON structure.
 -   Generate unique and descriptive IDs for steps, sub-steps, and resources.
@@ -125,11 +126,10 @@ Example of a "steps" array item (general, adapt for business content as per abov
 {
   "id": "improve-credit-utilization",
   "title": "Improve Credit Utilization Ratio",
-  "description": "Lowering your credit utilization ratio by paying down balances or increasing credit limits can significantly boost your credit score.",
+  "description": "Reviewing utilization and paying down affordable balances can support credit readiness without promising a particular score result.",
   "category": "Credit Health",
   "priority": "High",
   "estimated_timeline_text": "1-3 months",
-  "potential_impact_points": 30,
   "detailed_sub_steps": [
     { "id": "list-cards-balances", "title": "List all credit cards, balances, and limits", "details": "Create a spreadsheet to track this information. This helps visualize where your debt is concentrated.", "completed": false },
     { "id": "target-high-utilization-cards", "title": "Prioritize paying down cards over 30% utilization", "details": "Focus on getting individual card utilization below 30%, then overall utilization. High utilization on even one card can negatively impact your score.", "completed": false }

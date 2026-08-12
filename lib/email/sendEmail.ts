@@ -26,7 +26,8 @@ type EmailEventType =
   | 'user_dispute_letter_mail_reminder'
   | 'user_dispute_secondary_bureau_reminder'
   | 'user_dispute_bureau_response_reminder'
-  | 'admin_dispute_letter_followup';
+  | 'admin_dispute_letter_followup'
+  | 'user_next_move_roadmap';
 
 type SendEmailInput = {
   to?: string | null;
@@ -35,6 +36,7 @@ type SendEmailInput = {
   eventType: EmailEventType;
   userId?: string | null;
   userEmail?: string | null;
+  providerPreference?: 'resend' | 'google';
 };
 
 const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
@@ -46,12 +48,22 @@ const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
   'admin_lead_send_daily_report',
 ]);
 
-function getFromEmail() {
+function getGoogleFromEmail() {
   return (
     process.env.OUTREACH_FROM_EMAIL ||
     process.env.GOOGLE_WORKSPACE_SENDER ||
     process.env.FROM_EMAIL ||
     process.env.RESEND_EMAIL ||
+    'acquisitions@vestblock.io'
+  );
+}
+
+function getResendFromEmail() {
+  return (
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_EMAIL ||
+    process.env.OUTREACH_FROM_EMAIL ||
+    process.env.FROM_EMAIL ||
     'acquisitions@vestblock.io'
   );
 }
@@ -97,7 +109,7 @@ async function sendEmailWithGoogle(input: SendEmailInput) {
   }
 
   const mime = [
-    `From: VestBlock <${getFromEmail()}>`,
+    `From: VestBlock <${getGoogleFromEmail()}>`,
     `Reply-To: ${getReplyToEmail()}`,
     `To: ${input.to}`,
     `Subject: ${input.subject}`,
@@ -346,7 +358,8 @@ export async function sendEmail(input: SendEmailInput) {
   }
 
   let googleError: string | null = null;
-  if (hasGoogleWorkspaceConfig()) {
+  const preferResend = input.providerPreference === 'resend' && Boolean(process.env.RESEND_API_KEY);
+  if (hasGoogleWorkspaceConfig() && !preferResend) {
     try {
       const data = await sendEmailWithGoogle(input);
       await recordEmailEvent(input, 'accepted', data.id);
@@ -355,7 +368,7 @@ export async function sendEmail(input: SendEmailInput) {
         actorUserId: input.userId,
         entityType: 'email',
         entityId: data.id,
-        metadata: { subject: input.subject, eventType: input.eventType, to: input.to, provider: 'gmail' },
+        metadata: { subject: input.subject, eventType: input.eventType, provider: 'gmail' },
       });
       return { ok: true, id: data.id, provider: 'gmail' };
     } catch (error) {
@@ -376,7 +389,7 @@ export async function sendEmail(input: SendEmailInput) {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { data, error } = await resend.emails.send({
-      from: getFromEmail(),
+      from: getResendFromEmail(),
       to: input.to,
       subject: input.subject,
       html: input.html,
@@ -404,7 +417,7 @@ export async function sendEmail(input: SendEmailInput) {
       metadata: {
         subject: input.subject,
         eventType: input.eventType,
-        to: input.to,
+        provider: 'resend',
       },
     });
     return { ok: true, id: data?.id, provider: 'resend' };

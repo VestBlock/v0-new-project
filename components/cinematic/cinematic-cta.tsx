@@ -16,14 +16,16 @@ export function CinematicCta() {
         transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
         className="vb-closing__content"
       >
-        <h2 id="closing-title">Tell VestBlock what you are working toward.</h2>
+        <p className="vb-kicker">Free Next-Move Questionnaire</p>
+        <h2 id="closing-title">Start with your goal.</h2>
+        <p>Answer a few questions about your goal, timeline, current position, and main obstacle. Receive a practical starting roadmap before creating an account.</p>
         <div>
-          <Link href="/get-started" className="vb-button vb-button--primary">
-            Find your next move
+          <Link href="/next-move" className="vb-button vb-button--primary">
+            Build my free roadmap
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link href="#platform-path" className="vb-button vb-button--quiet">
-            Review the three paths
+          <Link href="/services" className="vb-button vb-button--quiet">
+            Browse all services
           </Link>
         </div>
       </motion.div>
