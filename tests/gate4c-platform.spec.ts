@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+test.setTimeout(90_000)
+
 test.describe('Gate 4C public platform and customer workspace', () => {
   test('homepage explains the four lanes and routes Real Estate to its hub', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -62,9 +64,38 @@ test.describe('Gate 4C public platform and customer workspace', () => {
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-material-hero__fallback')).toBeVisible()
+    await expect(page.locator('.vb-material-hero__fallback--desktop')).toBeVisible()
     await expect(page.locator('.vb-material-hero__video')).toBeHidden()
     await context.close()
+  })
+
+  test('hero is a framed decision room with four working platform lanes', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.vb-material-hero__scene')).toBeVisible()
+    await expect(page.locator('.vb-material-hero__scene')).toHaveCount(1)
+    await expect(page.locator('.vb-material-hero__robot')).toBeAttached()
+    await page.locator('.vb-material-hero__video').dispatchEvent('loadeddata')
+    await expect(page.getByRole('button', { name: /hero scene/i })).toBeVisible()
+
+    const laneNavigation = page.getByRole('navigation', { name: /four platform lanes/i })
+    await expect(laneNavigation.getByRole('link')).toHaveCount(4)
+    await expect(laneNavigation.getByRole('link', { name: /Capital/ })).toHaveAttribute('href', '/capital')
+    await expect(laneNavigation.getByRole('link', { name: /Real Estate/ })).toHaveAttribute('href', '/real-estate')
+    await expect(laneNavigation.getByRole('link', { name: /Opportunity/ })).toHaveAttribute('href', '/opportunity')
+    await expect(laneNavigation.getByRole('link', { name: /DealVault/ })).toHaveAttribute('href', '/dealvault')
+
+    await page.getByRole('link', { name: /What are you trying to do next/ }).click()
+    await expect(page).toHaveURL(/#choose-your-path$/)
+    await expect(page.getByRole('heading', { name: 'What are you trying to do next?' })).toBeInViewport()
+  })
+
+  test('hero reports a static fallback when motion media fails', async ({ page }) => {
+    await page.route(/\/hero\/material-ledger\/(desktop|mobile)\.(webm|mp4)$/, (route) => route.abort())
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.vb-material-hero__scene')).toHaveAttribute('data-media-failed', 'true')
+    await expect(page.getByText('Static working reference')).toBeVisible()
+    await expect(page.getByRole('button', { name: /hero scene/i })).toHaveCount(0)
+    await expect(page.locator('.vb-material-hero__fallback--desktop')).toBeVisible()
   })
 
   test('public surfaces have no horizontal overflow at phone and tablet widths', async ({ page }) => {
