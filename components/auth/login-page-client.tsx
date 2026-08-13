@@ -11,31 +11,23 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-function getSafeRedirectTarget(value: string | null, fallback: string) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return fallback
-  }
-
-  return value
-}
+import { buildAuthPath, DEFAULT_AUTH_RETURN_PATH, getSafeAuthReturnPath, normalizeAuthIntent } from "@/lib/auth/intent"
 
 export function LoginPageClient() {
-  const defaultRedirectTarget = "/dashboard/services"
+  const defaultRedirectTarget = DEFAULT_AUTH_RETURN_PATH
   const searchParams = useSearchParams()
   const prefilledEmail = searchParams.get("email") || ""
-  const [email, setEmail] = useState(prefilledEmail)
+  const [email, setEmail] = useState(() => prefilledEmail)
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { signIn, isLoading, authError, isAuthenticated } = useAuth()
   const router = useRouter()
-  const redirectTarget = getSafeRedirectTarget(searchParams.get("redirect"), defaultRedirectTarget)
-
-  useEffect(() => {
-    if (prefilledEmail) {
-      setEmail((current) => current || prefilledEmail)
-    }
-  }, [prefilledEmail])
+  const redirectTarget = getSafeAuthReturnPath(
+    searchParams.get("next") || searchParams.get("redirect"),
+    defaultRedirectTarget
+  )
+  const intent = normalizeAuthIntent(searchParams.get("intent"))
+  const authErrorCode = searchParams.get("auth_error")
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -82,7 +74,7 @@ export function LoginPageClient() {
             <div className="grid gap-2">
               <div className="flex items-center">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" passHref>
+                <Link href={buildAuthPath('/forgot-password', { next: redirectTarget, email, intent })} passHref>
                   <Button variant="link" className="ml-auto inline-block text-sm">
                     Forgot your password?
                   </Button>
@@ -98,6 +90,13 @@ export function LoginPageClient() {
               />
             </div>
             {authError ? <p className="text-sm font-medium text-destructive">{authError}</p> : null}
+            {!authError && authErrorCode ? (
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {authErrorCode === 'expired_link'
+                  ? 'That verification or recovery link has expired. Request a new link and try again.'
+                  : 'That authentication link is invalid. Please sign in or request a new link.'}
+              </p>
+            ) : null}
             <Button
               type="submit"
               className="w-full"
@@ -109,11 +108,7 @@ export function LoginPageClient() {
           <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{" "}
             <Link
-              href={
-                redirectTarget && redirectTarget !== defaultRedirectTarget
-                  ? `/register?redirect=${encodeURIComponent(redirectTarget)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
-                  : `/register?redirect=/dashboard/services${email ? `&email=${encodeURIComponent(email)}` : ""}`
-              }
+              href={buildAuthPath('/join', { next: redirectTarget, email, intent })}
               passHref
             >
               <Button variant="link" className="p-0">

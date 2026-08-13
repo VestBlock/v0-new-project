@@ -13,6 +13,7 @@ import { FinancialGoalsSelector, FinancialGoal } from "@/components/financial-go
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Target } from "lucide-react"
+import { MEMBER_ROLE_OPTIONS, normalizeMemberRoles, type MemberRole } from "@/lib/auth/intent"
 
 interface UserProfile {
   id: string
@@ -25,6 +26,7 @@ interface UserProfile {
   address_state: string | null
   address_zip: string | null
   phone_number: string | null
+  member_roles: MemberRole[]
   created_at: string
   updated_at: string
 }
@@ -71,7 +73,7 @@ export default function ProfilePage() {
         }
 
         if (data) {
-          setProfile(data as UserProfile)
+          setProfile({ ...data, member_roles: normalizeMemberRoles(data.member_roles) } as UserProfile)
           setInitialProfileSnapshot({
             credit_score: data.credit_score,
             financial_goal: normalizeFinancialGoal(data.financial_goal),
@@ -92,7 +94,7 @@ export default function ProfilePage() {
 
           if (insertError) throw insertError
 
-          setProfile(insertedProfile as UserProfile)
+          setProfile({ ...insertedProfile, member_roles: normalizeMemberRoles(insertedProfile.member_roles) } as UserProfile)
           setInitialProfileSnapshot({
             credit_score: insertedProfile.credit_score,
             financial_goal: normalizeFinancialGoal(insertedProfile.financial_goal),
@@ -162,6 +164,7 @@ export default function ProfilePage() {
         address_state: profile.address_state,
         address_zip: profile.address_zip,
         phone_number: profile.phone_number,
+        member_roles: normalizeMemberRoles(profile.member_roles),
         updated_at: new Date().toISOString(),
       }
 
@@ -313,6 +316,45 @@ export default function ProfilePage() {
                   placeholder="(555) 123-4567"
                   disabled={isSaving}
                 />
+              </div>
+
+              <div className="space-y-3 border-t pt-6">
+                <div>
+                  <Label className="text-base">How you participate in VestBlock</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Choose every path that fits. These preferences personalize your workspace and do not change account permissions.
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {MEMBER_ROLE_OPTIONS.map((option) => {
+                    const selected = normalizeMemberRoles(profile.member_roles).includes(option.value)
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+                          selected ? "border-primary/60 bg-primary/10" : "border-border/70 text-muted-foreground"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => {
+                            const current = normalizeMemberRoles(profile.member_roles)
+                            handleChange(
+                              "member_roles",
+                              selected
+                                ? current.filter((role) => role !== option.value)
+                                : [...current, option.value]
+                            )
+                          }}
+                          disabled={isSaving}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
 
               <h2 className="text-xl font-semibold border-b pb-3 pt-4 mb-4">Financial Snapshot</h2>

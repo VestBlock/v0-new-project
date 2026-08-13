@@ -57,9 +57,9 @@ export function getSupabaseClient() {
         // ← Generate & store a PKCE code_verifier for you
         flowType: 'pkce',
 
-        // ← On page load, look for ?code=… or ?access_token=… in the URL and
-        // automatically swap it for a real session
-        detectSessionInUrl: true,
+        // The server callback owns code exchange so tokens never linger in a
+        // public page URL and SSR cookies are written before navigation.
+        detectSessionInUrl: false,
       },
     }
   );

@@ -160,11 +160,11 @@ export function Navigation() {
                         Sign In
                       </Link>
                       <Link
-                        href="/next-move"
+                        href="/join"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Get Started
+                        Join VestBlock
                       </Link>
                     </>
                   ) : (
@@ -267,7 +267,7 @@ export function Navigation() {
                 <Link href="/login?redirect=/dashboard/services">Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/next-move">Free roadmap</Link>
+                <Link href="/join">Join free</Link>
               </Button>
             </nav>
           )}

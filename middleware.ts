@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { isConfiguredAdminEmail } from '@/lib/auth/admin-emails';
+import type { Database } from '@/types/supabase';
 
 const protectedAdminPages = [
   '/admin',
@@ -52,11 +54,6 @@ const protectedDiagnosticApis = [
 function diagnosticsEnabled() {
   return process.env.ENABLE_INTERNAL_DIAGNOSTICS === 'true' || process.env.NODE_ENV !== 'production';
 }
-
-type SupabaseUser = {
-  id: string;
-  email?: string | null;
-};
 
 function matchProtectedPath(pathname: string, paths: string[]) {
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -139,6 +136,11 @@ function withNoIndex(response: NextResponse, pathname: string) {
   return response;
 }
 
+function copyAuthCookies(source: NextResponse | null, target: NextResponse) {
+  source?.cookies.getAll().forEach((cookie) => target.cookies.set(cookie));
+  return target;
+}
+
 function getSupabaseConfig() {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -152,123 +154,21 @@ function getSupabaseConfig() {
   return { supabaseUrl, anonKey };
 }
 
-function getSupabaseRef(supabaseUrl: string) {
-  try {
-    return new URL(supabaseUrl).hostname.split('.')[0];
-  } catch {
-    return null;
-  }
-}
-
-function decodeBase64Url(value: string) {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    '='
-  );
-  return atob(padded);
-}
-
-function getCookieValue(request: NextRequest, cookieName: string) {
-  const direct = request.cookies.get(cookieName)?.value;
-  if (direct) return direct;
-
-  const chunks = request.cookies
-    .getAll()
-    .filter((cookie) => cookie.name.startsWith(`${cookieName}.`))
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((cookie) => cookie.value);
-
-  return chunks.length > 0 ? chunks.join('') : null;
-}
-
-function extractAccessTokenFromCookie(rawValue: string | null) {
-  if (!rawValue) return null;
-
-  try {
-    const decoded = decodeURIComponent(rawValue);
-    const sessionJson = decoded.startsWith('base64-')
-      ? decodeBase64Url(decoded.slice('base64-'.length))
-      : decoded;
-    const parsed = JSON.parse(sessionJson);
-
-    if (typeof parsed?.access_token === 'string') {
-      return parsed.access_token;
-    }
-
-    if (typeof parsed?.currentSession?.access_token === 'string') {
-      return parsed.currentSession.access_token;
-    }
-
-    if (Array.isArray(parsed) && typeof parsed[0] === 'string') {
-      return parsed[0];
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
-function getSupabaseAccessToken(request: NextRequest, supabaseUrl: string) {
-  const projectRef = getSupabaseRef(supabaseUrl);
-  if (!projectRef) return null;
-
-  return extractAccessTokenFromCookie(
-    getCookieValue(request, `sb-${projectRef}-auth-token`)
-  );
-}
-
-async function getUserFromToken(
-  supabaseUrl: string,
-  anonKey: string,
-  accessToken: string
-): Promise<SupabaseUser | null> {
-  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${accessToken}`,
+async function refreshServerAuth(request: NextRequest, config: NonNullable<ReturnType<typeof getSupabaseConfig>>) {
+  let response = NextResponse.next({ request });
+  const supabase = createServerClient<Database>(config.supabaseUrl, config.anonKey, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (cookiesToSet: { name: string; value: string; options: CookieOptions }[]) => {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+      },
     },
   });
 
-  if (!response.ok) return null;
-
-  const user = await response.json().catch(() => null);
-  if (!user?.id) return null;
-
-  return { id: user.id, email: user.email };
-}
-
-async function getUserProfileRole(input: {
-  supabaseUrl: string;
-  anonKey: string;
-  accessToken: string;
-  user: SupabaseUser;
-}) {
-  const filters = [
-    `id.eq.${input.user.id}`,
-    `user_id.eq.${input.user.id}`,
-    input.user.email && `email.eq.${input.user.email}`,
-  ]
-    .filter(Boolean)
-    .join(',');
-
-  const url = new URL('/rest/v1/user_profiles', input.supabaseUrl);
-  url.searchParams.set('select', 'role');
-  url.searchParams.set('or', `(${filters})`);
-  url.searchParams.set('limit', '1');
-
-  const response = await fetch(url, {
-    headers: {
-      apikey: input.anonKey,
-      Authorization: `Bearer ${input.accessToken}`,
-    },
-  });
-
-  if (!response.ok) return null;
-
-  const rows = await response.json().catch(() => []);
-  return Array.isArray(rows) ? rows[0]?.role ?? null : null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return { response, supabase, user: user ? { id: user.id, email: user.email } : null };
 }
 
 export async function middleware(request: NextRequest) {
@@ -292,24 +192,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const config = getSupabaseConfig();
-  const accessToken = config
-    ? getSupabaseAccessToken(request, config.supabaseUrl)
-    : null;
-
-  const user =
-    config && accessToken
-      ? await getUserFromToken(config.supabaseUrl, config.anonKey, accessToken)
-      : null;
+  const auth = config ? await refreshServerAuth(request, config) : null;
+  const user = auth?.user ?? null;
 
   if (!user) {
     if (apiRequest) {
-      return withNoIndex(
+      return copyAuthCookies(auth?.response ?? null, withNoIndex(
         NextResponse.json(
         { error: 'Authentication required.' },
         { status: 401 }
         ),
         pathname
-      );
+      ));
     }
 
     const loginUrl = request.nextUrl.clone();
@@ -319,48 +213,47 @@ export async function middleware(request: NextRequest) {
       'redirect',
       `${request.nextUrl.pathname}${request.nextUrl.search}`
     );
-    return withNoIndex(NextResponse.redirect(loginUrl), pathname);
+    return copyAuthCookies(auth?.response ?? null, withNoIndex(NextResponse.redirect(loginUrl), pathname));
   }
 
   if (!adminRequest) {
-    return withNoIndex(NextResponse.next(), pathname);
+    return withNoIndex(auth?.response ?? NextResponse.next(), pathname);
   }
 
   const email = user.email?.toLowerCase();
   let isAdmin = isConfiguredAdminEmail(email);
 
-  if (!isAdmin && config && accessToken) {
-    const role = await getUserProfileRole({
-      supabaseUrl: config.supabaseUrl,
-      anonKey: config.anonKey,
-      accessToken,
-      user,
-    });
-    isAdmin = role === 'admin';
+  if (!isAdmin && auth) {
+    const { data: profile } = await auth.supabase
+      .from('user_profiles')
+      .select('role')
+      .or(`id.eq.${user.id},user_id.eq.${user.id},email.eq.${user.email}`)
+      .maybeSingle();
+    isAdmin = profile?.role === 'admin';
   }
 
   if (!isAdmin) {
     if (apiRequest) {
-      return withNoIndex(
+      return copyAuthCookies(auth?.response ?? null, withNoIndex(
         NextResponse.json(
         { error: 'Admin access required.' },
         { status: 403 }
         ),
         pathname
-      );
+      ));
     }
 
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = '/dashboard';
     dashboardUrl.search = '';
-    return withNoIndex(NextResponse.redirect(dashboardUrl), pathname);
+    return copyAuthCookies(auth?.response ?? null, withNoIndex(NextResponse.redirect(dashboardUrl), pathname));
   }
 
   if (isDiagnosticPath(pathname) && !diagnosticsEnabled()) {
-    return withNoIndex(new NextResponse('Not found', { status: 404 }), pathname);
+    return copyAuthCookies(auth?.response ?? null, withNoIndex(new NextResponse('Not found', { status: 404 }), pathname));
   }
 
-  return withNoIndex(NextResponse.next(), pathname);
+  return withNoIndex(auth?.response ?? NextResponse.next(), pathname);
 }
 
 export const config = {

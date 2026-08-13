@@ -9,16 +9,23 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 import { useState } from 'react';
+import { buildAuthPath, getSafeAuthReturnPath } from '@/lib/auth/intent';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const { forgotPassword, isLoading } = useAuth();
+  const [returnTarget] = useState(() => {
+    if (typeof window === 'undefined') return getSafeAuthReturnPath(null);
+    return getSafeAuthReturnPath(new URLSearchParams(window.location.search).get('next'));
+  });
+  const loginPath = buildAuthPath('/login', { next: returnTarget, email });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await forgotPassword(email);
-    setSubmitted(true);
+    const resetTarget = `/reset-password?next=${encodeURIComponent(returnTarget)}`;
+    const sent = await forgotPassword(email, resetTarget);
+    setSubmitted(sent);
   };
 
   return (
@@ -37,7 +44,7 @@ export default function ForgotPasswordPage() {
                   receive a password reset link shortly.
                 </p>
                 <Button asChild className="mt-4">
-                  <Link href="/login">Return to Login</Link>
+                  <Link href={loginPath}>Return to Login</Link>
                 </Button>
               </div>
             ) : (
@@ -63,7 +70,7 @@ export default function ForgotPasswordPage() {
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   Remember your password?{' '}
-                  <Link href="/login" className="text-cyan-400 hover:underline">
+                  <Link href={loginPath} className="text-cyan-400 hover:underline">
                     Sign in
                   </Link>
                 </p>

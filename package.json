@@ -59,6 +59,7 @@
     "test:contracts": "hardhat test",
     "test:smoke": "playwright test tests/smoke",
     "qa:command-center": "node --env-file=.env.local scripts/qa-command-center-smoke.mjs",
+    "qa:auth:gate4b3": "node --env-file=.env.local scripts/qa-auth-gate4b3.mjs",
     "typecheck": "tsc --noEmit",
     "check:release": "npm run check:app && npm run check:contracts",
     "verify:dealvault:ui": "node --env-file=.env.local scripts/verifyDealVaultUiFlow.mjs",

@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { getSafeAuthReturnPath } from '@/lib/auth/intent';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -18,16 +19,13 @@ export default function ResetPasswordPage() {
   const { updatePassword, isLoading, user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-
-  const [isRecoveryFlow] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      new URLSearchParams(window.location.search).get('type') === 'recovery'
-    );
+  const [returnTarget] = useState(() => {
+    if (typeof window === 'undefined') return getSafeAuthReturnPath(null);
+    return getSafeAuthReturnPath(new URLSearchParams(window.location.search).get('next'));
   });
 
   useEffect(() => {
-    if (!isLoading && !isRecoveryFlow && !user) {
+    if (!isLoading && !user) {
       toast({
         title: 'Invalid or expired reset link',
         description: 'Please request a fresh password reset.',
@@ -35,7 +33,7 @@ export default function ResetPasswordPage() {
       });
       router.push('/forgot-password');
     }
-  }, [isLoading, isRecoveryFlow, user, toast, router]);
+  }, [isLoading, user, toast, router]);
 
   const validatePassword = (password: string) => {
     if (password.length < 8) {
@@ -61,7 +59,7 @@ export default function ResetPasswordPage() {
     }
 
     setPasswordError('');
-    await updatePassword(password);
+    await updatePassword(password, returnTarget);
   };
 
   if (isLoading) return null;

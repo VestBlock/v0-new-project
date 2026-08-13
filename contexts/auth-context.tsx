@@ -18,11 +18,18 @@ import { analyticsEvents } from '@/lib/analytics/events';
 import type { User, Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
+import {
+  getSafeAuthReturnPath,
+  normalizeAuthIntent,
+  normalizeMemberRoles,
+  type MemberRole,
+} from '@/lib/auth/intent';
 
 interface UserProfile {
   id: string;
   full_name?: string;
   role?: string;
+  member_roles?: MemberRole[];
   is_subscribed?: boolean | string | number | null;
   paypal_order_product?: string | null;
 }
@@ -76,14 +83,16 @@ interface AuthContextType {
   authError: string | null;
   signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
-  signUp: (
-    email: string,
-    password: string,
-    fullName: string,
-    redirectTo?: string
-  ) => Promise<void>;
-  forgotPassword: (email: string) => Promise<void>;
-  updatePassword: (newPassword: string) => Promise<void>;
+  signUp: (input: {
+    email: string;
+    password: string;
+    fullName: string;
+    memberRoles?: readonly string[];
+    next?: string | null;
+    intent?: string | null;
+  }) => Promise<{ ok: boolean; verificationRequired: boolean }>;
+  forgotPassword: (email: string, next?: string | null) => Promise<boolean>;
+  updatePassword: (newPassword: string, next?: string | null) => Promise<boolean>;
   fetchUserProfile: (user: User) => Promise<void>;
 }
 
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('id, full_name, role, is_subscribed, paypal_order_product')
+          .select('id, full_name, role, member_roles, is_subscribed, paypal_order_product')
           .eq('id', user.id)
           .single();
 
@@ -117,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: data.id,
             full_name: data.full_name ?? undefined,
             role: data.role ?? undefined,
+            member_roles: normalizeMemberRoles(data.member_roles),
             is_subscribed: data.is_subscribed,
             paypal_order_product: data.paypal_order_product,
           });
@@ -131,35 +141,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const hydrate = async () => {
       try {
-        // If Supabase redirected here with ?code=..., exchange it without letting
-        // the whole app stay in a permanent loading state on failure or timeout.
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        if (code) {
-          const {
-            data: { session },
-            error,
-          } = await withAuthTimeout(
-            supabase.auth.exchangeCodeForSession(code),
-            'Auth code exchange'
-          );
-          if (error) {
-            console.error('PKCE code-exchange failed:', error);
-          } else if (session) {
-            setSession(session);
-            setUser(session.user);
-            await fetchUserProfile(session.user);
-          }
-          window.history.replaceState({}, '', window.location.pathname);
-        }
-
         const {
           data: { session: stored },
         } = await withAuthTimeout(supabase.auth.getSession(), 'Auth session lookup');
-        setSession(stored);
-        setUser(stored?.user ?? null);
-        if (stored?.user) {
-          await fetchUserProfile(stored.user);
+        if (stored) {
+          const {
+            data: { user: verifiedUser },
+          } = await withAuthTimeout(supabase.auth.getUser(), 'Auth user verification');
+          setSession(verifiedUser ? stored : null);
+          setUser(verifiedUser);
+          if (verifiedUser) await fetchUserProfile(verifiedUser);
+        } else {
+          setSession(null);
+          setUser(null);
         }
       } catch (error: any) {
         console.error('Auth hydration error:', error);
@@ -269,18 +263,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const forgotPassword = async (email: string) => {
+  const forgotPassword = async (email: string, next?: string | null) => {
     setIsLoading(true);
     setAuthError(null);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+          getSafeAuthReturnPath(next, '/reset-password')
+        )}&intent=recovery`,
       });
       if (error) throw error;
       toast({
         title: 'Password Reset',
         description: 'Check your inbox for a reset link.',
       });
+      return true;
     } catch (error: any) {
       console.error('Reset password error:', error);
       setAuthError(error.message);
@@ -289,12 +286,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error.message,
         variant: 'destructive',
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updatePassword = async (newPassword: string) => {
+  const updatePassword = async (newPassword: string, next?: string | null) => {
     setIsLoading(true);
     setAuthError(null);
     try {
@@ -307,7 +305,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: 'Your password has been updated.',
       });
 
-      router.push('/');
+      router.push(getSafeAuthReturnPath(next, '/dashboard/services'));
+      return true;
     } catch (err: any) {
       console.error('Update password error:', err);
       setAuthError(err.message);
@@ -316,26 +315,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: err.message,
         variant: 'destructive',
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const signUp = async (
-    email: string,
-    password: string,
-    fullName: string,
-    redirectTo?: string
-  ) => {
+  const signUp: AuthContextType['signUp'] = async ({
+    email,
+    password,
+    fullName,
+    memberRoles,
+    next,
+    intent,
+  }) => {
     setIsLoading(true);
     setAuthError(null);
     try {
+      const safeNext = getSafeAuthReturnPath(next);
+      const safeIntent = normalizeAuthIntent(intent);
+      const safeMemberRoles = normalizeMemberRoles(memberRoles);
+      const callback = new URL('/auth/callback', window.location.origin);
+      callback.searchParams.set('next', safeNext);
+      if (safeIntent) callback.searchParams.set('intent', safeIntent);
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: callback.toString(),
           data: {
             full_name: fullName,
+            member_roles: safeMemberRoles,
+            signup_intent: safeIntent,
           },
         },
       });
@@ -344,7 +356,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!authData.user)
         throw new Error('Sign up succeeded but no user was returned.');
 
-      try {
+      if (authData.session) try {
+        if (safeMemberRoles.length > 0) {
+          const { error: roleError } = await supabase
+            .from('user_profiles')
+            .update({ member_roles: safeMemberRoles })
+            .eq('id', authData.user.id);
+          if (roleError) console.warn('Member role setup failed:', roleError.message);
+        }
+
         const postSignupResponse = await fetch('/api/auth/post-signup', {
           method: 'POST',
           headers: {
@@ -369,14 +389,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       captureClientEvent(analyticsEvents.authSignUpCompleted, {
         email_domain: email.split('@')[1] || 'unknown',
-        redirect_to: redirectTo || '/login',
+        redirect_to: safeNext,
+        verification_required: !authData.session,
       });
 
       toast({
         title: 'Success',
-        description: 'Account created. Your Growth System is being prepared now.',
+        description: authData.session
+          ? 'Account created. Your VestBlock workspace is ready.'
+          : 'Account created. Check your email to verify and continue.',
       });
-      router.push(redirectTo || '/login');
+      return { ok: true, verificationRequired: !authData.session };
     } catch (error: any) {
       console.error('Sign up error:', error);
       setAuthError(error.message);
@@ -385,6 +408,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error.message,
         variant: 'destructive',
       });
+      return { ok: false, verificationRequired: false };
     } finally {
       setIsLoading(false);
     }

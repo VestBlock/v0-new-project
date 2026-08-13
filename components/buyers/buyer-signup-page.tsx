@@ -146,11 +146,11 @@ export function BuyerSignupPage() {
         registerUrl:
           typeof payload.registerUrl === "string" && payload.registerUrl
             ? payload.registerUrl
-            : "/register?redirect=%2Fdashboard%2Fservices",
+            : "/join?next=%2Fdashboard%2Fservices&intent=buyer&roles=real_estate_buyer",
         loginUrl:
           typeof payload.loginUrl === "string" && payload.loginUrl
             ? payload.loginUrl
-            : "/login?redirect=%2Fdashboard%2Fservices",
+            : "/login?next=%2Fdashboard%2Fservices&intent=buyer",
         growthSystemReady: payload.growthSystemReady !== false,
         growthSystemEmailSent: payload.growthSystemEmailSent === true,
       })
@@ -229,13 +229,13 @@ export function BuyerSignupPage() {
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Button asChild className="bg-emerald-300 text-slate-950 hover:bg-emerald-200">
-                    <Link href={successState?.registerUrl || "/register?redirect=%2Fdashboard%2Fservices"}>
+                    <Link href={successState?.registerUrl || "/join?next=%2Fdashboard%2Fservices&intent=buyer&roles=real_estate_buyer"}>
                       Create account
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="border-emerald-200/40 bg-transparent text-emerald-50 hover:bg-emerald-50/10 hover:text-white">
-                    <Link href={successState?.loginUrl || "/login?redirect=%2Fdashboard%2Fservices"}>
+                    <Link href={successState?.loginUrl || "/login?next=%2Fdashboard%2Fservices&intent=buyer"}>
                       Sign in to dashboard
                     </Link>
                   </Button>

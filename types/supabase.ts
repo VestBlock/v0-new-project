@@ -101,6 +101,7 @@ export interface Database {
           date_of_birth: string | null
           ssn: string | null
           role: string | null
+          member_roles: string[]
           is_subscribed: boolean | null
           paypal_order_product: string | null
           created_at: string
@@ -128,6 +129,7 @@ export interface Database {
           date_of_birth?: string | null
           ssn?: string | null
           role?: string | null
+          member_roles?: string[]
           is_subscribed?: boolean | null
           paypal_order_product?: string | null
           created_at?: string
@@ -154,6 +156,7 @@ export interface Database {
           date_of_birth?: string | null
           ssn?: string | null
           role?: string | null
+          member_roles?: string[]
           is_subscribed?: boolean | null
           paypal_order_product?: string | null
           created_at?: string

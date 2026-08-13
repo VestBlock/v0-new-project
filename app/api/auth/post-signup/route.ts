@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureSignupGrowthSystem } from '@/lib/auth/signup-growth-system';
 import { sendUserSignupGrowthSystemReadyEmail } from '@/lib/email/sendEmail';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,13 +12,25 @@ function isValidEmail(email: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    const origin = request.headers.get('origin');
+    if (origin && origin !== request.nextUrl.origin) {
+      return NextResponse.json({ error: 'Cross-site request rejected.' }, { status: 403 });
+    }
+
     const body = await request.json().catch(() => null);
-    const email = String(body?.email || '').trim().toLowerCase();
-    const fullName = String(body?.fullName || '').trim() || null;
-    const userId = String(body?.userId || '').trim() || null;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user?.id || !user.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
+    const email = user.email.trim().toLowerCase();
+    const fullName = String(user.user_metadata?.full_name || body?.fullName || '').trim() || null;
+    const userId = user.id;
     const skipEmail = body?.skipEmail === true;
 
-    if (!email || !isValidEmail(email)) {
+    if (!isValidEmail(email)) {
       return NextResponse.json({ error: 'Valid email is required.' }, { status: 400 });
     }
 

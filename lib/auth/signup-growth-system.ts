@@ -179,7 +179,7 @@ export async function ensureSignupGrowthSystem(
         lead_type: 'visibility_expansion',
         status: 'new',
         source: SIGNUP_GROWTH_SOURCE,
-        source_url: '/register',
+        source_url: '/join',
         category: 'member_growth_system',
         name,
         email,

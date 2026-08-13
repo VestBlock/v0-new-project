@@ -243,8 +243,8 @@ export async function POST(request: NextRequest) {
       growthSystemReady: Boolean(growthSystemResult.ok),
       growthSystemCreated: Boolean(growthSystemResult.created),
       growthSystemEmailSent: Boolean(emailResult?.ok),
-      registerUrl: `/register?redirect=${encodeURIComponent('/dashboard/services')}&email=${encodeURIComponent(data.email)}`,
-      loginUrl: `/login?redirect=${encodeURIComponent('/dashboard/services')}&email=${encodeURIComponent(data.email)}`,
+      registerUrl: `/join?next=${encodeURIComponent('/dashboard/services')}&intent=buyer&roles=real_estate_buyer&email=${encodeURIComponent(data.email)}`,
+      loginUrl: `/login?next=${encodeURIComponent('/dashboard/services')}&intent=buyer&email=${encodeURIComponent(data.email)}`,
     })
   } catch (error) {
     console.error('Buyer signup error:', error)
