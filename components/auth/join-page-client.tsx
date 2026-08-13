@@ -116,8 +116,8 @@ export function JoinPageClient() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-20 sm:py-24">
-      <div className="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
-        <div className="space-y-6 pt-3">
+      <div className="mx-auto grid w-full min-w-0 max-w-5xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
+        <div className="min-w-0 space-y-6 pt-3">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
             One VestBlock account
           </p>
@@ -139,7 +139,7 @@ export function JoinPageClient() {
           </div>
         </div>
 
-        <Card className="border-border/70 bg-card/95 shadow-2xl">
+        <Card className="min-w-0 border-border/70 bg-card/95 shadow-2xl">
           <CardHeader>
             <CardTitle className="text-2xl">Create your free account</CardTitle>
             <CardDescription>Start with only what VestBlock needs to save and route your request.</CardDescription>
