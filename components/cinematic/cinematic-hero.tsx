@@ -8,9 +8,9 @@ import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 const doorways = [
-  { number: "01", label: "Capital", detail: "Prepare for funding and understand the paths that may fit.", href: "#capital-path" },
-  { number: "02", label: "Deals", detail: "Sell, source, assess, fund, or coordinate an active opportunity.", href: "#deals-path" },
-  { number: "03", label: "Opportunity", detail: "Strengthen credit, income, business readiness, or growth.", href: "#opportunity-path" },
+  { number: "01", label: "Capital", detail: "Prepare for funding and understand the paths that may fit.", href: "/capital" },
+  { number: "02", label: "Real Estate", detail: "Buy, sell, fund, analyze, build, or participate from the right role.", href: "/real-estate" },
+  { number: "03", label: "Opportunity", detail: "Strengthen credit, income, business readiness, or growth.", href: "/opportunity" },
 ]
 
 const chapters = [
@@ -26,6 +26,8 @@ export function CinematicHero() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [paused, setPaused] = useState(false)
   const [chapter, setChapter] = useState(0)
+  const [mediaReady, setMediaReady] = useState(false)
+  const [mediaFailed, setMediaFailed] = useState(false)
 
   useEffect(() => {
     const section = sectionRef.current
@@ -37,6 +39,7 @@ export function CinematicHero() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     if (reduceMotion) {
       video.pause()
+      setPaused(true)
       return
     }
 
@@ -79,7 +82,7 @@ export function CinematicHero() {
 
   return (
     <section ref={sectionRef} className="vb-material-hero" aria-labelledby="homepage-hero-title">
-      <div ref={mediaRef} className="vb-material-hero__media">
+      <div ref={mediaRef} className="vb-material-hero__media" data-ready={mediaReady && !mediaFailed || undefined} data-failed={mediaFailed || undefined}>
         <video
           ref={videoRef}
           className="vb-material-hero__video"
@@ -89,6 +92,10 @@ export function CinematicHero() {
           playsInline
           preload="metadata"
           poster="/hero/material-ledger/opening-poster.jpg"
+          onCanPlay={() => setMediaReady(true)}
+          onPlaying={() => { setMediaReady(true); setPaused(false) }}
+          onPause={() => setPaused(true)}
+          onError={() => { setMediaFailed(true); setMediaReady(false); setPaused(true) }}
           aria-label="A Black business owner reviewing and marking a working file with an AI-assisted spatial interface."
         >
           <source media="(max-width: 640px)" src="/hero/material-ledger/mobile.webm" type="video/webm" />
@@ -110,10 +117,10 @@ export function CinematicHero() {
       </button>
 
       <div ref={contentRef} className="vb-material-hero__content">
-        <p className="vb-material-hero__eyebrow">Capital · Deals · Opportunity</p>
+        <p className="vb-material-hero__eyebrow">Capital · Real Estate · Opportunity · DealVault</p>
         <h1 id="homepage-hero-title">Find your next move.</h1>
         <p className="vb-material-hero__lede">
-          VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place. Understand your options, prepare what matters, and act with a clear next step.
+          VestBlock helps people and businesses prepare for and coordinate practical next moves across capital, real estate, financial readiness, business growth, and active deal records.
         </p>
         <div className="vb-material-hero__actions">
           <Link href="/next-move" className="vb-button vb-button--primary">Build my free roadmap <ArrowRight className="h-4 w-4" /></Link>

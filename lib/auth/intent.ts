@@ -1,4 +1,4 @@
-export const DEFAULT_AUTH_RETURN_PATH = '/dashboard/services'
+export const DEFAULT_AUTH_RETURN_PATH = '/workspace'
 
 export const MEMBER_ROLE_OPTIONS = [
   { value: 'business_owner', label: 'Build or grow a business' },

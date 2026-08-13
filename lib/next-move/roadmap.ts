@@ -38,7 +38,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: sharedCreditCautions,
   },
   'real-estate-funding': {
-    label: 'real-estate funding review', primaryPath: 'Capital', secondaryPaths: ['Deals'],
+    label: 'real-estate funding review', primaryPath: 'Capital', secondaryPaths: ['Real Estate'],
     firstAction: 'Define the property, requested capital, intended strategy, timing, and exit assumptions.',
     preparation: 'Gather property facts, purchase or payoff context, renovation scope, income assumptions, and borrower information.',
     review: 'Run the property through a screening analysis and flag any unsupported value or income assumption.',
@@ -71,7 +71,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: sharedCreditCautions,
   },
   'sell-property': {
-    label: 'property sale review', primaryPath: 'Deals', secondaryPaths: ['Capital'],
+    label: 'property sale review', primaryPath: 'Real Estate', secondaryPaths: ['Capital'],
     firstAction: 'Clarify the property, condition, timing, payoff context, occupancy, and preferred outcome.',
     preparation: 'Gather photos, access details, title or lien context, repairs, and any existing listing or representation information.',
     review: 'Compare cash, creative, novation, listing, or partner paths only after the facts are reviewed.',
@@ -79,7 +79,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     resources: [{ title: 'Seller Property Review', description: 'Submit property and seller context for a structured review.', href: '/sell', access: 'Free', limitation: 'No offer, structure, or closing timeline is promised before review.' }], cautions: ['Any offer or transaction structure remains subject to property, title, representation, and participant review.'],
   },
   'buy-property': {
-    label: 'property acquisition preparation', primaryPath: 'Deals', secondaryPaths: ['Capital'],
+    label: 'property acquisition preparation', primaryPath: 'Real Estate', secondaryPaths: ['Capital'],
     firstAction: 'Define a buy box with market, asset type, budget, condition, return requirements, and exclusions.',
     preparation: 'Document proof-of-funds or financing readiness and the decision rules used to screen opportunities.',
     review: 'Use consistent property analysis before requesting introductions or making offers.',
@@ -90,7 +90,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: ['Verify title, condition, values, rents, financing, and exit assumptions independently.'],
   },
   'fund-deal': {
-    label: 'active deal funding', primaryPath: 'Deals', secondaryPaths: ['Capital'],
+    label: 'active deal funding', primaryPath: 'Real Estate', secondaryPaths: ['Capital'],
     firstAction: 'State the asset, economics, capital request, use of funds, term, collateral, and exit clearly.',
     preparation: 'Gather the deal package, borrower or sponsor background, title context, estimates, and evidence behind projections.',
     review: 'Separate verified facts from estimates and unresolved questions before sharing the file.',
@@ -101,7 +101,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: ['VestBlock organizes and routes context; it does not make a lending or investment decision.'],
   },
   'business-acquisition': {
-    label: 'business acquisition preparation', primaryPath: 'Deals', secondaryPaths: ['Capital', 'Opportunity'],
+    label: 'business acquisition preparation', primaryPath: 'Real Estate', secondaryPaths: ['Capital', 'Opportunity'],
     firstAction: 'Define acquisition criteria: industry, location, purchase range, owner involvement, cash flow, and deal-breakers.',
     preparation: 'Build a personal financial statement, capital plan, operator thesis, diligence checklist, and transition assumptions.',
     review: 'Separate seller claims from documents that can be verified during diligence.',
@@ -112,7 +112,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: ['Use qualified legal, tax, accounting, and diligence professionals before acquiring a business.'], manualReview: true,
   },
   'builder-developer': {
-    label: 'builder and developer routing', primaryPath: 'Deals', secondaryPaths: ['Capital'],
+    label: 'builder and developer routing', primaryPath: 'Real Estate', secondaryPaths: ['Capital'],
     firstAction: 'Define project type, geography, site status, scope, capacity, timeline, and the relationship you need.',
     preparation: 'Gather entity, licensing, insurance, portfolio, project economics, team capacity, and funding context.',
     review: 'Clarify whether the next need is a project, capital, contractor relationship, buyer, site, or operator introduction.',
@@ -156,7 +156,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: ['Validate demand and obtain professional advice where legal, tax, licensing, or accounting decisions apply.'],
   },
   'grow-business': {
-    label: 'business growth preparation', primaryPath: 'Opportunity', secondaryPaths: ['Capital', 'Deals'],
+    label: 'business growth preparation', primaryPath: 'Opportunity', secondaryPaths: ['Capital', 'Real Estate'],
     firstAction: 'Identify the single constraint limiting growth: demand, conversion, delivery, cash flow, capacity, or retention.',
     preparation: 'Baseline lead volume, conversion, gross margin, fulfillment capacity, and cash needs.',
     review: 'Choose one measurable growth experiment with a clear owner, cost ceiling, and stop condition.',
@@ -167,7 +167,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     ], cautions: ['Set a cost ceiling and measurement window before paying for acquisition or automation.'],
   },
   visibility: {
-    label: 'visibility and lead-capture improvement', primaryPath: 'Opportunity', secondaryPaths: ['Deals'],
+    label: 'visibility and lead-capture improvement', primaryPath: 'Opportunity', secondaryPaths: ['Real Estate'],
     firstAction: 'Clarify the audience, service, geography, proof, and conversion action your public presence must support.',
     preparation: 'Audit website clarity, local profiles, response speed, booking, search coverage, and trust evidence.',
     review: 'Prioritize fixes closest to a measurable customer action before expanding content volume.',

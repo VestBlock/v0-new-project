@@ -33,6 +33,9 @@ export function Navigation() {
   const { user, userProfile, isAuthenticated, signOut, isLoading } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const mobileMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const mobileMenuPanelRef = React.useRef<HTMLDivElement>(null);
+  const mobileMenuCloseRef = React.useRef<HTMLButtonElement>(null);
   const isAdmin = React.useMemo(
     () =>
       isClientAdmin({
@@ -41,6 +44,46 @@ export function Navigation() {
       }),
     [user?.email, userProfile?.role]
   );
+
+  React.useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    mobileMenuCloseRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(
+        mobileMenuPanelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      mobileMenuTriggerRef.current?.focus();
+    };
+  }, [isMobileMenuOpen]);
 
   // Admin surfaces run their own command shell; the marketing header stays out of the cockpit.
   if (
@@ -53,9 +96,9 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/funding', label: 'Capital' },
-    { href: '/sell', label: 'Deals' },
-    { href: '/next-move', label: 'Opportunity' },
+    { href: '/capital', label: 'Capital' },
+    { href: '/real-estate', label: 'Real Estate' },
+    { href: '/opportunity', label: 'Opportunity' },
     { href: '/dealvault', label: 'DealVault' },
   ];
 
@@ -67,8 +110,7 @@ export function Navigation() {
 
   // User menu links (when logged in)
   const userMenuLinks = [
-    { href: '/dashboard/services', label: 'Network Workspace', icon: Sparkles },
-    { href: '/get-started', label: 'Network Hub', icon: LayoutDashboard },
+    { href: '/workspace', label: 'My Workspace', icon: Sparkles },
     { href: '/profile', label: 'Profile', icon: User },
     { href: '/dashboard/funding', label: 'Funding Assistant', icon: Sparkles },
     { href: '/dashboard', label: 'Dashboard', icon: FileText },
@@ -118,7 +160,15 @@ export function Navigation() {
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
           <div className="lg:hidden">
-            <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setIsMobileMenuOpen(true)}>
+            <Button
+              ref={mobileMenuTriggerRef}
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              aria-controls="mobile-site-navigation"
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
               <Menu className="h-6 w-6" />
               <span className="sr-only">Toggle Menu</span>
             </Button>
@@ -130,8 +180,13 @@ export function Navigation() {
                   className="absolute inset-0 cursor-default bg-background/70 backdrop-blur-sm"
                   onClick={() => setIsMobileMenuOpen(false)}
                 />
-                <div className="relative h-full w-80 max-w-[85vw] overflow-y-auto border-r border-border bg-background p-6 shadow-2xl">
+                <div
+                  id="mobile-site-navigation"
+                  ref={mobileMenuPanelRef}
+                  className="relative h-full w-80 max-w-[85vw] overflow-y-auto border-r border-border bg-background p-6 shadow-2xl"
+                >
                   <button
+                    ref={mobileMenuCloseRef}
                     type="button"
                     aria-label="Close navigation"
                     onClick={() => setIsMobileMenuOpen(false)}
@@ -156,7 +211,7 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/dashboard/services" onClick={() => setIsMobileMenuOpen(false)} className="text-foreground">
+                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                         Sign In
                       </Link>
                       <Link
@@ -204,7 +259,7 @@ export function Navigation() {
           {/* Desktop Auth Section */}
           {isLoading ? (
             <Link
-              href="/next-move"
+              href="/opportunity"
               className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
             >
               Get started
@@ -264,7 +319,7 @@ export function Navigation() {
           ) : (
             <nav className="hidden items-center space-x-2 md:flex">
               <Button variant="ghost" asChild>
-                <Link href="/login?redirect=/dashboard/services">Sign In</Link>
+                <Link href="/login?redirect=/workspace">Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
                 <Link href="/join">Join free</Link>

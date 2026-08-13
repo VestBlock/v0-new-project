@@ -15,6 +15,7 @@ const protectedAdminApis = [
 ];
 
 const protectedAuthenticatedApis = [
+  '/api/workspace',
   '/api/chat',
   '/api/chat-with-analysis',
   '/api/generate-roadmap',
@@ -35,6 +36,7 @@ const protectedAuthenticatedPages = [
   '/tools/grants',
   '/tools/my-dispute-letters',
   '/user-hub',
+  '/workspace',
 ];
 
 const protectedDiagnostics = [
@@ -117,7 +119,12 @@ function isSameOriginMutation(request: NextRequest) {
   if (!origin) return true
 
   try {
-    return new URL(origin).origin === request.nextUrl.origin
+    const originUrl = new URL(origin)
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    const expectedHost = forwardedHost || request.headers.get('host') || request.nextUrl.host
+    const expectedProtocol = forwardedProto ? `${forwardedProto}:` : request.nextUrl.protocol
+    return originUrl.host === expectedHost && originUrl.protocol === expectedProtocol
   } catch {
     return false
   }
@@ -279,6 +286,7 @@ export const config = {
     '/tools/grants/:path*',
     '/tools/my-dispute-letters/:path*',
     '/user-hub/:path*',
+    '/workspace/:path*',
     '/api/admin/:path*',
     '/api/chat/:path*',
     '/api/chat-with-analysis/:path*',
@@ -288,5 +296,6 @@ export const config = {
     '/api/run-db-setup/:path*',
     '/api/setup-database/:path*',
     '/api/test-openai-connection/:path*',
+    '/api/workspace/:path*',
   ],
 };

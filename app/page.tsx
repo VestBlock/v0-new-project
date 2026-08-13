@@ -13,9 +13,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Capital, Deals, and Opportunity | VestBlock',
+  title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
   description:
-    'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place. Find your next move.',
+    'VestBlock coordinates practical next moves across capital, real estate, financial readiness, business growth, and DealVault records.',
   keywords: [
     'business capital preparation',
     'capital readiness',
@@ -36,24 +36,24 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Capital, Deals, and Opportunity | VestBlock',
+    title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
     description:
-      'Capital access, deal pathways, and opportunities to build, acquire, or grow—organized around a clear next move.',
+      'Capital preparation, real estate pathways, practical opportunity roadmaps, and DealVault continuity—organized around a clear next move.',
     url: absoluteUrl('/'),
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Capital, Deals, and Opportunity social preview',
+        alt: 'VestBlock Capital, Real Estate, Opportunity, and DealVault social preview',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Capital, Deals, and Opportunity | VestBlock',
+    title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
     description:
-      'Capital access, deal pathways, and opportunities to build, acquire, or grow—organized around a clear next move.',
+      'Capital preparation, real estate pathways, practical opportunity roadmaps, and DealVault continuity—organized around a clear next move.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

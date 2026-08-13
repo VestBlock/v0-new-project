@@ -16,7 +16,7 @@ export const nextMoveFocuses = [
 ] as const
 
 export type NextMoveFocus = (typeof nextMoveFocuses)[number]
-export type NextMovePath = 'Capital' | 'Deals' | 'Opportunity'
+export type NextMovePath = 'Capital' | 'Real Estate' | 'Opportunity'
 export type AccessType = 'Free' | 'Free account' | 'Paid' | 'Member tool' | 'Review required' | 'Partner-routed'
 
 export type NextMoveAnswers = {

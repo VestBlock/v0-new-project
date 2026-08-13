@@ -1,20 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import { FormEvent, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { ArrowLeft, ArrowRight, Check, Download, LockKeyhole, Mail, ShieldCheck } from "lucide-react"
 import type { NextMoveAnswers, NextMoveFocus, NextMoveRoadmap } from "@/lib/next-move/types"
+import { nextMoveFocuses } from "@/lib/next-move/types"
+import { useAuth } from "@/contexts/auth-context"
 
 const focusOptions: Array<{ value: NextMoveFocus; label: string; detail: string; path: string }> = [
   { value: "business-funding", label: "Prepare for business funding", detail: "Organize the request, documents, and timing.", path: "Capital" },
   { value: "real-estate-funding", label: "Prepare property funding", detail: "Structure a property-specific capital scenario.", path: "Capital" },
   { value: "grants", label: "Explore grant preparation", detail: "Define the project and verify program fit.", path: "Capital" },
   { value: "business-credit", label: "Build business-credit readiness", detail: "Sequence foundations and selective applications.", path: "Capital" },
-  { value: "sell-property", label: "Review a property sale path", detail: "Organize property, condition, timing, and outcome.", path: "Deals" },
-  { value: "buy-property", label: "Prepare to acquire property", detail: "Define a buy box and decision rules.", path: "Deals" },
-  { value: "fund-deal", label: "Fund an active deal", detail: "Prepare economics, evidence, and capital needs.", path: "Deals" },
-  { value: "business-acquisition", label: "Explore a business acquisition", detail: "Organize criteria, diligence, and capital preparation.", path: "Deals" },
-  { value: "builder-developer", label: "Route a builder or development project", detail: "Create a project-fit brief for review.", path: "Deals" },
+  { value: "sell-property", label: "Review a property sale path", detail: "Organize property, condition, timing, and outcome.", path: "Real Estate" },
+  { value: "buy-property", label: "Prepare to acquire property", detail: "Define a buy box and decision rules.", path: "Real Estate" },
+  { value: "fund-deal", label: "Fund an active deal", detail: "Prepare economics, evidence, and capital needs.", path: "Real Estate" },
+  { value: "business-acquisition", label: "Explore a business acquisition", detail: "Organize criteria, diligence, and capital preparation.", path: "Real Estate" },
+  { value: "builder-developer", label: "Route a builder or development project", detail: "Create a project-fit brief for review.", path: "Real Estate" },
   { value: "improve-credit", label: "Improve credit readiness", detail: "Start with a free report review and roadmap.", path: "Opportunity" },
   { value: "increase-income", label: "Create an income path", detail: "Match a testable direction to time and capacity.", path: "Opportunity" },
   { value: "start-business", label: "Start a business", detail: "Move from offer validation to operating foundations.", path: "Opportunity" },
@@ -29,6 +31,7 @@ const emptyAnswers: NextMoveAnswers = {
 }
 
 export function NextMoveQuestionnaire({ initialFocus }: { initialFocus?: NextMoveFocus }) {
+  const { isAuthenticated, user } = useAuth()
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<NextMoveAnswers>({ ...emptyAnswers, focus: initialFocus || emptyAnswers.focus })
   const [roadmap, setRoadmap] = useState<NextMoveRoadmap | null>(null)
@@ -36,6 +39,68 @@ export function NextMoveQuestionnaire({ initialFocus }: { initialFocus?: NextMov
   const [confirmationAccepted, setConfirmationAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [draftReady, setDraftReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const applyDraft = (value: unknown) => {
+      if (!value || typeof value !== "object" || cancelled) return
+      const draft = value as Record<string, unknown>
+      setAnswers((current) => ({
+        ...current,
+        focus: initialFocus || (typeof draft.focus === "string" && nextMoveFocuses.includes(draft.focus as NextMoveFocus) ? draft.focus as NextMoveFocus : current.focus),
+        timeline: ["now", "30-days", "90-days", "exploring"].includes(String(draft.timeline)) ? draft.timeline as NextMoveAnswers["timeline"] : current.timeline,
+        position: ["starting", "preparing", "active", "stalled"].includes(String(draft.position)) ? draft.position as NextMoveAnswers["position"] : current.position,
+        creditRange: ["unknown", "below-580", "580-669", "670-739", "740-plus", "prefer-not-to-say"].includes(String(draft.creditRange)) ? draft.creditRange as NextMoveAnswers["creditRange"] : current.creditRange,
+        weeklyTime: ["under-3", "3-7", "8-plus"].includes(String(draft.weeklyTime)) ? draft.weeklyTime as NextMoveAnswers["weeklyTime"] : current.weeklyTime,
+        mainObstacle: typeof draft.mainObstacle === "string" ? draft.mainObstacle.slice(0, 500) : current.mainObstacle,
+        goalDetails: typeof draft.goalDetails === "string" ? draft.goalDetails.slice(0, 1200) : current.goalDetails,
+        requestFollowUp: typeof draft.requestFollowUp === "boolean" ? draft.requestFollowUp : current.requestFollowUp,
+      }))
+      if (typeof draft.step === "number") setStep(Math.max(0, Math.min(2, Math.trunc(draft.step))))
+    }
+
+    try {
+      const local = window.localStorage.getItem("vestblock:next-move-draft")
+      if (local) applyDraft(JSON.parse(local))
+    } catch {
+      // A disabled or invalid browser store must never block the questionnaire.
+    }
+
+    if (!isAuthenticated) {
+      setDraftReady(true)
+      return () => { cancelled = true }
+    }
+
+    void fetch("/api/workspace", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => applyDraft(payload?.workspace?.questionnaireProgress))
+      .finally(() => { if (!cancelled) setDraftReady(true) })
+
+    return () => { cancelled = true }
+  }, [initialFocus, isAuthenticated, user?.id])
+
+  useEffect(() => {
+    if (!draftReady || step >= 3) return
+    const draft = {
+      step,
+      focus: answers.focus,
+      timeline: answers.timeline,
+      position: answers.position,
+      creditRange: answers.creditRange,
+      weeklyTime: answers.weeklyTime,
+      mainObstacle: answers.mainObstacle,
+      goalDetails: answers.goalDetails || "",
+      requestFollowUp: answers.requestFollowUp,
+    }
+    const timer = window.setTimeout(() => {
+      try { window.localStorage.setItem("vestblock:next-move-draft", JSON.stringify(draft)) } catch { /* Optional continuity only. */ }
+      if (isAuthenticated) {
+        void fetch("/api/workspace", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ questionnaireProgress: draft }) })
+      }
+    }, 450)
+    return () => window.clearTimeout(timer)
+  }, [answers.creditRange, answers.focus, answers.goalDetails, answers.mainObstacle, answers.position, answers.requestFollowUp, answers.timeline, answers.weeklyTime, draftReady, isAuthenticated, step])
 
   const update = <K extends keyof NextMoveAnswers>(key: K, value: NextMoveAnswers[K]) => setAnswers((current) => ({ ...current, [key]: value }))
 
@@ -66,6 +131,8 @@ export function NextMoveQuestionnaire({ initialFocus }: { initialFocus?: NextMov
       setToken(data.lifecycleToken)
       setConfirmationAccepted(Boolean(data.confirmationAccepted))
       setStep(3)
+      try { window.localStorage.removeItem("vestblock:next-move-draft") } catch { /* Storage is optional. */ }
+      if (isAuthenticated) void fetch("/api/workspace", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ questionnaireProgress: {} }) })
       window.scrollTo({ top: 0, behavior: "smooth" })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your roadmap could not be prepared. Please try again.")

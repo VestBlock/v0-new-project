@@ -56,7 +56,7 @@ export const metadata: Metadata = {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Capital, Deals, and Opportunity platform preview',
+        alt: 'VestBlock Capital, Real Estate, Opportunity, and DealVault platform preview',
       },
     ],
   },
