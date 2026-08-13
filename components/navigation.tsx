@@ -43,7 +43,11 @@ export function Navigation() {
   );
 
   // Admin surfaces run their own command shell; the marketing header stays out of the cockpit.
-  if (pathname.startsWith('/admin') || pathname.startsWith('/dev/command-center-preview')) {
+  if (
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/dev/command-center-preview') ||
+    pathname.startsWith('/dev/gate-4b2-prototype')
+  ) {
     return null;
   }
 
