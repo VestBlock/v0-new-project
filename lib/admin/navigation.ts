@@ -25,6 +25,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'pipeline',
   },
   {
+    title: 'Capital Cases',
+    description: 'Owned Capital intakes, readiness, documents, status history, and operator review.',
+    href: '/admin/funding',
+    group: 'pipeline',
+  },
+  {
     title: 'Lead Sources',
     description: 'DealMachine, partner discovery, and source readiness.',
     href: '/admin/lead-sources',

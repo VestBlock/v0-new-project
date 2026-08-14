@@ -1,7 +1,13 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { checkAdminAccess } from '@/lib/auth/admin'
+import { CapitalCaseDashboard } from '@/components/admin/capital-case-dashboard'
+import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
 
-export default function AdminFundingPage() {
-  redirect('/admin/command-center')
+export default async function AdminFundingPage() {
+  const admin = await checkAdminAccess()
+  if (!admin.isAdmin) redirect('/dashboard')
+  return <div className="space-y-6 px-4 py-6 md:px-8"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-slate-400">Admin workspace</p><h1 className="text-2xl font-semibold text-white">Capital case review</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">Review customer-owned Capital cases, preserve provider decision boundaries, assign follow-up, and keep every status change auditable.</p></div><div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/leads">CRM leads</Link></Button><Button asChild variant="outline"><Link href="/admin/lenders">Provider network</Link></Button></div></div><CapitalCaseDashboard /></div>
 }
