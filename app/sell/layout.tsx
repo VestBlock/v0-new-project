@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { absoluteUrl } from "@/lib/seo/site"
 
 export const metadata: Metadata = {
-  title: "Property Review And Sale Path Evaluation",
+  title: "Private Property Review and Seller Case",
   description:
-    "Submit your property details so VestBlock can review the situation and recommend the right next sale conversation, including investor review, creative structures, or prep-first support.",
+    "Save a private seller case with property facts, condition, occupancy, timing, and priorities for accountable VestBlock review.",
   keywords:
     "property review, sell house options, investor property review, creative sale options, home sale planning",
   alternates: {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "VestBlock Property Review",
     description:
-      "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
+      "Build one private property record around condition, timeline, occupancy, and seller priorities before the next conversation.",
     type: "website",
     url: absoluteUrl("/sell"),
     images: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "VestBlock Property Review",
     description:
-      "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
+      "Build one private property record around condition, timeline, occupancy, and seller priorities before the next conversation.",
     images: [absoluteUrl("/opengraph-image")],
   },
   robots: {

@@ -63,6 +63,7 @@
     "qa:gate4c": "playwright test tests/gate4c-platform.spec.ts",
     "qa:gate4c:workspace": "node --env-file=.env.local scripts/qa-gate4c-workspace.mjs",
     "qa:gate4d:capital": "node --env-file=.env.local scripts/qa-gate4d-capital.mjs",
+    "qa:gate4e1:seller": "node --env-file=.env.local scripts/qa-gate4e1-seller.mjs",
     "typecheck": "tsc --noEmit",
     "check:release": "npm run check:app && npm run check:contracts",
     "verify:dealvault:ui": "node --env-file=.env.local scripts/verifyDealVaultUiFlow.mjs",

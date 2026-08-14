@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { SellPage } from '@/components/sell/sell-page'
 import { FaqSection } from '@/components/marketing/faq-section'
 import { absoluteUrl } from '@/lib/seo/site'
@@ -10,9 +11,9 @@ import {
 import { sellFaqs } from '@/lib/seo/faqContent'
 
 export const metadata: Metadata = {
-  title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
+  title: 'Private Property Review and Seller Case',
   description:
-    'Submit your property online for review. VestBlock routes condition, timeline, payoff, and seller context to acquisitions review for fast cash, creative structure, novation, or partner sale paths.',
+    'Create a private seller case around property condition, occupancy, timing, priorities, and voluntary price context. Save progress and submit for accountable VestBlock review.',
   keywords: [
     'sell my house fast',
     'novation real estate review',
@@ -31,9 +32,9 @@ export const metadata: Metadata = {
     canonical: '/sell',
   },
   openGraph: {
-    title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
+    title: 'Private Property Review and Seller Case',
     description:
-      'Submit property details for review. VestBlock routes the submission to acquisitions review for fast cash, creative structure, novation, or another partner sale path.',
+      'Organize property facts and seller priorities in one private, resumable case before a next-step conversation.',
     url: absoluteUrl('/sell'),
     images: [
       {
@@ -46,9 +47,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
+    title: 'Private Property Review and Seller Case',
     description:
-      'Submit property details for review. VestBlock routes fast cash, creative, novation, and partner review based on your situation.',
+      'Organize property facts and seller priorities in one private, resumable case before a next-step conversation.',
     images: [absoluteUrl('/opengraph-image')],
   },
 }
@@ -69,7 +70,7 @@ export default function SellPageRoute() {
           ]),
         }}
       />
-      <SellPage />
+      <Suspense fallback={<div className="premium-page min-h-[60vh]" />}><SellPage /></Suspense>
       <div className="premium-page">
         <FaqSection items={sellFaqs} title="Selling FAQ" />
       </div>

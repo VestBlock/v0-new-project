@@ -447,7 +447,7 @@ export function realEstatePartnerServiceJsonLd() {
     name: 'VestBlock Real Estate Partner Network',
     url: absoluteUrl('/'),
     description:
-      'VestBlock connects real estate seller opportunities with buyer, lender, developer, contractor, operator, and capital partner conversations using clear review forms, buy-box criteria, lender requirements, and DealVault records.',
+      'VestBlock provides role-specific entry paths for real estate sellers, buyers, investors, agents, wholesalers, lenders, builders, and developers. Seller cases are privately organized for operator review; later participant decisions remain independent.',
     provider: {
       '@type': 'Organization',
       name: vestBlockSiteName,
@@ -467,16 +467,16 @@ export function realEstatePartnerServiceJsonLd() {
           '@type': 'Offer',
           name: 'Seller Property Review',
           url: absoluteUrl('/sell'),
-          description: 'Sellers submit property details for fast cash buyer, creative structure, novation, or partner sale review.',
+          description: 'Sellers create a private, resumable property case for organized VestBlock review without a promised offer, buyer, price, closing date, or sale outcome.',
           availability: 'https://schema.org/InStock',
           price: '0',
           priceCurrency: 'USD',
         },
         {
           '@type': 'Offer',
-          name: 'Buyer Buy Box Network',
+          name: 'Buyer Criteria Intake',
           url: absoluteUrl('/buyers'),
-          description: 'Real estate buyers share acquisition criteria so matching seller opportunities can be introduced for review, with No Limit Capital or another partner funding review available when capital fit matters.',
+          description: 'Real estate buyers can share acquisition criteria through the current intake. Expanded profile controls, discovery, and automated matching are separate later-stage functionality.',
           availability: 'https://schema.org/InStock',
           price: '0',
           priceCurrency: 'USD',

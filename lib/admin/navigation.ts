@@ -31,6 +31,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'pipeline',
   },
   {
+    title: 'Seller Cases',
+    description: 'Private seller intakes, property facts, permissions, tasks, CRM links, and status history.',
+    href: '/admin/sellers',
+    group: 'pipeline',
+  },
+  {
     title: 'Lead Sources',
     description: 'DealMachine, partner discovery, and source readiness.',
     href: '/admin/lead-sources',

@@ -15,34 +15,34 @@ export type FaqItem = { question: string; answer: string };
 
 export const sellFaqs: FaqItem[] = [
   {
-    question: 'How do I sell my property through VestBlock?',
+    question: 'How do I start a seller case with VestBlock?',
     answer:
-      'Submit your property at vestblock.io/sell with the address, condition, timeline, payoff context, asking price, and your situation. VestBlock routes the details to acquisitions review so the follow-up can be shaped around fast cash, creative structure, novation, or another partner sale conversation.',
+      'Create a private seller case at vestblock.io/sell with the property, condition, occupancy, timeline, and your priorities. Price expectations are optional. You can save progress, resume securely, and submit the completed case for VestBlock review.',
   },
   {
     question: 'Does it cost anything to submit my property for review?',
     answer:
-      'No. Submitting your property for review is free and there is no upfront fee to get started. You are never obligated to accept any offer or path that comes out of the review.',
+      'No. Saving or submitting a seller case is free. Submission places the case in VestBlock’s review queue; it does not create an offer, buyer match, agreement, or obligation.',
   },
   {
     question: 'What kinds of properties does VestBlock review?',
     answer:
-      'VestBlock reviews single-family homes, small multifamily, condos, townhomes, land, and other residential situations — including properties that need repairs, are in pre-foreclosure, inherited, tenant-occupied, or otherwise hard to sell the traditional way.',
+      'The intake supports single-family homes, small multifamily properties, condos, townhomes, land, commercial property, and other situations. VestBlock still verifies whether it can provide a useful review after the case is submitted.',
   },
   {
-    question: 'How fast can a sale happen?',
+    question: 'Does VestBlock set a sale or closing timeline?',
     answer:
-      'Timing depends on the property, liens, condition, payoff, title, buyer interest, and the sale path. Some situations fit a faster cash or investor conversation; others are better reviewed for creative structure, novation, or a more traditional sale path. VestBlock routes the details for review first, then the team follows up on the most realistic next step.',
+      'No. A sale or closing timeline depends on the property, title, inspections, legal and contractual review, buyer decisions, financing when applicable, and other independent parties. VestBlock records your preferred timing so an operator can review the case responsibly.',
   },
   {
-    question: 'What seller sale paths does VestBlock review?',
+    question: 'What does VestBlock do after I submit?',
     answer:
-      'VestBlock routes seller submissions for three primary paths: fast cash buyer review, creative structure review, and novation or market-assisted sale review. The right path depends on the property, payoff, equity, timing, repairs, and buyer demand.',
+      'VestBlock organizes the submitted facts, creates an accountable operator task, and reviews whether more information is needed. Any later sale-path conversation remains separate from the intake and depends on the property, seller priorities, legal requirements, and independent participant decisions.',
   },
   {
     question: 'Is VestBlock a real estate agent or buyer?',
     answer:
-      'VestBlock is a real estate partner platform, not a licensed brokerage, buyer, or closing agent. It reviews your property and helps connect the right buyer or follow-up conversation. It does not guarantee an offer, price, or closing.',
+      'VestBlock is a platform for organizing and reviewing the opportunity. It is not a buyer, lender, title company, inspector, attorney, or closing agent, and it does not guarantee an offer, price, buyer, financing, closing date, sale, or other outcome.',
   },
 ];
 

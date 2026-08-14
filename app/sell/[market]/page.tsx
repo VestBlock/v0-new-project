@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { SellPage } from '@/components/sell/sell-page'
 import { absoluteUrl } from '@/lib/seo/site'
@@ -9,43 +10,43 @@ const sellerMarkets = {
     city: 'Milwaukee',
     state: 'WI',
     stateName: 'Wisconsin',
-    title: 'Sell a Property in Milwaukee - Fast Cash, Creative, or Novation Review',
+    title: 'Private Property Review in Milwaukee',
     description:
-      'Milwaukee property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
+      'Milwaukee property owners can create a private, resumable case around condition, occupancy, timing, priorities, and voluntary price context for VestBlock review.',
   },
   toledo: {
     city: 'Toledo',
     state: 'OH',
     stateName: 'Ohio',
-    title: 'Sell a Property in Toledo - Fast Cash, Creative, or Novation Review',
+    title: 'Private Property Review in Toledo',
     description:
-      'Toledo property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
+      'Toledo property owners can create a private, resumable case around condition, occupancy, timing, priorities, and voluntary price context for VestBlock review.',
   },
   memphis: {
     city: 'Memphis',
     state: 'TN',
     stateName: 'Tennessee',
-    title: 'Sell a Property in Memphis - Fast Cash, Creative, or Novation Review',
+    title: 'Private Property Review in Memphis',
     description:
-      'Memphis property owners can submit address, condition, timeline, occupancy, and payoff context for fast cash buyer, creative structure, novation, or partner review.',
+      'Memphis property owners can create a private, resumable case around condition, occupancy, timing, priorities, and voluntary price context for VestBlock review.',
   },
   'west-michigan': {
     city: 'Grand Rapids',
     state: 'MI',
     stateName: 'Michigan',
     regionLabel: 'West Michigan',
-    title: 'Sell a Property in West Michigan - Cash, Creative, or Partner Review',
+    title: 'Private Property Review in West Michigan',
     description:
-      'West Michigan property owners can submit address, condition, timeline, occupancy, and payoff context for a practical cash buyer, creative structure, novation, or partner sale review.',
+      'West Michigan property owners can create a private, resumable case around condition, occupancy, timing, priorities, and voluntary price context for VestBlock review.',
   },
   'west-mi': {
     city: 'Grand Rapids',
     state: 'MI',
     stateName: 'Michigan',
     regionLabel: 'West Michigan',
-    title: 'Sell a Property in West Michigan - Cash, Creative, or Partner Review',
+    title: 'Private Property Review in West Michigan',
     description:
-      'West Michigan property owners can submit address, condition, timeline, occupancy, and payoff context for a practical cash buyer, creative structure, novation, or partner sale review.',
+      'West Michigan property owners can create a private, resumable case around condition, occupancy, timing, priorities, and voluntary price context for VestBlock review.',
   },
 } as const
 
@@ -89,12 +90,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       `sell house as-is ${market.city}`,
       `${market.city} property review`,
       `${market.city} investor property review`,
-      `${market.city} cash buyer review`,
-      `${market.city} creative finance review`,
-      `${market.city} novation review`,
+      `${market.city} private seller case`,
+      `${market.city} property sale path review`,
+      `${market.city} seller priorities review`,
       `sell property in ${market.city}`,
       'VestBlock seller intake',
-      'fast cash creative novation review',
+      'private property review',
     ],
     alternates: {
       canonical: path,
@@ -135,7 +136,7 @@ export default async function MarketSellPage({ params }: PageProps) {
           __html: JSON.stringify(realEstatePartnerServiceJsonLd()),
         }}
       />
-      <SellPage market={market} />
+      <Suspense fallback={<div className="premium-page min-h-[60vh]" />}><SellPage market={market} /></Suspense>
     </>
   )
 }

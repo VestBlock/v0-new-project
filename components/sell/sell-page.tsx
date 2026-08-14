@@ -1,984 +1,292 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { motion } from "framer-motion"
-import {
-  Home,
-  DollarSign,
-  Clock,
-  Shield,
-  CheckCircle2,
-  Phone,
-  Zap,
-  HandshakeIcon,
-  TrendingUp,
-  Users
-} from "lucide-react"
-import { BrandMark } from "@/components/brand-logo"
-import { useAuth } from "@/contexts/auth-context"
-import { analyticsEvents } from "@/lib/analytics/events"
-import { captureClientEvent } from "@/lib/analytics/client"
-import { sendGoogleAdsConversion } from "@/components/providers/google-ads-provider"
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ClipboardCheck, FileText, Loader2, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { useAuth } from '@/contexts/auth-context'
+import type { SellerCaseEvent, SellerCaseRecord } from '@/lib/seller/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
-const US_STATES = [
-  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
-  "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
-  "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
-  "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
-  "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
-  "Wisconsin", "Wyoming"
+const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming']
+const PROPERTY_TYPES = ['Single-family','Duplex / triplex / fourplex','Condo','Townhome','Multifamily','Land','Commercial','Other']
+const CONDITIONS = ['Move-in ready','Minor updates needed','Significant repairs needed','Major rehabilitation needed','Unsure']
+const OCCUPANCIES = ['Owner occupied','Tenant occupied','Vacant','Partially occupied','Unsure']
+const TIMELINES = ['As soon as practical','Within 30 days','Within 60 days','Within 3–6 months','Exploring options']
+const STEPS = [
+  { title: 'Property', detail: 'The asset and its current condition' },
+  { title: 'Priorities', detail: 'Your timing and decision factors' },
+  { title: 'Contact', detail: 'Private follow-up permissions' },
 ]
+const TRACKING_PARAMS = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','gbraid','wbraid']
 
-const PROPERTY_CONDITIONS = ["Good", "Needs Repairs", "Major Repairs"]
-const TIMELINES = ["ASAP", "30 days", "60+ days"]
-const PROPERTY_TYPES = ["Single Family", "Duplex / Triplex / Fourplex", "Condo", "Townhome", "Multifamily", "Land", "Other"]
-const OCCUPANCY_STATUS = ["Owner Occupied", "Tenant Occupied", "Vacant", "Unknown"]
-const BEST_TIMES = ["Morning", "Afternoon", "Evening", "Anytime"]
-const SELLER_REVIEW_PATHS = [
-  { value: "not_sure", label: "Not sure yet - review the best path" },
-  { value: "fast_cash", label: "Fast cash buyer review" },
-  { value: "creative_structure", label: "Creative structure review" },
-  { value: "novation", label: "Novation / market-assisted sale review" },
-]
-const SELLING_REASONS = [
-  "Foreclosure",
-  "Pre-Foreclosure",
-  "Inherited",
-  "Tired Landlord",
-  "Divorce",
-  "Relocating",
-  "Other"
-]
-
-const QUERY_PREFILL_FIELDS = [
-  "propertyAddress",
-  "city",
-  "state",
-  "propertyType",
-  "bedrooms",
-  "bathrooms",
-  "propertyCondition",
-  "timelineToSell",
-  "estimatedValue",
-  "askingPrice",
-  "mortgageBalance",
-  "liensOrTaxes",
-  "occupancyStatus",
-] as const
-
-const TRACKING_PARAMS = [
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "gclid",
-  "gbraid",
-  "wbraid",
-] as const
-
-type SellPageMarket = {
-  city: string
-  state: string
-  stateName: string
-  regionLabel?: string
+type SellPageMarket = { city: string; state: string; stateName: string; regionLabel?: string }
+type SellPageProps = { market?: SellPageMarket }
+type FormState = {
+  sellerName: string; email: string; phone: string; propertyAddress: string; city: string; state: string; postalCode: string
+  propertyType: string; bedrooms: string; bathrooms: string; propertyCondition: string; occupancyStatus: string; timelineToSell: string
+  reasonForSelling: string; preferredSalePath: string; estimatedValue: string; askingPrice: string; mortgageBalance: string
+  liensOrTaxes: string; bestTimeToContact: string; communicationPreference: 'email' | 'phone' | 'either'
+  analysisConsent: boolean; contactConsent: boolean; marketingConsent: boolean; sellerNotes: string; attribution: Record<string, string>
 }
 
-type SellPageProps = {
-  market?: SellPageMarket
-}
-
-function getInitialFormData(market?: SellPageMarket) {
+function emptyForm(market?: SellPageMarket): FormState {
   return {
-    propertyAddress: "",
-    city: market?.city || "",
-    state: market?.stateName || "",
-    name: "",
-    email: "",
-    phone: "",
-    propertyType: "",
-    bedrooms: "",
-    bathrooms: "",
-    propertyCondition: "",
-    timelineToSell: "",
-    estimatedValue: "",
-    askingPrice: "",
-    mortgageBalance: "",
-    liensOrTaxes: "",
-    occupancyStatus: "",
-    bestTimeToCall: "",
-    preferredSalePath: "not_sure",
-    notes: "",
-    reasonForSelling: "",
-    attribution: {} as Record<string, string>,
+    sellerName: '', email: '', phone: '', propertyAddress: '', city: market?.city || '', state: market?.stateName || '', postalCode: '',
+    propertyType: '', bedrooms: '', bathrooms: '', propertyCondition: '', occupancyStatus: '', timelineToSell: '', reasonForSelling: '',
+    preferredSalePath: 'not_sure', estimatedValue: '', askingPrice: '', mortgageBalance: '', liensOrTaxes: '', bestTimeToContact: '',
+    communicationPreference: 'either', analysisConsent: false, contactConsent: false, marketingConsent: false, sellerNotes: '', attribution: {},
   }
 }
+
+function formFromCase(record: SellerCaseRecord): FormState {
+  return {
+    sellerName: record.seller_name, email: record.email, phone: record.phone, propertyAddress: record.property_address, city: record.city,
+    state: record.state, postalCode: record.postal_code, propertyType: record.property_type,
+    bedrooms: record.bedrooms === null ? '' : String(record.bedrooms), bathrooms: record.bathrooms === null ? '' : String(record.bathrooms),
+    propertyCondition: record.property_condition, occupancyStatus: record.occupancy_status, timelineToSell: record.timeline_to_sell,
+    reasonForSelling: record.reason_for_selling, preferredSalePath: record.preferred_sale_path, estimatedValue: record.estimated_value === null ? '' : String(record.estimated_value),
+    askingPrice: record.asking_price === null ? '' : String(record.asking_price), mortgageBalance: record.mortgage_balance === null ? '' : String(record.mortgage_balance),
+    liensOrTaxes: record.liens_or_taxes, bestTimeToContact: record.best_time_to_contact, communicationPreference: record.communication_preference,
+    analysisConsent: record.analysis_consent, contactConsent: record.contact_consent, marketingConsent: record.marketing_consent,
+    sellerNotes: record.seller_notes, attribution: record.attribution || {},
+  }
+}
+
+function label(value: string) { return value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase()) }
+function money(value: number | null) { return value === null ? 'Not provided' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value) }
+const STORAGE_KEY = 'vestblock-seller-case'
 
 export function SellPage({ market }: SellPageProps) {
-  const { user, userProfile } = useAuth()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [submitError, setSubmitError] = useState("")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, userProfile, isLoading: authLoading } = useAuth()
+  const [form, setForm] = useState<FormState>(() => emptyForm(market))
+  const [step, setStep] = useState(0)
+  const [record, setRecord] = useState<SellerCaseRecord | null>(null)
+  const [events, setEvents] = useState<SellerCaseEvent[]>([])
+  const [ownedCases, setOwnedCases] = useState<SellerCaseRecord[]>([])
+  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState<'draft' | 'submit' | 'withdraw' | null>(null)
+  const [message, setMessage] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const idempotencyKey = useRef(crypto.randomUUID())
 
-  const [formData, setFormData] = useState(() => getInitialFormData(market))
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const params = new URLSearchParams(window.location.search)
-    if (
-      !QUERY_PREFILL_FIELDS.some((field) => params.has(field)) &&
-      !TRACKING_PARAMS.some((field) => params.has(field))
-    ) return
-
-    setFormData((current) => {
-      const next = { ...current }
-
-      for (const field of QUERY_PREFILL_FIELDS) {
-        const value = params.get(field)
-        if (value && !next[field]) next[field] = value
-      }
-
-      const attribution = { ...next.attribution }
-      for (const field of TRACKING_PARAMS) {
-        const value = params.get(field)
-        if (value) attribution[field] = value
-      }
-      next.attribution = attribution
-
-      return next
-    })
-  }, [])
-
-  useEffect(() => {
-    const email = user?.email || ""
-    const fullName =
-      userProfile?.full_name ||
-      (typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "")
-
-    if (!email && !fullName) return
-
-    setFormData((current) => ({
-      ...current,
-      email: current.email || email,
-      name: current.name || fullName,
-    }))
-  }, [user?.email, user?.user_metadata?.full_name, userProfile?.full_name])
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const validatePhone = (phone: string) => {
-    const phoneRegex = /^[\d\s\-\(\)\+]{10,}$/
-    return phoneRegex.test(phone.replace(/\s/g, ""))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setSubmitError("")
-
-    // Validate required fields
-    if (!formData.propertyAddress || !formData.city || !formData.state || !formData.name || !formData.phone) {
-      setSubmitError("Please fill in all required fields.")
-      setIsSubmitting(false)
-      return
-    }
-
-    if (!validatePhone(formData.phone)) {
-      setSubmitError("Please enter a valid phone number.")
-      setIsSubmitting(false)
-      return
-    }
-
+  const loadCase = useCallback(async (id: string, token?: string | null, stripPrivateParams = false) => {
+    setLoading(true)
     try {
-      const response = await fetch("/api/sell-lead", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to submit form")
-      }
-
-      const marketLabel = market?.regionLabel || market?.city || formData.city || "unknown"
-      captureClientEvent(analyticsEvents.sellerLeadSubmitted, {
-        market: marketLabel,
-        city: formData.city,
-        state: formData.state,
-        propertyType: formData.propertyType,
-        timelineToSell: formData.timelineToSell,
-        preferredSalePath: formData.preferredSalePath,
-        source: formData.attribution.utm_source || "direct",
-        campaign: formData.attribution.utm_campaign || "unknown",
-      })
-      sendGoogleAdsConversion("sell_property_lead", undefined, {
-        market: marketLabel,
-        property_type: formData.propertyType,
-        timeline_to_sell: formData.timelineToSell,
-        preferred_sale_path: formData.preferredSalePath,
-      })
-
-      setSubmitSuccess(true)
-      setFormData(getInitialFormData(market))
+      const params = new URLSearchParams({ id })
+      if (token) params.set('token', token)
+      const response = await fetch(`/api/seller/cases?${params}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Unable to resume this seller case.')
+      setRecord(payload.case)
+      setForm(formFromCase(payload.case))
+      setEvents(payload.events || [])
+      setAccessToken(token || null)
+      if (token) window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: payload.case.id, token }))
+      if (stripPrivateParams) router.replace(window.location.pathname, { scroll: false })
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.")
-    } finally {
-      setIsSubmitting(false)
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Unable to resume this seller case.' })
+    } finally { setLoading(false) }
+  }, [router])
+
+  useEffect(() => {
+    if (authLoading) return
+    const queryId = searchParams.get('case')
+    const queryToken = searchParams.get('token')
+    if (queryId) {
+      const timeout = window.setTimeout(() => void loadCase(queryId, queryToken, true), 0)
+      return () => window.clearTimeout(timeout)
     }
+    const saved = window.localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as { id?: string; token?: string }
+        if (parsed.id && parsed.token) {
+          const timeout = window.setTimeout(() => void loadCase(parsed.id!, parsed.token), 0)
+          return () => window.clearTimeout(timeout)
+        }
+      } catch { window.localStorage.removeItem(STORAGE_KEY) }
+    }
+  }, [authLoading, loadCase, searchParams])
+
+  useEffect(() => {
+    const attribution: Record<string, string> = {}
+    for (const key of TRACKING_PARAMS) {
+      const value = searchParams.get(key)
+      if (value) attribution[key] = value
+    }
+    if (Object.keys(attribution).length) {
+      const timeout = window.setTimeout(() => setForm((current) => ({ ...current, attribution: { ...current.attribution, ...attribution } })), 0)
+      return () => window.clearTimeout(timeout)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (authLoading || !user) return
+    fetch('/api/seller/cases', { cache: 'no-store' }).then(async (response) => ({ ok: response.ok, payload: await response.json() }))
+      .then(({ ok, payload }) => { if (ok) setOwnedCases(payload.cases || []) }).catch(() => null)
+    if (!record) {
+      const timeout = window.setTimeout(() => setForm((current) => ({ ...current, sellerName: current.sellerName || userProfile?.full_name || '', email: current.email || user.email || '' })), 0)
+      return () => window.clearTimeout(timeout)
+    }
+  }, [authLoading, record, user, userProfile?.full_name])
+
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((current) => ({ ...current, [key]: value }))
+
+  async function persist(action: 'save_draft' | 'submit' | 'withdraw') {
+    if (action === 'save_draft' && !user && !/^\S+@\S+\.\S+$/.test(form.email)) {
+      setStep(2)
+      setMessage({ tone: 'info', text: 'Add your email to save a private guest draft and return from this device.' })
+      return
+    }
+    setSaving(action === 'save_draft' ? 'draft' : action)
+    setMessage(null)
+    try {
+      const response = await fetch('/api/seller/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: record?.id, accessToken: accessToken || undefined, idempotencyKey: idempotencyKey.current, action, ...form,
+          bedrooms: form.bedrooms === '' ? null : Number(form.bedrooms), bathrooms: form.bathrooms === '' ? null : Number(form.bathrooms),
+          estimatedValue: form.estimatedValue === '' ? null : Number(form.estimatedValue), askingPrice: form.askingPrice === '' ? null : Number(form.askingPrice),
+          mortgageBalance: form.mortgageBalance === '' ? null : Number(form.mortgageBalance), sourcePath: window.location.pathname,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        if (response.status === 422) {
+          const gaps = payload.completeness?.gaps || []
+          if (gaps.some((gap: string) => ['property address','city','state','property type','property condition','occupancy'].includes(gap))) setStep(0)
+          else if (gaps.some((gap: string) => ['sale timeline','seller objective'].includes(gap))) setStep(1)
+          else setStep(2)
+        }
+        throw new Error(payload.error || 'Unable to save this seller case.')
+      }
+      setRecord(payload.case)
+      if (payload.case) setForm(formFromCase(payload.case))
+      setAccessToken(payload.accessToken || accessToken)
+      if (!user && payload.accessToken) window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: payload.case.id, token: payload.accessToken }))
+      if (user) window.localStorage.removeItem(STORAGE_KEY)
+      idempotencyKey.current = crypto.randomUUID()
+      setMessage({ tone: 'success', text: action === 'withdraw'
+        ? 'This seller case is withdrawn and its operator follow-up has been closed.'
+        : payload.operationPending ? payload.message
+        : action === 'submit' ? 'Submitted for VestBlock review. This is not an offer, price commitment, buyer match, or closing promise.'
+        : payload.duplicate ? 'Your existing case was updated; no duplicate property record was created.'
+        : 'Private draft saved. You can return and continue from this device.' })
+      if (payload.case?.id) await loadCase(payload.case.id, payload.accessToken || accessToken)
+    } catch (error) {
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Unable to save this seller case.' })
+    } finally { setSaving(null) }
   }
 
-  const scrollToForm = () => {
-    document.getElementById("lead-form")?.scrollIntoView({ behavior: "smooth" })
+  function moveStep(current: number, key: string) {
+    const delta = key === 'ArrowRight' || key === 'ArrowDown' ? 1 : key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 0
+    if (!delta && key !== 'Home' && key !== 'End') return
+    const next = key === 'Home' ? 0 : key === 'End' ? STEPS.length - 1 : (current + delta + STEPS.length) % STEPS.length
+    setStep(next)
+    window.requestAnimationFrame(() => document.getElementById(`seller-step-${next}`)?.focus())
   }
+
+  const terminal = Boolean(record && ['withdrawn', 'closed', 'declined'].includes(record.status))
+  const location = [record?.property_address, record?.city, record?.state].filter(Boolean).join(', ')
 
   return (
-    <div className="premium-page text-slate-100">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden px-4 pb-12 pt-10 md:pb-14 md:pt-14">
-          <div className="absolute inset-0 bg-gradient-to-b from-cyan-950/45 via-slate-950/20 to-cyan-950/35" />
-          <div className="absolute inset-0 circuit-bg" />
+    <div className="vb-hub vb-seller-page">
+      <section className="vb-hub__hero vb-seller-hero">
+        <div className="vb-section-shell">
+          <p className="vb-kicker">Private seller casework</p>
+          <h1>Understand the property. Clarify the seller’s priorities.</h1>
+          <p>Build one private record around the property, condition, occupancy, timing, and decision factors. VestBlock reviews the file before any next-step conversation; submitting does not create an offer or guarantee a sale.</p>
+          <div className="vb-hub__actions"><Button asChild><a href="#seller-intake">Start a property review</a></Button><Button asChild variant="outline"><Link href="/real-estate">See every real estate path</Link></Button></div>
+        </div>
+      </section>
 
-          <div className="container mx-auto relative z-10">
-            <motion.div
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center max-w-4xl mx-auto"
-            >
-              <div className="flex justify-center mb-5">
-                <BrandMark
-                  className="h-[92px] w-[92px] rounded-[1.6rem]"
-                />
+      <section id="seller-intake" className="vb-capital vb-seller" aria-labelledby="seller-workbench-title">
+        <div className="vb-section-shell">
+          <div className="vb-section-intro vb-section-intro--split">
+            <div><p className="vb-kicker">Seller workspace</p><h2 id="seller-workbench-title">One clear intake. Saved progress. Accountable review.</h2></div>
+            <p>Share only what is known. Price estimates are voluntary. Save a private draft, return securely, and see the case history without creating duplicate property records.</p>
+          </div>
+
+          {ownedCases.length ? <div className="vb-capital__saved"><div><strong>Your seller cases</strong><span>Resume the same property record.</span></div><div>{ownedCases.map((item) => <button key={item.id} type="button" onClick={() => void loadCase(item.id)}><span>{item.property_address || 'Property draft'}</span><small>{label(item.status)} · {new Date(item.updated_at).toLocaleDateString()}</small></button>)}</div></div> : null}
+
+          <div className="vb-capital__path-tabs vb-seller__steps" role="tablist" aria-label="Seller intake sections">
+            {STEPS.map((item, index) => <button key={item.title} id={`seller-step-${index}`} type="button" role="tab" aria-selected={step === index} tabIndex={step === index ? 0 : -1} onClick={() => setStep(index)} onKeyDown={(event) => { if (['ArrowRight','ArrowDown','ArrowLeft','ArrowUp','Home','End'].includes(event.key)) { event.preventDefault(); moveStep(index, event.key) } }}><span>0{index + 1}</span>{item.title}<small>{item.detail}</small></button>)}
+          </div>
+
+          {loading ? <div className="vb-capital__loading"><Loader2 aria-hidden="true" /> Loading your private seller case…</div> : null}
+          <div className="vb-capital__workspace">
+            <form className="vb-capital__form" onSubmit={(event) => { event.preventDefault(); if (step < 2) setStep(step + 1); else void persist('submit') }} noValidate>
+              <div className="vb-capital__form-head"><div><p className="vb-kicker">{STEPS[step].detail}</p><h3>{record ? location || 'Continue this case' : STEPS[step].title}</h3></div>{record ? <span className="vb-capital-status">{label(record.status)}</span> : null}</div>
+              {message ? <div role={message.tone === 'error' ? 'alert' : 'status'} className={`vb-capital__message vb-capital__message--${message.tone}`}>{message.text}</div> : null}
+
+              <fieldset disabled={Boolean(saving) || terminal}>
+                <legend>{STEPS[step].title}</legend>
+                {step === 0 ? <div className="vb-capital__grid">
+                  <div className="vb-capital__span"><Label htmlFor="seller-address">Property address *</Label><Input id="seller-address" autoComplete="street-address" value={form.propertyAddress} onChange={(event) => update('propertyAddress', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-city">City *</Label><Input id="seller-city" autoComplete="address-level2" value={form.city} onChange={(event) => update('city', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-state">State *</Label><select id="seller-state" autoComplete="address-level1" value={form.state} onChange={(event) => update('state', event.target.value)}><option value="">Select state</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></div>
+                  <div><Label htmlFor="seller-postal">Postal code</Label><Input id="seller-postal" autoComplete="postal-code" inputMode="numeric" value={form.postalCode} onChange={(event) => update('postalCode', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-type">Property type *</Label><select id="seller-type" value={form.propertyType} onChange={(event) => update('propertyType', event.target.value)}><option value="">Select type</option>{PROPERTY_TYPES.map((item) => <option key={item}>{item}</option>)}</select></div>
+                  <div><Label htmlFor="seller-bedrooms">Bedrooms</Label><Input id="seller-bedrooms" type="number" min="0" inputMode="decimal" value={form.bedrooms} onChange={(event) => update('bedrooms', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-bathrooms">Bathrooms</Label><Input id="seller-bathrooms" type="number" min="0" step="0.5" inputMode="decimal" value={form.bathrooms} onChange={(event) => update('bathrooms', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-condition">Current condition *</Label><select id="seller-condition" value={form.propertyCondition} onChange={(event) => update('propertyCondition', event.target.value)}><option value="">Select condition</option>{CONDITIONS.map((item) => <option key={item}>{item}</option>)}</select></div>
+                  <div><Label htmlFor="seller-occupancy">Occupancy *</Label><select id="seller-occupancy" value={form.occupancyStatus} onChange={(event) => update('occupancyStatus', event.target.value)}><option value="">Select occupancy</option>{OCCUPANCIES.map((item) => <option key={item}>{item}</option>)}</select></div>
+                </div> : null}
+
+                {step === 1 ? <div className="vb-capital__grid">
+                  <div><Label htmlFor="seller-timeline">Preferred timeline *</Label><select id="seller-timeline" value={form.timelineToSell} onChange={(event) => update('timelineToSell', event.target.value)}><option value="">Select timeline</option>{TIMELINES.map((item) => <option key={item}>{item}</option>)}</select></div>
+                  <div><Label htmlFor="seller-path">Current path preference</Label><select id="seller-path" value={form.preferredSalePath} onChange={(event) => update('preferredSalePath', event.target.value)}><option value="not_sure">Review the available paths</option><option value="direct_sale">Direct sale review</option><option value="market_assisted">Market-assisted review</option><option value="structured_terms">Structured terms review</option><option value="preparation_first">Prepare before a sale decision</option></select></div>
+                  <div className="vb-capital__span"><Label htmlFor="seller-reason">What would a useful outcome address? *</Label><Textarea id="seller-reason" rows={4} placeholder="For example: timing, repairs, an inherited property, tenant considerations, or uncertainty about the next step." value={form.reasonForSelling} onChange={(event) => update('reasonForSelling', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-value">Estimated property value (optional)</Label><Input id="seller-value" type="number" min="0" inputMode="decimal" value={form.estimatedValue} onChange={(event) => update('estimatedValue', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-asking">Price expectation (optional)</Label><Input id="seller-asking" type="number" min="0" inputMode="decimal" value={form.askingPrice} onChange={(event) => update('askingPrice', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-mortgage">Approximate mortgage balance (optional)</Label><Input id="seller-mortgage" type="number" min="0" inputMode="decimal" value={form.mortgageBalance} onChange={(event) => update('mortgageBalance', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-liens">Known liens, taxes, or title questions</Label><Input id="seller-liens" value={form.liensOrTaxes} onChange={(event) => update('liensOrTaxes', event.target.value)} /></div>
+                  <div className="vb-capital__span"><Label htmlFor="seller-notes">Other property or decision context</Label><Textarea id="seller-notes" rows={4} value={form.sellerNotes} onChange={(event) => update('sellerNotes', event.target.value)} /></div>
+                </div> : null}
+
+                {step === 2 ? <div className="vb-capital__grid">
+                  <div><Label htmlFor="seller-name">Full name *</Label><Input id="seller-name" autoComplete="name" value={form.sellerName} onChange={(event) => update('sellerName', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-email">Email *</Label><Input id="seller-email" type="email" autoComplete="email" value={form.email} onChange={(event) => update('email', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-phone">Phone *</Label><Input id="seller-phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => update('phone', event.target.value)} /></div>
+                  <div><Label htmlFor="seller-best-time">Best time to contact</Label><Input id="seller-best-time" placeholder="Morning, afternoon, evening…" value={form.bestTimeToContact} onChange={(event) => update('bestTimeToContact', event.target.value)} /></div>
+                  <div className="vb-capital__span"><Label htmlFor="seller-contact-method">Preferred contact method</Label><select id="seller-contact-method" value={form.communicationPreference} onChange={(event) => update('communicationPreference', event.target.value as FormState['communicationPreference'])}><option value="email">Email</option><option value="phone">Phone</option><option value="either">Either</option></select></div>
+                  <div className="vb-capital__span vb-capital__permissions">
+                    <label><input type="checkbox" checked={form.analysisConsent} onChange={(event) => update('analysisConsent', event.target.checked)} /><span><strong>Required to submit:</strong> I authorize VestBlock to analyze the property and seller information I provide for a private sale-path review. I understand this is not an appraisal, legal opinion, or offer.</span></label>
+                    <label><input type="checkbox" checked={form.contactConsent} onChange={(event) => update('contactConsent', event.target.checked)} /><span><strong>Required to submit:</strong> I authorize VestBlock to contact me about this case using my selected method. I understand no buyer, price, financing, closing date, or sale outcome is promised.</span></label>
+                    <label><input type="checkbox" checked={form.marketingConsent} onChange={(event) => update('marketingConsent', event.target.checked)} /><span>I would like optional VestBlock news and educational updates. This is not required to save, submit, or receive case-related contact.</span></label>
+                  </div>
+                </div> : null}
+              </fieldset>
+
+              <div className="vb-capital__actions">
+                {step > 0 ? <Button type="button" variant="outline" className="border-black/20 bg-[#ecece3] text-[#151911] hover:bg-[#dfe1d2] hover:text-[#151911]" onClick={() => setStep(step - 1)} disabled={Boolean(saving)}>Previous</Button> : null}
+                <Button type="button" variant="outline" className="border-black/20 bg-[#ecece3] text-[#151911] hover:bg-[#dfe1d2] hover:text-[#151911] disabled:bg-[#e2e2d7] disabled:text-[#4d5149] disabled:opacity-70" onClick={() => void persist('save_draft')} disabled={Boolean(saving) || terminal}>{saving === 'draft' ? <Loader2 className="animate-spin" aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />} Save private draft</Button>
+                {!terminal ? <Button type="submit" disabled={Boolean(saving)}>{step < 2 ? <>Continue</> : <>{saving === 'submit' ? <Loader2 className="animate-spin" aria-hidden="true" /> : <ClipboardCheck aria-hidden="true" />} Submit for review</>}</Button> : null}
+                {record && !terminal ? <Button type="button" variant="ghost" onClick={() => void persist('withdraw')} disabled={Boolean(saving)}>Withdraw case</Button> : null}
               </div>
+              <p className="vb-capital__auth-note">{terminal ? `This ${label(record!.status)} case is read-only. ` : null}{user ? `Owned by ${user.email}.` : <>Guest drafts use a private high-entropy token stored on this device. <Link href="/join?next=%2Fsell">Create an account</Link> to claim the record across devices.</>}</p>
+            </form>
 
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-5 text-white">
-                <span className="text-cyan-200">
-                  {market ? `Sell a Property in ${market.regionLabel || market.city}?` : "Submit Your Property"}
-                </span>
-                <br />
-                {" "}
-                <span className="text-white">
-                  {market ? "Get a Clear Cash, Creative, or Partner Review" : "For Fast Cash, Creative, or Novation Review"}
-                </span>
-              </h1>
-
-              <p className="text-lg md:text-xl text-slate-200 mb-7 max-w-2xl mx-auto">
-                {market
-                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.regionLabel || market.city} property review. VestBlock reviews the details for a practical next conversation: cash buyer, creative structure, novation, or another partner path.`
-                  : "Share the property details, timeline, occupancy, and selling situation so VestBlock can route the submission to our acquisitions review for fast cash, creative structure, novation, or a partner path."}
-              </p>
-
-              <Button
-                size="lg"
-                className="bg-cyan-400 text-slate-950 hover:bg-cyan-300 glow"
-                onClick={scrollToForm}
-              >
-                <Home className="mr-2 h-5 w-5" />
-                Review My Sale Options
-              </Button>
-              <p className="mt-4 text-sm text-slate-300">
-                No upfront review fee. No promised offer. Just a clearer path before you commit to anything.
-              </p>
-            </motion.div>
+            <aside className="vb-capital__review" aria-live="polite"><div className="vb-capital__review-sticky">
+              <p className="vb-kicker">Case record</p>
+              {!record ? <div className="vb-capital__empty"><FileText aria-hidden="true" /><h3>New seller case</h3><p>No saved case is selected. Save this intake as a private draft, or submit it when the required property, priority, contact, and permission fields are accurate.</p></div> : <>
+                <div className="vb-capital__score"><span>{record.completeness_score}</span><div><strong>{label(record.status)}</strong><small>Intake completeness—not sale probability</small></div></div>
+                <p>{location}</p>
+                <div className="vb-capital__review-block"><h4>Submitted context</h4><ul><li>{record.property_type || 'Property type pending'} · {record.property_condition || 'condition pending'}</li><li>{record.occupancy_status || 'Occupancy pending'} · {record.timeline_to_sell || 'timeline pending'}</li><li>Estimated value: {money(record.estimated_value)}</li><li>Price expectation: {money(record.asking_price)}</li></ul></div>
+                <div className="vb-capital__review-block"><h4>Information still needed</h4>{record.completeness_gaps.length ? <ul>{record.completeness_gaps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The standard intake is complete. An operator may ask focused follow-up questions.</p>}</div>
+                {events.length ? <div className="vb-capital__timeline"><h4>Status history</h4><ol>{events.slice().reverse().map((event) => <li key={event.id}><span>{label(event.event_type)}</span><small>{new Date(event.created_at).toLocaleString()}</small>{event.note ? <p>{event.note}</p> : null}</li>)}</ol></div> : null}
+              </>}
+              <div className="vb-capital__disclaimer"><ShieldCheck aria-hidden="true" /><p><strong>Review boundary</strong>VestBlock organizes the case and may request more information. Offers, buyers, terms, financing, property condition, title, and closing remain subject to separate review and independent decisions.</p></div>
+            </div></aside>
           </div>
-        </section>
-
-        <section className="pb-10 px-4">
-          <div className="container mx-auto max-w-5xl">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card className="premium-card border-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white">Share the sale situation</CardTitle>
-                  <p className="text-sm text-slate-300">
-                    Add the address, condition, timeline, payoff context, preferred sale path, and any issues affecting the deal.
-                  </p>
-                </CardHeader>
-              </Card>
-              <Card className="premium-card border-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white">Compare three paths</CardTitle>
-                  <p className="text-sm text-slate-300">
-                    Your submission is reviewed for fast cash, creative structure, novation, or a partner conversation as the cleaner next step.
-                  </p>
-                </CardHeader>
-              </Card>
-              <Card className="premium-card border-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white">Route the right conversation</CardTitle>
-                  <p className="text-sm text-slate-300">
-                    The goal is clarity first, then the best-fit sale conversation based on the property and seller situation.
-                  </p>
-                </CardHeader>
-              </Card>
-            </div>
-          </div>
-        </section>
-
-        {/* Lead Capture Form Section */}
-        <section id="lead-form" className="py-20 px-4 bg-gradient-to-b from-background to-muted/10">
-          <div className="container mx-auto max-w-2xl">
-            <motion.div
-              initial={false}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-            >
-              <Card className="premium-card border-cyan-500/20">
-                <CardHeader className="text-center pb-6">
-                  <CardTitle className="text-3xl font-bold gradient-text">
-                    Request Your Property Review
-                  </CardTitle>
-                  <p className="text-muted-foreground mt-2">
-                    Fill out the form below so your property can be routed for fast cash, creative, novation, or partner review.
-                  </p>
-                </CardHeader>
-
-                <CardContent>
-                  {submitSuccess ? (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="text-center py-12"
-                    >
-                      <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle2 className="h-10 w-10 text-green-500" />
-                      </div>
-                      <h3 className="text-2xl font-bold text-white mb-4">
-                        Thank You!
-                      </h3>
-                      <p className="text-muted-foreground text-lg">
-                        We've received your information and will follow up after reviewing the property, timeline, and preferred sale path.
-                      </p>
-                      <div className="mt-6 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-left">
-                        <p className="font-medium text-foreground">What happens next</p>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          The property details go to our acquisitions review first, then the follow-up is shaped around fast cash,
-                          creative structure, novation, or another partner conversation based on the timeline and condition.
-                        </p>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      {submitError && (
-                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-center">
-                          {submitError}
-                        </div>
-                      )}
-
-                      {/* Property Address */}
-                      <div className="space-y-2">
-                        <Label htmlFor="propertyAddress" className="text-sm font-medium">
-                          Property Address <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="propertyAddress"
-                          placeholder="123 Main Street"
-                          value={formData.propertyAddress}
-                          onChange={(e) => handleInputChange("propertyAddress", e.target.value)}
-                          className="bg-background/50"
-                          required
-                        />
-                      </div>
-
-                      {/* City and State */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="city" className="text-sm font-medium">
-                            City <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="city"
-                            placeholder="City"
-                            value={formData.city}
-                            onChange={(e) => handleInputChange("city", e.target.value)}
-                            className="bg-background/50"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="state" className="text-sm font-medium">
-                            State <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={formData.state}
-                            onValueChange={(value) => handleInputChange("state", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select State" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {US_STATES.map((state) => (
-                                <SelectItem key={state} value={state}>
-                                  {state}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Name and Contact */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="name" className="text-sm font-medium">
-                            Your Name <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="name"
-                            placeholder="John Doe"
-                            value={formData.name}
-                            onChange={(e) => handleInputChange("name", e.target.value)}
-                            className="bg-background/50"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="email" className="text-sm font-medium">
-                            Email
-                          </Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={formData.email}
-                            onChange={(e) => handleInputChange("email", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="phone" className="text-sm font-medium">
-                            Phone Number <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            placeholder="(555) 123-4567"
-                            value={formData.phone}
-                            onChange={(e) => handleInputChange("phone", e.target.value)}
-                            className="bg-background/50"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="bestTimeToCall" className="text-sm font-medium">
-                            Best Time to Call
-                          </Label>
-                          <Select
-                            value={formData.bestTimeToCall}
-                            onValueChange={(value) => handleInputChange("bestTimeToCall", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Time" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {BEST_TIMES.map((time) => (
-                                <SelectItem key={time} value={time}>
-                                  {time}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <details className="group rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
-                        <summary className="cursor-pointer select-none text-sm font-semibold text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                          Add property, loan, and timing details (optional)
-                        </summary>
-                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                          These details help us compare cash, creative, novation, and partner paths before we call.
-                        </p>
-                        <div className="mt-5 space-y-6">
-                      {/* Property Type and Occupancy */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="propertyType" className="text-sm font-medium">
-                            Property Type
-                          </Label>
-                          <Select
-                            value={formData.propertyType}
-                            onValueChange={(value) => handleInputChange("propertyType", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PROPERTY_TYPES.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="occupancyStatus" className="text-sm font-medium">
-                            Occupancy
-                          </Label>
-                          <Select
-                            value={formData.occupancyStatus}
-                            onValueChange={(value) => handleInputChange("occupancyStatus", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Occupancy" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {OCCUPANCY_STATUS.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {status}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Property Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="bedrooms" className="text-sm font-medium">
-                            Bedrooms
-                          </Label>
-                          <Input
-                            id="bedrooms"
-                            placeholder="3"
-                            value={formData.bedrooms}
-                            onChange={(e) => handleInputChange("bedrooms", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="bathrooms" className="text-sm font-medium">
-                            Bathrooms
-                          </Label>
-                          <Input
-                            id="bathrooms"
-                            placeholder="2"
-                            value={formData.bathrooms}
-                            onChange={(e) => handleInputChange("bathrooms", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Property Condition and Timeline */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="propertyCondition" className="text-sm font-medium">
-                            Property Condition
-                          </Label>
-                          <Select
-                            value={formData.propertyCondition}
-                            onValueChange={(value) => handleInputChange("propertyCondition", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Condition" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PROPERTY_CONDITIONS.map((condition) => (
-                                <SelectItem key={condition} value={condition}>
-                                  {condition}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="timelineToSell" className="text-sm font-medium">
-                            Timeline to Sell
-                          </Label>
-                          <Select
-                            value={formData.timelineToSell}
-                            onValueChange={(value) => handleInputChange("timelineToSell", value)}
-                          >
-                            <SelectTrigger className="bg-background/50">
-                              <SelectValue placeholder="Select Timeline" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIMELINES.map((timeline) => (
-                                <SelectItem key={timeline} value={timeline}>
-                                  {timeline}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Numbers */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="estimatedValue" className="text-sm font-medium">
-                            Estimated Property Value
-                          </Label>
-                          <Input
-                            id="estimatedValue"
-                            placeholder="$"
-                            value={formData.estimatedValue}
-                            onChange={(e) => handleInputChange("estimatedValue", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="askingPrice" className="text-sm font-medium">
-                            Desired Sale Price
-                          </Label>
-                          <Input
-                            id="askingPrice"
-                            placeholder="$"
-                            value={formData.askingPrice}
-                            onChange={(e) => handleInputChange("askingPrice", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="mortgageBalance" className="text-sm font-medium">
-                            Estimated Mortgage Balance
-                          </Label>
-                          <Input
-                            id="mortgageBalance"
-                            placeholder="$"
-                            value={formData.mortgageBalance}
-                            onChange={(e) => handleInputChange("mortgageBalance", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="liensOrTaxes" className="text-sm font-medium">
-                            Liens / Back Taxes / HOA
-                          </Label>
-                          <Input
-                            id="liensOrTaxes"
-                            placeholder="Amount or describe"
-                            value={formData.liensOrTaxes}
-                            onChange={(e) => handleInputChange("liensOrTaxes", e.target.value)}
-                            className="bg-background/50"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Reason for Selling */}
-                      <div className="space-y-2">
-                        <Label htmlFor="reasonForSelling" className="text-sm font-medium">
-                          Reason for Selling
-                        </Label>
-                        <Select
-                          value={formData.reasonForSelling}
-                          onValueChange={(value) => handleInputChange("reasonForSelling", value)}
-                        >
-                          <SelectTrigger className="bg-background/50">
-                            <SelectValue placeholder="Select Reason" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SELLING_REASONS.map((reason) => (
-                              <SelectItem key={reason} value={reason}>
-                                {reason}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="preferredSalePath" className="text-sm font-medium">
-                          Preferred Sale Path
-                        </Label>
-                        <Select
-                          value={formData.preferredSalePath}
-                          onValueChange={(value) => handleInputChange("preferredSalePath", value)}
-                        >
-                          <SelectTrigger className="bg-background/50">
-                            <SelectValue placeholder="Select Sale Path" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SELLER_REVIEW_PATHS.map((path) => (
-                              <SelectItem key={path.value} value={path.value}>
-                                {path.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Choose what you want reviewed first. VestBlock may still recommend a different route after looking at the property, payoff, timing, and buyer interest.
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="notes" className="text-sm font-medium">
-                          Anything Else We Should Know?
-                        </Label>
-                        <Textarea
-                          id="notes"
-                          placeholder="Repairs needed, foreclosure date, access notes, tenant details, creative terms, novation questions, or cash-sale timing."
-                          value={formData.notes}
-                          onChange={(e) => handleInputChange("notes", e.target.value)}
-                          className="bg-background/50"
-                          rows={4}
-                        />
-                      </div>
-                        </div>
-                      </details>
-
-                      {/* Submit Button */}
-                      <Button
-                        type="submit"
-                        size="lg"
-                        className="w-full bg-cyan-500 hover:bg-cyan-600 glow"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
-                            Submitting...
-                          </>
-                        ) : (
-                          <>
-                            <DollarSign className="mr-2 h-5 w-5" />
-                            Submit Property Review
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Flexible Solutions Section */}
-        <section className="py-20 px-4">
-          <div className="container mx-auto">
-            <motion.div
-              initial={false}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="text-center mb-12"
-            >
-              <h2 className="text-3xl md:text-4xl font-bold gradient-text mb-4">
-                Flexible selling options
-              </h2>
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                The best path depends on the property, timeline, payoff, repairs, marketability, and buyer interest.
-              </p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                viewport={{ once: true }}
-              >
-                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
-                  <CardContent className="pt-8 text-center">
-                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <Zap className="h-8 w-8 text-cyan-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">Fast Cash Buyer Review</h3>
-                    <p className="text-muted-foreground">
-                      When speed and simplicity matter most, the property can be reviewed for a faster cash-buyer or as-is investor conversation.
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                viewport={{ once: true }}
-              >
-                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
-                  <CardContent className="pt-8 text-center">
-                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <HandshakeIcon className="h-8 w-8 text-cyan-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">Creative Structure Review</h3>
-                    <p className="text-muted-foreground">
-                      When payoff, equity, timing, or seller goals support it, the property can be reviewed for seller finance, subject-to, or other creative structures.
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                viewport={{ once: true }}
-              >
-                <Card className="premium-card h-full border-cyan-500/20 hover:border-cyan-500/50">
-                  <CardContent className="pt-8 text-center">
-                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <TrendingUp className="h-8 w-8 text-cyan-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">Novation Review</h3>
-                    <p className="text-muted-foreground">
-                      When a property may perform better with market exposure, retail buyer demand, or coordinated improvement work, a novation path can be reviewed.
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-            <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
-              VestBlock routes seller submissions for sale-path review. It does not guarantee a cash offer, creative terms, novation approval, sale price, closing timeline, or completed transaction.
-            </p>
-          </div>
-        </section>
-
-        {/* Trust Indicators Section */}
-        <section className="py-20 px-4 bg-gradient-to-b from-muted/10 to-background">
-          <div className="container mx-auto">
-            <motion.div
-              initial={false}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="text-center mb-12"
-            >
-              <h2 className="text-3xl md:text-4xl font-bold gradient-text mb-4">
-                Why sellers use VestBlock first
-              </h2>
-            </motion.div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                viewport={{ once: true }}
-                className="flex items-center gap-4 p-6 bg-card/50 rounded-lg border border-cyan-500/10"
-              >
-                <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Users className="h-6 w-6 text-cyan-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Buyer Fit Review</h3>
-                  <p className="text-sm text-muted-foreground">Buyers, investors, and partners reviewed for fit</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                viewport={{ once: true }}
-                className="flex items-center gap-4 p-6 bg-card/50 rounded-lg border border-cyan-500/10"
-              >
-                <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Clock className="h-6 w-6 text-cyan-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Faster Paths Available</h3>
-                  <p className="text-sm text-muted-foreground">Investor and cash conversations when timing fits</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                viewport={{ once: true }}
-                className="flex items-center gap-4 p-6 bg-card/50 rounded-lg border border-cyan-500/10"
-              >
-                <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="h-6 w-6 text-cyan-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Clear Options Reviewed</h3>
-                  <p className="text-sm text-muted-foreground">Fast cash, creative, novation, or partner paths compared</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={false}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                viewport={{ once: true }}
-                className="flex items-center gap-4 p-6 bg-card/50 rounded-lg border border-cyan-500/10"
-              >
-                <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Shield className="h-6 w-6 text-cyan-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">No Upfront Review Fee</h3>
-                  <p className="text-sm text-muted-foreground">Submit details before any commitment is required</p>
-                </div>
-              </motion.div>
-            </div>
-            <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
-              VestBlock routes property details for possible next conversations. It does not guarantee offers, sale price, closing timelines, buyer acceptance, funding approval, or a completed transaction.
-            </p>
-          </div>
-        </section>
-
-        {/* Minimal Footer */}
-        <footer className="py-12 px-4 border-t border-border/50">
-          <div className="container mx-auto">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
-                <BrandMark className="h-10 w-10" />
-                <div>
-                  <span className="block text-lg font-semibold leading-none text-white">VestBlock</span>
-                  <span className="mt-1 block text-xs uppercase tracking-[0.18em] text-cyan-200/70">Real estate partner network</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center gap-6 text-muted-foreground">
-                <a
-                  href="#lead-form"
-                  className="flex items-center gap-2 hover:text-cyan-500 transition-colors"
-                >
-                  <Home className="h-4 w-4" />
-                  Submit property details
-                </a>
-                <a
-                  href="tel:414-687-6923"
-                  className="flex items-center gap-2 hover:text-cyan-500 transition-colors"
-                >
-                  <Phone className="h-4 w-4" />
-                  (414) 687-6923
-                </a>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} VestBlock. All rights reserved.
-              </p>
-            </div>
-          </div>
-        </footer>
-      </div>
+        </div>
+      </section>
+    </div>
   )
 }
