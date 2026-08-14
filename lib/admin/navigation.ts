@@ -37,6 +37,12 @@ export const adminNavItems: AdminNavItem[] = [
     group: 'pipeline',
   },
   {
+    title: 'Participant Profiles',
+    description: 'Owned multi-role profiles, consent, review tasks, account links, and lifecycle control.',
+    href: '/admin/participant-profiles',
+    group: 'pipeline',
+  },
+  {
     title: 'Lead Sources',
     description: 'DealMachine, partner discovery, and source readiness.',
     href: '/admin/lead-sources',

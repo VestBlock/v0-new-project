@@ -6,6 +6,7 @@ import { ArrowRight, Check, CircleAlert, FileCheck2, Loader2, RefreshCw, Save, S
 import { MEMBER_ROLE_OPTIONS, normalizeMemberRoles, type MemberRole } from "@/lib/auth/intent"
 import { platformLanes, platformScenarios, type PlatformLaneId, type ScenarioId } from "@/lib/platform/lanes"
 import { Switch } from "@/components/ui/switch"
+import { PARTICIPANT_ROLE_DEFINITIONS, type ParticipantRole, type ParticipantStatus } from "@/lib/participant-profiles/config"
 
 type WorkspaceResponse = {
   workspace: {
@@ -22,8 +23,7 @@ type WorkspaceResponse = {
   roadmap: { id: string; financial_goal_title?: string; generated_at?: string; roadmap_data?: unknown } | null
   questionnaire: { id: string; focus?: string; primary_path?: string; created_at?: string; updated_at?: string } | null
   intake: {
-    buyers: Array<{ id: string; name?: string; markets_served?: string[]; relationship_stage?: string; updated_at?: string }>
-    lenders: Array<{ id: string; name?: string; states_served?: string[]; relationship_stage?: string; updated_at?: string }>
+    profiles: Array<{ id: string; role: ParticipantRole; status: ParticipantStatus; display_name?: string; organization_name?: string; public_visibility_consent?: boolean; safe_failure_state?: string | null; updated_at?: string }>
     sellers: Array<{ id: string; property_address?: string; city?: string; state?: string; status?: string; updated_at?: string; created_at?: string }>
   }
   creditReports: Array<{ id: string; status?: string; created_at?: string; completed_at?: string }>
@@ -40,9 +40,10 @@ function getNextActions(data: WorkspaceResponse, form: EditableWorkspace) {
   const actions: Array<{ title: string; body: string; href: string; label: string }> = []
   if (!form.memberRoles.length) actions.push({ title: 'Choose your roles', body: 'Roles personalize the paths and status shown in this workspace.', href: '#roles', label: 'Choose roles' })
   if (!data.questionnaire) actions.push({ title: 'Build your free roadmap', body: 'Start with your goal, current position, timeline, and main obstacle.', href: '/next-move', label: 'Start questionnaire' })
-  if (form.memberRoles.includes('real_estate_buyer') && !data.intake.buyers.length) actions.push({ title: 'Save buyer criteria', body: 'Add markets, asset types, price range, strategy, and no-go criteria.', href: '/buyers', label: 'Create buy box' })
+  if (form.memberRoles.includes('real_estate_buyer') && !data.intake.profiles.some((profile) => profile.role === 'buyer')) actions.push({ title: 'Save buyer criteria', body: 'Add markets, asset types, price range, strategy, capacity, and no-go criteria in a private account profile.', href: '/workspace/profiles/new?role=buyer', label: 'Create buyer profile' })
   if (form.memberRoles.includes('property_seller') && !data.intake.sellers.length) actions.push({ title: 'Submit a property', body: 'Organize the property, condition, timing, and preferred outcome.', href: '/sell', label: 'Review sale path' })
-  if ((form.memberRoles.includes('lender') || form.memberRoles.includes('investor')) && !data.intake.lenders.length) actions.push({ title: 'Add provider criteria', body: 'State where and what you fund before an opportunity is routed.', href: '/lenders', label: 'Set criteria' })
+  if (form.memberRoles.includes('lender') && !data.intake.profiles.some((profile) => profile.role === 'lender')) actions.push({ title: 'Add provider criteria', body: 'Record coverage, products, provider-supplied terms, documentation, and exclusions for operator review.', href: '/workspace/profiles/new?role=lender', label: 'Create provider profile' })
+  if (form.memberRoles.includes('investor') && !data.intake.profiles.some((profile) => profile.role === 'investor')) actions.push({ title: 'Organize investor criteria', body: 'State your acquisition thesis, economics, capacity, and exclusions in a private profile.', href: '/workspace/profiles/new?role=investor', label: 'Create investor profile' })
   if (!actions.length) actions.push({ title: 'Review your active lane', body: 'Your foundation is saved. Continue into the lane that matches your current objective.', href: platformLanes[form.activeLane || 'opportunity'].href, label: `Open ${platformLanes[form.activeLane || 'opportunity'].label}` })
   return actions.slice(0, 3)
 }
@@ -92,7 +93,10 @@ export function CustomerWorkspace() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
 
   const save = async () => {
     if (!form) return
@@ -130,7 +134,7 @@ export function CustomerWorkspace() {
 
   const selectedScenario = platformScenarios.find((item) => item.id === form.selectedScenario)
   const activeLane = platformLanes[form.activeLane || selectedScenario?.lane || 'opportunity']
-  const intakeCount = data.intake.buyers.length + data.intake.lenders.length + data.intake.sellers.length
+  const intakeCount = data.intake.profiles.length + data.intake.sellers.length
 
   return (
     <div className="vb-workspace">
@@ -172,7 +176,8 @@ export function CustomerWorkspace() {
             <div className="vb-workspace__records">
               <article><FileCheck2 aria-hidden="true" /><div><h3>Next-Move Questionnaire</h3><p>{data.questionnaire ? `${data.questionnaire.primary_path || 'Roadmap'} path · updated ${formatDate(data.questionnaire.updated_at)}` : 'No completed questionnaire is connected to this account email yet.'}</p></div><Link href={data.questionnaire ? '/next-move' : '/next-move'}>{data.questionnaire ? 'Build another roadmap' : 'Start questionnaire'}<ArrowRight /></Link></article>
               <article><FileCheck2 aria-hidden="true" /><div><h3>Roadmap</h3><p>{data.roadmap ? `${data.roadmap.financial_goal_title || 'Personal roadmap'} · generated ${formatDate(data.roadmap.generated_at)}` : 'Complete your questionnaire or profile to begin an ordered roadmap.'}</p></div><Link href={data.roadmap ? '/roadmap' : '/next-move'}>{data.roadmap ? 'Open roadmap' : 'Create roadmap'}<ArrowRight /></Link></article>
-              <article><FileCheck2 aria-hidden="true" /><div><h3>Real estate criteria</h3><p>{intakeCount ? `${data.intake.buyers.length} buyer · ${data.intake.lenders.length} lender · ${data.intake.sellers.length} seller records found.` : 'No buyer, lender, or seller criteria are connected yet.'}</p></div><Link href="/real-estate">Review real estate paths<ArrowRight /></Link></article>
+              <article><FileCheck2 aria-hidden="true" /><div><h3>Participant profiles</h3><p>{data.intake.profiles.length ? data.intake.profiles.length + ' owned role ' + (data.intake.profiles.length === 1 ? 'profile' : 'profiles') + ' connected to this account.' : 'No buyer, investor, lender, builder, developer, agent, wholesaler, business, or provider profile is connected yet.'}</p></div><Link href="/workspace/profiles">Manage participant profiles<ArrowRight /></Link></article>
+              <article><FileCheck2 aria-hidden="true" /><div><h3>Seller cases</h3><p>{data.intake.sellers.length ? data.intake.sellers.length + ' private seller ' + (data.intake.sellers.length === 1 ? 'case' : 'cases') + ' connected by authenticated ownership.' : 'No authenticated seller case is connected yet.'}</p></div><Link href="/sell">Review seller path<ArrowRight /></Link></article>
             </div>
           </section>
 
@@ -183,6 +188,17 @@ export function CustomerWorkspace() {
                 <article key={recommendation.id}><Sparkles aria-hidden="true" /><div><h3>{recommendation.title}</h3><p>{recommendation.summary || recommendation.status}</p></div>{recommendation.href ? <Link href={recommendation.href}>Review path<ArrowRight /></Link> : <span>{recommendation.status}</span>}</article>
               )) : (
                 <article><Sparkles aria-hidden="true" /><div><h3>{activeLane.label} is your current recommendation</h3><p>{activeLane.introduction}</p></div><Link href={activeLane.href}>Review this lane<ArrowRight /></Link></article>
+              )}
+            </div>
+          </section>
+
+          <section className="vb-workspace__section" aria-labelledby="profiles-title">
+            <div className="vb-workspace__section-head"><p>Role profiles</p><h2 id="profiles-title">Your criteria and participation controls</h2><span>Each role has its own private criteria, permissions, review status, and history. Matching and outreach are not active from these profiles.</span></div>
+            <div className="vb-workspace__records">
+              {data.intake.profiles.length ? data.intake.profiles.map((participant) => (
+                <article key={participant.id}><ShieldCheck aria-hidden="true" /><div><h3>{PARTICIPANT_ROLE_DEFINITIONS[participant.role].label}</h3><p>{participant.organization_name || participant.display_name || 'Participant profile'} · {participant.status.replaceAll('_', ' ')}{participant.safe_failure_state ? ' · follow-up retry available' : ''}</p></div><Link href={'/workspace/profiles/' + participant.id}>Open profile<ArrowRight /></Link></article>
+              )) : (
+                <article><ShieldCheck aria-hidden="true" /><div><h3>Private by default</h3><p>Create the first role profile when you are ready to organize criteria for operator review.</p></div><Link href="/workspace/profiles">Choose a role<ArrowRight /></Link></article>
               )}
             </div>
           </section>

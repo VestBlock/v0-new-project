@@ -1,0 +1,849 @@
+.shell {
+  --profile-bg: var(--vb-obsidian);
+  --profile-surface: var(--vb-charcoal);
+  --profile-fg: var(--vb-paper);
+  --profile-muted: var(--vb-steel);
+  --profile-accent: var(--vb-signal);
+  --profile-border: var(--vb-line);
+  --profile-border-subtle: var(--vb-line-subtle);
+  min-height: 100svh;
+  width: 100%;
+  overflow-x: clip;
+  background: var(--profile-bg);
+  color: var(--profile-fg);
+  padding: clamp(6.5rem, 10vw, 8.5rem) clamp(1rem, 4vw, 4rem) 5rem;
+}
+
+.shell > * {
+  width: min(100%, 88rem);
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.masthead,
+.workbenchHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-bottom: clamp(2rem, 4vw, 3.75rem);
+  border-bottom: 1px solid var(--profile-border);
+}
+
+.masthead > div,
+.workbenchHeader > div {
+  max-width: 54rem;
+  min-width: 0;
+}
+
+.masthead h1,
+.workbenchHeader h1 {
+  max-width: 18ch;
+  margin: 0.35rem 0 1rem;
+  font-size: clamp(2.35rem, 5.6vw, 5.4rem);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.masthead p,
+.workbenchHeader p,
+.sectionHeader span,
+.formSection header span,
+.assistantSection header span,
+.roleCard p,
+.profileCard p,
+.workbenchAside section > span {
+  color: var(--profile-muted);
+  line-height: 1.65;
+}
+
+.kicker,
+.sectionHeader p,
+.formSection header p,
+.assistantSection header p,
+.workbenchAside section > p {
+  margin: 0;
+  color: var(--profile-accent);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workbenchHeader > div:first-child > a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--profile-muted);
+}
+
+.workbenchHeader > div:first-child > a:hover { color: var(--profile-fg); }
+.workbenchHeader > div:first-child > a svg { width: 1rem; }
+
+.saveCluster {
+  display: flex;
+  min-width: min(100%, 18rem);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.saveCluster p {
+  min-height: 1.4rem;
+  max-width: 24rem;
+  margin: 0;
+  overflow: hidden;
+  color: var(--profile-muted);
+  font-size: 0.8rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.roleCard a,
+.profileCard footer a,
+.publicLink,
+.alert button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--profile-border);
+  padding: 0.72rem 1rem;
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1;
+  transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.primaryButton {
+  border-color: var(--profile-accent);
+  background: var(--profile-accent);
+  color: var(--profile-bg);
+}
+
+.secondaryButton,
+.roleCard a,
+.profileCard footer a,
+.publicLink,
+.alert button {
+  background: transparent;
+  color: var(--profile-fg);
+}
+
+.dangerButton {
+  border-color: hsl(var(--destructive));
+  background: transparent;
+  color: hsl(var(--destructive));
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.dangerButton:hover,
+.roleCard a:hover,
+.profileCard footer a:hover,
+.publicLink:hover {
+  transform: translateY(-1px);
+  border-color: var(--profile-accent);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
+.primaryButton svg,
+.secondaryButton svg,
+.dangerButton svg,
+.roleCard a svg,
+.profileCard footer a svg,
+.publicLink svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.boundaryBar,
+.notice,
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: 1.25rem;
+  border: 1px solid var(--profile-border);
+  border-left: 3px solid var(--profile-accent);
+  background: color-mix(in srgb, var(--profile-surface) 82%, transparent);
+  padding: 1rem 1.1rem;
+}
+
+.boundaryBar svg,
+.notice svg,
+.alert svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  color: var(--profile-accent);
+}
+
+.boundaryBar div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.boundaryBar span,
+.notice span,
+.alert span {
+  color: var(--profile-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.alert {
+  align-items: center;
+  border-left-color: hsl(var(--destructive));
+}
+
+.alert svg { color: hsl(var(--destructive)); }
+.alert span { flex: 1; color: var(--profile-fg); }
+.alert button { min-height: 44px; }
+
+.section {
+  padding-top: clamp(3rem, 6vw, 5rem);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader h2,
+.formSection h2,
+.assistantSection h2,
+.workbenchAside h2 {
+  margin: 0.3rem 0 0;
+  font-size: clamp(1.45rem, 2.4vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.sectionHeader > span { max-width: 28rem; text-align: right; }
+
+.profileGrid,
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--profile-border);
+  background: var(--profile-bg);
+}
+
+.profileCard,
+.roleCard {
+  min-width: 0;
+  background: var(--profile-bg);
+  box-shadow: 1px 0 0 var(--profile-border), 0 1px 0 var(--profile-border);
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.profileCard h3,
+.roleCard h3 {
+  margin: 1.25rem 0 0.6rem;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+.profileCard footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--profile-border-subtle);
+}
+
+.profileCard footer > span { color: var(--profile-muted); font-size: 0.78rem; }
+
+.cardTop {
+  display: flex;
+  min-height: 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--profile-muted);
+  font-size: 0.74rem;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--profile-border);
+  padding: 0.35rem 0.55rem;
+  color: var(--profile-fg);
+}
+
+.status[data-status='active'] { border-color: var(--profile-accent); color: var(--profile-accent); }
+.status[data-status='declined'],
+.status[data-status='withdrawn'] { border-color: hsl(var(--destructive)); color: hsl(var(--destructive)); }
+
+.recoverable {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+.recoverable svg { width: 1rem; }
+
+.roleNumber {
+  color: var(--profile-accent);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.roleCard {
+  display: flex;
+  min-height: 19rem;
+  flex-direction: column;
+}
+
+.roleCard p { flex: 1; }
+.roleCard a { align-self: flex-start; }
+
+.emptyState,
+.loading {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  border: 1px solid var(--profile-border);
+  padding: 2rem;
+  text-align: center;
+}
+
+.emptyState h3 { margin: 0; font-size: 1.45rem; }
+.emptyState p { max-width: 38rem; color: var(--profile-muted); }
+.loading { display: flex; gap: 0.75rem; color: var(--profile-muted); }
+.spin { animation: profile-spin 800ms linear infinite; }
+
+.stepNav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 2rem;
+  border-block: 1px solid var(--profile-border);
+}
+
+.stepNav button {
+  display: flex;
+  min-height: 58px;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  border-right: 1px solid var(--profile-border);
+  padding: 0.75rem 1rem;
+  color: var(--profile-muted);
+  text-align: left;
+}
+
+.stepNav button:last-child { border-right: 0; }
+.stepNav button[data-active] { background: var(--profile-surface); color: var(--profile-fg); }
+.stepNav button span {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--profile-border);
+  color: var(--profile-accent);
+  font-size: 0.72rem;
+}
+
+.workbenchGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: clamp(1.5rem, 4vw, 4rem);
+  padding-top: clamp(2rem, 4vw, 3.5rem);
+}
+
+.workbenchMain,
+.workbenchAside { min-width: 0; }
+
+.formSection,
+.assistantSection {
+  border-top: 1px solid var(--profile-border);
+  padding-top: 1.5rem;
+}
+
+.formSection > header,
+.assistantSection > header {
+  max-width: 52rem;
+  margin-bottom: 2rem;
+}
+
+.formSection > header span,
+.assistantSection > header span {
+  display: block;
+  margin-top: 0.75rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.field,
+.fieldWide {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.45rem;
+  margin-bottom: 1.1rem;
+}
+
+.fieldWide { grid-column: 1 / -1; }
+
+.field > span,
+.fieldWide > span {
+  color: var(--profile-fg);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.field small,
+.fieldWide small,
+.inlineHelp {
+  color: var(--profile-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.field input,
+.field textarea,
+.field select,
+.fieldWide input,
+.fieldWide textarea,
+.fieldWide select {
+  width: 100%;
+  min-height: 48px;
+  min-width: 0;
+  border: 1px solid var(--profile-border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--profile-surface) 72%, transparent);
+  padding: 0.75rem 0.85rem;
+  color: var(--profile-fg);
+  outline: none;
+}
+
+.field textarea,
+.fieldWide textarea { resize: vertical; }
+
+.field input:focus-visible,
+.field textarea:focus-visible,
+.field select:focus-visible,
+.fieldWide input:focus-visible,
+.fieldWide textarea:focus-visible,
+.fieldWide select:focus-visible,
+.stepNav button:focus-visible,
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.dangerButton:focus-visible,
+.roleCard a:focus-visible,
+.profileCard a:focus-visible,
+.permission:focus-within {
+  outline: 2px solid var(--profile-accent);
+  outline-offset: 3px;
+}
+
+.assistantSection {
+  margin-top: 3rem;
+  border: 1px solid var(--profile-border);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+
+.assistantSection > header {
+  display: flex;
+  gap: 1rem;
+}
+
+.assistantSection > header > svg {
+  width: 1.25rem;
+  flex: 0 0 auto;
+  color: var(--profile-accent);
+}
+
+.proposal {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--profile-border);
+  padding-top: 1.5rem;
+}
+
+.proposal > div:first-child > span { color: var(--profile-muted); font-size: 0.75rem; }
+
+.permissionStack {
+  display: grid;
+  gap: 1px;
+  background: var(--profile-border);
+}
+
+.permission {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: var(--profile-bg);
+  padding: 1rem;
+}
+
+.permission > span {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.permission small { max-width: 50rem; color: var(--profile-muted); line-height: 1.5; }
+
+.permission button[role='switch'] {
+  width: 64px;
+  height: 44px;
+  flex: 0 0 64px;
+  border: 10px solid transparent;
+  background-clip: padding-box;
+}
+
+.publicFields {
+  margin-top: 2rem;
+  border-left: 2px solid var(--profile-accent);
+  padding-left: 1.25rem;
+}
+
+.publicFields p { color: var(--profile-muted); }
+.publicFields > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.publicFields label { display: flex; min-height: 44px; align-items: center; gap: 0.65rem; }
+.publicFields input { width: 1.1rem; height: 1.1rem; accent-color: var(--profile-accent); }
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--profile-border);
+}
+
+.reviewGrid > div {
+  min-width: 0;
+  background: var(--profile-bg);
+  padding: 1.15rem;
+}
+
+.reviewGrid dt { color: var(--profile-muted); font-size: 0.75rem; text-transform: uppercase; }
+.reviewGrid dd { margin: 0.45rem 0 0; overflow-wrap: anywhere; font-weight: 700; }
+
+.reviewBoundary {
+  display: flex;
+  gap: 0.85rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--profile-border);
+  padding: 1rem;
+}
+
+.reviewBoundary svg { width: 1.15rem; flex: 0 0 auto; color: var(--profile-accent); }
+.reviewBoundary p { display: grid; gap: 0.3rem; margin: 0; }
+.reviewBoundary span { color: var(--profile-muted); line-height: 1.55; }
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.publicLink { margin-top: 1rem; }
+
+.stepActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--profile-border);
+  padding-top: 1rem;
+}
+
+.workbenchAside {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  background: var(--profile-border);
+}
+
+.workbenchAside section {
+  min-width: 0;
+  background: var(--profile-bg);
+  padding: 1.25rem;
+}
+
+.timeline {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline li { display: grid; gap: 0.2rem; border-left: 1px solid var(--profile-border); padding-left: 0.8rem; }
+.timeline span { overflow-wrap: anywhere; font-size: 0.82rem; }
+.timeline small { color: var(--profile-muted); font-size: 0.7rem; }
+
+@keyframes profile-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1024px) {
+  .profileGrid,
+  .roleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workbenchGrid { grid-template-columns: minmax(0, 1fr); }
+  .workbenchAside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .shell { padding-top: 5.75rem; }
+  .masthead,
+  .workbenchHeader,
+  .sectionHeader { align-items: flex-start; flex-direction: column; gap: 1.25rem; }
+  .sectionHeader > span { text-align: left; }
+  .saveCluster { width: 100%; align-items: stretch; }
+  .saveCluster p { max-width: 100%; text-align: left; }
+  .stepNav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stepNav button:nth-child(2) { border-right: 0; }
+  .stepNav button:nth-child(-n + 2) { border-bottom: 1px solid var(--profile-border); }
+  .fieldGrid,
+  .publicFields > div,
+  .reviewGrid { grid-template-columns: minmax(0, 1fr); }
+  .workbenchAside { grid-template-columns: minmax(0, 1fr); }
+  .stepActions {
+    margin-top: 0.75rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 560px) {
+  .profileGrid,
+  .roleGrid { grid-template-columns: minmax(0, 1fr); }
+  .roleCard { min-height: 15rem; }
+  .profileCard footer,
+  .permission { align-items: flex-start; flex-direction: column; }
+  .profileCard footer a,
+  .roleCard a,
+  .primaryButton,
+  .secondaryButton,
+  .dangerButton,
+  .publicLink { width: 100%; }
+  .actionRow > * { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primaryButton,
+  .secondaryButton,
+  .dangerButton,
+  .roleCard a,
+  .profileCard footer a,
+  .publicLink { transition: none; }
+  .primaryButton:hover,
+  .secondaryButton:hover,
+  .dangerButton:hover,
+  .roleCard a:hover,
+  .profileCard footer a:hover,
+  .publicLink:hover { transform: none; }
+  .spin { animation: none; }
+}
+
+.adminSurface {
+  --profile-bg: var(--vb-obsidian);
+  --profile-surface: var(--vb-charcoal);
+  --profile-fg: var(--vb-paper);
+  --profile-muted: var(--vb-steel);
+  --profile-accent: var(--vb-signal);
+  --profile-border: var(--vb-line);
+  --profile-border-subtle: var(--vb-line-subtle);
+  min-width: 0;
+  color: var(--profile-fg);
+}
+
+.adminHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--profile-border);
+  padding-bottom: 1.5rem;
+}
+
+.adminHeader > div { max-width: 58rem; }
+.adminHeader h1 { margin: 0.3rem 0 0.65rem; font-size: clamp(2rem, 4vw, 3.8rem); letter-spacing: -0.05em; }
+.adminHeader span { color: var(--profile-muted); line-height: 1.55; }
+.adminStatus { min-height: 1.4rem; margin: 0.6rem 0; color: var(--profile-muted); font-size: 0.8rem; }
+
+.adminFilters {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1.8fr) repeat(3, minmax(8rem, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin: 1.2rem 0;
+}
+
+.adminFilters label,
+.operatorControls label {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  color: var(--profile-muted);
+  font-size: 0.75rem;
+}
+
+.adminFilters label > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  border: 1px solid var(--profile-border);
+  background: var(--profile-surface);
+  padding-left: 0.7rem;
+}
+
+.adminFilters svg { width: 1rem; }
+.adminFilters input,
+.adminFilters select,
+.operatorControls input,
+.operatorControls select,
+.operatorControls textarea {
+  width: 100%;
+  min-height: 46px;
+  min-width: 0;
+  border: 1px solid var(--profile-border);
+  border-radius: 0;
+  background: var(--profile-surface);
+  padding: 0.7rem;
+  color: var(--profile-fg);
+}
+
+.adminFilters label > div input { border: 0; background: transparent; }
+
+.adminLayout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.adminQueue,
+.adminDetail {
+  min-width: 0;
+  border: 1px solid var(--profile-border);
+  background: var(--profile-bg);
+}
+
+.adminQueue {
+  align-self: start;
+  max-height: calc(100svh - 15rem);
+  overflow-y: auto;
+}
+
+.adminQueue > header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--profile-border);
+  background: var(--profile-bg);
+  padding: 1rem;
+}
+
+.adminQueue h2 { margin: 0; font-size: 1rem; }
+.adminQueue > header span { color: var(--profile-muted); font-size: 0.75rem; }
+
+.adminQueue > button {
+  display: grid;
+  width: 100%;
+  min-height: 112px;
+  min-width: 0;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--profile-border-subtle);
+  padding: 1rem;
+  color: var(--profile-fg);
+  text-align: left;
+}
+
+.adminQueue > button:hover,
+.adminQueue > button[data-active] { background: var(--profile-surface); }
+.adminQueue > button strong,
+.adminQueue > button small { overflow-wrap: anywhere; }
+.adminQueue > button small { color: var(--profile-muted); }
+.adminQueue .status { justify-self: start; }
+
+.adminDetail { padding: clamp(1rem, 2.5vw, 2rem); }
+
+.adminDetailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--profile-border);
+  padding-bottom: 1.5rem;
+}
+
+.adminDetailHeader p { margin: 0; color: var(--profile-accent); font-size: 0.72rem; text-transform: uppercase; }
+.adminDetailHeader h2 { margin: 0.4rem 0; font-size: clamp(1.5rem, 3vw, 2.5rem); }
+.adminDetailHeader > div > span { color: var(--profile-muted); }
+
+.operatorFacts { margin-top: 1.25rem; }
+.operatorFacts dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--profile-border); }
+.operatorFacts dl > div { min-width: 0; background: var(--profile-bg); padding: 0.9rem; }
+.operatorFacts dt { color: var(--profile-muted); font-size: 0.7rem; text-transform: uppercase; }
+.operatorFacts dd { margin: 0.35rem 0 0; overflow-wrap: anywhere; font-size: 0.84rem; }
+.operatorFacts > a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 0.5rem; color: var(--profile-accent); }
+
+.adminSection { margin-top: 2rem; border-top: 1px solid var(--profile-border); padding-top: 1.25rem; }
+.adminSection h3 { margin: 0 0 1rem; font-size: 1rem; }
+.operatorControls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: end; }
+.operatorReason { grid-column: 1 / -1; }
+.operatorControls .actionRow,
+.legacyControl { grid-column: 1 / -1; }
+
+.legacyControl {
+  margin-top: 0.5rem;
+  border: 1px solid var(--profile-border);
+  padding: 1rem;
+}
+
+.legacyControl summary { min-height: 44px; cursor: pointer; color: var(--profile-fg); font-weight: 700; }
+.legacyControl p { color: var(--profile-muted); font-size: 0.8rem; }
+.legacyControl label { margin-top: 0.75rem; }
+.legacyControl button { margin-top: 0.75rem; }
+
+@media (max-width: 1100px) {
+  .adminFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adminFilters button { width: 100%; }
+  .adminLayout { grid-template-columns: minmax(0, 1fr); }
+  .adminQueue { max-height: 26rem; }
+}
+
+@media (max-width: 640px) {
+  .adminHeader,
+  .adminDetailHeader { align-items: flex-start; flex-direction: column; }
+  .adminFilters,
+  .operatorFacts dl,
+  .operatorControls { grid-template-columns: minmax(0, 1fr); }
+  .operatorControls .actionRow,
+  .operatorReason,
+  .legacyControl { grid-column: 1; }
+}

@@ -49,6 +49,7 @@ export function Navigation() {
     if (!isMobileMenuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    const mobileMenuTrigger = mobileMenuTriggerRef.current;
     document.body.style.overflow = 'hidden';
     mobileMenuCloseRef.current?.focus();
 
@@ -81,7 +82,7 @@ export function Navigation() {
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
-      mobileMenuTriggerRef.current?.focus();
+      mobileMenuTrigger?.focus();
     };
   }, [isMobileMenuOpen]);
 
@@ -190,11 +191,11 @@ export function Navigation() {
                     type="button"
                     aria-label="Close navigation"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
+                    className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                <Link href="/" className="group mb-6 flex items-center">
+                <Link href="/" className="group mb-6 flex min-h-11 items-center">
                   <BrandLogo showTagline />
                 </Link>
                 <div className="flex flex-col space-y-2">
@@ -203,7 +204,7 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -211,13 +212,13 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
+                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                         Sign In
                       </Link>
                       <Link
                         href="/join"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
+                        className="flex min-h-11 items-center rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
                         Join VestBlock
                       </Link>
@@ -229,13 +230,13 @@ export function Navigation() {
                           key={link.href}
                           href={link.href}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
+                          className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
                         >
                           {link.label}
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
+                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
@@ -244,7 +245,7 @@ export function Navigation() {
                           setIsMobileMenuOpen(false);
                           await signOut();
                         }}
-                        className="text-left text-foreground"
+                        className="flex min-h-11 items-center rounded-xl px-3 py-2 text-left text-foreground transition-colors hover:bg-white/[0.05]"
                       >
                         Sign Out
                       </button>
@@ -269,7 +270,7 @@ export function Navigation() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="relative h-8 w-8 rounded-full"
+                  className="relative h-11 w-11 rounded-full"
                 >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>

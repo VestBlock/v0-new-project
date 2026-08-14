@@ -53,14 +53,13 @@ async function loadWorkspace(user: { id: string; email?: string | null }) {
   const admin = createAdminClient()
   const email = user.email?.trim().toLowerCase() || ''
 
-  const [workspace, profile, roadmap, questionnaire, buyers, lenders, sellers, creditReports] = await Promise.all([
+  const [workspace, profile, roadmap, questionnaire, participantProfiles, sellers, creditReports] = await Promise.all([
     admin.from('customer_workspaces').select('*').eq('user_id', user.id).maybeSingle(),
     admin.from('user_profiles').select('id,full_name,email,member_roles,financial_goal,updated_at').or(`id.eq.${user.id},user_id.eq.${user.id}`).maybeSingle(),
     admin.from('user_roadmaps').select('id,financial_goal_title,roadmap_data,generated_at,is_primary').eq('user_id', user.id).order('generated_at', { ascending: false }).limit(1).maybeSingle(),
     email ? admin.from('next_move_questionnaires').select('id,focus,primary_path,roadmap_json,created_at,updated_at').eq('email', email).is('deleted_at', null).order('updated_at', { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    email ? admin.from('buyers').select('id,name,markets_served,relationship_stage,updated_at').eq('contact_email', email).order('updated_at', { ascending: false }).limit(3) : Promise.resolve({ data: [], error: null }),
-    email ? admin.from('lenders').select('id,name,states_served,relationship_stage,updated_at').eq('contact_email', email).order('updated_at', { ascending: false }).limit(3) : Promise.resolve({ data: [], error: null }),
-    email ? admin.from('leads').select('id,property_address,city,state,status,updated_at,created_at').eq('lead_type', 'sell_house').eq('email', email).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: [], error: null }),
+    admin.from('participant_profiles').select('id,role,status,display_name,organization_name,public_visibility_consent,safe_failure_state,updated_at').eq('owner_user_id', user.id).eq('origin', 'customer').order('updated_at', { ascending: false }).limit(20),
+    admin.from('seller_cases').select('id,property_address,city,state,status,updated_at,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(3),
     admin.from('credit_reports').select('id,status,created_at,completed_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(3),
   ])
 
@@ -101,8 +100,7 @@ async function loadWorkspace(user: { id: string; email?: string | null }) {
     roadmap: roadmap.error ? null : roadmap.data,
     questionnaire: questionnaire.error ? null : questionnaire.data,
     intake: {
-      buyers: buyers.error ? [] : buyers.data || [],
-      lenders: lenders.error ? [] : lenders.data || [],
+      profiles: participantProfiles.error ? [] : participantProfiles.data || [],
       sellers: sellers.error ? [] : sellers.data || [],
     },
     creditReports: creditReports.error ? [] : creditReports.data || [],

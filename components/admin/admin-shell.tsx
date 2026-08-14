@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronDown, Command, Menu, Radar, Search, X } from 'lucide-react'
@@ -24,7 +24,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
             <button
               type="button"
               onClick={() => setCollapsed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
-              className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left"
+              className="flex min-h-11 w-full items-center justify-between rounded-lg px-2 py-1 text-left"
             >
               <span className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-slate-500">
                 {group.title}
@@ -45,7 +45,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                       onClick={onNavigate}
                       title={item.description}
                       className={cn(
-                        'block rounded-lg border border-transparent px-3 py-2 text-sm transition-colors',
+                        'flex min-h-11 items-center rounded-lg border border-transparent px-3 py-2 text-sm transition-colors',
                         isActive
                           ? 'vb-admin-nav-active border-cyan-400/30 bg-cyan-400/10 font-medium text-white'
                           : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
@@ -68,6 +68,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobilePanelRef = useRef<HTMLDivElement>(null)
+  const mobileCloseRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -79,6 +82,47 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    const mobileTrigger = mobileTriggerRef.current
+    document.body.style.overflow = 'hidden'
+    mobileCloseRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileOpen(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = Array.from(
+        mobilePanelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      )
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+      mobileTrigger?.focus()
+    }
+  }, [mobileOpen])
 
   const activeTitle = useMemo(() => {
     const exact = adminNavItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
@@ -96,17 +140,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             className="absolute inset-0 cursor-default bg-slate-950/70 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="vb-admin-mobile-drawer relative h-full w-72 border-r border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/50">
+          <div id="admin-mobile-navigation" ref={mobilePanelRef} className="vb-admin-mobile-drawer relative h-full w-72 border-r border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/50">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Radar className="h-4 w-4 text-cyan-300 vb-admin-signal" />
                 <p className="text-sm font-semibold text-white">VestBlock Admin</p>
               </div>
               <button
+                ref={mobileCloseRef}
                 type="button"
                 aria-label="Close navigation"
                 onClick={() => setMobileOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -123,10 +168,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-14 w-full max-w-[1700px] items-center gap-3 px-4 lg:px-6">
           {/* Mobile nav */}
           <button
+            ref={mobileTriggerRef}
             type="button"
             aria-label="Open navigation"
+            aria-controls="admin-mobile-navigation"
+            aria-expanded={mobileOpen}
             onClick={() => setMobileOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 lg:hidden"
           >
             <Menu className="h-4 w-4" />
           </button>
@@ -146,7 +194,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400 transition-colors hover:border-cyan-300/40 hover:text-slate-200"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400 transition-colors hover:border-cyan-300/40 hover:text-slate-200"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Jump anywhere</span>
@@ -158,7 +206,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Link
             href="/admin/command-center"
             className={cn(
-              'hidden rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors md:block',
+              'hidden min-h-11 items-center rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors md:flex',
               pathname === '/admin/command-center'
                 ? 'border-cyan-400/40 bg-cyan-400/10 text-white'
                 : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-300/40'
