@@ -257,7 +257,7 @@ export function ParticipantProfileWorkbench(props: {
     if (!lifecycleProfile) return
     setSaving(true)
     setError('')
-    setStatusMessage(action === 'submit' ? 'Submitting for operator review…' : 'Updating profile status…')
+    setStatusMessage(action === 'submit' ? 'Submitting for VestBlock review…' : 'Updating profile status…')
     try {
       const response = await fetch('/api/participant-profiles/' + lifecycleProfile.id + '/lifecycle', {
         method: 'POST',
@@ -377,7 +377,7 @@ export function ParticipantProfileWorkbench(props: {
         <div className={styles.workbenchMain}>
           {activeStep === 'identity' ? (
             <section className={styles.formSection} aria-labelledby="identity-title">
-              <header><p>Who this profile represents</p><h2 id="identity-title">Identity and account contact</h2><span>Contact information stays private and is used for account service and operator review.</span></header>
+              <header><p>Who this profile represents</p><h2 id="identity-title">Identity and account contact</h2><span>Contact information stays private and is used for account service and VestBlock review.</span></header>
               {!profile ? (
                 <label className={styles.field}><span>Role</span><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as ParticipantRole, criteria: {}, publicFieldKeys: [] })}>{PARTICIPANT_ROLES.map((role) => <option key={role} value={role}>{PARTICIPANT_ROLE_DEFINITIONS[role].label}</option>)}</select></label>
               ) : null}
@@ -443,13 +443,13 @@ export function ParticipantProfileWorkbench(props: {
 
           {activeStep === 'permissions' ? (
             <section className={styles.formSection} aria-labelledby="permissions-title">
-              <header><p>Independent permissions</p><h2 id="permissions-title">You control each use separately</h2><span>Account service, marketing, future matching, future outreach, and public display are not bundled together.</span></header>
+              <header><p>Independent permissions</p><h2 id="permissions-title">You control each use separately</h2><span>Account service, marketing, matching, outreach, and public display are not bundled together.</span></header>
               <div className={styles.permissionStack}>
                 <label className={styles.permission}><span><strong>Account email</strong><small>Allow status and service communication about this profile. This is not marketing permission.</small></span><Switch aria-label="Allow account email" checked={form.communicationPreferences.email} onCheckedChange={(checked) => setForm({ ...form, communicationPreferences: { ...form.communicationPreferences, email: checked } })} /></label>
                 <label className={styles.permission}><span><strong>Account phone contact</strong><small>Allow an operator to call about this profile. Text messaging is not enabled here.</small></span><Switch aria-label="Allow account phone contact" checked={form.communicationPreferences.phone} onCheckedChange={(checked) => setForm({ ...form, communicationPreferences: { ...form.communicationPreferences, phone: checked } })} /></label>
                 <label className={styles.permission}><span><strong>Optional marketing</strong><small>Receive educational or promotional updates. Turning this off does not stop necessary account service.</small></span><Switch aria-label="Allow optional marketing" checked={form.marketingConsent} onCheckedChange={(checked) => setForm({ ...form, marketingConsent: checked })} /></label>
-                <label className={styles.permission}><span><strong>Future matching permission</strong><small>Record whether you may want criteria considered in a later matching system. No matching is active from this profile today.</small></span><Switch aria-label="Record future matching permission" checked={form.matchingConsent} onCheckedChange={(checked) => setForm({ ...form, matchingConsent: checked })} /></label>
-                <label className={styles.permission}><span><strong>Future outreach permission</strong><small>Record whether you may want approved outreach in a later workflow. No email, phone, social, or direct-mail outreach starts here.</small></span><Switch aria-label="Record future outreach permission" checked={form.outreachConsent} onCheckedChange={(checked) => setForm({ ...form, outreachConsent: checked })} /></label>
+                <label className={styles.permission}><span><strong>Matching permission</strong><small>Allow an active, recently verified profile to be considered for potential opportunities. Every match is reviewed before it can appear in your workspace.</small></span><Switch aria-label="Allow matching" checked={form.matchingConsent} onCheckedChange={(checked) => setForm({ ...form, matchingConsent: checked })} /></label>
+                <label className={styles.permission}><span><strong>Outreach permission</strong><small>Record whether VestBlock may later request separately controlled outreach for this profile. Turning this on does not start email, phone, social, or direct-mail outreach.</small></span><Switch aria-label="Allow separately controlled outreach" checked={form.outreachConsent} onCheckedChange={(checked) => setForm({ ...form, outreachConsent: checked })} /></label>
                 <label className={styles.permission}><span><strong>Public profile permission</strong><small>Allow an approved active profile to display its role, profile name, optional summary, and only the criteria fields you select below. Contact and internal account details are never included.</small></span><Switch aria-label="Allow public profile display" checked={form.publicVisibilityConsent} onCheckedChange={(checked) => setForm({ ...form, publicVisibilityConsent: checked, publicFieldKeys: checked ? form.publicFieldKeys : [] })} /></label>
               </div>
               {form.publicVisibilityConsent ? (
@@ -464,14 +464,14 @@ export function ParticipantProfileWorkbench(props: {
 
           {activeStep === 'review' ? (
             <section className={styles.formSection} aria-labelledby="review-title">
-              <header><p>Review before submission</p><h2 id="review-title">Confirm the structure and the boundaries</h2><span>Saving creates a private draft. Submitting creates an operator review task; it does not start sourcing, matching, or outreach.</span></header>
+              <header><p>Review before submission</p><h2 id="review-title">Confirm the structure and the boundaries</h2><span>Saving creates a private draft. Submitting asks the VestBlock team to review it. Matching begins only after approval, recent verification, and your matching permission; outreach remains separate.</span></header>
               <dl className={styles.reviewGrid}>
                 <div><dt>Role</dt><dd>{definition.label}</dd></div>
                 <div><dt>Represents</dt><dd>{form.organizationName || form.displayName || 'Not completed'}</dd></div>
                 <div><dt>Criteria completed</dt><dd>{Object.keys(form.criteria).length} structured fields</dd></div>
                 <div><dt>Public display</dt><dd>{form.publicVisibilityConsent ? form.publicFieldKeys.length + ' selected public fields' : 'Private'}</dd></div>
-                <div><dt>Matching</dt><dd>{form.matchingConsent ? 'Permission recorded for a later workflow' : 'Not permitted'}</dd></div>
-                <div><dt>Outreach</dt><dd>{form.outreachConsent ? 'Permission recorded for a later workflow' : 'Not permitted'}</dd></div>
+                <div><dt>Matching</dt><dd>{form.matchingConsent ? 'Allowed after profile approval and verification' : 'Not permitted'}</dd></div>
+                <div><dt>Outreach</dt><dd>{form.outreachConsent ? 'Permission recorded; no outreach starts here' : 'Not permitted'}</dd></div>
               </dl>
               <div className={styles.reviewBoundary}><ShieldCheck /><p><strong>What happens next</strong><span>VestBlock reviews completeness, criteria, permission boundaries, and any verification needs. An active profile is not a guarantee of capital, property, customers, referrals, projects, contracts, revenue, or a transaction.</span></p></div>
               <div className={styles.actionRow}>
@@ -492,7 +492,7 @@ export function ParticipantProfileWorkbench(props: {
         </div>
 
         <aside className={styles.workbenchAside}>
-          <section><p>Status</p><h2>{profile ? PARTICIPANT_STATUS_LABELS[profile.status] : 'Private draft'}</h2><span>{profile?.last_review_reason || 'Save freely. Submit only when the criteria and permissions are ready for operator review.'}</span></section>
+          <section><p>Status</p><h2>{profile ? PARTICIPANT_STATUS_LABELS[profile.status] : 'Private draft'}</h2><span>{profile?.last_review_reason || 'Save freely. Submit when the criteria and permissions are ready for VestBlock review.'}</span></section>
           <section><p>Privacy</p><h2>{form.publicVisibilityConsent ? 'Public permission selected' : 'Private by default'}</h2><span>{form.publicVisibilityConsent ? 'Nothing is public until approval and active status. Only selected fields may display.' : 'Contact details, criteria, activity, and internal review remain private.'}</span></section>
           <section><p>Verification</p><h2>{profile?.last_verified_at ? 'Reviewed ' + dateTime(profile.last_verified_at) : 'Not yet verified'}</h2><span>Profile review does not automatically verify funds, licenses, insurance, pricing, capacity, or availability.</span></section>
           <section><p>History</p><h2>{events.length} profile {events.length === 1 ? 'update' : 'updates'}</h2>{events.length ? <ol className={styles.timeline}>{events.slice(-8).reverse().map((event) => <li key={event.id}><span>{event.note || event.event_type.replaceAll('_', ' ')}</span><small>{dateTime(event.created_at)}</small></li>)}</ol> : <span>History begins when the draft is saved.</span>}</section>

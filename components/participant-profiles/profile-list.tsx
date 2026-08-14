@@ -69,7 +69,7 @@ export function ParticipantProfilesHome() {
         <ShieldCheck aria-hidden="true" />
         <div>
           <strong>Private by default and controlled by you.</strong>
-          <span>Matching, sourcing, and automated outreach do not start from these profiles. Public display requires a separate opt-in and an approved active profile.</span>
+          <span>When you turn on matching, an active and recently verified profile may be considered for operator-reviewed opportunities. Matching never authorizes outreach. Public display requires a separate opt-in.</span>
         </div>
       </section>
 

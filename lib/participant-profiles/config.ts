@@ -109,7 +109,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Lender or capital provider',
     shortLabel: 'Capital provider',
     description: 'Record provider-supplied coverage, products, underwriting context, capacity, and exclusions.',
-    use: 'VestBlock stores this information for controlled operator review and future preparation.',
+    use: 'VestBlock stores this information for controlled team review and future preparation.',
     boundary: 'Rates, leverage, timing, fees, products, and terms are provider-supplied, subject to verification and underwriting, and are not an approval or commitment.',
     fields: lenderFields,
   },
@@ -117,7 +117,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Builder',
     shortLabel: 'Builder',
     description: 'Describe where and what you build, current capacity, project stage, and the support you need.',
-    use: 'VestBlock uses the profile to organize operating context for operator review.',
+    use: 'VestBlock uses the profile to organize operating context for team review.',
     boundary: 'Licenses, insurance, capacity, and credentials remain unverified unless an operator records evidence. No project, contract, referral, or revenue is guaranteed.',
     fields: [
       ...commonMarketFields,
@@ -135,7 +135,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Developer',
     shortLabel: 'Developer',
     description: 'Organize market, asset, site, stage, deal size, capital, and operating criteria.',
-    use: 'VestBlock uses this profile to prepare a consistent operator review.',
+    use: 'VestBlock uses this profile to prepare a consistent team review.',
     boundary: 'No site, entitlement, approval, capital, partner, buyer, contractor, or development outcome is guaranteed.',
     fields: [
       ...commonMarketFields,
@@ -152,7 +152,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Real estate agent',
     shortLabel: 'Agent',
     description: 'Describe market coverage, client focus, transaction coverage, and referral preferences.',
-    use: 'VestBlock stores voluntary professional criteria for operator review.',
+    use: 'VestBlock stores voluntary professional criteria for team review.',
     boundary: 'License status is unverified unless an operator records evidence. No client, listing, referral, fee, or transaction is guaranteed.',
     fields: [
       ...commonMarketFields,
@@ -167,7 +167,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Real estate wholesaler',
     shortLabel: 'Wholesaler',
     description: 'Define acquisition and disposition coverage, transaction preferences, capacity, and exclusions.',
-    use: 'VestBlock uses this profile for operator review and account organization.',
+    use: 'VestBlock uses this profile for team review and account organization.',
     boundary: 'No property, buyer, assignment, fee, disposition, or closing is guaranteed.',
     fields: [
       { key: 'acquisitionMarkets', label: 'Acquisition markets', help: 'Where you source or contract opportunities.', type: 'list', required: true, publicEligible: true },
@@ -184,7 +184,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Business buyer',
     shortLabel: 'Business buyer',
     description: 'Define industry, geography, size, economics, structure, experience, timeline, and exclusions.',
-    use: 'VestBlock stores voluntary acquisition criteria for controlled operator review.',
+    use: 'VestBlock stores voluntary acquisition criteria for controlled team review.',
     boundary: 'No business, valuation, financing, seller, introduction, or closing is guaranteed.',
     fields: [
       { key: 'industries', label: 'Industries', help: 'Target industries and any adjacent categories.', type: 'list', required: true, publicEligible: true },
@@ -203,7 +203,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Business seller',
     shortLabel: 'Business seller',
     description: 'Privately organize the business, economics, sale objective, structure, timing, and confidentiality requirements.',
-    use: 'VestBlock stores this private profile for controlled operator review.',
+    use: 'VestBlock stores this private profile for controlled team review.',
     boundary: 'Financial figures are owner-supplied and unverified unless stated. No valuation, buyer, offer, financing, confidentiality outcome, or closing is guaranteed.',
     fields: [
       { key: 'industries', label: 'Industry', help: 'Primary industry and operating category.', type: 'list', required: true, publicEligible: true },
@@ -222,7 +222,7 @@ export const PARTICIPANT_ROLE_DEFINITIONS: Record<ParticipantRole, ParticipantRo
     label: 'Service provider',
     shortLabel: 'Service provider',
     description: 'Describe services, markets, responsible capacity, availability, credentials, and partner preferences.',
-    use: 'VestBlock stores the profile for operator review and future account organization.',
+    use: 'VestBlock stores the profile for team review and future account organization.',
     boundary: 'Credentials, insurance, licenses, pricing, and availability remain provider-supplied until verified. No customer, contract, referral, project, or revenue is guaranteed.',
     fields: [
       { key: 'serviceCategories', label: 'Service categories', help: 'Services you currently provide.', type: 'list', required: true, publicEligible: true },

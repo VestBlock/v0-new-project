@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
-import { ArrowRight, Clipboard, RefreshCw, Sparkles, Target, Zap } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { ArrowRight, Check, Clipboard, RefreshCw, ShieldCheck, Sparkles, Target, X, Zap } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -51,6 +51,14 @@ type StrategyBriefing = {
   lessons: StrategyLesson[]
 }
 
+type GovernanceSnapshot = {
+  lanes: Array<{ id: string; lane_key: string; version: number; title: string; contract_json: { objective?: string; primaryConversionEvent?: string } }>
+  proposals: Array<{ id: string; target_key: string; title: string; rationale: string; risk_level: string; approval_status: string; created_at: string }>
+  evidence: Array<{ id: string; brief_title: string; source_type: string; created_at: string }>
+  outcomes: Array<{ id: string; decision: string | null }>
+  generatedAt: string
+}
+
 function effortTone(value: StrategyPlay["effort"]) {
   if (value === "low") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
   if (value === "medium") return "border-amber-300/20 bg-amber-300/10 text-amber-100"
@@ -73,12 +81,70 @@ export function CommandCenterStrategyPanel({
   const [isLearning, setIsLearning] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string>("")
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
+  const [governance, setGovernance] = useState<GovernanceSnapshot | null>(null)
+  const [governanceWorking, setGovernanceWorking] = useState<string | null>(null)
 
   const focusPlay = useMemo(
     () => briefing.plays.find((play) => play.key === briefing.focusKey) || briefing.plays[0] || null,
     [briefing]
   )
   const challengerPlays = briefing.plays.filter((play) => play.key !== focusPlay?.key).slice(0, 3)
+
+  const loadGovernance = useCallback(async () => {
+    const response = await fetch("/api/admin/strategy-governance", { cache: "no-store" })
+    const payload = (await response.json()) as GovernanceSnapshot & { error?: string }
+    if (!response.ok) throw new Error(payload.error || "Unable to load strategy governance.")
+    setGovernance(payload)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadGovernance().catch((error) => setStatusMessage(error instanceof Error ? error.message : "Unable to load strategy governance."))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [loadGovernance])
+
+  const decideProposal = async (id: string, action: "approve" | "reject" | "apply") => {
+    setGovernanceWorking(id)
+    setStatusMessage("")
+    try {
+      const response = await fetch(`/api/admin/strategy-governance/${id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || "Unable to record the strategy decision.")
+      setStatusMessage(action === "apply" ? "A new strategy version is active; the prior version remains in history." : `Strategy proposal ${action}d.`)
+      await loadGovernance()
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Unable to record the strategy decision.")
+    } finally {
+      setGovernanceWorking(null)
+    }
+  }
+
+  const runN8nContractTest = async () => {
+    setGovernanceWorking("n8n-test")
+    setStatusMessage("")
+    try {
+      const response = await fetch("/api/admin/orchestration/n8n", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          eventType: "workflow_contract_test",
+          idempotencyKey: `command-center-contract-${new Date().toISOString().slice(0, 16)}`,
+          mode: "no_send",
+          channel: "no_outreach",
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || "n8n no-send test failed safely.")
+      setStatusMessage(payload.replayed ? "The existing n8n no-send test was reused; no duplicate run was created." : "Signed n8n no-send test dispatched and recorded.")
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "n8n no-send test failed safely.")
+    } finally {
+      setGovernanceWorking(null)
+    }
+  }
 
   const refreshBriefing = async () => {
     const response = await fetch("/api/admin/boss-agent", { cache: "no-store" })
@@ -354,6 +420,60 @@ export function CommandCenterStrategyPanel({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/[0.08] bg-slate-950/60 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-cyan-200" />
+              <h3 className="text-sm font-semibold text-white">Strategy governance</h3>
+            </div>
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-400">
+              Sourced observations can propose a change, but they cannot rewrite an active strategy or trigger external action. Material changes require approval and create a preserved new version.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => void runN8nContractTest()} disabled={governanceWorking === "n8n-test"}>
+              {governanceWorking === "n8n-test" ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+              Test n8n · no send
+            </Button>
+            <Link href="/admin/opportunity-matches" className="inline-flex min-h-9 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-xs text-slate-200 hover:border-cyan-300/35 hover:text-white">
+              Review matches <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-2xl font-semibold text-white">{governance?.lanes.length ?? "—"}</p><p className="mt-1 text-xs text-slate-500">Active versioned lanes</p></div>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-2xl font-semibold text-white">{governance?.proposals.length ?? "—"}</p><p className="mt-1 text-xs text-slate-500">Changes awaiting decision</p></div>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-2xl font-semibold text-white">{governance?.evidence.length ?? "—"}</p><p className="mt-1 text-xs text-slate-500">Recent sourced briefs</p></div>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-2xl font-semibold text-white">{governance?.outcomes.length ?? "—"}</p><p className="mt-1 text-xs text-slate-500">Measured learning records</p></div>
+        </div>
+        {governance?.lanes.length ? (
+          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {governance.lanes.map((lane) => (
+              <div key={lane.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium text-white">{lane.title}</p><span className="text-[0.65rem] text-cyan-200">v{lane.version}</span></div>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{lane.contract_json.objective}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {governance?.proposals.length ? (
+          <div className="mt-4 space-y-2">
+            <p className="vb-mono text-[0.62rem] uppercase tracking-[0.16em] text-slate-500">Material change queue</p>
+            {governance.proposals.map((proposal) => (
+              <div key={proposal.id} className="flex flex-col gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-3 lg:flex-row lg:items-center lg:justify-between">
+                <div><p className="text-sm font-medium text-white">{proposal.title}</p><p className="mt-1 text-xs leading-5 text-slate-400">{proposal.rationale}</p><p className="mt-1 text-[0.65rem] uppercase tracking-[0.12em] text-slate-500">{proposal.target_key.replaceAll("_", " ")} · {proposal.risk_level} risk · {proposal.approval_status}</p></div>
+                <div className="flex shrink-0 gap-2">
+                  {proposal.approval_status === "queued" ? <Button size="sm" onClick={() => void decideProposal(proposal.id, "approve")} disabled={governanceWorking === proposal.id}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button> : null}
+                  {proposal.approval_status === "approved" ? <Button size="sm" onClick={() => void decideProposal(proposal.id, "apply")} disabled={governanceWorking === proposal.id}>Create next version</Button> : null}
+                  <Button size="sm" variant="outline" onClick={() => void decideProposal(proposal.id, "reject")} disabled={governanceWorking === proposal.id}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   )

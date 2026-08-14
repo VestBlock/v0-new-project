@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       fromStatus: profile.status,
       toStatus: target,
       note: parsed.data.action === 'submit'
-        ? 'Submitted for VestBlock operator review.'
+        ? 'Submitted for VestBlock review.'
         : parsed.data.action === 'pause'
           ? 'Profile paused by the customer.'
           : parsed.data.action === 'reactivate'

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { getServerUser } from '@/lib/auth/admin'
 import { normalizeMemberRoles } from '@/lib/auth/intent'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { listCustomerOpportunityMatches } from '@/lib/matching/opportunity-matches'
 
 const patchSchema = z.object({
   activeLane: z.enum(['capital', 'real-estate', 'opportunity', 'dealvault']).nullable().optional(),
@@ -80,6 +81,13 @@ async function loadWorkspace(user: { id: string; email?: string | null }) {
     updated_at: null,
   }
 
+  let opportunityMatches: Awaited<ReturnType<typeof listCustomerOpportunityMatches>> = []
+  try {
+    opportunityMatches = await listCustomerOpportunityMatches(user.id)
+  } catch (error) {
+    console.error('[workspace] opportunity matches unavailable', error)
+  }
+
   return {
     workspace: {
       activeLane: state.active_lane,
@@ -104,6 +112,7 @@ async function loadWorkspace(user: { id: string; email?: string | null }) {
       sellers: sellers.error ? [] : sellers.data || [],
     },
     creditReports: creditReports.error ? [] : creditReports.data || [],
+    opportunityMatches,
   }
 }
 

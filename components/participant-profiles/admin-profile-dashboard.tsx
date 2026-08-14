@@ -219,8 +219,8 @@ export function ParticipantProfileAdminDashboard() {
                   <div><dt>Account email</dt><dd>{detail.profile.communication_preferences_json.email ? 'Allowed' : 'Off'}</dd></div>
                   <div><dt>Account phone</dt><dd>{detail.profile.communication_preferences_json.phone ? 'Allowed' : 'Off'}</dd></div>
                   <div><dt>Marketing</dt><dd>{detail.profile.marketing_consent ? 'Allowed' : 'Not allowed'}</dd></div>
-                  <div><dt>Future matching</dt><dd>{detail.profile.matching_consent ? 'Permission recorded; inactive' : 'Not allowed'}</dd></div>
-                  <div><dt>Future outreach</dt><dd>{detail.profile.outreach_consent ? 'Permission recorded; inactive' : 'Not allowed'}</dd></div>
+                  <div><dt>Matching</dt><dd>{detail.profile.matching_consent ? 'Allowed when active and recently verified' : 'Not allowed'}</dd></div>
+                  <div><dt>Outreach</dt><dd>{detail.profile.outreach_consent ? 'Permission recorded; separately controlled' : 'Not allowed'}</dd></div>
                   <div><dt>Public display</dt><dd>{detail.profile.public_visibility_consent ? detail.profile.public_field_keys.length + ' allowlisted fields' : 'Private'}</dd></div>
                 </dl>
               </section>

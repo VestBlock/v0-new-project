@@ -27,6 +27,18 @@ type WorkspaceResponse = {
     sellers: Array<{ id: string; property_address?: string; city?: string; state?: string; status?: string; updated_at?: string; created_at?: string }>
   }
   creditReports: Array<{ id: string; status?: string; created_at?: string; completed_at?: string }>
+  opportunityMatches: Array<{
+    id: string
+    participant_profile_id: string
+    status: 'approved' | 'needs_information'
+    customer_safe_summary: string
+    uncertainty: 'low' | 'medium' | 'high'
+    source_observed_at: string | null
+    reviewed_at: string | null
+    customer_note: string | null
+    next_action_href: string
+    strategy_lane_versions: { title: string } | null
+  }>
 }
 
 type EditableWorkspace = WorkspaceResponse['workspace'] & { memberRoles: MemberRole[] }
@@ -42,7 +54,7 @@ function getNextActions(data: WorkspaceResponse, form: EditableWorkspace) {
   if (!data.questionnaire) actions.push({ title: 'Build your free roadmap', body: 'Start with your goal, current position, timeline, and main obstacle.', href: '/next-move', label: 'Start questionnaire' })
   if (form.memberRoles.includes('real_estate_buyer') && !data.intake.profiles.some((profile) => profile.role === 'buyer')) actions.push({ title: 'Save buyer criteria', body: 'Add markets, asset types, price range, strategy, capacity, and no-go criteria in a private account profile.', href: '/workspace/profiles/new?role=buyer', label: 'Create buyer profile' })
   if (form.memberRoles.includes('property_seller') && !data.intake.sellers.length) actions.push({ title: 'Submit a property', body: 'Organize the property, condition, timing, and preferred outcome.', href: '/sell', label: 'Review sale path' })
-  if (form.memberRoles.includes('lender') && !data.intake.profiles.some((profile) => profile.role === 'lender')) actions.push({ title: 'Add provider criteria', body: 'Record coverage, products, provider-supplied terms, documentation, and exclusions for operator review.', href: '/workspace/profiles/new?role=lender', label: 'Create provider profile' })
+  if (form.memberRoles.includes('lender') && !data.intake.profiles.some((profile) => profile.role === 'lender')) actions.push({ title: 'Add provider criteria', body: 'Record coverage, products, provider-supplied terms, documentation, and exclusions for VestBlock review.', href: '/workspace/profiles/new?role=lender', label: 'Create provider profile' })
   if (form.memberRoles.includes('investor') && !data.intake.profiles.some((profile) => profile.role === 'investor')) actions.push({ title: 'Organize investor criteria', body: 'State your acquisition thesis, economics, capacity, and exclusions in a private profile.', href: '/workspace/profiles/new?role=investor', label: 'Create investor profile' })
   if (!actions.length) actions.push({ title: 'Review your active lane', body: 'Your foundation is saved. Continue into the lane that matches your current objective.', href: platformLanes[form.activeLane || 'opportunity'].href, label: `Open ${platformLanes[form.activeLane || 'opportunity'].label}` })
   return actions.slice(0, 3)
@@ -184,21 +196,32 @@ export function CustomerWorkspace() {
           <section className="vb-workspace__section" aria-labelledby="recommendations-title">
             <div className="vb-workspace__section-head"><p>Matches and recommendations</p><h2 id="recommendations-title">Relevant next paths</h2><span>Only opportunities released to your workspace appear here. Internal screening does not create an offer or approval.</span></div>
             <div className="vb-workspace__records">
+              {data.opportunityMatches.map((match) => (
+                <article key={match.id}>
+                  <Sparkles aria-hidden="true" />
+                  <div>
+                    <h3>{match.status === 'needs_information' ? 'More information requested' : match.strategy_lane_versions?.title || 'Potential opportunity match'}</h3>
+                    <p>{match.status === 'needs_information' ? match.customer_note || 'VestBlock needs an update before this potential match can be reviewed.' : match.customer_safe_summary}</p>
+                    <small>{match.status === 'approved' ? `VestBlock reviewed${match.source_observed_at ? ` · source observed ${formatDate(match.source_observed_at)}` : ''}. Potential fit only—not an offer, reservation, introduction, or guaranteed outcome.` : 'Update the connected profile, then the VestBlock team can review the match again.'}</small>
+                  </div>
+                  <Link href={match.next_action_href}>{match.status === 'needs_information' ? 'Update profile' : 'Review criteria'}<ArrowRight /></Link>
+                </article>
+              ))}
               {form.recommendations.length ? form.recommendations.map((recommendation) => (
                 <article key={recommendation.id}><Sparkles aria-hidden="true" /><div><h3>{recommendation.title}</h3><p>{recommendation.summary || recommendation.status}</p></div>{recommendation.href ? <Link href={recommendation.href}>Review path<ArrowRight /></Link> : <span>{recommendation.status}</span>}</article>
-              )) : (
+              )) : !data.opportunityMatches.length ? (
                 <article><Sparkles aria-hidden="true" /><div><h3>{activeLane.label} is your current recommendation</h3><p>{activeLane.introduction}</p></div><Link href={activeLane.href}>Review this lane<ArrowRight /></Link></article>
-              )}
+              ) : null}
             </div>
           </section>
 
           <section className="vb-workspace__section" aria-labelledby="profiles-title">
-            <div className="vb-workspace__section-head"><p>Role profiles</p><h2 id="profiles-title">Your criteria and participation controls</h2><span>Each role has its own private criteria, permissions, review status, and history. Matching and outreach are not active from these profiles.</span></div>
+            <div className="vb-workspace__section-head"><p>Role profiles</p><h2 id="profiles-title">Your criteria and participation controls</h2><span>Each role has its own private criteria, permissions, review status, and history. Eligible profiles can be matched only with matching permission; outreach remains separately controlled.</span></div>
             <div className="vb-workspace__records">
               {data.intake.profiles.length ? data.intake.profiles.map((participant) => (
                 <article key={participant.id}><ShieldCheck aria-hidden="true" /><div><h3>{PARTICIPANT_ROLE_DEFINITIONS[participant.role].label}</h3><p>{participant.organization_name || participant.display_name || 'Participant profile'} · {participant.status.replaceAll('_', ' ')}{participant.safe_failure_state ? ' · follow-up retry available' : ''}</p></div><Link href={'/workspace/profiles/' + participant.id}>Open profile<ArrowRight /></Link></article>
               )) : (
-                <article><ShieldCheck aria-hidden="true" /><div><h3>Private by default</h3><p>Create the first role profile when you are ready to organize criteria for operator review.</p></div><Link href="/workspace/profiles">Choose a role<ArrowRight /></Link></article>
+                <article><ShieldCheck aria-hidden="true" /><div><h3>Private by default</h3><p>Create the first role profile when you are ready to organize criteria for VestBlock review.</p></div><Link href="/workspace/profiles">Choose a role<ArrowRight /></Link></article>
               )}
             </div>
           </section>
