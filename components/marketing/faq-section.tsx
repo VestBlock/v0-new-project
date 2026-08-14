@@ -25,7 +25,7 @@ export function FaqSection({
     <section className={`px-4 py-16 ${className}`} aria-labelledby="faq-heading">
       <div className="container mx-auto max-w-3xl">
         <div className="mb-8 text-center">
-          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">{eyebrow}</p>
+          <p className="text-sm uppercase tracking-[0.24em] text-cyan-300/80">{eyebrow}</p>
           <h2 id="faq-heading" className="mt-3 text-3xl font-semibold text-white md:text-4xl">
             {title}
           </h2>
@@ -38,7 +38,7 @@ export function FaqSection({
               className="group rounded-2xl border border-white/10 bg-white/[0.035] p-5 backdrop-blur-xl transition-colors duration-200 hover:border-cyan-300/30 open:border-cyan-300/30"
               {...(index === 0 ? { open: true } : {})}
             >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left text-lg font-medium text-white [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 py-2 text-left text-lg font-medium text-white [&::-webkit-details-marker]:hidden">
                 {item.question}
                 <span className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-cyan-200 transition-transform duration-200 group-open:rotate-45">
                   +

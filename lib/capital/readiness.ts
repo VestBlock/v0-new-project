@@ -78,7 +78,7 @@ export function assessCapitalReadiness(input: CapitalReadinessInput) {
         : `The intake is complete enough for VestBlock review. A ${score}/100 readiness score is preparation feedback, not provider approval.`,
       strengths,
       gaps,
-      nextSteps: nextSteps.length ? nextSteps : ['Submit for VestBlock operator review.'],
+      nextSteps: nextSteps.length ? nextSteps : ['Submit for VestBlock review.'],
     },
   }
 }

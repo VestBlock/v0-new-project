@@ -68,8 +68,13 @@ export function NextMoveQuestionnaire({ initialFocus }: { initialFocus?: NextMov
     }
 
     if (!isAuthenticated) {
-      setDraftReady(true)
-      return () => { cancelled = true }
+      const readyTimer = window.setTimeout(() => {
+        if (!cancelled) setDraftReady(true)
+      }, 0)
+      return () => {
+        cancelled = true
+        window.clearTimeout(readyTimer)
+      }
     }
 
     void fetch("/api/workspace", { cache: "no-store" })
@@ -186,7 +191,7 @@ export function NextMoveQuestionnaire({ initialFocus }: { initialFocus?: NextMov
               </div>
                 <div className="vb-consent">
                   <label><input type="checkbox" checked={answers.analysisConsent} onChange={(event) => update("analysisConsent", event.target.checked as true)} required /><span><strong>Required: prepare and deliver my analysis.</strong> I consent to VestBlock using these answers and contact information to generate, store, display, and email the requested roadmap.</span></label>
-                  <label><input type="checkbox" checked={answers.requestFollowUp} onChange={(event) => update("requestFollowUp", event.target.checked)} /><span><strong>Request a human follow-up.</strong> Create an operator review task for this goal.</span></label>
+                  <label><input type="checkbox" checked={answers.requestFollowUp} onChange={(event) => update("requestFollowUp", event.target.checked)} /><span><strong>Request a human follow-up.</strong> Ask the VestBlock team to review this goal with you.</span></label>
                   {answers.requestFollowUp && <label className="vb-consent__contact"><span><strong>Phone (optional)</strong><input type="tel" maxLength={40} autoComplete="tel" value={answers.phone} onChange={(event) => update("phone", event.target.value)} placeholder="Best number for the requested follow-up" /></span></label>}
                   <label><input type="checkbox" checked={answers.marketingConsent} onChange={(event) => update("marketingConsent", event.target.checked)} /><span><strong>Optional marketing.</strong> I agree to receive occasional VestBlock educational and service messages. This is not required for the free roadmap.</span></label>
                 </div>

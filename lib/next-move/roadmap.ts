@@ -118,7 +118,7 @@ const focusPlans: Record<NextMoveFocus, FocusPlan> = {
     review: 'Clarify whether the next need is a project, capital, contractor relationship, buyer, site, or operator introduction.',
     decision: 'Route the completed brief for a project-fit review and documented follow-up.',
     resources: [
-      { title: 'Builder/developer project-fit review', description: 'Your questionnaire creates a structured project brief and operator task.', href: '/next-move', access: 'Review required', limitation: 'No project, contract, capital, or introduction is guaranteed.' },
+      { title: 'Builder/developer project-fit review', description: 'Your questionnaire creates a structured project brief for VestBlock review.', href: '/next-move', access: 'Review required', limitation: 'No project, contract, capital, or introduction is guaranteed.' },
       { title: 'Real-estate funding intake', description: 'Prepare an active project capital scenario.', href: '/real-estate-funding', access: 'Review required', limitation: 'Subject to underwriting and third-party terms.' },
     ], cautions: ['Licensing, insurance, contracts, site control, budgets, and funding must be independently verified.'], manualReview: true,
   },

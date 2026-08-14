@@ -61,7 +61,7 @@ const statusCopy: Record<CreditReportStatus, CreditReportStatusView> = {
     description:
       'The report text was captured and is ready for AI review and dispute letter preparation.',
     nextStep:
-      'The next step is analysis. If anything looks unclear, an operator can move the report to review.',
+      'The next step is analysis. If anything looks unclear, the VestBlock team can move the report to review.',
   },
   analyzing: {
     status: 'analyzing',
@@ -103,7 +103,7 @@ const statusCopy: Record<CreditReportStatus, CreditReportStatusView> = {
     progress: 88,
     headline: 'Manual review needed',
     description:
-      'This report needs an operator review before VestBlock can complete the credit repair workflow.',
+      'This report needs a VestBlock review before the credit-repair workflow can continue.',
     nextStep:
       'The admin team can review the report, update the status, and follow up with the next action.',
   },

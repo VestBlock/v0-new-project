@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 import { Toaster } from '@/components/ui/toaster';
 import { Navigation } from '@/components/navigation'; // Corrected import
+import { SiteFooter } from '@/components/site-footer';
 import {
   absoluteUrl,
   getSiteUrl,
@@ -98,6 +99,7 @@ export default function RootLayout({
           <AuthProvider>
             <Navigation />
             <main>{children}</main>
+            <SiteFooter />
             <Toaster />
           </AuthProvider>
         </ThemeProvider>

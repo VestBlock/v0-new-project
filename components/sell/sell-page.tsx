@@ -173,7 +173,7 @@ export function SellPage({ market }: SellPageProps) {
       if (user) window.localStorage.removeItem(STORAGE_KEY)
       idempotencyKey.current = crypto.randomUUID()
       setMessage({ tone: 'success', text: action === 'withdraw'
-        ? 'This seller case is withdrawn and its operator follow-up has been closed.'
+        ? 'This seller case is withdrawn and its VestBlock follow-up has been closed.'
         : payload.operationPending ? payload.message
         : action === 'submit' ? 'Submitted for VestBlock review. This is not an offer, price commitment, buyer match, or closing promise.'
         : payload.duplicate ? 'Your existing case was updated; no duplicate property record was created.'
@@ -279,7 +279,7 @@ export function SellPage({ market }: SellPageProps) {
                 <div className="vb-capital__score"><span>{record.completeness_score}</span><div><strong>{label(record.status)}</strong><small>Intake completeness—not sale probability</small></div></div>
                 <p>{location}</p>
                 <div className="vb-capital__review-block"><h4>Submitted context</h4><ul><li>{record.property_type || 'Property type pending'} · {record.property_condition || 'condition pending'}</li><li>{record.occupancy_status || 'Occupancy pending'} · {record.timeline_to_sell || 'timeline pending'}</li><li>Estimated value: {money(record.estimated_value)}</li><li>Price expectation: {money(record.asking_price)}</li></ul></div>
-                <div className="vb-capital__review-block"><h4>Information still needed</h4>{record.completeness_gaps.length ? <ul>{record.completeness_gaps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The standard intake is complete. An operator may ask focused follow-up questions.</p>}</div>
+                <div className="vb-capital__review-block"><h4>Information still needed</h4>{record.completeness_gaps.length ? <ul>{record.completeness_gaps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The standard intake is complete. The VestBlock team may ask focused follow-up questions.</p>}</div>
                 {events.length ? <div className="vb-capital__timeline"><h4>Status history</h4><ol>{events.slice().reverse().map((event) => <li key={event.id}><span>{label(event.event_type)}</span><small>{new Date(event.created_at).toLocaleString()}</small>{event.note ? <p>{event.note}</p> : null}</li>)}</ol></div> : null}
               </>}
               <div className="vb-capital__disclaimer"><ShieldCheck aria-hidden="true" /><p><strong>Review boundary</strong>VestBlock organizes the case and may request more information. Offers, buyers, terms, financing, property condition, title, and closing remain subject to separate review and independent decisions.</p></div>

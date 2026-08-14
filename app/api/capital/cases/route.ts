@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
       eventType,
       fromStatus: existing?.status || null,
       toStatus: saved.status,
-      note: input.action === 'submit' ? 'Submitted for VestBlock operator review.' : 'Capital intake saved for continuation.',
+      note: input.action === 'submit' ? 'Submitted for VestBlock review.' : 'Capital intake saved for continuation.',
       metadata: { readinessScore: saved.readiness_score, readinessTier: saved.readiness_tier },
     })
     if (input.action === 'submit') {

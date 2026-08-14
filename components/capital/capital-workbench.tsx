@@ -178,9 +178,9 @@ export function CapitalWorkbench() {
       setMessage({
         tone: 'success',
         text: payload.operationPending
-          ? payload.message || 'Your case is safely saved. VestBlock is resolving an internal follow-up delay.'
+          ? payload.message || 'Your case is safely saved. VestBlock will follow up once the next review step is available.'
           : action === 'submit'
-          ? 'Submitted. Your case is in VestBlock’s operator review queue; this is not a provider approval or application submission.'
+          ? 'Submitted. The VestBlock team will review your case; this is not a provider approval or application submission.'
           : payload.duplicate ? 'Your existing case was updated—no duplicate record was created.' : 'Draft saved. You can return and continue from this device.',
       })
       await loadCase(payload.case.id, payload.accessToken || accessToken)

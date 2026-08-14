@@ -27,7 +27,7 @@ test.describe('Gate 4C public platform and customer workspace', () => {
     { path: '/capital', heading: /Build a clearer path to the capital/ },
     { path: '/real-estate', heading: /Bring buyers, sellers, capital/ },
     { path: '/opportunity', heading: /Turn a goal into an ordered/ },
-    { path: '/dealvault', heading: /Cleaner records for deals/ },
+    { path: '/dealvault', heading: /Keep the record that supports the work/ },
   ]) {
     test(`${route.path} is a meaningful guest hub`, async ({ page }) => {
       await page.goto(route.path, { waitUntil: 'domcontentloaded' })

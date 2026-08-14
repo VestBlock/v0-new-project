@@ -1,589 +1,218 @@
-import Link from 'next/link';
-import type { Metadata } from 'next';
-import Image from 'next/image';
-import {
-  ArrowRight,
-  BadgeCheck,
-  Blocks,
-  CircleDollarSign,
-  FileCheck,
-  Landmark,
-  Link2,
-  Network,
-  Presentation,
-  ReceiptText,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { absoluteUrl } from '@/lib/seo/site';
-import { DealVaultPilotInterestForm } from '@/components/dealvault/dealvault-pilot-interest-form';
-import {
-  dealVaultPublicContracts,
-  dealVaultPublicDemo,
-  shortenHex,
-} from '@/lib/dealvault/contractMetadata';
-import {
-  breadcrumbJsonLd,
-  dealVaultFaqJsonLd,
-  dealVaultServiceJsonLd,
-} from '@/lib/seo/structuredData';
+import Image from 'next/image'
+import Link from 'next/link'
+import type { Metadata } from 'next'
+import { ArrowRight, BadgeCheck, Blocks, FileCheck2, Link2, ReceiptText, ShieldCheck } from 'lucide-react'
+
+import { DealVaultPilotInterestForm } from '@/components/dealvault/dealvault-pilot-interest-form'
+import { dealVaultPublicContracts, dealVaultPublicDemo, shortenHex } from '@/lib/dealvault/contractMetadata'
+import { absoluteUrl } from '@/lib/seo/site'
+import { breadcrumbJsonLd, dealVaultFaqJsonLd, dealVaultServiceJsonLd } from '@/lib/seo/structuredData'
 
 export const metadata: Metadata = {
-  title: 'DealVault Proof, Payout, And Milestone Tracking',
-  description:
-    'DealVault by VestBlock gives teams cleaner agreement records, payout tracking, and milestone audit trails with live blockchain proof records behind them.',
-  alternates: {
-    canonical: '/dealvault',
-  },
-  keywords: [
-    'smart agreement tracking',
-    'blockchain proof records',
-    'payout ledger software',
-    'milestone audit trail',
-    'referral payout tracking',
-    'contractor milestone tracking',
-    'DealVault by VestBlock',
-  ],
+  title: 'DealVault Proof, Payout, and Milestone Records',
+  description: 'DealVault by VestBlock keeps agreements, payout terms, milestone history, and verifiable proof connected to the work they support.',
+  alternates: { canonical: '/dealvault' },
   openGraph: {
-    title: 'DealVault By VestBlock',
-    description:
-      'Cleaner proof records, payout ledgers, and milestone audit trails for serious deal-driven teams.',
+    title: 'DealVault by VestBlock',
+    description: 'A durable record for agreements, payout terms, milestones, and approvals.',
     url: absoluteUrl('/dealvault'),
-    images: [
-      {
-        url: absoluteUrl('/dealvault/opengraph-image'),
-        width: 1200,
-        height: 630,
-        alt: 'DealVault by VestBlock preview',
-      },
-    ],
+    images: [{ url: absoluteUrl('/dealvault/opengraph-image'), width: 1200, height: 630, alt: 'DealVault by VestBlock preview' }],
   },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'DealVault By VestBlock',
-    description:
-      'Cleaner proof records, payout ledgers, and milestone audit trails for serious deal-driven teams.',
-    images: [absoluteUrl('/dealvault/opengraph-image')],
-  },
-};
+}
 
-const primaryModules = [
-  {
-    title: 'Proof records',
-    description:
-      'Create document proof records and timestamps without storing raw contracts or sensitive property details on-chain.',
-    icon: FileCheck,
-  },
-  {
-    title: 'Payout ledger',
-    description:
-      'Track referral, partner, and split-based payouts in a transparent ledger before money movement becomes a dispute problem.',
-    icon: ReceiptText,
-  },
-  {
-    title: 'Milestone audit trail',
-    description:
-      'Track project milestones with proof submissions, approvals, disputes, and completion history.',
-    icon: Blocks,
-  },
-];
-
-const trustPoints = [
-  'Live on Polygon mainnet',
-  'Private documents stay off-chain',
-  'No wallet connect required for normal users',
-  'Transparent event records with public explorer links',
-];
+const recordLayers = [
+  { number: '01', title: 'Agreement record', body: 'Retain the version, terms, timestamps, and permissions connected to a commitment without placing private documents on-chain.', icon: FileCheck2 },
+  { number: '02', title: 'Payout reference', body: 'Keep referral, partner, and split terms in a durable ledger before memory or scattered messages become the record.', icon: ReceiptText },
+  { number: '03', title: 'Milestone history', body: 'Connect submissions, approvals, disputes, and completion events to the work they belong to.', icon: Blocks },
+]
 
 const useCases = [
-  'Real estate agreement proof and partner split tracking',
-  'Private lending and referral payout accountability',
+  'Real-estate agreement and partner-split records',
+  'Private-lending and referral accountability',
   'Contractor and field-service milestone approvals',
-  'Agency, consulting, and client-deliverable milestone records',
-  'Creative finance and custom agreement proof timelines',
-  'Staffing, recruiting, and placement-fee trail support',
-];
-
-const processSteps = [
-  {
-    title: 'Track the agreement',
-    body: 'Create a deal record, anchor proof metadata, and keep sensitive documents off-chain.',
-  },
-  {
-    title: 'Lock the payout logic',
-    body: 'Record referral, partner, and split-based payout terms in a transparent ledger.',
-  },
-  {
-    title: 'Manage the project trail',
-    body: 'Capture milestone submissions, approvals, disputes, and completions in one clear audit trail.',
-  },
-];
+  'Agency, consulting, and client-deliverable history',
+  'Staffing, recruiting, and placement-fee records',
+  'Custom agreements that need a durable proof timeline',
+]
 
 const pricingTiers = [
-  {
-    title: 'Solo Investor',
-    price: '$97/mo',
-    description: 'For individuals who need proof records and cleaner accountability.',
-    bullets: [
-      'Core proof and agreement tracking',
-      'Referral and JV payout ledger support',
-      'Milestone tracking for active projects',
-      'Pilot onboarding and product support',
-    ],
-    emphasis: false,
-  },
-  {
-    title: 'Team',
-    price: '$297/mo',
-    description: 'For active teams with multiple partners, vendors, or milestone owners around the same work.',
-    bullets: [
-      'Everything in Solo Investor',
-      'Multi-user access and support',
-      'Higher-touch rollout and usage guidance',
-      'Built for deal teams, service firms, and partner-heavy businesses',
-    ],
-    emphasis: true,
-  },
-  {
-    title: 'Business',
-    price: '$997/mo',
-    description: 'For serious businesses that want DealVault as a premium record and accountability product.',
-    bullets: [
-      'Everything in Team',
-      'Deeper rollout support and custom setup planning',
-      'Priority support',
-      'Best for higher-volume firms and partner networks',
-    ],
-    emphasis: false,
-  },
-];
+  { name: 'Solo Investor', price: '$97/mo', note: 'For an individual maintaining active agreement, payout, and milestone records.', items: ['Core proof records', 'Payout-ledger support', 'Milestone tracking', 'Pilot onboarding'] },
+  { name: 'Team', price: '$297/mo', note: 'For teams coordinating multiple partners, vendors, or milestone owners.', items: ['Everything in Solo Investor', 'Multi-user access', 'Guided rollout', 'Team record controls'] },
+  { name: 'Business', price: '$997/mo', note: 'For higher-volume organizations that need a structured implementation.', items: ['Everything in Team', 'Custom setup planning', 'Priority support', 'Deeper rollout support'] },
+]
 
-const faqItems = [
-  {
-    question: 'What does DealVault store on-chain?',
-    answer:
-      'DealVault stores hashes, proof IDs, timestamps, statuses, and opaque record references on-chain. Sensitive documents, names, and raw property details stay off-chain.',
-  },
-  {
-    question: 'Does DealVault replace escrow, title, or legal counsel?',
-    answer:
-      'No. DealVault helps track and prove agreement records. It does not replace legal counsel, licensed title services, escrow, brokerage compliance, or required real estate professionals.',
-  },
-  {
-    question: 'Who should look at DealVault first?',
-    answer:
-      'The strongest early users are real estate teams, private lenders, contractors, agencies, consulting groups, staffing businesses, and referral-heavy companies that need a stronger proof and payout trail.',
-  },
-];
+const faqs = [
+  { question: 'What is recorded on-chain?', answer: 'Hashes, proof IDs, timestamps, statuses, and opaque record references. Sensitive documents, names, and raw property details remain off-chain.' },
+  { question: 'Does DealVault replace escrow, title, or legal counsel?', answer: 'No. It supports record continuity and verification; it does not replace legal, title, escrow, brokerage, or other licensed services.' },
+  { question: 'Do customers need a wallet?', answer: 'No wallet connection is required for the standard customer experience.' },
+]
+
+const sectionClass = 'mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12'
 
 export default function DealVaultLandingPage() {
-  const breadcrumbs = breadcrumbJsonLd([
-    { name: 'VestBlock', path: '/' },
-    { name: 'DealVault', path: '/dealvault' },
-  ]);
+  const structuredData = [
+    breadcrumbJsonLd([{ name: 'VestBlock', path: '/' }, { name: 'DealVault', path: '/dealvault' }]),
+    dealVaultServiceJsonLd(),
+    dealVaultFaqJsonLd(),
+  ]
 
   return (
-    <main className="premium-page px-4 py-24">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify([breadcrumbs, dealVaultServiceJsonLd(), dealVaultFaqJsonLd()]),
-        }}
-      />
+    <main className="vb-dealvault-page bg-[#06090c] text-[#f1f3ed]">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
 
-      <div className="container mx-auto max-w-6xl space-y-12">
-        <section className="grid gap-8 lg:grid-cols-[1.08fr_.92fr] lg:items-start">
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-cyan-600 text-white">Private demos open</Badge>
-              <Badge variant="outline">Live on {dealVaultPublicDemo.network}</Badge>
-              <Badge variant="outline">Built for serious teams</Badge>
-            </div>
-
-            <div className="space-y-4">
-              <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
-                Cleaner records for deals, payouts, and milestones.
-              </h1>
-              <p className="max-w-3xl text-lg text-muted-foreground">
-                DealVault by VestBlock is built for teams that have already outgrown scattered PDFs,
-                text threads, and spreadsheet memory. It gives real estate teams, private lenders,
-                contractors, agencies, staffing groups, and referral partners a cleaner audit trail
-                around agreements, payout logic, and project milestones.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-cyan-600 hover:bg-cyan-700">
-                    <Link href="/dealvault/demo">
-                      Request Private Demo
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="#pricing">See Pricing</Link>
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <Link href="/services/dealvault" className="underline-offset-4 hover:underline">
-                Read the DealVault service guide
-              </Link>
-              <Link href="/services" className="underline-offset-4 hover:underline">
-                Compare all services
-              </Link>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {trustPoints.map((item) => (
-                <div key={item} className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04] p-4">
-                  <div className="flex items-start gap-2">
-                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
-                    <p className="text-sm text-muted-foreground">{item}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              DealVault helps track and prove agreement records. It does not replace legal counsel,
-              licensed title services, escrow services, brokerage compliance, or required real
-              estate professionals.
+      <section className="relative overflow-hidden border-b border-white/10 pt-28 sm:pt-36">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(215,248,11,0.08),transparent_34%),radial-gradient(circle_at_80%_34%,rgba(241,243,237,0.09),transparent_30%)]" />
+        <div className={`${sectionClass} relative grid gap-14 pb-20 lg:grid-cols-[1.06fr_.94fr] lg:items-end lg:pb-28`}>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#d7f80b]">DealVault · VestBlock record layer</p>
+            <h1 className="mt-6 max-w-4xl text-5xl font-medium leading-[0.96] tracking-[-0.055em] sm:text-6xl lg:text-8xl">
+              Keep the record that supports the work.
+            </h1>
+            <p className="mt-8 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+              DealVault keeps agreements, payout terms, milestones, and approvals connected to the active work—while sensitive material stays private.
             </p>
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+              <Link href="#dealvault-demo" className="inline-flex min-h-12 items-center justify-center gap-2 bg-[#d7f80b] px-6 text-sm font-semibold text-[#06090c] transition hover:bg-[#ecff5d] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d7f80b]">
+                Request a private demo <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link href="/dealvault/demo-record" className="inline-flex min-h-12 items-center justify-center border border-white/20 px-6 text-sm font-medium text-white transition hover:border-[#d7f80b]/70 hover:text-[#d7f80b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d7f80b]">
+                Inspect a sample record
+              </Link>
+            </div>
           </div>
 
-          <Card className="premium-card overflow-hidden border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.06] to-background">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-cyan-600" />
-                What makes this premium
-              </CardTitle>
-              <CardDescription>
-                This is not a crypto toy. It is a serious record and accountability product built for real deals, teams, and partner approvals.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <p className="text-sm font-semibold text-foreground">Agreement tracking</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Create a tamper-evident proof trail without exposing private deal documents.
-                </p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <p className="text-sm font-semibold text-foreground">Transparent payout records</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Lock and review partner splits in a cleaner ledger before friction turns expensive.
-                </p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="text-sm font-semibold text-foreground">Project accountability</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                  Keep proof-backed milestone history visible for project, service, and approval-based work.
-                  </p>
-                </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40">
-                <p className="text-sm font-semibold text-foreground">Best match</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Real estate teams first, plus lenders, contractors, agencies, staffing teams,
-                  and other partner-heavy businesses that want cleaner discipline around records.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section
-          id="live-contracts"
-          className="premium-section grid gap-8 p-6 lg:grid-cols-[1.02fr_.98fr]"
-        >
-          <div className="space-y-5">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-cyan-600 text-white">Live contract layer</Badge>
-              <Badge variant="outline">Chain ID {dealVaultPublicDemo.chainId}</Badge>
+          <div className="border-l border-[#d7f80b]/45 pl-6 sm:pl-8">
+            <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-slate-400">Record continuity</p>
+            <div className="mt-7 grid grid-cols-2 gap-x-8 gap-y-7">
+              <div><p className="text-2xl font-medium">Polygon</p><p className="mt-1 text-sm text-slate-400">Live proof network</p></div>
+              <div><p className="text-2xl font-medium">Private</p><p className="mt-1 text-sm text-slate-400">Documents remain off-chain</p></div>
+              <div><p className="text-2xl font-medium">Verifiable</p><p className="mt-1 text-sm text-slate-400">Explorer-linked records</p></div>
+              <div><p className="text-2xl font-medium">Accessible</p><p className="mt-1 text-sm text-slate-400">No wallet required</p></div>
             </div>
+            <p className="mt-9 border-t border-white/10 pt-5 text-sm leading-6 text-slate-400">
+              DealVault supports recordkeeping. It does not replace signed agreements, escrow, title, legal counsel, or required licensed professionals.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/10 py-20 lg:py-28">
+        <div className={sectionClass}>
+          <div className="grid gap-10 lg:grid-cols-[.65fr_1.35fr]">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight">Proof close to the decision point</h2>
-              <p className="mt-2 max-w-3xl text-muted-foreground">
-                Instead of asking visitors to believe the story, DealVault shows the live contract
-                layer, public explorer references, and a verified smoke run directly on the page.
-              </p>
+              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">One connected record</p>
+              <h2 className="mt-5 text-4xl font-medium tracking-[-0.04em] sm:text-5xl">From commitment to completion.</h2>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <p className="text-sm font-semibold text-foreground">Mainnet deployment</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Live since {new Date(dealVaultPublicDemo.liveSince).toLocaleString()}.
-                </p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <p className="text-sm font-semibold text-foreground">Verified smoke run</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Verified on {new Date(dealVaultPublicDemo.smokeVerifiedAt).toLocaleString()} with
-                  proof, deal, payout, and milestone records written successfully.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <FileCheck className="h-4 w-4 text-cyan-600" />
-                  Sample proof ID
-                </div>
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                  {dealVaultPublicDemo.sampleProofId}
-                </p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Blocks className="h-4 w-4 text-cyan-600" />
-                  Sample project ID
-                </div>
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                  {dealVaultPublicDemo.sampleProjectId}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Card className="premium-card border-cyan-500/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Network className="h-5 w-5 text-cyan-600" />
-                Live contract cards
-              </CardTitle>
-              <CardDescription>
-                Production contracts powering the premium demo experience.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {dealVaultPublicContracts.map((contract) => (
-                <div key={contract.key} className="group rounded-xl border p-4 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-cyan-400/30 hover:shadow-[0_20px_44px_rgba(8,145,178,0.1)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{contract.label}</p>
-                      <p className="text-base font-medium">{contract.title}</p>
-                    </div>
-                    <Button asChild size="sm" variant="outline">
-                      <a href={contract.explorerUrl} target="_blank" rel="noopener noreferrer">
-                        PolygonScan
-                        <Link2 className="ml-2 h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </a>
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{contract.description}</p>
-                  <p className="mt-3 break-all rounded-md bg-muted/60 px-3 py-2 font-mono text-xs text-muted-foreground">
-                    {shortenHex(contract.address, 12, 8)}
-                  </p>
-                </div>
+            <div className="divide-y divide-white/10 border-y border-white/10">
+              {recordLayers.map(({ number, title, body, icon: Icon }) => (
+                <article key={title} className="grid gap-4 py-7 sm:grid-cols-[3rem_2rem_1fr] sm:items-start">
+                  <span className="font-mono text-xs text-slate-500">{number}</span>
+                  <Icon className="h-5 w-5 text-[#d7f80b]" aria-hidden="true" />
+                  <div><h3 className="text-xl font-medium">{title}</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{body}</p></div>
+                </article>
               ))}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          {primaryModules.map((module) => (
-            <Card key={module.title} className="premium-card h-full border-cyan-500/10">
-              <CardHeader>
-                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-600">
-                  <module.icon className="h-5 w-5" />
-                </div>
-                <CardTitle>{module.title}</CardTitle>
-                <CardDescription>{module.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
-        </section>
-
-        <section id="pricing" className="space-y-5">
-          <div className="space-y-2">
-            <Badge className="bg-cyan-600 text-white">Premium pricing</Badge>
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Premium pricing for teams that need stronger accountability.
-            </h2>
-            <p className="max-w-3xl text-muted-foreground">
-              DealVault is built for teams that care about cleaner records, better accountability, and a stronger audit story around deals.
-            </p>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            {pricingTiers.map((tier) => (
-              <Card
-                key={tier.title}
-                className={`premium-card ${
-                  tier.emphasis
-                    ? 'border-cyan-500/40 shadow-lg shadow-cyan-500/10'
-                    : 'border-cyan-500/20'
-                }`}
-              >
-                <CardHeader>
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <Badge variant="outline">{tier.title}</Badge>
-                    {tier.emphasis && (
-                      <Badge className="bg-cyan-600 text-white">
-                        Recommended
-                      </Badge>
-                    )}
+      <section id="live-contracts" className="border-b border-white/10 bg-[#0a0e11] py-20 lg:py-28">
+        <div className={sectionClass}>
+          <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr]">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">Live verification layer</p>
+              <h2 className="mt-5 text-4xl font-medium tracking-[-0.04em] sm:text-5xl">Proof close to the decision.</h2>
+              <p className="mt-6 max-w-xl text-base leading-7 text-slate-400">
+                Review the production contract references and verified record IDs directly. The public proof is visible; private source material is not.
+              </p>
+              <div className="mt-9 border-l border-white/15 pl-5 text-sm leading-7 text-slate-300">
+                <p>Network: {dealVaultPublicDemo.network}</p>
+                <p>Chain ID: {dealVaultPublicDemo.chainId}</p>
+                <p>Live since: {new Date(dealVaultPublicDemo.liveSince).toLocaleDateString('en-US')}</p>
+              </div>
+            </div>
+            <div className="divide-y divide-white/10 border-y border-white/10">
+              {dealVaultPublicContracts.map((contract) => (
+                <article key={contract.key} className="py-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div><p className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500">{contract.label}</p><h3 className="mt-2 text-xl font-medium">{contract.title}</h3></div>
+                    <a className="inline-flex min-h-11 items-center gap-2 text-sm text-[#d7f80b] underline decoration-[#d7f80b]/35 underline-offset-4 hover:decoration-[#d7f80b]" href={contract.explorerUrl} target="_blank" rel="noopener noreferrer">PolygonScan <Link2 className="h-4 w-4" /></a>
                   </div>
-                  <CardTitle className="text-3xl">{tier.price}</CardTitle>
-                  <CardDescription>{tier.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    {tier.bullets.map((item) => (
-                      <li key={item} className="flex gap-2">
-                        <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    asChild
-                    className={tier.emphasis ? 'w-full bg-cyan-600 hover:bg-cyan-700' : 'w-full'}
-                    variant={tier.emphasis ? 'default' : 'outline'}
-                  >
-                    <Link href="/dealvault/demo">Request Private Demo</Link>
-                  </Button>
-                </CardContent>
-              </Card>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{contract.description}</p>
+                  <p className="mt-4 break-all font-mono text-xs text-slate-500">{shortenHex(contract.address, 12, 8)}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/10 py-20 lg:py-28">
+        <div className={sectionClass}>
+          <div className="grid gap-12 lg:grid-cols-2">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">Where it fits</p>
+              <h2 className="mt-5 max-w-xl text-4xl font-medium tracking-[-0.04em] sm:text-5xl">For work that crosses people, terms, and time.</h2>
+            </div>
+            <ol className="grid gap-px bg-white/10 sm:grid-cols-2">
+              {useCases.map((item, index) => <li key={item} className="min-h-32 bg-[#06090c] p-6"><span className="font-mono text-xs text-[#d7f80b]">0{index + 1}</span><p className="mt-5 text-sm leading-6 text-slate-300">{item}</p></li>)}
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="border-b border-white/10 bg-[#f1f3ed] py-20 text-[#10161a] lg:py-28">
+        <div className={sectionClass}>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#566100]">Plans</p>
+          <div className="mt-5 flex flex-col gap-5 border-b border-black/15 pb-10 lg:flex-row lg:items-end lg:justify-between">
+            <h2 className="max-w-3xl text-4xl font-medium tracking-[-0.04em] sm:text-5xl">Choose the record discipline your team needs.</h2>
+            <p className="max-w-md text-sm leading-6 text-black/60">Every plan keeps private source documents off-chain and includes a guided starting point.</p>
+          </div>
+          <div className="grid lg:grid-cols-3">
+            {pricingTiers.map((tier, index) => (
+              <article key={tier.name} className={`border-b border-black/15 py-8 lg:border-b-0 lg:px-8 ${index > 0 ? 'lg:border-l' : 'lg:pl-0'}`}>
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-black/45">{tier.name}</p>
+                <p className="mt-5 text-4xl font-medium tracking-[-0.04em]">{tier.price}</p>
+                <p className="mt-5 min-h-16 text-sm leading-6 text-black/60">{tier.note}</p>
+                <ul className="mt-7 space-y-3 border-t border-black/10 pt-6">{tier.items.map((item) => <li key={item} className="flex gap-3 text-sm"><BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#647000]" />{item}</li>)}</ul>
+                <Link href="#dealvault-demo" className="mt-8 inline-flex min-h-11 items-center gap-2 border-b border-black pb-1 text-sm font-semibold">Request a demo <ArrowRight className="h-4 w-4" /></Link>
+              </article>
             ))}
           </div>
+          <p className="mt-8 text-xs leading-5 text-black/55">Custom setup may range from $997–$5,000 depending on scope. Any future transaction-linked pricing would require a separate agreement; it is not part of the current pilot plans.</p>
+        </div>
+      </section>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_.95fr]">
-            <Card className="premium-card border-cyan-500/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CircleDollarSign className="h-5 w-5 text-cyan-600" />
-                  Premium rollout economics
-                </CardTitle>
-                <CardDescription>
-                  Higher-touch implementations and proof-heavy records deserve clear pricing and clear scope.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="font-medium text-foreground">Setup / custom configuration</p>
-                  <p className="mt-1">$997-$5,000 depending on rollout depth and team complexity.</p>
-                </div>
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="font-medium text-foreground">Proof certificate pricing</p>
-                  <p className="mt-1">$25 per certificate for teams that want a polished proof document for counterparties or audit support.</p>
-                </div>
-                <div className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="font-medium text-foreground">Future premium option</p>
-                  <p className="mt-1">Potential payout tracking fee band of 0.5%-1% once the product moves beyond the current early-access phase.</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="premium-card border-cyan-500/20">
-              <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-cyan-600" />
-                  Best match
-              </CardTitle>
-              <CardDescription>
-                  DealVault works best for teams that already feel the pain of fragmented records.
-              </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3 text-sm text-muted-foreground">
-                  {useCases.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+      <section className="border-b border-white/10 py-20 lg:py-28">
+        <div className={`${sectionClass} grid gap-12 lg:grid-cols-[.9fr_1.1fr]`}>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">Example output</p>
+            <h2 className="mt-5 text-4xl font-medium tracking-[-0.04em] sm:text-5xl">A record you can inspect.</h2>
+            <p className="mt-6 max-w-lg text-base leading-7 text-slate-400">See how a proof certificate presents the record ID, network reference, and verification details without publishing private deal documents.</p>
+            <a href={dealVaultPublicDemo.certificatePdfPath} target="_blank" rel="noopener noreferrer" className="mt-8 inline-flex min-h-12 items-center gap-2 bg-[#d7f80b] px-6 text-sm font-semibold text-[#06090c] hover:bg-[#ecff5d]">View sample certificate <ArrowRight className="h-4 w-4" /></a>
           </div>
-        </section>
+          <div className="border border-white/10 bg-white p-3"><Image src={dealVaultPublicDemo.certificateImagePath} alt="DealVault sample proof certificate" width={1200} height={900} className="h-auto w-full" /></div>
+        </div>
+      </section>
 
-        <section className="grid gap-8 lg:grid-cols-[1fr_.95fr]">
-          <Card className="premium-card">
-            <CardHeader>
-              <CardTitle>How it works</CardTitle>
-              <CardDescription>
-                The process is simple: record the agreement, track the activity, and keep the history visible.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {processSteps.map((step, index) => (
-                <div key={step.title} className="rounded-xl border p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="text-sm font-semibold text-cyan-600">Step {index + 1}</p>
-                  <p className="mt-1 font-medium text-foreground">{step.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+      <section className="border-b border-white/10 bg-[#0a0e11] py-20 lg:py-28">
+        <div className={`${sectionClass} grid gap-12 lg:grid-cols-[.7fr_1.3fr]`}>
+          <div><p className="font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">Clear boundaries</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.04em]">Before you rely on the record.</h2></div>
+          <div className="divide-y divide-white/10 border-y border-white/10">{faqs.map((item) => <article key={item.question} className="py-6"><h3 className="text-lg font-medium">{item.question}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{item.answer}</p></article>)}</div>
+        </div>
+      </section>
 
-          <Card className="premium-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Landmark className="h-5 w-5 text-cyan-600" />
-                Buyer-ready answers
-              </CardTitle>
-              <CardDescription>
-                The public layer answers the questions searchers and answer engines ask before they book a demo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {faqItems.map((item) => (
-                <div key={item.question} className="rounded-md border p-3 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-cyan-400/30">
-                  <p className="font-medium text-foreground">{item.question}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{item.answer}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="grid gap-8 lg:grid-cols-[1fr_.95fr]">
-          <Card className="premium-card border-cyan-500/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Presentation className="h-5 w-5 text-cyan-600" />
-                Sample certificate showcase
-              </CardTitle>
-              <CardDescription>
-                Trust proof should sit close to pricing and the demo request, not hidden at the bottom of the page.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="overflow-hidden rounded-2xl border bg-white">
-                <Image
-                  src={dealVaultPublicDemo.certificateImagePath}
-                  alt="DealVault sample proof certificate preview"
-                  width={1200}
-                  height={900}
-                  className="h-auto w-full"
-                />
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="bg-cyan-600 hover:bg-cyan-700">
-                  <a href={dealVaultPublicDemo.certificatePdfPath} target="_blank" rel="noopener noreferrer">
-                    View Sample Certificate
-                  </a>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="#live-contracts">Review Live Contract Layer</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
+      <section className="py-20 lg:py-28">
+        <div className={`${sectionClass} grid gap-12 lg:grid-cols-[.72fr_1.28fr]`}>
+          <div>
+            <ShieldCheck className="h-7 w-7 text-[#d7f80b]" />
+            <p className="mt-7 font-mono text-xs uppercase tracking-[0.24em] text-[#d7f80b]">Private demonstration</p>
+            <h2 className="mt-5 text-4xl font-medium tracking-[-0.04em] sm:text-5xl">Bring the workflow you need to make durable.</h2>
+            <p className="mt-6 max-w-lg text-sm leading-6 text-slate-400">Tell us where records fragment today. We’ll use that context to determine whether DealVault fits and what the next step should be.</p>
+          </div>
           <DealVaultPilotInterestForm />
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
-  );
+  )
 }

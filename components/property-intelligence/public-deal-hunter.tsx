@@ -94,7 +94,7 @@ export function PublicDealHunter() {
 
       <Card className="border-slate-800 bg-slate-950/70">
         <CardContent className="p-4 text-sm text-slate-400">
-          This public view deliberately obscures exact property identity and map location. Data comes from public records, user uploads, and open-source research and may be incomplete or outdated. Exact records remain subject to operator review, privacy controls, Fair Housing, and applicable real-estate rules.
+          This public view deliberately obscures exact property identity and map location. Data comes from public records, user uploads, and open-source research and may be incomplete or outdated. Exact records remain subject to VestBlock review, privacy controls, Fair Housing, and applicable real-estate rules.
         </CardContent>
       </Card>
     </div>

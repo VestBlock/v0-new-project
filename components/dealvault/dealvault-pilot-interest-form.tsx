@@ -1,224 +1,75 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { Loader2, Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react'
+import { Loader2, Send } from 'lucide-react'
 
-const initialForm = {
-  name: '',
-  email: '',
-  phone: '',
-  companyName: '',
-  role: '',
-  useCase: '',
-  pilotWindow: '',
-  notes: '',
-};
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { useToast } from '@/hooks/use-toast'
 
-function getCurrentSourcePath() {
-  if (typeof window === 'undefined') return '/dealvault';
-  return window.location.pathname || '/dealvault';
+const initialForm = { name: '', email: '', phone: '', companyName: '', role: '', useCase: '', pilotWindow: '', notes: '' }
+const fieldClass = 'min-h-12 rounded-none border-white/15 bg-white/[0.035] text-white placeholder:text-slate-600 focus-visible:ring-[#d7f80b]'
+
+function sourcePath() {
+  return typeof window === 'undefined' ? '/dealvault' : window.location.pathname || '/dealvault'
 }
 
 export function DealVaultPilotInterestForm() {
-  const [form, setForm] = useState(initialForm);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionState, setSubmissionState] = useState<{
-    companyName: string;
-    useCase: string;
-  } | null>(null);
-  const { toast } = useToast();
+  const [form, setForm] = useState(initialForm)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [savedFor, setSavedFor] = useState('')
+  const { toast } = useToast()
 
-  const updateField = (name: keyof typeof initialForm, value: string) => {
-    setForm((current) => ({ ...current, [name]: value }));
-  };
+  const update = (name: keyof typeof initialForm, value: string) => setForm((current) => ({ ...current, [name]: value }))
 
-  const submitInterest = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsSubmitting(true);
-
+  async function submitInterest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSubmitting(true)
     try {
-      const response = await fetch('/api/dealvault/pilot-interest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, sourcePath: getCurrentSourcePath() }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Unable to submit demo request.');
-      }
-
-      toast({
-        title: 'Demo request received',
-        description: 'VestBlock will review the DealVault request and follow up with the next step.',
-      });
-      setSubmissionState({
-        companyName: form.companyName || form.name,
-        useCase: form.useCase || 'private demo',
-      });
-      setForm(initialForm);
+      const response = await fetch('/api/dealvault/pilot-interest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sourcePath: sourcePath() }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Unable to submit demo request.')
+      setSavedFor(form.companyName || form.name)
+      setForm(initialForm)
+      toast({ title: 'Demo request received', description: 'VestBlock will review the request and follow up with the next step.' })
     } catch (error) {
-      toast({
-        title: 'Demo request not sent',
-        description:
-          error instanceof Error ? error.message : 'Unable to submit demo request.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Demo request not sent', description: error instanceof Error ? error.message : 'Unable to submit demo request.', variant: 'destructive' })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
-    <Card id="dealvault-demo" className="border-cyan-500/20">
-      <CardHeader>
-        <CardTitle>Request A Private DealVault Demo</CardTitle>
-        <CardDescription>
-          No wallet connect required. Tell VestBlock how your team wants to use DealVault and we
-          will review the request and follow up with the next step.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submitInterest} className="space-y-5">
-          {submissionState ? (
-            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">
-                Demo request saved for {submissionState.companyName}
-              </p>
-              <p className="mt-1">
-                Next step: VestBlock reviews the {submissionState.useCase.replaceAll('_', ' ')} request and follows up with the right demo path or rollout conversation.
-              </p>
-            </div>
-          ) : null}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="dealvault-name">Name</Label>
-              <Input
-                id="dealvault-name"
-                value={form.name}
-                onChange={(event) => updateField('name', event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dealvault-email">Email</Label>
-              <Input
-                id="dealvault-email"
-                type="email"
-                value={form.email}
-                onChange={(event) => updateField('email', event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dealvault-phone">Phone</Label>
-              <Input
-                id="dealvault-phone"
-                value={form.phone}
-                onChange={(event) => updateField('phone', event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dealvault-company">Company / Team</Label>
-              <Input
-                id="dealvault-company"
-                value={form.companyName}
-                onChange={(event) => updateField('companyName', event.target.value)}
-              />
-            </div>
-          </div>
+    <section id="dealvault-demo" className="border border-white/12 bg-white/[0.025] p-6 sm:p-8" aria-labelledby="dealvault-demo-title">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-[#d7f80b]">Demo request</p>
+      <h3 id="dealvault-demo-title" className="mt-3 text-2xl font-medium text-white">Describe your record workflow.</h3>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">No wallet is required. Share enough context for the VestBlock team to evaluate fit; do not include passwords, account numbers, or private deal documents.</p>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={form.role} onValueChange={(value) => updateField('role', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="wholesaler">Wholesaler</SelectItem>
-                  <SelectItem value="investor">Investor</SelectItem>
-                  <SelectItem value="contractor">Contractor</SelectItem>
-                  <SelectItem value="private_lender">Private lender</SelectItem>
-                  <SelectItem value="agency">Agency / studio</SelectItem>
-                  <SelectItem value="consulting_firm">Consulting firm</SelectItem>
-                  <SelectItem value="staffing_recruiting">Staffing / recruiting</SelectItem>
-                  <SelectItem value="referral_partner">Referral partner</SelectItem>
-                  <SelectItem value="creative_finance_team">Creative finance team</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Primary use case</Label>
-              <Select value={form.useCase} onValueChange={(value) => updateField('useCase', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select use case" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="proof_records">Proof records</SelectItem>
-                  <SelectItem value="payout_ledger">Payout ledger</SelectItem>
-                  <SelectItem value="milestone_tracking">Milestone tracking</SelectItem>
-                  <SelectItem value="vendor_or_partner_approvals">Vendor or partner approvals</SelectItem>
-                  <SelectItem value="placement_or_referral_fees">Placement or referral fee tracking</SelectItem>
-                  <SelectItem value="full_workflow">Full proof, payout, and milestone package</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Desired demo window</Label>
-              <Select
-                value={form.pilotWindow}
-                onValueChange={(value) => updateField('pilotWindow', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select window" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="immediately">Immediately</SelectItem>
-                  <SelectItem value="this_month">This month</SelectItem>
-                  <SelectItem value="next_30_days">Next 30 days</SelectItem>
-                  <SelectItem value="exploring">Just exploring</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+      {savedFor ? <div role="status" className="mt-6 border-l-2 border-[#d7f80b] bg-[#d7f80b]/[0.06] px-4 py-3 text-sm text-slate-300">Request saved for <strong className="text-white">{savedFor}</strong>. VestBlock will follow up with the appropriate next step.</div> : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="dealvault-notes">Notes</Label>
-            <Textarea
-              id="dealvault-notes"
-              value={form.notes}
-              onChange={(event) => updateField('notes', event.target.value)}
-              placeholder="Tell VestBlock how you want to use agreement tracking, payout ledgers, milestone records, or partner approvals."
-              rows={4}
-            />
-          </div>
+      <form onSubmit={submitInterest} className="mt-8 space-y-6">
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="space-y-2"><Label htmlFor="dealvault-name">Name</Label><Input id="dealvault-name" className={fieldClass} value={form.name} onChange={(event) => update('name', event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="dealvault-email">Email</Label><Input id="dealvault-email" className={fieldClass} type="email" value={form.email} onChange={(event) => update('email', event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="dealvault-phone">Phone</Label><Input id="dealvault-phone" className={fieldClass} value={form.phone} onChange={(event) => update('phone', event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="dealvault-company">Company or team</Label><Input id="dealvault-company" className={fieldClass} value={form.companyName} onChange={(event) => update('companyName', event.target.value)} /></div>
+        </div>
 
-          <Button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-700" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="mr-2 h-4 w-4" />
-            )}
-            Request Private Demo
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
+        <div className="grid gap-5 md:grid-cols-3">
+          <div className="space-y-2"><Label>Role</Label><Select value={form.role} onValueChange={(value) => update('role', value)}><SelectTrigger className={fieldClass}><SelectValue placeholder="Select role" /></SelectTrigger><SelectContent><SelectItem value="investor">Investor</SelectItem><SelectItem value="private_lender">Private lender</SelectItem><SelectItem value="contractor">Contractor</SelectItem><SelectItem value="agency">Agency or studio</SelectItem><SelectItem value="consulting_firm">Consulting firm</SelectItem><SelectItem value="staffing_recruiting">Staffing or recruiting</SelectItem><SelectItem value="referral_partner">Referral partner</SelectItem><SelectItem value="real_estate_team">Real-estate team</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+          <div className="space-y-2"><Label>Primary need</Label><Select value={form.useCase} onValueChange={(value) => update('useCase', value)}><SelectTrigger className={fieldClass}><SelectValue placeholder="Select need" /></SelectTrigger><SelectContent><SelectItem value="proof_records">Proof records</SelectItem><SelectItem value="payout_ledger">Payout ledger</SelectItem><SelectItem value="milestone_tracking">Milestone tracking</SelectItem><SelectItem value="partner_approvals">Partner approvals</SelectItem><SelectItem value="placement_referral_fees">Placement or referral fees</SelectItem><SelectItem value="full_workflow">Full record workflow</SelectItem></SelectContent></Select></div>
+          <div className="space-y-2"><Label>Timing</Label><Select value={form.pilotWindow} onValueChange={(value) => update('pilotWindow', value)}><SelectTrigger className={fieldClass}><SelectValue placeholder="Select timing" /></SelectTrigger><SelectContent><SelectItem value="immediately">Immediately</SelectItem><SelectItem value="this_month">This month</SelectItem><SelectItem value="next_30_days">Next 30 days</SelectItem><SelectItem value="exploring">Exploring</SelectItem></SelectContent></Select></div>
+        </div>
+
+        <div className="space-y-2"><Label htmlFor="dealvault-notes">What needs a stronger record?</Label><Textarea id="dealvault-notes" className={`${fieldClass} min-h-32`} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Describe the agreement, payout, milestone, or approval workflow." /></div>
+
+        <Button type="submit" className="min-h-12 w-full rounded-none bg-[#d7f80b] font-semibold text-[#06090c] hover:bg-[#ecff5d]" disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />} Request private demo
+        </Button>
+      </form>
+    </section>
+  )
 }

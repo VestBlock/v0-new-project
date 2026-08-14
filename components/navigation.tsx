@@ -136,7 +136,7 @@ export function Navigation() {
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/92 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/78">
       <div className="container flex h-16 items-center">
         <div className="mr-4 flex min-w-0 items-center">
-          <Link href="/" className="group mr-7 flex items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <Link href="/" className="group mr-7 flex min-h-11 items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
@@ -146,7 +146,7 @@ export function Navigation() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'border-b border-transparent px-3 py-2 transition-[color,border-color] duration-200 ease-out hover:border-[#d7f80b]/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7f80b]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'flex min-h-11 items-center border-b border-transparent px-3 py-2 transition-[color,border-color] duration-200 ease-out hover:border-[#d7f80b]/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7f80b]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActiveLink(link.href)
                     ? 'border-[#d7f80b] text-foreground'
                     : 'text-foreground/60'
@@ -261,7 +261,7 @@ export function Navigation() {
           {isLoading ? (
             <Link
               href="/opportunity"
-              className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
+              className="hidden min-h-11 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
             >
               Get started
             </Link>
@@ -319,10 +319,10 @@ export function Navigation() {
             </DropdownMenu>
           ) : (
             <nav className="hidden items-center space-x-2 md:flex">
-              <Button variant="ghost" asChild>
+              <Button variant="ghost" asChild className="h-11">
                 <Link href="/login?redirect=/workspace">Sign In</Link>
               </Button>
-              <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
+              <Button asChild className="h-11 rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
                 <Link href="/join">Join free</Link>
               </Button>
             </nav>

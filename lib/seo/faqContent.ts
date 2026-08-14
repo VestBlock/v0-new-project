@@ -32,12 +32,12 @@ export const sellFaqs: FaqItem[] = [
   {
     question: 'Does VestBlock set a sale or closing timeline?',
     answer:
-      'No. A sale or closing timeline depends on the property, title, inspections, legal and contractual review, buyer decisions, financing when applicable, and other independent parties. VestBlock records your preferred timing so an operator can review the case responsibly.',
+      'No. A sale or closing timeline depends on the property, title, inspections, legal and contractual review, buyer decisions, financing when applicable, and other independent parties. VestBlock records your preferred timing so the team can review the case responsibly.',
   },
   {
     question: 'What does VestBlock do after I submit?',
     answer:
-      'VestBlock organizes the submitted facts, creates an accountable operator task, and reviews whether more information is needed. Any later sale-path conversation remains separate from the intake and depends on the property, seller priorities, legal requirements, and independent participant decisions.',
+      'VestBlock organizes the submitted facts, creates a documented review record, and determines whether more information is needed. Any later sale-path conversation remains separate from the intake and depends on the property, seller priorities, legal requirements, and independent participant decisions.',
   },
   {
     question: 'Is VestBlock a real estate agent or buyer?',

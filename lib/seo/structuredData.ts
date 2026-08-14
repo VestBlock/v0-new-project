@@ -447,7 +447,7 @@ export function realEstatePartnerServiceJsonLd() {
     name: 'VestBlock Real Estate Partner Network',
     url: absoluteUrl('/'),
     description:
-      'VestBlock provides role-specific entry paths for real estate sellers, buyers, investors, agents, wholesalers, lenders, builders, and developers. Seller cases are privately organized for operator review; later participant decisions remain independent.',
+      'VestBlock provides role-specific entry paths for real estate sellers, buyers, investors, agents, wholesalers, lenders, builders, and developers. Seller cases are privately organized for VestBlock review; later participant decisions remain independent.',
     provider: {
       '@type': 'Organization',
       name: vestBlockSiteName,

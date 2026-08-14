@@ -54,6 +54,8 @@ const publicRoutes = [
   { path: '/sell/memphis', priority: 0.88, changeFrequency: 'weekly' },
   { path: '/dealflow-growth-system', priority: 0.86, changeFrequency: 'weekly' },
   { path: '/proof', priority: 0.84, changeFrequency: 'weekly' },
+  { path: '/privacy', priority: 0.35, changeFrequency: 'yearly' },
+  { path: '/terms', priority: 0.35, changeFrequency: 'yearly' },
 ] as const;
 
 async function getPublishedResourceRoutes(siteUrl: string) {
