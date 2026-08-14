@@ -17,7 +17,11 @@ const SEND = args.includes("--send")
 const START_DATE = getArg("start") || "2026-06-05"
 const MAX_TO_SEND = getArg("max") ? Number.parseInt(getArg("max"), 10) : null
 const DEFAULT_CHANNEL_ID = "6824f8e7f49c987a95b0151f"
-const FACEBOOK_CHANNEL_ID = getArg("channel") || process.env.BUFFER_FACEBOOK_CHANNEL_ID || DEFAULT_CHANNEL_ID
+const APPROVED_VESTBLOCK_CHANNEL_IDS = new Set([DEFAULT_CHANNEL_ID])
+const FACEBOOK_CHANNEL_ID = process.env.BUFFER_FACEBOOK_CHANNEL_ID || DEFAULT_CHANNEL_ID
+if (!APPROVED_VESTBLOCK_CHANNEL_IDS.has(FACEBOOK_CHANNEL_ID)) {
+  throw new Error("The configured Buffer channel is not on the VestBlock-owned allowlist.")
+}
 const OUT_DIR = path.join(process.cwd(), "data", "buffer")
 const JSON_OUT = path.join(OUT_DIR, "vestblock-facebook-90-day-calendar.json")
 const CSV_OUT = path.join(OUT_DIR, "vestblock-facebook-90-day-calendar.csv")

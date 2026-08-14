@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "build": "next build",
+    "obsidian:agent": "node --env-file=.env.local scripts/vestblock-obsidian-agent.mjs",
     "check:app": "npm run typecheck && npm run build",
     "check:contracts": "npm run compile:contracts && npm run test:contracts",
     "check:dealvault:deploy:base": "hardhat run scripts/checkDealVaultDeployReadiness.ts --network base",
@@ -64,6 +65,7 @@
     "qa:gate4c:workspace": "node --env-file=.env.local scripts/qa-gate4c-workspace.mjs",
     "qa:gate4d:capital": "node --env-file=.env.local scripts/qa-gate4d-capital.mjs",
     "qa:gate4e1:seller": "node --env-file=.env.local scripts/qa-gate4e1-seller.mjs",
+    "qa:gate4e3:release": "node --env-file=.env.local scripts/qa-gate4e3-release.mjs",
     "typecheck": "tsc --noEmit",
     "check:release": "npm run check:app && npm run check:contracts",
     "verify:dealvault:ui": "node --env-file=.env.local scripts/verifyDealVaultUiFlow.mjs",

@@ -224,3 +224,6 @@ B-
 ### Tomorrow's Best Fix
 
 Run the Outreach V4 Daily Sender automation to generate `artifacts/outreach-v4/2026-05-25/` (and ensure it writes `approved-drafts.json` / `send-results.json` when applicable), then send `50` from the existing `sendReady` pool without changing guardrails.
+
+## 2026-08-14 weekly review
+Week totals: 5,896 tracked sends, 0 attributed replies, 0 opt-outs, 10 suppression records (11 failed, 15 blocked). No winning lanes yet — reply attribution is the blocker, so the whole book stays review-only; all 144 rotation lanes still lack a fresh (<=10d) export and 119 verified second-touch reactivation contacts sit staged but unsent. Next week feed tax-code-stack, portfolio-landlord, and tax-remote-equity-rotation first, and log every inbox reply so lane decisions stop being blind.
