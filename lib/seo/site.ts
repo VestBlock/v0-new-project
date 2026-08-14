@@ -1,7 +1,9 @@
 export const vestBlockSiteName = 'VestBlock';
 
+export const vestBlockDefaultTitle = 'VestBlock | Find Your Next Move';
+
 export const vestBlockDefaultDescription =
-  'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place, with DealVault records supporting active work.';
+  'VestBlock is an AI-guided platform that helps people and businesses prepare, organize, and coordinate next moves across capital, real estate, opportunity, and DealVault.';
 
 export function getSiteUrl() {
   const configured = (

@@ -53,6 +53,10 @@
   --vb-line-subtle: rgba(231, 239, 227, 0.1);
 }
 
+.vb-site-header {
+  background: var(--vb-obsidian);
+}
+
 /* Material Ledger: a real next-move desk, never an abstract machine or network diagram. */
 .vb-material-hero {
   position: relative;
@@ -1901,6 +1905,15 @@
 }
 
 .vb-closing__content { position: relative; z-index: 1; width: min(100%, 52rem); text-align: center; }
+.vb-closing__brand {
+  width: min(88vw, 34rem);
+  height: auto;
+  margin: 0 auto 2rem;
+  border: 1px solid var(--vb-line);
+  background: var(--vb-obsidian);
+  object-fit: contain;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.24);
+}
 .vb-closing h2 { max-width: 13ch; margin-inline: auto; }
 .vb-closing__content > p:not(.vb-kicker) { max-width: 38rem; margin: 1.25rem auto 0; color: rgba(241, 243, 237, 0.68); line-height: 1.65; }
 .vb-closing__content > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin-top: 2.35rem; }

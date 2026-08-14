@@ -16,7 +16,33 @@ export const metadata: Metadata = {
     title: 'DealVault by VestBlock',
     description: 'A durable record for agreements, payout terms, milestones, and approvals.',
     url: absoluteUrl('/dealvault'),
-    images: [{ url: absoluteUrl('/dealvault/opengraph-image'), width: 1200, height: 630, alt: 'DealVault by VestBlock preview' }],
+    images: [
+      {
+        url: absoluteUrl('/dealvault/opengraph-image'),
+        width: 1200,
+        height: 630,
+        alt: 'DealVault by VestBlock agreement, milestone, and payout record preview',
+        type: 'image/png',
+      },
+      {
+        url: absoluteUrl('/vestblock-mark-platform-ai-3d.png'),
+        width: 1254,
+        height: 1254,
+        alt: 'VestBlock compact AI platform mark',
+        type: 'image/png',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'DealVault by VestBlock',
+    description: 'A durable record for agreements, payout terms, milestones, and approvals.',
+    images: [
+      {
+        url: absoluteUrl('/dealvault/opengraph-image'),
+        alt: 'DealVault by VestBlock agreement, milestone, and payout record preview',
+      },
+    ],
   },
 }
 

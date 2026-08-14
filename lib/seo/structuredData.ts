@@ -40,10 +40,18 @@ export function organizationJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
+    '@id': absoluteUrl('/#organization'),
     name: vestBlockSiteName,
     url: absoluteUrl('/'),
-    description:
-      'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place, with DealVault records supporting agreements, milestones, and active work.',
+    description: vestBlockDefaultDescription,
+    slogan: 'Find your next move.',
+    logo: {
+      '@type': 'ImageObject',
+      url: absoluteUrl('/vestblock-mark-platform-ai-3d.png'),
+      width: 1254,
+      height: 1254,
+    },
+    image: absoluteUrl('/opengraph-image'),
     sameAs: vestBlockSameAs,
     areaServed: 'US',
     contactPoint: {
@@ -53,6 +61,9 @@ export function organizationJsonLd() {
       areaServed: 'US',
     },
     knowsAbout: [
+      'AI-guided decision support',
+      'next-move roadmaps',
+      'opportunity coordination',
       'business capital preparation',
       'capital readiness',
       'business acquisition opportunities',
@@ -88,9 +99,22 @@ export function websiteJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
+    '@id': absoluteUrl('/#website'),
     name: vestBlockSiteName,
+    alternateName: 'VestBlock — Find Your Next Move',
     url: absoluteUrl('/'),
     description: vestBlockDefaultDescription,
+    slogan: 'Find your next move.',
+    logo: {
+      '@type': 'ImageObject',
+      url: absoluteUrl('/vestblock-mark-platform-ai-3d.png'),
+      width: 1254,
+      height: 1254,
+    },
+    image: absoluteUrl('/opengraph-image'),
+    publisher: {
+      '@id': absoluteUrl('/#organization'),
+    },
   };
 }
 

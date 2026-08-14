@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
@@ -12,6 +12,7 @@ import {
   absoluteUrl,
   getSiteUrl,
   vestBlockDefaultDescription,
+  vestBlockDefaultTitle,
   vestBlockSiteName,
 } from '@/lib/seo/site';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/structuredData';
@@ -21,7 +22,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${vestBlockSiteName} - Find Your Next Move`,
+    default: vestBlockDefaultTitle,
     template: `%s | ${vestBlockSiteName}`,
   },
   description: vestBlockDefaultDescription,
@@ -30,19 +31,35 @@ export const metadata: Metadata = {
   },
   applicationName: vestBlockSiteName,
   authors: [{ name: vestBlockSiteName, url: absoluteUrl('/') }],
+  creator: vestBlockSiteName,
+  publisher: vestBlockSiteName,
+  category: 'Business services and opportunity coordination',
+  referrer: 'origin-when-cross-origin',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  icons: {
+    icon: [{ url: '/icon.png', type: 'image/png', sizes: '512x512' }],
+    shortcut: [{ url: '/favicon.ico', type: 'image/x-icon' }],
+    apple: [{ url: '/apple-icon.png', type: 'image/png', sizes: '180x180' }],
+  },
+  manifest: '/manifest.webmanifest',
   keywords: [
+    'AI-guided next move platform',
     'business capital preparation',
     'capital readiness',
     'business acquisition opportunities',
     'deal pathways',
+    'financial readiness roadmap',
     'business growth resources',
+    'opportunity coordination',
+    'decision support platform',
+    'DealVault active work records',
     'seller property review',
     'buyer buy box network',
     'private lender network',
-    'DealVault records',
-    'AI real estate intake',
-    'search visibility for real estate',
-    'AEO SEO booster for real estate',
     'real estate funding',
     'developer contractor partner network',
   ],
@@ -50,22 +67,36 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: vestBlockSiteName,
     url: absoluteUrl('/'),
-    title: `${vestBlockSiteName} - Find Your Next Move`,
+    title: vestBlockDefaultTitle,
     description: vestBlockDefaultDescription,
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Capital, Real Estate, Opportunity, and DealVault platform preview',
+        alt: 'VestBlock AI-guided next-move platform for Capital, Real Estate, Opportunity, and DealVault',
+        type: 'image/png',
+      },
+      {
+        url: absoluteUrl('/vestblock-mark-platform-ai-3d.png'),
+        width: 1254,
+        height: 1254,
+        alt: 'VestBlock compact AI platform mark',
+        type: 'image/png',
       },
     ],
+    locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${vestBlockSiteName} - Find Your Next Move`,
+    title: vestBlockDefaultTitle,
     description: vestBlockDefaultDescription,
-    images: [absoluteUrl('/opengraph-image')],
+    images: [
+      {
+        url: absoluteUrl('/opengraph-image'),
+        alt: 'VestBlock AI-guided next-move platform',
+      },
+    ],
   },
   robots: {
     index: true,
@@ -78,6 +109,13 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  colorScheme: 'dark',
+  themeColor: '#06090c',
 };
 
 export default function RootLayout({

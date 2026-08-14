@@ -1,92 +1,114 @@
 import { ImageResponse } from 'next/og';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
-export const runtime = 'edge';
-export const alt = 'DealVault by VestBlock - blockchain-backed proof, payout, and milestone tracking';
+export const alt =
+  'DealVault by VestBlock — continuity and accountability for active work';
 export const size = {
   width: 1200,
   height: 630,
 };
 export const contentType = 'image/png';
 
-const cards = [
-  'Proof records',
-  'Payout ledger',
-  'Milestone tracking',
-  'Live on Polygon',
-];
+const records = ['Agreement record', 'Milestone history', 'Payout reference'];
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  const markBuffer = await readFile(
+    join(process.cwd(), 'public', 'vestblock-mark-platform-ai-3d.png')
+  );
+  const markSrc = `data:image/png;base64,${markBuffer.toString('base64')}`;
+
   return new ImageResponse(
     (
       <div
         style={{
+          position: 'relative',
           height: '100%',
           width: '100%',
           display: 'flex',
-          background: 'linear-gradient(135deg, #071018 0%, #10253a 52%, #1e3a5f 100%)',
-          color: '#f8fafc',
-          padding: '54px',
+          overflow: 'hidden',
+          background: '#06090c',
+          color: '#f1f3ed',
+          padding: '54px 62px',
           fontFamily: 'sans-serif',
         }}
       >
         <div
           style={{
-            width: '100%',
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            display: 'flex',
+            background:
+              'linear-gradient(118deg, rgba(215,248,11,0.075), transparent 34%), radial-gradient(circle at 88% 18%, rgba(182,176,109,0.10), transparent 27rem)',
+          }}
+        />
+        <div
+          style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
-            borderRadius: '30px',
-            border: '1px solid rgba(103, 232, 249, 0.22)',
-            background: 'linear-gradient(180deg, rgba(6, 19, 29, 0.75), rgba(8, 18, 26, 0.92))',
-            padding: '42px',
+            width: '100%',
+            borderTop: '1px solid rgba(241,243,237,0.22)',
+            borderBottom: '1px solid rgba(241,243,237,0.15)',
+            padding: '30px 0 26px',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#a5f3fc' }}>DealVault by VestBlock</div>
-              <div style={{ fontSize: '18px', color: '#cbd5e1' }}>
-                Proof and payout records for serious deal teams
-              </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+              <img
+                src={markSrc}
+                alt=""
+                width={96}
+                height={96}
+                style={{ width: '96px', height: '96px', objectFit: 'contain' }}
+              />
+              <span style={{ color: '#f1f3ed', fontSize: '28px', fontWeight: 800 }}>
+                DealVault
+                <span style={{ marginLeft: '8px', color: '#d7f80b' }}>by VestBlock</span>
+              </span>
             </div>
-            <div
-              style={{
-                display: 'flex',
-                padding: '10px 16px',
-                borderRadius: '999px',
-                background: 'rgba(34, 211, 238, 0.14)',
-                color: '#a5f3fc',
-                fontSize: '18px',
-                fontWeight: 600,
-              }}
-            >
-              Transparent event records
+            <span style={{ color: '#d7f80b', fontSize: '18px', fontWeight: 700, letterSpacing: '0.11em', textTransform: 'uppercase' }}>
+              Keep active work connected
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', maxWidth: '940px' }}>
+            <div style={{ display: 'flex', fontSize: '70px', lineHeight: 0.98, letterSpacing: '-0.05em', fontWeight: 850 }}>
+              Keep the record that supports the work.
+            </div>
+            <div style={{ display: 'flex', maxWidth: '880px', color: '#d3d8d0', fontSize: '29px', lineHeight: 1.35 }}>
+              DealVault keeps agreements, milestones, and payout references connected while sensitive material remains private.
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '860px' }}>
-            <div style={{ fontSize: '68px', lineHeight: 1.02, fontWeight: 800 }}>
-              Real estate proof, payout, and milestone tracking.
-            </div>
-            <div style={{ fontSize: '28px', lineHeight: 1.35, color: '#dbeafe' }}>
-              Private documents stay off-chain. Hashes, timestamps, and status records stay easy to audit.
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-            {cards.map((item) => (
+          <div style={{ display: 'flex', width: '100%', borderTop: '1px solid rgba(241,243,237,0.18)' }}>
+            {records.map((record, index) => (
               <div
-                key={item}
+                key={record}
                 style={{
                   display: 'flex',
-                  padding: '12px 18px',
-                  borderRadius: '16px',
-                  background: 'rgba(15, 23, 42, 0.66)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  color: '#f8fafc',
-                  fontSize: '22px',
+                  flex: 1,
+                  alignItems: 'center',
+                  gap: '14px',
+                  padding: '18px 16px 0',
+                  borderRight:
+                    index < records.length - 1
+                      ? '1px solid rgba(241,243,237,0.13)'
+                      : 'none',
                 }}
               >
-                {item}
+                <span style={{ color: '#d7f80b', fontSize: '16px' }}>0{index + 1}</span>
+                <span style={{ fontSize: '22px', fontWeight: 700 }}>{record}</span>
               </div>
             ))}
           </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { ArrowRight } from "lucide-react"
@@ -16,6 +17,14 @@ export function CinematicCta() {
         transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
         className="vb-closing__content"
       >
+        <Image
+          className="vb-closing__brand"
+          src="/vestblock-logo-platform-ai-3d.png"
+          alt="VestBlock — Find Your Next Move"
+          width={1881}
+          height={836}
+          sizes="(max-width: 640px) 78vw, 360px"
+        />
         <p className="vb-kicker">Free Next-Move Questionnaire</p>
         <h2 id="closing-title">Start with your goal.</h2>
         <p>Answer a few questions about your goal, timeline, current position, and main obstacle. Receive a practical starting roadmap before creating an account.</p>
