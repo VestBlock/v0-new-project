@@ -142,13 +142,29 @@ Evidence completed:
 
 Remaining release-only work:
 
-- Exact deployment smoke test and rollback capture.
+- None. Owner-controlled legal review, provider verification, and approval of any future external outreach campaign remain operational follow-ups, not incomplete release code.
 
 Attorney/compliance review remains required for legal sufficiency, financial/underwriting disclosures, referral arrangements, outreach lawful basis, and jurisdiction-specific requirements. This release can verify implementation and clarity but does not claim legal certification.
 
 ## Final release gate
 
-Status: **PENDING**
+Status: **PASS**
 
-- Starting production rollback deployment: pending capture immediately before deployment.
-- Final commit(s), push, deployment ID/URL, production smoke results, and clean-worktree proof: pending.
+Release evidence:
+
+- Pre-release rollback deployment: `dpl_cnQJjC9JZuiAR7TBuhVpjHiYLv2b` at `https://v0-vest-block-rebuild-q6t4eolh0.vercel.app` (`Ready`).
+- Verified application commit: `14f2ab01e9e86108e68cb5da40f5f82f94e40a23` (`feat: finish VestBlock release experience`).
+- GitHub push succeeded through the already authenticated VestBlock account without adding persistent GitHub credentials to the Mac Pro. Remote branch `codex/operation-rebrand-final` was verified at the exact application commit before deployment.
+- Production deployment: `dpl_3XEskNJy8559V5Rw2ZVnWQZTgXLB` at `https://v0-vest-block-rebuild-kuyzyar2b.vercel.app` (`Ready`).
+- The existing project alias was updated successfully: `https://vestblock.io` serves the new release from the proven `v0-vest-block-rebuild` project in `robert-sanders-projects-f3e473a9`.
+- Live health check returns HTTP 200, `status=healthy`, `runtime=nodejs`, `commit=14f2ab0`, and `supabase=true`.
+- Live public smoke checks return HTTP 200 for `/`, `/capital`, `/real-estate`, `/sell`, `/opportunity`, `/next-move`, `/dealvault`, `/privacy`, `/terms`, `/robots.txt`, and `/sitemap.xml`.
+- Live unauthenticated checks return HTTP 307 to the expected login redirect for `/workspace`, `/workspace/profiles`, `/admin/participant-profiles`, `/admin/command-center`, and `/admin/opportunity-matches`; no protected page content is exposed.
+- Live production response headers include CSP, HSTS, frame denial, content-type protection, strict referrer policy, restricted permissions policy, COOP/CORP, and DNS prefetch control.
+- Full-page production screenshots at 1440 by 1000 and an iPhone 13 viewport confirm the approved hero, outcome selector, four-lane narrative, DealVault proof, trust/privacy section, CTA hierarchy, legal links, responsive stacking, and no obvious overflow or broken rendering.
+- No live outreach or external campaign was launched. The signed n8n bridge remains published in no-send mode with no downstream send node.
+- The Mac Pro worktree was clean at the verified application commit before this evidence-only ledger update. The final ledger commit and remote verification close the repository handoff.
+
+Rollback:
+
+- If a material production regression is discovered, restore deployment `dpl_cnQJjC9JZuiAR7TBuhVpjHiYLv2b` / `https://v0-vest-block-rebuild-q6t4eolh0.vercel.app` on the same existing Vercel project. Do not create a new project or move the domain.
