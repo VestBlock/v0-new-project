@@ -1,9 +1,12 @@
 import 'server-only'
 
+import { createHash } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { updateBuyerRecord, upsertBuyer } from '@/lib/buyers/repository'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recordOperatingStrategyAttributionQuarantine } from '@/lib/strategy/runtime-governance'
 import { logEvent } from '@/lib/system/logEvent'
 
 type GraphMessage = {
@@ -229,6 +232,7 @@ async function recordSellerReplyOutcome(leadId: string, occurredAt: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('lead_id', leadId)
+    .is('operating_strategy_version_id', null)
     .select('campaign_run_id')
   if (membershipError) throw membershipError
 
@@ -240,6 +244,7 @@ async function recordSellerReplyOutcome(leadId: string, occurredAt: string) {
     })
     .eq('lead_id', leadId)
     .eq('channel', 'email')
+    .is('operating_strategy_version_id', null)
   if (enrollmentError) throw enrollmentError
 
   const campaignRunIds = Array.from(
@@ -252,12 +257,14 @@ async function recordSellerReplyOutcome(leadId: string, occurredAt: string) {
         .select('id', { count: 'exact', head: true })
         .eq('campaign_run_id', campaignRunId)
         .eq('status', 'replied')
+        .is('operating_strategy_version_id', null)
       if (countError) throw countError
 
       const { error: runError } = await admin
         .from('command_center_strategy_runs')
         .update({ reply_count: count || 0, updated_at: new Date().toISOString() })
         .eq('id', campaignRunId)
+        .is('operating_strategy_version_id', null)
       if (runError) throw runError
     })
   )
@@ -307,14 +314,21 @@ export async function syncOutlookMailbox(options: {
         .map((message) => cleanText(message.from?.emailAddress?.address).toLowerCase())
         .filter(Boolean)
     ))
-    const [buyerResult, leadResult, lenderResult, investorResult] = senderEmails.length
+    const [buyerResult, leadResult, lenderResult, investorResult, governedEnrollmentResult] = senderEmails.length
       ? await Promise.all([
           admin.from('buyers').select('id,name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
           admin.from('leads').select('id,email,name,business_name,property_address,market_segment,category,status').in('email', senderEmails),
           admin.from('lenders').select('id,name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
           admin.from('investor_profiles').select('id,display_name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
+          admin
+            .from('command_center_outbound_enrollments')
+            .select('id,recipient_hash,operating_strategy_id,operating_strategy_version_id,operating_contract_fingerprint,provider,provider_message_id,canonical_activity_id')
+            .eq('channel', 'email')
+            .eq('strategy_binding_mode', 'governed_v1')
+            .in('recipient', senderEmails),
         ])
       : [
+          { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
@@ -324,10 +338,20 @@ export async function syncOutlookMailbox(options: {
     if (leadResult.error) throw leadResult.error
     if (lenderResult.error) throw lenderResult.error
     if (investorResult.error) throw investorResult.error
+    if (governedEnrollmentResult.error) throw governedEnrollmentResult.error
     const buyersByEmail = new Map((buyerResult.data || []).map((buyer) => [String(buyer.contact_email || '').toLowerCase(), buyer]))
     const leadsByEmail = new Map((leadResult.data || []).map((lead) => [String(lead.email || '').toLowerCase(), lead]))
     const lendersByEmail = new Map((lenderResult.data || []).map((lender) => [String(lender.contact_email || '').toLowerCase(), lender]))
     const investorsByEmail = new Map((investorResult.data || []).map((investor) => [String(investor.contact_email || '').toLowerCase(), investor]))
+    const governedEnrollmentsByRecipientHash = new Map<string, typeof governedEnrollmentResult.data>()
+    for (const enrollment of governedEnrollmentResult.data || []) {
+      const recipientHash = String(enrollment.recipient_hash || '')
+      if (!recipientHash) continue
+      governedEnrollmentsByRecipientHash.set(recipientHash, [
+        ...(governedEnrollmentsByRecipientHash.get(recipientHash) || []),
+        enrollment,
+      ])
+    }
     const classifications: Record<string, number> = {}
     const rows = []
     const confirmedSpamMessageIds: string[] = []
@@ -437,6 +461,69 @@ export async function syncOutlookMailbox(options: {
       const existingMessageIds = new Set((existingRows || []).map((row) => String(row.message_id)))
       const newMessageIds = new Set(messageIds.filter((messageId) => !existingMessageIds.has(messageId)))
       newMessages = newMessageIds.size
+
+      for (const row of rows.filter((item) => newMessageIds.has(item.message_id) && item.from_email)) {
+        const senderEmailHash = createHash('sha256')
+          .update(String(row.from_email).trim().toLowerCase())
+          .digest('hex')
+        const candidates = governedEnrollmentsByRecipientHash.get(senderEmailHash) || []
+        if (!candidates.length) continue
+        const originalMessage = messages.find((message) => message.id === row.message_id)
+        const occurredAt = row.received_at || new Date().toISOString()
+        const evidence = {
+          mailbox_hash: createHash('sha256').update(config.mailbox.toLowerCase()).digest('hex'),
+          graph_message_id: row.message_id,
+          graph_conversation_id_hash: originalMessage?.conversationId
+            ? createHash('sha256').update(originalMessage.conversationId).digest('hex')
+            : null,
+          internet_message_id_hash: originalMessage?.internetMessageId
+            ? createHash('sha256').update(originalMessage.internetMessageId).digest('hex')
+            : null,
+          sender_email_hash: senderEmailHash,
+          classification: row.classification,
+          explicit_opt_out: row.metadata_json.explicitOptOut === true,
+          occurred_at: occurredAt,
+        }
+        const payloadHash = createHash('sha256').update(JSON.stringify(evidence)).digest('hex')
+        const quarantineId = await recordOperatingStrategyAttributionQuarantine({
+          sourceDomain: 'outlook_mailbox',
+          sourceEventKey: `${evidence.mailbox_hash}:${row.message_id}`,
+          reasonCode: candidates.length > 1
+            ? 'ambiguous_governed_enrollment'
+            : 'provider_identity_missing',
+          identifiers: evidence,
+          candidateBindings: candidates.map((candidate) => ({
+            outbound_enrollment_id: candidate.id,
+            operating_strategy_id: candidate.operating_strategy_id,
+            operating_strategy_version_id: candidate.operating_strategy_version_id,
+            operating_contract_fingerprint: candidate.operating_contract_fingerprint,
+            provider: candidate.provider,
+            provider_message_id: candidate.provider_message_id,
+            canonical_activity_id: candidate.canonical_activity_id,
+            recipient_hash: candidate.recipient_hash,
+          })),
+          payloadHash,
+          occurredAt,
+        })
+        const attributionTask = await createAdminTask({
+          title: 'Reconcile governed Outlook reply attribution',
+          description: 'An inbound Outlook message matched one or more governed recipients, but no exact immutable outbound thread identity proved which enrollment owns it. Review the quarantined evidence before updating any governed strategy outcome.',
+          taskType: 'governed_reply_attribution_review',
+          priority: row.metadata_json.explicitOptOut ? 'urgent' : 'high',
+          entityType: 'attribution_quarantine',
+          entityId: quarantineId,
+          dueAt: adminTaskDueDates.now(),
+          metadata: {
+            quarantineId,
+            graphMessageId: row.message_id,
+            candidateCount: candidates.length,
+            explicitOptOut: row.metadata_json.explicitOptOut === true,
+          },
+        })
+        if (!attributionTask.ok || !attributionTask.task?.id) {
+          throw new Error(attributionTask.error || 'Governed Outlook attribution task could not be created.')
+        }
+      }
 
       const { data: saved, error } = await admin
         .from('command_center_reply_memory')
@@ -559,6 +646,7 @@ export async function syncOutlookMailbox(options: {
           .update({ status: 'suppressed', suppression_reason: 'Explicit email opt-out.', next_action_at: null, updated_at: new Date().toISOString() })
           .eq('recipient', email)
           .eq('channel', 'email')
+          .is('operating_strategy_version_id', null)
       }
 
       for (const lead of leadsByEmail.values()) {
@@ -610,6 +698,7 @@ export async function syncOutlookMailbox(options: {
           .update({ status: 'replied', next_action_at: null, updated_at: new Date().toISOString() })
           .eq('recipient', email)
           .eq('channel', 'email')
+          .is('operating_strategy_version_id', null)
         if (enrollmentError) throw enrollmentError
       }
 

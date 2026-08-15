@@ -11,10 +11,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 const schema = z.object({
   eventType: z.enum(['workflow_contract_test', 'approved_outreach_requested', 'match_reviewed', 'strategy_version_activated']),
-  strategyLaneKey: z.string().trim().max(100).nullable().optional(),
-  strategyVersionId: z.string().uuid().nullable().optional(),
+  strategyIdentifierNamespace: z.string().trim().max(100).regex(/^[a-z0-9_]+$/).nullable().optional(),
+  strategyIdentifier: z.string().trim().max(120).nullable().optional(),
+  legacyStrategyLaneKey: z.string().trim().max(100).nullable().optional(),
+  legacyStrategyVersionId: z.string().uuid().nullable().optional(),
   matchId: z.string().uuid().nullable().optional(),
   crmLeadId: z.string().uuid().nullable().optional(),
+  outboundEnrollmentId: z.string().uuid().nullable().optional(),
+  dispatchReservationId: z.string().uuid().nullable().optional(),
+  subjectNamespace: z.string().trim().max(100).regex(/^[a-z0-9_]+$/).nullable().optional(),
+  subjectKey: z.string().trim().max(200).nullable().optional(),
   idempotencyKey: z.string().trim().min(8).max(200).regex(/^[a-zA-Z0-9._:-]+$/),
   mode: z.enum(['no_send', 'internal_test', 'approved_live']).default('no_send'),
   channel: z.enum(N8N_CHANNELS).default('no_outreach'),

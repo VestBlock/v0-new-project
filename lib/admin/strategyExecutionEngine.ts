@@ -2,7 +2,6 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 
-import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { runStrategySourceOrchestrator, type StrategySourceOrchestrationResult } from '@/lib/admin/strategySourceOrchestrator'
 import {
   STRATEGY_EXECUTION_LANES,
@@ -19,9 +18,15 @@ import { sendEmail } from '@/lib/email/sendEmail'
 import { saveOutreachMessages, updateLeadRecord } from '@/lib/leads/repository'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
-import type { LeadRecord } from '@/lib/leads/types'
+import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
 import { verifyEmailWithHunter, type HunterEmailVerification } from '@/lib/outreach/hunterEmailVerification'
 import { getReplyCaptureReadiness, type ReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import {
+  fingerprintGovernedOutreachMessage,
+  recordOperatingStrategyActivity,
+  resolveOperatingStrategyBinding,
+  type OperatingStrategyBinding,
+} from '@/lib/strategy/runtime-governance'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type StrategyMarketStateRow = {
@@ -121,7 +126,7 @@ async function recoverStaleStrategyRuns() {
   const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
   const { data: staleRuns, error: staleRunsError } = await admin
     .from('command_center_strategy_runs')
-    .select('id,strategy_key,market,source_provider,metadata_json,started_at,created_at')
+    .select('id,strategy_key,market,source_provider,metadata_json,started_at,created_at,operating_strategy_version_id')
     .eq('status', 'running')
     .lt('started_at', cutoff)
     .limit(50)
@@ -131,12 +136,21 @@ async function recoverStaleStrategyRuns() {
   for (const run of staleRuns || []) {
     const { data: memberships, error: membershipError } = await admin
       .from('strategy_lead_memberships')
-      .select('status')
+      .select('status,canonical_activity_id,operating_strategy_version_id,metadata_json')
       .eq('campaign_run_id', run.id)
     if (membershipError) throw membershipError
     const statuses = (memberships || []).map((membership) => String(membership.status || ''))
     const draftCount = statuses.filter((status) => !['qualified', 'rejected', 'failed'].includes(status)).length
-    const finalStatus = draftCount ? 'drafted' : 'failed'
+    const governedRun = Boolean(run.operating_strategy_version_id)
+    const incompleteGovernedEvidence = governedRun && (memberships || []).some((membership) => {
+      const metadata = (membership.metadata_json || {}) as Record<string, unknown>
+      if (
+        membership.operating_strategy_version_id !== run.operating_strategy_version_id ||
+        !membership.canonical_activity_id
+      ) return true
+      return membership.status === 'needs_review' && !String(metadata.canonicalMessageActivityId || '').trim()
+    })
+    const finalStatus = incompleteGovernedEvidence ? 'failed' : draftCount ? 'drafted' : 'failed'
     const { error: runError } = await admin
       .from('command_center_strategy_runs')
       .update({
@@ -150,13 +164,15 @@ async function recoverStaleStrategyRuns() {
           recoveredAfterInterruptedExecution: true,
           recoveredAt: new Date().toISOString(),
           recoveredDraftCount: draftCount,
+          governedRun,
+          requiresOperatorReconciliation: incompleteGovernedEvidence,
         },
         updated_at: new Date().toISOString(),
       })
       .eq('id', run.id)
     if (runError) throw runError
 
-    if (run.market && run.source_provider) {
+    if (!governedRun && run.market && run.source_provider) {
       const { error: marketError } = await admin
         .from('strategy_market_state')
         .update({
@@ -204,8 +220,23 @@ function poolKey(strategyKey: string, market: string, sourceProvider: string) {
   return `${strategyKey}::${normalizeMarket(market).toLowerCase()}::${sourceProvider}`
 }
 
-function runKey(date: string, strategyKey: string, market: string, provider: string) {
-  return `${date}:${strategyKey}:${normalizeMarket(market).toLowerCase()}:${provider}`
+function runKey(
+  date: string,
+  strategyKey: string,
+  market: string,
+  provider: string,
+  binding: OperatingStrategyBinding,
+  dryRun: boolean
+) {
+  return [
+    date,
+    dryRun ? 'dry_run' : 'execution',
+    strategyKey,
+    normalizeMarket(market).toLowerCase(),
+    provider,
+    binding.operatingStrategyVersionId,
+    binding.contractFingerprint,
+  ].join(':')
 }
 
 function hashPayload(value: unknown) {
@@ -526,8 +557,10 @@ async function createStrategyRun(input: {
   state: StrategyMarketStateRow
   candidates: Candidate[]
   dryRun: boolean
+  binding: OperatingStrategyBinding
 }) {
   const admin = createAdminClient()
+  const startedAt = new Date().toISOString()
   const payload = {
     run_key: input.runKey,
     strategy_key: input.lane.key,
@@ -545,10 +578,23 @@ async function createStrategyRun(input: {
     sms_review_count: 0,
     execution_mode: 'execution',
     cost_guardrail_status: input.state.source_provider === 'public_records' ? 'blocked' : 'allowed',
-    started_at: new Date().toISOString(),
-    completed_at: input.dryRun || !input.candidates.length ? new Date().toISOString() : null,
+    started_at: startedAt,
+    completed_at: input.dryRun || !input.candidates.length ? startedAt : null,
+    operating_strategy_id: input.binding.operatingStrategyId,
+    operating_strategy_version_id: input.binding.operatingStrategyVersionId,
+    strategy_identifier_namespace: input.binding.namespace,
+    strategy_binding_mode: 'governed_v1',
+    strategy_binding_recorded_at: startedAt,
+    strategy_writer_release: 'gate_3c',
+    destination_mode_snapshot: input.binding.destinationMode,
+    destination_path_snapshot: input.binding.destinationPath,
+    cta_label_snapshot: input.binding.ctaLabel,
+    operating_contract_fingerprint: input.binding.contractFingerprint,
     metadata_json: {
       verifiedExecution: true,
+      governedExecution: true,
+      operatingStrategyVersionId: input.binding.operatingStrategyVersionId,
+      operatingContractFingerprint: input.binding.contractFingerprint,
       dryRun: input.dryRun,
       candidateLeadIds: input.candidates.slice(0, 100).map((candidate) => candidate.lead.id),
       qualificationPreview: input.candidates.slice(0, 10).map((candidate) => ({
@@ -559,14 +605,83 @@ async function createStrategyRun(input: {
       })),
     },
   }
-
-  const { data, error } = await admin
+  const existing = await admin
     .from('command_center_strategy_runs')
-    .upsert(payload, { onConflict: 'run_key' })
-    .select('id,status')
-    .single()
-  if (error) throw error
-  return data as { id: string; status: string }
+    .select(
+      'id,status,started_at,canonical_activity_id,operating_strategy_version_id,operating_contract_fingerprint,metadata_json',
+    )
+    .eq('run_key', input.runKey)
+    .maybeSingle()
+  if (existing.error) throw existing.error
+  const existingMetadata = (existing.data?.metadata_json || {}) as Record<string, unknown>
+  if (
+    existing.data &&
+    (existing.data.operating_strategy_version_id !== input.binding.operatingStrategyVersionId ||
+      existing.data.operating_contract_fingerprint !== input.binding.contractFingerprint ||
+      Boolean(existingMetadata.dryRun) !== input.dryRun)
+  ) {
+    throw new Error('An existing strategy run cannot be rebound to a different operating contract or execution mode.')
+  }
+
+  let run = existing.data
+  if (!run) {
+    const inserted = await admin
+      .from('command_center_strategy_runs')
+      .insert(payload)
+      .select(
+        'id,status,started_at,canonical_activity_id,operating_strategy_version_id,operating_contract_fingerprint,metadata_json',
+      )
+      .single()
+    if (inserted.error) throw inserted.error
+    run = inserted.data
+  }
+
+  let canonicalActivityId = run.canonical_activity_id as string | null
+  if (!canonicalActivityId) {
+    canonicalActivityId = await recordOperatingStrategyActivity({
+      binding: input.binding,
+      activityType: 'domain_event',
+      activityNamespace: 'command_center_strategy_run',
+      activityKey: run.id,
+      subjectNamespace: 'strategy_market',
+      subjectKey: `${normalizeMarket(input.state.market).toLowerCase()}:${input.state.source_provider}`,
+      idempotencyKey: `strategy-run:${input.binding.operatingStrategyVersionId}:${run.id}`,
+      occurredAt: run.started_at || startedAt,
+      provenance: [
+        {
+          kind: 'strategy_execution_catalog',
+          sourceProvider: input.state.source_provider,
+          market: input.state.market,
+          dryRun: input.dryRun,
+        },
+      ],
+      metadata: {
+        runId: run.id,
+        runKey: input.runKey,
+        candidateCount: input.candidates.length,
+        lifecycleEvent: input.dryRun ? 'dry_run_started' : 'run_started',
+      },
+    })
+    const linked = await admin
+      .from('command_center_strategy_runs')
+      .update({ canonical_activity_id: canonicalActivityId, updated_at: new Date().toISOString() })
+      .eq('id', run.id)
+      .eq('operating_strategy_version_id', input.binding.operatingStrategyVersionId)
+      .is('canonical_activity_id', null)
+      .select('id')
+    if (linked.error) throw linked.error
+    if ((linked.data || []).length !== 1) {
+      const current = await admin
+        .from('command_center_strategy_runs')
+        .select('id')
+        .eq('id', run.id)
+        .eq('canonical_activity_id', canonicalActivityId)
+        .maybeSingle()
+      if (current.error) throw current.error
+      if (!current.data) throw new Error('Canonical strategy-run activity did not link exactly once.')
+    }
+  }
+  return { id: run.id as string, status: run.status as string, canonicalActivityId }
 }
 
 async function updateMarketAfterRun(
@@ -614,18 +729,45 @@ async function executeLane(input: {
   assigned: AssignedContacts
   dryRun: boolean
   deliveryAllowed: boolean
+  binding: OperatingStrategyBinding
 }): Promise<LaneRunResult> {
-  const candidates = input.pool.filter((candidate) => {
+  const initiallyUnassigned = input.pool.filter((candidate) => {
     const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
     return !input.assigned.leadIds.has(candidate.lead.id) && !input.assigned.recipientKeys.has(recipientKey)
   })
-  const key = runKey(input.date, input.lane.key, input.state.market, input.state.source_provider)
+  const key = runKey(
+    input.date,
+    input.lane.key,
+    input.state.market,
+    input.state.source_provider,
+    input.binding,
+    input.dryRun
+  )
   const run = await createStrategyRun({
     runKey: key,
     lane: input.lane,
     state: input.state,
-    candidates,
+    candidates: initiallyUnassigned,
     dryRun: input.dryRun,
+    binding: input.binding,
+  })
+  const admin = createAdminClient()
+  const { data: existingRunMemberships, error: existingRunMembershipsError } = input.dryRun
+    ? { data: [], error: null }
+    : await admin
+        .from('strategy_lead_memberships')
+        .select(
+          'id,lead_id,campaign_run_id,canonical_activity_id,operating_strategy_version_id,operating_contract_fingerprint,strategy_binding_recorded_at,assigned_at,metadata_json,status,qualification_score,qualification_reasons,email_verification_status,market,source_provider,recipient_key'
+        )
+        .eq('campaign_run_id', run.id)
+  if (existingRunMembershipsError) throw existingRunMembershipsError
+  const existingMembershipByLeadId = new Map(
+    (existingRunMemberships || []).map((membership) => [String(membership.lead_id), membership])
+  )
+  const candidates = input.pool.filter((candidate) => {
+    if (existingMembershipByLeadId.has(candidate.lead.id)) return true
+    const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
+    return !input.assigned.leadIds.has(candidate.lead.id) && !input.assigned.recipientKeys.has(recipientKey)
   })
   const draftLimit = envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', 25)
 
@@ -652,15 +794,20 @@ async function executeLane(input: {
     }
   }
 
-  const admin = createAdminClient()
   let draftsCreated = 0
   let reviewOnly = 0
   const selected = candidates.slice(0, draftLimit)
-  const verificationByLeadId = await verifySelectedRecipients(selected)
+  const verificationByLeadId = await verifySelectedRecipients(
+    selected.filter((candidate) => !existingMembershipByLeadId.has(candidate.lead.id))
+  )
 
   for (const candidate of selected) {
+    let membershipRecordedAt = new Date().toISOString()
     const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
-    const verification = verificationByLeadId.get(candidate.lead.id) || {
+    let membership = existingMembershipByLeadId.get(candidate.lead.id) || null
+    const storedMembershipMetadata = (membership?.metadata_json || {}) as Record<string, unknown>
+    const storedVerification = storedMembershipMetadata.hunterVerification as HunterEmailVerification | undefined
+    const verification = storedVerification || verificationByLeadId.get(candidate.lead.id) || {
       configured: Boolean(process.env.HUNTER_API_KEY),
       status: 'unverified' as const,
       score: null,
@@ -670,10 +817,22 @@ async function executeLane(input: {
       hardInvalid: false,
       reason: 'Recipient was not verified in this execution.',
     }
-    const effectiveReviewOnly = candidate.reviewOnly || !verification.approvalSafe
-    const { data: membership, error: membershipError } = await admin
-      .from('strategy_lead_memberships')
-      .insert({
+    const effectiveReviewOnly =
+      typeof storedMembershipMetadata.reviewOnly === 'boolean'
+        ? storedMembershipMetadata.reviewOnly
+        : candidate.reviewOnly || !verification.approvalSafe
+    if (
+      membership &&
+      (membership.campaign_run_id !== run.id ||
+        membership.operating_strategy_version_id !== input.binding.operatingStrategyVersionId ||
+        membership.operating_contract_fingerprint !== input.binding.contractFingerprint)
+    ) {
+      throw new Error('An existing strategy membership cannot be rebound to a different governed run or contract.')
+    }
+    if (membership) {
+      membershipRecordedAt = membership.strategy_binding_recorded_at || membership.assigned_at || membershipRecordedAt
+    } else {
+      const inserted = await admin.from('strategy_lead_memberships').insert({
         lead_id: candidate.lead.id,
         campaign_run_id: run.id,
         strategy_key: input.lane.key,
@@ -684,17 +843,114 @@ async function executeLane(input: {
         qualification_reasons: candidate.reasons,
         email_verification_status: verification.status,
         status: verification.hardInvalid ? 'rejected' : 'qualified',
+        operating_strategy_id: input.binding.operatingStrategyId,
+        operating_strategy_version_id: input.binding.operatingStrategyVersionId,
+        strategy_identifier_namespace: input.binding.namespace,
+        strategy_binding_mode: 'governed_v1',
+        strategy_binding_recorded_at: membershipRecordedAt,
+        strategy_writer_release: 'gate_3c',
+        destination_mode_snapshot: input.binding.destinationMode,
+        destination_path_snapshot: input.binding.destinationPath,
+        cta_label_snapshot: input.binding.ctaLabel,
+        operating_contract_fingerprint: input.binding.contractFingerprint,
         metadata_json: {
           reviewOnly: effectiveReviewOnly,
           matchedStrategyKeys: candidate.matchedStrategyKeys,
           hunterVerification: verification,
         },
       })
-      .select('id')
-      .single()
-    if (membershipError) {
-      if (membershipError.code === '23505') continue
-      throw membershipError
+        .select(
+          'id,lead_id,campaign_run_id,canonical_activity_id,operating_strategy_version_id,operating_contract_fingerprint,strategy_binding_recorded_at,assigned_at,metadata_json,status,qualification_score,qualification_reasons,email_verification_status,market,source_provider,recipient_key'
+        )
+        .single()
+      if (inserted.error?.code === '23505') {
+        const raced = await admin
+          .from('strategy_lead_memberships')
+          .select(
+            'id,lead_id,campaign_run_id,canonical_activity_id,operating_strategy_version_id,operating_contract_fingerprint,strategy_binding_recorded_at,assigned_at,metadata_json,status,qualification_score,qualification_reasons,email_verification_status,market,source_provider,recipient_key'
+          )
+          .eq('lead_id', candidate.lead.id)
+          .maybeSingle()
+        if (raced.error) throw raced.error
+        if (
+          !raced.data ||
+          raced.data.campaign_run_id !== run.id ||
+          raced.data.operating_strategy_version_id !== input.binding.operatingStrategyVersionId ||
+          raced.data.operating_contract_fingerprint !== input.binding.contractFingerprint
+        ) {
+          input.assigned.leadIds.add(candidate.lead.id)
+          input.assigned.recipientKeys.add(recipientKey)
+          continue
+        }
+        membership = raced.data
+        membershipRecordedAt =
+          raced.data.strategy_binding_recorded_at || raced.data.assigned_at || membershipRecordedAt
+      } else {
+        if (inserted.error) throw inserted.error
+        membership = inserted.data
+      }
+    }
+    if (!membership) throw new Error('Strategy membership creation returned no row.')
+    const immutableMembershipMetadata = (membership.metadata_json || {}) as Record<string, unknown>
+    const immutableQualificationReasons = Array.isArray(membership.qualification_reasons)
+      ? membership.qualification_reasons
+      : candidate.reasons
+    const immutableMatchedStrategyKeys = Array.isArray(immutableMembershipMetadata.matchedStrategyKeys)
+      ? immutableMembershipMetadata.matchedStrategyKeys
+      : candidate.matchedStrategyKeys
+    const immutableVerification =
+      (immutableMembershipMetadata.hunterVerification as HunterEmailVerification | undefined) || verification
+    const immutableReviewOnly =
+      typeof immutableMembershipMetadata.reviewOnly === 'boolean'
+        ? immutableMembershipMetadata.reviewOnly
+        : effectiveReviewOnly
+
+    let membershipActivityId = membership.canonical_activity_id as string | null
+    if (!membershipActivityId) {
+      membershipActivityId = await recordOperatingStrategyActivity({
+        binding: input.binding,
+        activityType: 'operator_review',
+        activityNamespace: 'strategy_lead_membership',
+        activityKey: membership.id,
+        subjectNamespace: 'lead',
+        subjectKey: candidate.lead.id,
+        idempotencyKey: `strategy-membership:${input.binding.operatingStrategyVersionId}:${membership.id}`,
+        occurredAt: membershipRecordedAt,
+        strategyLeadMembershipId: membership.id,
+        provenance: [
+          {
+            kind: 'strategy_qualification',
+            sourceProvider: membership.source_provider || input.state.source_provider,
+            market: membership.market || input.state.market,
+            qualificationScore: membership.qualification_score ?? candidate.score,
+            matchedStrategyKeys: immutableMatchedStrategyKeys,
+          },
+        ],
+        metadata: {
+          runId: run.id,
+          qualificationReasons: immutableQualificationReasons,
+          reviewOnly: immutableReviewOnly,
+          emailVerificationStatus: membership.email_verification_status || immutableVerification.status,
+        },
+      })
+      const membershipLink = await admin
+        .from('strategy_lead_memberships')
+        .update({ canonical_activity_id: membershipActivityId, updated_at: new Date().toISOString() })
+        .eq('id', membership.id)
+        .eq('operating_strategy_version_id', input.binding.operatingStrategyVersionId)
+        .is('canonical_activity_id', null)
+        .select('id')
+      if (membershipLink.error) throw membershipLink.error
+      if ((membershipLink.data || []).length !== 1) {
+        const current = await admin
+          .from('strategy_lead_memberships')
+          .select('id')
+          .eq('id', membership.id)
+          .eq('canonical_activity_id', membershipActivityId)
+          .maybeSingle()
+        if (current.error) throw current.error
+        if (!current.data) throw new Error('Canonical membership activity did not link exactly once.')
+      }
     }
 
     if (verification.hardInvalid) {
@@ -712,19 +968,66 @@ async function executeLane(input: {
       continue
     }
 
-    const draft = buildStrategyEmailDraft(input.lane.key, candidate.lead)
-    const messages = await saveOutreachMessages(candidate.lead.id, [
-      {
-        channel: 'email',
-        subject: draft.subject,
-        body: draft.body,
-        cta: draft.cta,
-        language: 'en',
-        complianceNote: draft.complianceNote,
-        generatedWith: `strategy_engine:${input.lane.key}`,
-      },
-    ])
-    const emailMessage = messages.find((message) => message.channel === 'email')
+    const expectedGenerator = `strategy_engine:${input.lane.key}`
+    const existingMessageQuery = await admin
+      .from('outreach_messages')
+      .select('*')
+      .eq('lead_id', candidate.lead.id)
+      .eq('channel', 'email')
+      .maybeSingle()
+    if (existingMessageQuery.error) throw existingMessageQuery.error
+    let emailMessage = existingMessageQuery.data as OutreachMessageRecord | null
+    if (
+      emailMessage &&
+      (emailMessage.generated_with !== expectedGenerator ||
+        emailMessage.status === 'sent' ||
+        Boolean(emailMessage.sent_at))
+    ) {
+      await admin
+        .from('strategy_lead_memberships')
+        .update({
+          status: 'rejected',
+          metadata_json: {
+            ...immutableMembershipMetadata,
+            reason: 'An existing email belongs to another generator or has already been sent.',
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', membership.id)
+      input.assigned.leadIds.add(candidate.lead.id)
+      input.assigned.recipientKeys.add(recipientKey)
+      continue
+    }
+    if (emailMessage) {
+      const existingActivities = await admin
+        .from('operating_strategy_activities')
+        .select('id,operating_strategy_version_id')
+        .eq('activity_namespace', 'outreach_message_draft')
+        .eq('activity_key', emailMessage.id)
+        .limit(2)
+      if (existingActivities.error) throw existingActivities.error
+      if (
+        (existingActivities.data || []).some(
+          (activity) => activity.operating_strategy_version_id !== input.binding.operatingStrategyVersionId
+        )
+      ) {
+        throw new Error('An existing outreach draft is already bound to another operating-strategy version.')
+      }
+    } else {
+      const draft = buildStrategyEmailDraft(input.lane.key, candidate.lead)
+      const messages = await saveOutreachMessages(candidate.lead.id, [
+        {
+          channel: 'email',
+          subject: draft.subject,
+          body: draft.body,
+          cta: draft.cta,
+          language: 'en',
+          complianceNote: draft.complianceNote,
+          generatedWith: expectedGenerator,
+        },
+      ])
+      emailMessage = messages.find((message) => message.channel === 'email') || null
+    }
     if (!emailMessage || emailMessage.status === 'sent' || emailMessage.sent_at) {
       await admin
         .from('strategy_lead_memberships')
@@ -732,6 +1035,35 @@ async function executeLane(input: {
         .eq('id', membership.id)
       continue
     }
+
+    const messageContentSha256 = fingerprintGovernedOutreachMessage(emailMessage)
+    const messageActivityId = await recordOperatingStrategyActivity({
+      binding: input.binding,
+      activityType: 'message',
+      activityNamespace: 'outreach_message_draft',
+      activityKey: emailMessage.id,
+      subjectNamespace: 'lead',
+      subjectKey: candidate.lead.id,
+      idempotencyKey: `strategy-message-draft:${input.binding.operatingStrategyVersionId}:${emailMessage.id}`,
+      occurredAt: emailMessage.created_at || membershipRecordedAt,
+      parentActivityId: membershipActivityId,
+      strategyLeadMembershipId: membership.id,
+      messageVersionKey: `${emailMessage.id}:strategy-engine:${input.lane.key}:${messageContentSha256}`,
+      provenance: [
+        {
+          kind: 'strategy_execution_draft',
+          runId: run.id,
+          sourceProvider: input.state.source_provider,
+          market: input.state.market,
+        },
+      ],
+      metadata: {
+        reviewOnly: immutableReviewOnly,
+        deliveryAuthorized: false,
+        receivingStrategyMustResolveBeforeDispatch: true,
+        messageContentSha256,
+      },
+    })
 
     const existingFlags = candidate.lead.automation_flags_json || {}
     const existingMetadata = candidate.lead.metadata_json || {}
@@ -770,35 +1102,16 @@ async function executeLane(input: {
       .update({
         status: 'needs_review',
         metadata_json: {
-          reviewOnly: effectiveReviewOnly,
+          reviewOnly: immutableReviewOnly,
           outreachMessageId: emailMessage.id,
-          matchedStrategyKeys: candidate.matchedStrategyKeys,
-          hunterVerification: verification,
+          canonicalMessageActivityId: messageActivityId,
+          matchedStrategyKeys: immutableMatchedStrategyKeys,
+          hunterVerification: immutableVerification,
         },
         updated_at: new Date().toISOString(),
       })
       .eq('id', membership.id)
     if (membershipUpdateError) throw membershipUpdateError
-
-    await recordOutboundEnrollment({
-      campaignRunId: run.id,
-      strategyKey: input.lane.key,
-      channel: 'email',
-      status: 'needs_review',
-      messageId: emailMessage.id,
-      recipient: candidate.lead.email,
-      leadId: candidate.lead.id,
-      market: input.state.market,
-      propertyAddress: candidate.lead.property_address,
-      metadata: {
-        qualificationScore: candidate.score,
-        qualificationReasons: candidate.reasons,
-        matchedStrategyKeys: candidate.matchedStrategyKeys,
-        reviewOnly: effectiveReviewOnly,
-        hunterVerification: verification,
-        verifiedExecution: true,
-      },
-    })
 
     input.assigned.leadIds.add(candidate.lead.id)
     input.assigned.recipientKeys.add(recipientKey)
@@ -948,6 +1261,7 @@ async function loadOutcomeTotals() {
   const { data, error } = await admin
     .from('strategy_lead_memberships')
     .select('status')
+    .is('operating_strategy_version_id', null)
     .limit(10000)
   if (error) throw error
   const statuses = (data || []).map((row) => String(row.status || ''))
@@ -1197,6 +1511,31 @@ export async function runStrategyExecutionEngine(options: {
     const lane = STRATEGY_EXECUTION_LANES.find((item) => item.key === state.strategy_key)
     if (!lane) continue
     const pool = pools.get(poolKey(lane.key, state.market, state.source_provider)) || []
+    let binding: OperatingStrategyBinding
+    try {
+      binding = await resolveOperatingStrategyBinding({
+        namespace: 'seller_execution',
+        sourceIdentifier: lane.key,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      blockers.push(`Strategy ${lane.key} is governance-blocked: ${message}`)
+      laneRuns.push({
+        runId: null,
+        runKey: `${date}:${lane.key}:governance-blocked`,
+        strategyKey: lane.key,
+        strategyName: lane.label,
+        market: state.market,
+        sourceProvider: state.source_provider,
+        status: 'governance_blocked',
+        discovered: pool.length,
+        qualified: 0,
+        draftsCreated: 0,
+        reviewOnly: 0,
+        message: 'No active, approved operating-strategy version authorizes this lane.',
+      })
+      continue
+    }
     laneRuns.push(await executeLane({
       date,
       state,
@@ -1205,6 +1544,7 @@ export async function runStrategyExecutionEngine(options: {
       assigned,
       dryRun,
       deliveryAllowed: deliveryEvidence.allowed && outboundReadiness.ready && replyCaptureReadiness.ready,
+      binding,
     }))
   }
 

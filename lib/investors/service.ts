@@ -1,5 +1,6 @@
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { discoverInvestorsForMarket } from '@/lib/investors/discovery'
 import { sendInvestorOutreachEmail } from '@/lib/investors/outbound'
 import { scoreExistingInvestor } from '@/lib/investors/scoring'
@@ -27,6 +28,113 @@ import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { evaluateInvestorAutoApproval } from '@/lib/investors/automationCore'
 import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
+import {
+  authorizeOperatingStrategyDispatch,
+  reserveOperatingStrategyDispatch,
+} from '@/lib/strategy/runtime-governance'
+
+const GOVERNED_INVESTOR_NAMESPACE = 'legacy_runtime'
+const GOVERNED_INVESTOR_SOURCE_IDENTIFIER = 'investor-network'
+
+function getInvestorProviderReadiness() {
+  const gmail = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REFRESH_TOKEN
+  )
+  const resend = Boolean(process.env.RESEND_API_KEY)
+  return {
+    gmail,
+    resend,
+    defaultProvider: gmail ? 'gmail' : resend ? 'resend' : 'none',
+  }
+}
+
+function configuredInvestorDispatchChannels(
+  readiness: ReturnType<typeof getInvestorProviderReadiness>
+) {
+  if (readiness.resend) return { provider: 'resend' as const, channel: 'resend_email' }
+  if (readiness.gmail) return { provider: 'gmail' as const, channel: 'gmail_email' }
+  throw new Error('Investor dispatch requires a configured outbound email provider.')
+}
+
+async function authorizeInvestorEmailDispatch() {
+  const readiness = getInvestorProviderReadiness()
+  const adapter = configuredInvestorDispatchChannels(readiness)
+  const binding = await authorizeOperatingStrategyDispatch({
+    namespace: GOVERNED_INVESTOR_NAMESPACE,
+    sourceIdentifier: GOVERNED_INVESTOR_SOURCE_IDENTIFIER,
+    channel: adapter.channel,
+    requestedExternalSends: 1,
+    requiredDispatchAuthority: 'vestblock_application',
+  })
+  return { binding, adapter, readiness }
+}
+
+async function investorConsentSnapshot(investorId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('participant_profiles')
+    .select('id,role,status,communication_preferences_json,outreach_consent,outreach_consent_at,consent_version,consent_recorded_at,operator_verified_at,legacy_claim_status')
+    .eq('legacy_entity_type', 'investor_profiles')
+    .eq('legacy_entity_id', investorId)
+    .limit(2)
+  if (error) throw error
+  if ((data || []).length !== 1) {
+    throw new Error('Investor dispatch requires exactly one operator-verified participant-profile link with first-class outreach consent.')
+  }
+  const profile = data![0]
+  const preferences = (profile.communication_preferences_json || {}) as Record<string, unknown>
+  if (
+    profile.role !== 'investor' ||
+    profile.status !== 'active' ||
+    profile.legacy_claim_status !== 'verified' ||
+    !profile.operator_verified_at ||
+    profile.outreach_consent !== true ||
+    !profile.outreach_consent_at ||
+    preferences.email !== true
+  ) {
+    throw new Error('Investor dispatch is blocked until the linked active profile has verified ownership, email permission, and recorded outreach consent.')
+  }
+  return {
+    basis: 'participant_profile_outreach_consent',
+    dispatchAuthorized: true,
+    evidenceKey: `participant-profile:${profile.id}:outreach-consent:${profile.outreach_consent_at}`,
+    provenance: {
+      sourceTable: 'participant_profiles',
+      participantProfileId: profile.id,
+      legacyEntityType: 'investor_profiles',
+      legacyEntityId: investorId,
+      consentVersion: profile.consent_version,
+      consentRecordedAt: profile.consent_recorded_at,
+      outreachConsentAt: profile.outreach_consent_at,
+      operatorVerifiedAt: profile.operator_verified_at,
+    },
+  }
+}
+
+async function investorSuppressionSnapshot(investorId: string, email: string) {
+  const admin = createAdminClient()
+  const normalizedEmail = email.trim().toLowerCase()
+  const { data, error } = await admin
+    .from('lead_suppressions')
+    .select('id,reason')
+    .eq('email', normalizedEmail)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (data?.id) throw new Error(`Investor recipient is suppressed: ${data.reason || 'active suppression'}.`)
+  const checkedAt = new Date().toISOString()
+  return {
+    checkedAt,
+    suppressionCleared: true,
+    evidenceKey: `investor-suppression-preflight:${investorId}:${checkedAt}`,
+    provenance: { sourceTable: 'lead_suppressions', matchField: 'email', subjectId: investorId },
+    activeSuppression: false,
+    usableEmail: true,
+  }
+}
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -184,6 +292,14 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
   try {
     const approved = await listApprovedInvestorEmailOutreach(limit)
     const results: Array<{ investorId: string; name: string; status: string }> = []
+    let authorization: Awaited<ReturnType<typeof authorizeInvestorEmailDispatch>> | null = null
+
+    const requireAuthorization = async () => {
+      if (!authorization) {
+        authorization = await authorizeInvestorEmailDispatch()
+      }
+      return authorization
+    }
 
     for (const row of approved) {
       const investor = row.investor_profiles as InvestorProfileRecord | null
@@ -217,12 +333,113 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         continue
       }
 
-      const sent = await sendInvestorOutreachEmail({ investor, message: row })
+      const { binding, adapter } = await requireAuthorization()
+      if (investor.outreach_status === 'do_not_contact') {
+        throw new Error('Investor dispatch is blocked because the investor is marked do not contact.')
+      }
+      if (
+        investor.contact_email?.trim().toLowerCase() === 'contact@vestblock.io' &&
+        process.env.ALLOW_CONTACT_ADMIN_ALERTS !== 'true'
+      ) {
+        throw new Error('Investor dispatch is blocked because routine automation notices cannot target contact@vestblock.io.')
+      }
+      const consentBasisSnapshot = await investorConsentSnapshot(investor.id)
+      const suppressionSnapshot = await investorSuppressionSnapshot(investor.id, investor.contact_email!)
+      const dispatchIntentAt = new Date().toISOString()
+      const nextActionAt = adminTaskDueDates.days(4)
+      const messageVersionKey = `${row.id}:approved:${row.approved_at || row.updated_at}`
+      const reservation = await reserveOperatingStrategyDispatch({
+        binding,
+        channel: adapter.channel,
+        requestedCount: 1,
+        idempotencyKey: `investor-outreach:${binding.operatingStrategyVersionId}:${messageVersionKey}`,
+      })
+      const enrollmentBase = {
+        strategyKey: binding.sourceIdentifier,
+        channel: 'email' as const,
+        messageId: row.id,
+        recipient: investor.contact_email,
+        market: investor.markets?.[0] || null,
+        binding,
+        governedStage: 'dispatch_intent' as const,
+        subjectNamespace: 'investor_profile',
+        subjectKey: investor.id,
+        dispatchIntentAt,
+        dispatchReservationId: reservation.reservationId,
+        dispatchChannel: adapter.channel,
+        provider: adapter.provider,
+        outreachPurpose: 'legacy_investor_relationship_outreach',
+        consentBasisSnapshot: {
+          ...consentBasisSnapshot,
+          messageStatus: row.status,
+          approvedAt: row.approved_at,
+          approvedByUserId: row.approved_by_user_id,
+          capturedAt: dispatchIntentAt,
+        },
+        suppressionSnapshot: {
+          ...suppressionSnapshot,
+          replyCaptureReady: replyCapture.ready,
+          deliveryCircuitAllowed: deliveryCircuitBreaker?.allowed === true,
+        },
+        messageVersionKey,
+      }
+      const dispatchIntent = await recordOutboundEnrollment({
+        ...enrollmentBase,
+        status: 'queued',
+        nextActionAt,
+        metadata: {
+          investorId: investor.id,
+          investorType: investor.primary_investor_type,
+          authorizedChannels: [adapter.channel],
+        },
+      })
+
+      const sent = await sendInvestorOutreachEmail({
+        investor,
+        message: row,
+        provider: adapter.provider,
+        disableFallback: true,
+      })
       if (!sent.ok) {
+        const failedAt = new Date().toISOString()
+        await recordOutboundEnrollment({
+          ...enrollmentBase,
+          enrollmentId: dispatchIntent.id,
+          status: 'failed',
+          provider: sent.provider,
+          suppressionReason: sent.error || 'send_failed',
+          nextActionAt: null,
+          metadata: {
+            investorId: investor.id,
+            investorType: investor.primary_investor_type,
+            authorizedChannels: [adapter.channel],
+            error: sent.error || 'send_failed',
+            providerResultAt: failedAt,
+          },
+        })
+        const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+          subjectNamespace: 'investor_profile',
+          subjectKey: investor.id,
+          messageId: row.id,
+          enrollmentId: dispatchIntent.id,
+          operatingStrategyVersionId: binding.operatingStrategyVersionId,
+          provider: sent.provider,
+          providerMessageId: sent.providerMessageId || null,
+          evidenceId: `investor-outreach:${row.id}:${sent.provider}:failed`,
+          status: 'failed',
+          occurredAt: failedAt,
+        })
+        if (!failedDeliveryOutcome.updated) {
+          throw new Error(`Investor delivery outcome attribution failed: ${failedDeliveryOutcome.reason}.`)
+        }
         await updateInvestorOutreachMessage(row.id, {
           status: 'failed',
           send_provider: sent.provider,
           send_error: sent.error || 'Send failed.',
+          metadata_json: {
+            ...(row.metadata_json || {}),
+            providerResultAt: failedAt,
+          },
         })
         await updateInvestorRecord(investor.id, { outreach_status: 'failed' })
         await createAdminTask({
@@ -233,58 +450,72 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
           entityType: 'investor_profile',
           entityId: investor.id,
           dueAt: adminTaskDueDates.now(),
-          metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider },
+          metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider, providerResultAt: failedAt },
         }).catch(() => null)
         results.push({ investorId: investor.id, name: investor.display_name, status: 'failed' })
         continue
       }
 
-      const now = new Date().toISOString()
+      const acceptedAt = new Date().toISOString()
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'accepted',
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+        nextActionAt,
+        metadata: {
+          investorId: investor.id,
+          investorType: investor.primary_investor_type,
+          authorizedChannels: [adapter.channel],
+          providerResultAt: acceptedAt,
+        },
+      })
+      const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        subjectNamespace: 'investor_profile',
+        subjectKey: investor.id,
+        messageId: row.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+        evidenceId: `investor-outreach:${row.id}:${sent.provider}:${sent.providerMessageId || 'accepted'}`,
+        status: 'accepted',
+        occurredAt: acceptedAt,
+      })
+      if (!acceptedDeliveryOutcome.updated) {
+        throw new Error(`Investor delivery outcome attribution failed: ${acceptedDeliveryOutcome.reason}.`)
+      }
       await updateInvestorOutreachMessage(row.id, {
         status: 'sent',
-        sent_at: now,
+        sent_at: acceptedAt,
         send_provider: sent.provider,
         send_error: null,
         metadata_json: {
           ...(row.metadata_json || {}),
           providerMessageId: sent.providerMessageId || null,
-          providerAcceptedAt: now,
+          providerAcceptedAt: acceptedAt,
         },
       })
       await updateInvestorRecord(investor.id, {
         relationship_stage: 'contacted',
         outreach_status: 'sent',
-        last_contacted_at: now,
-        next_follow_up_at: adminTaskDueDates.days(4),
+        last_contacted_at: acceptedAt,
+        next_follow_up_at: nextActionAt,
       })
       await insertInvestorEngagementEvent({
         investorId: investor.id,
         outreachMessageId: row.id,
         eventType: 'note',
         eventValue: 'outreach_sent',
-        metadata: { provider: sent.provider, sequenceCode: row.sequence_code },
+        metadata: { provider: sent.provider, sequenceCode: row.sequence_code, providerResultAt: acceptedAt },
       })
       await logEvent({
         eventType: 'admin_action',
         entityType: 'investor_profile',
         entityId: investor.id,
-        metadata: { action: 'investor_outreach_sent', messageId: row.id, provider: sent.provider },
+        metadata: { action: 'investor_outreach_sent', messageId: row.id, provider: sent.provider, providerResultAt: acceptedAt },
       })
-      await recordOutboundEnrollment({
-        strategyKey: 'investor-network',
-        channel: 'email',
-        status: 'accepted',
-        messageId: row.id,
-        recipient: investor.contact_email,
-        market: investor.markets?.[0] || null,
-        nextActionAt: adminTaskDueDates.days(4),
-        metadata: {
-          investorId: investor.id,
-          investorType: investor.primary_investor_type,
-          provider: sent.provider,
-          providerMessageId: sent.providerMessageId || null,
-        },
-      }).catch(() => null)
       results.push({ investorId: investor.id, name: investor.display_name, status: 'accepted' })
     }
 

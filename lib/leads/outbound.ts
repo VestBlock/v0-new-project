@@ -7,6 +7,8 @@ import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 type SendLeadEmailInput = {
   lead: LeadRecord
   message: OutreachMessageRecord
+  provider?: 'gmail' | 'resend'
+  disableFallback?: boolean
 }
 
 type SendLeadEmailResult = {
@@ -234,12 +236,34 @@ export async function sendLeadOutreachEmail(
     }
   }
 
+  if (input.provider === 'gmail') {
+    if (!hasGmailConfig()) {
+      return { ok: false, provider: 'gmail', error: 'The selected Google Workspace provider is not configured.' }
+    }
+    try {
+      return await sendWithGmail(input)
+    } catch (error) {
+      return {
+        ok: false,
+        provider: 'gmail',
+        error: error instanceof Error ? error.message : 'Google Workspace sender failed.',
+      }
+    }
+  }
+
+  if (input.provider === 'resend') {
+    if (!hasResendConfig()) {
+      return { ok: false, provider: 'resend', error: 'The selected Resend provider is not configured.' }
+    }
+    return sendWithResend(input)
+  }
+
   if (hasGmailConfig()) {
     try {
       const gmailResult = await sendWithGmail(input)
-      if (gmailResult.ok || !hasResendConfig()) return gmailResult
+      if (gmailResult.ok || !hasResendConfig() || input.disableFallback) return gmailResult
     } catch (error) {
-      if (!hasResendConfig()) {
+      if (!hasResendConfig() || input.disableFallback) {
         return {
           ok: false,
           provider: 'gmail',

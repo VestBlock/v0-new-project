@@ -112,6 +112,160 @@ ${provenance.length ? provenance.map((item) => `- ${item.source || 'source'} · 
 `
 }
 
+function list(value) {
+  if (!Array.isArray(value) || !value.length) return '- Not recorded'
+  return value.map((item) => `- ${typeof item === 'string' ? item : JSON.stringify(item)}`).join('\n')
+}
+
+function markdownForOperatingStrategy(row) {
+  const contract = row.contract_json || {}
+  const lifecycle = row.lifecycle_contract_json || {}
+  const owner = row.owner_contract_json || {}
+  const outcome = row.outcome_contract_json || {}
+  const destination = row.destination_mode === 'public_route'
+    ? `${row.destination_path} — ${row.cta_label}`
+    : row.destination_mode
+  return `---
+strategy: ${row.strategy_key}
+portfolio: ${row.portfolio_key}
+version: ${row.operating_strategy_version}
+status: ${row.version_status}
+execution_mode: ${row.execution_mode}
+external_send_cap: ${row.external_send_cap}
+contract_fingerprint: ${row.operating_contract_fingerprint}
+projection: true
+projection_source: Supabase Gate 3C registry
+---
+
+# ${row.strategy_title}
+
+> PII-free, read-only projection from the governed Supabase registry. Draft status is not execution authority. Approvals, activation, caps, channels, or contract changes must occur through the VestBlock review gate.
+
+## Identity and destination
+
+- Portfolio: ${row.portfolio_title} (${row.portfolio_key})
+- Strategy: ${row.strategy_key}
+- Version: ${row.operating_strategy_version}
+- Status: ${row.version_status}
+- Execution mode: ${row.execution_mode}
+- External send cap: ${row.external_send_cap}
+- Destination: ${destination}
+- Contract fingerprint: ${row.operating_contract_fingerprint}
+- CRM owner: ${row.crm_owner_key}
+- Automation owner: ${row.automation_owner_key}
+- Dispatch authority: ${owner.dispatchAuthority || 'Not recorded'}
+
+## Objective
+
+${contract.objective || 'Not recorded'}
+
+## Participant, problem, and offer
+
+- Target participant: ${contract.targetParticipant || 'Not recorded'}
+- Problem: ${contract.problem || 'Not recorded'}
+- Value exchange: ${contract.valueExchange || 'Not recorded'}
+- Offer: ${contract.offer || 'Not recorded'}
+
+## Eligibility
+
+${list(contract.eligibilityCriteria)}
+
+## Disqualification
+
+${list(contract.disqualificationCriteria)}
+
+## Channels and cadence
+
+Primary channels:
+
+${list(contract.primaryChannels)}
+
+Secondary channels:
+
+${list(contract.secondaryChannels)}
+
+Cadence:
+
+${list(contract.followupCadence)}
+
+## Lifecycle authority
+
+- Record authority: ${lifecycle.recordAuthority || 'Not recorded'}
+- Initial state: ${lifecycle.initialState || 'Not recorded'}
+
+Persisted states:
+
+${list(lifecycle.persistedStates)}
+
+Target-only stages:
+
+${list(lifecycle.targetOnlyStages)}
+
+Stop conditions:
+
+${list(lifecycle.stopConditions)}
+
+## Outcome and learning threshold
+
+- Primary conversion: ${outcome.primaryConversionEvent || 'Not recorded'}
+- Current outcome observable: ${outcome.targetOutcomeObservable === true ? 'yes' : 'no'}
+- Learning window: ${outcome.learningWindowDays ?? '—'} days
+- Minimum exposure: ${outcome.minimumExposure ?? '—'} ${outcome.exposureUnit || ''}
+- Minimum primary conversions: ${outcome.minimumPrimaryConversions ?? '—'}
+- Required complete windows: ${outcome.requiredCompleteWindows ?? '—'}
+- Verified outcome rule: ${outcome.verifiedOutcomeRule || 'Not recorded'}
+
+Leading indicators:
+
+${list(outcome.leadingIndicators)}
+
+Safeguards:
+
+${list(outcome.safeguards)}
+
+## Activation blockers
+
+${list(contract.activationReadiness?.blockers)}
+
+## Integration dependencies
+
+${list(contract.integrationDependencies)}
+
+## Source provenance
+
+${list(row.source_provenance_json)}
+`
+}
+
+function operatingRegistryIndex(rows) {
+  const counts = rows.reduce((result, row) => {
+    result[row.version_status] = (result[row.version_status] || 0) + 1
+    return result
+  }, {})
+  return `---
+projection: true
+projection_source: Supabase Gate 3C registry
+generated_at: ${new Date().toISOString()}
+---
+
+# Operating Strategy Registry
+
+> Read-only registry projection. A strategy must never be treated as executable because it appears in this vault.
+
+## Safety state
+
+- Strategies: ${rows.length}
+- Draft: ${counts.draft || 0}
+- Active: ${counts.active || 0}
+- Retired: ${counts.retired || 0}
+- Total external send cap: ${rows.reduce((sum, row) => sum + Number(row.external_send_cap || 0), 0)}
+
+## Strategies
+
+${rows.map((row) => `- [[Strategies/Operating/${row.strategy_key}|${row.strategy_title}]] — ${row.version_status}, v${row.operating_strategy_version}, ${row.destination_mode}, cap ${row.external_send_cap}`).join('\n')}
+`
+}
+
 async function refresh() {
   ensureHealthy()
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -126,7 +280,44 @@ async function refresh() {
     const path = safePath(`Strategies/${lane.lane_key}.md`)
     obsidian(['create', `path=${path}`, `content=${markdownForLane(lane)}`, 'overwrite'])
   }
-  console.log(JSON.stringify({ refreshed: lanes.length, source: 'Supabase strategy_lane_versions', vault: VAULT }, null, 2))
+  const operatingResponse = await fetch(`${baseUrl}/rest/v1/rpc/list_operating_strategy_registry_projection`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  })
+  if (!operatingResponse.ok) fail(`Operating-strategy refresh failed safely with HTTP ${operatingResponse.status}.`)
+  const versionRows = await operatingResponse.json()
+  const latestByStrategy = new Map()
+  for (const row of versionRows) {
+    const current = latestByStrategy.get(row.strategy_key)
+    if (!current || Number(row.operating_strategy_version) > Number(current.operating_strategy_version)) {
+      latestByStrategy.set(row.strategy_key, row)
+    }
+  }
+  const operatingStrategies = [...latestByStrategy.values()].sort((left, right) =>
+    String(left.strategy_key).localeCompare(String(right.strategy_key))
+  )
+  if (operatingStrategies.length !== 17) {
+    fail(`Operating-strategy projection expected 17 stable strategies and received ${operatingStrategies.length}.`)
+  }
+  for (const strategy of operatingStrategies) {
+    const path = safePath(`Strategies/Operating/${strategy.strategy_key}.md`)
+    obsidian(['create', `path=${path}`, `content=${markdownForOperatingStrategy(strategy)}`, 'overwrite'])
+  }
+  const indexPath = safePath('Strategies/Operating Strategy Registry.md')
+  obsidian(['create', `path=${indexPath}`, `content=${operatingRegistryIndex(operatingStrategies)}`, 'overwrite'])
+  const health = ensureHealthy()
+  console.log(JSON.stringify({
+    portfolioLanesRefreshed: lanes.length,
+    operatingStrategiesRefreshed: operatingStrategies.length,
+    source: 'Supabase governed strategy registries',
+    vault: VAULT,
+    health,
+  }, null, 2))
 }
 
 if (!command || command === 'help') {

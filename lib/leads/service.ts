@@ -1,4 +1,6 @@
 import { enrichLeadEmailFromWebsite } from '@/lib/leads/email-enrichment'
+import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { getLeadOutboundPauseReason, isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
@@ -6,12 +8,17 @@ import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { generateLeadOutreach } from '@/lib/leads/outreach'
-import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
+import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { addLeadNote, finishScrapeRun, insertOutreachSendEvent, listSuppressions, saveLeadScore, saveOutreachMessages, startScrapeRun, updateOutreachMessage, upsertLead, updateLeadRecord } from '@/lib/leads/repository'
 import { scoreLead } from '@/lib/leads/scoring'
 import { safeUrl } from '@/lib/leads/utils'
 import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput, OutreachMessageRecord } from '@/lib/leads/types'
+import {
+  authorizeOperatingStrategyDispatch,
+  reserveOperatingStrategyDispatch,
+  resolveOperatingStrategyLeadMembership,
+} from '@/lib/strategy/runtime-governance'
 
 type IngestLeadOptions = {
   scoreOnIngest?: boolean
@@ -20,6 +27,17 @@ type IngestLeadOptions = {
 
 type GenerateOutreachOptions = {
   allowImmediateAutoSend?: boolean
+}
+
+const GOVERNED_SELLER_NAMESPACE = 'legacy_runtime'
+const GOVERNED_SELLER_STRATEGY_KEY = 'seller-outreach'
+
+function configuredEmailDispatchChannels(
+  readiness: ReturnType<typeof getOutboundProviderReadiness>
+) {
+  if (readiness.resend) return ['resend_email']
+  if (readiness.gmail) return ['gmail_email']
+  return ['no_outreach']
 }
 
 function shouldTriggerLeadAutomation(category: string | null | undefined, score: number) {
@@ -105,6 +123,117 @@ function shouldAutoGenerateOutreachForLead(sourceKey: string, lead: LeadRecord) 
 }
 
 async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMessageRecord) {
+  const source = String(lead.source || '').trim().toLowerCase()
+  const explicitlySellerMapped = lead.category === 'seller_lead' || lead.lead_type === 'sell_house'
+  if (!explicitlySellerMapped || source.includes('dealmachine')) {
+    return {
+      sent: false as const,
+      blocked: true as const,
+      provider: 'none' as const,
+      error: 'Immediate auto-send has no explicit governed seller mapping for this lead.',
+    }
+  }
+
+  const suppressions = await listSuppressions()
+  const dispatchDecision = getLeadEmailAutopilotDecision(lead, suppressions)
+  if (!dispatchDecision.eligible || !dispatchDecision.autoSendEnabled) {
+    return {
+      sent: false as const,
+      blocked: true as const,
+      provider: 'none' as const,
+      error: dispatchDecision.reason || 'Immediate auto-send guardrails did not authorize this lead.',
+    }
+  }
+
+  const outboundReadiness = getOutboundProviderReadiness()
+  const authorizedChannels = configuredEmailDispatchChannels(outboundReadiness)
+  if (authorizedChannels.length !== 1 || authorizedChannels[0] === 'no_outreach') {
+    throw new Error('Governed dispatch requires exactly one configured external email provider path.')
+  }
+  const selectedProvider = authorizedChannels[0] === 'resend_email' ? 'resend' as const : 'gmail' as const
+  const bindings = await Promise.all(
+    authorizedChannels.map((channel) =>
+      authorizeOperatingStrategyDispatch({
+        namespace: GOVERNED_SELLER_NAMESPACE,
+        sourceIdentifier: GOVERNED_SELLER_STRATEGY_KEY,
+        channel,
+        requestedExternalSends: 1,
+        requiredDispatchAuthority: 'vestblock_application',
+      })
+    )
+  )
+  const binding = bindings[0]
+  if (
+    bindings.some(
+      (candidate) =>
+        candidate.operatingStrategyVersionId !== binding.operatingStrategyVersionId ||
+        candidate.contractFingerprint !== binding.contractFingerprint
+    )
+  ) {
+    throw new Error('Configured provider paths did not resolve to one canonical operating strategy version.')
+  }
+  const strategyLeadMembershipId = await resolveOperatingStrategyLeadMembership({
+    binding,
+    leadId: lead.id,
+  })
+  const dispatchChannel = authorizedChannels[0]
+  const dispatchReservation = await reserveOperatingStrategyDispatch({
+    binding,
+    channel: dispatchChannel,
+    requestedCount: 1,
+    idempotencyKey: `immediate-send:${binding.operatingStrategyVersionId}:${message.id}`,
+  })
+  const dispatchIntentAt = new Date().toISOString()
+  const nextFollowUpAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+  const enrollmentBase = {
+    strategyKey: GOVERNED_SELLER_STRATEGY_KEY,
+    channel: 'email' as const,
+    messageId: message.id,
+    recipient: lead.email,
+    leadId: lead.id,
+    subjectNamespace: 'lead',
+    subjectKey: lead.id,
+    market: [lead.city, lead.state].filter(Boolean).join(', '),
+    propertyAddress: lead.property_address,
+    binding,
+    governedStage: 'dispatch_intent' as const,
+    strategyLeadMembershipId,
+    dispatchReservationId: dispatchReservation.reservationId,
+    dispatchChannel,
+    dispatchIntentAt,
+    provider: selectedProvider,
+    outreachPurpose: 'seller_acquisition_immediate_first_touch',
+    consentBasisSnapshot: {
+      basis: 'operator_approved_business_outreach',
+      dispatchAuthorized: true,
+      evidenceKey: `approved-outreach-message:${message.id}`,
+      provenance: {
+        messageId: message.id,
+        messageStatus: message.status,
+        autopilotDecision: dispatchDecision.reason || 'eligible',
+      },
+      messageStatus: message.status,
+      approvedAt: message.approved_at || null,
+      source: lead.source || null,
+      capturedAt: dispatchIntentAt,
+    },
+    suppressionSnapshot: {
+      checkedAt: dispatchIntentAt,
+      suppressionCleared: true,
+      evidenceKey: `immediate-send-preflight:${lead.id}:${dispatchIntentAt}`,
+      eligible: dispatchDecision.eligible,
+      guardrailDecision: dispatchDecision.reason || null,
+      activeSuppression: false,
+    },
+    messageVersionKey: `${message.id}:approved:${message.approved_at || message.updated_at}`,
+  }
+  const dispatchIntent = await recordOutboundEnrollment({
+    ...enrollmentBase,
+    status: 'queued',
+    nextActionAt: nextFollowUpAt,
+    metadata: { action: 'auto_queued_after_approval', authorizedChannels },
+  })
+
   await updateOutreachMessage(message.id, {
     status: 'queued',
     send_provider: null,
@@ -123,9 +252,35 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
   const sendResult = await sendLeadOutreachEmail({
     lead,
     message,
+    provider: selectedProvider,
+    disableFallback: true,
   })
 
   if (sendResult.ok) {
+    await recordOutboundEnrollment({
+      ...enrollmentBase,
+      enrollmentId: dispatchIntent.id,
+      status: 'accepted',
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      nextActionAt: nextFollowUpAt,
+      metadata: { action: 'auto_sent_after_approval', authorizedChannels },
+    })
+    const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+      leadId: lead.id,
+      subjectNamespace: 'lead',
+      subjectKey: lead.id,
+      messageId: message.id,
+      enrollmentId: dispatchIntent.id,
+      operatingStrategyVersionId: binding.operatingStrategyVersionId,
+      occurredAt: dispatchIntentAt,
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      status: 'accepted',
+    })
+    if (!acceptedDeliveryOutcome.updated) {
+      throw new Error(`Governed delivery attribution failed closed: ${acceptedDeliveryOutcome.reason}.`)
+    }
     await Promise.all([
       updateOutreachMessage(message.id, {
         status: 'sent',
@@ -138,7 +293,7 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
         outreach_status: 'sent',
         delivery_status: 'accepted',
         last_contacted_at: new Date().toISOString(),
-        next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        next_follow_up_at: nextFollowUpAt,
       }),
       insertOutreachSendEvent({
         leadId: lead.id,
@@ -170,6 +325,33 @@ async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMess
     return { sent: true as const, provider: sendResult.provider }
   }
 
+  await recordOutboundEnrollment({
+    ...enrollmentBase,
+    enrollmentId: dispatchIntent.id,
+    status: 'failed',
+    provider: sendResult.provider,
+    suppressionReason: sendResult.error || 'send_failed',
+    metadata: {
+      action: 'auto_send_failed_after_approval',
+      authorizedChannels,
+      error: sendResult.error || 'send_failed',
+    },
+  })
+  const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+    leadId: lead.id,
+    subjectNamespace: 'lead',
+    subjectKey: lead.id,
+    messageId: message.id,
+    enrollmentId: dispatchIntent.id,
+    operatingStrategyVersionId: binding.operatingStrategyVersionId,
+    occurredAt: dispatchIntentAt,
+    provider: sendResult.provider,
+    providerMessageId: sendResult.providerMessageId || null,
+    status: 'failed',
+  })
+  if (!failedDeliveryOutcome.updated) {
+    throw new Error(`Governed delivery attribution failed closed: ${failedDeliveryOutcome.reason}.`)
+  }
   await updateOutreachMessage(message.id, {
     status: 'failed',
     send_provider: sendResult.provider,
@@ -562,20 +744,22 @@ export async function generateAndStoreOutreachForLead(
       })
 
       if (allowImmediateAutoSend && decision.autoSendEnabled && isCurrentVestblockOutboundLead(lead)) {
-        await autoSendApprovedLeadEmail(lead, {
+        const immediateSend = await autoSendApprovedLeadEmail(lead, {
           ...approvedMessage,
           subject: approvedMessage.subject || emailMessage.subject || null,
           body: approvedMessage.body || emailMessage.body,
         })
-        finalMessages = finalMessages.map((row) =>
-          row.id === approvedMessage.id
-            ? {
-                ...row,
-                ...approvedMessage,
-                status: 'sent',
-              }
-            : row
-        )
+        if (immediateSend.sent) {
+          finalMessages = finalMessages.map((row) =>
+            row.id === approvedMessage.id
+              ? {
+                  ...row,
+                  ...approvedMessage,
+                  status: 'sent',
+                }
+              : row
+          )
+        }
       }
     }
   }

@@ -1,9 +1,11 @@
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { DEFAULT_BUYER_DISCOVERY_MARKETS, DEFAULT_BUYER_DISCOVERY_NICHES } from '@/lib/buyers/constants'
 import { listMarketsForExpansionLane, pickDiscoveryTermsForMarket } from '@/lib/leads/marketExpansion'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import {
   finishBuyerOutreachRun,
@@ -28,7 +30,100 @@ import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { runQualifiedSellerBuyerRouting } from '@/lib/buyers/qualifiedSellerRouting'
 import type { BuyerRecord } from '@/lib/buyers/types'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  authorizeOperatingStrategyDispatch,
+  reserveOperatingStrategyDispatch,
+} from '@/lib/strategy/runtime-governance'
 import { logEvent } from '@/lib/system/logEvent'
+
+const GOVERNED_BUYER_NAMESPACE = 'legacy_runtime'
+const GOVERNED_BUYER_SOURCE_IDENTIFIER = 'buyer-network'
+
+function selectEmailDispatchAdapter(
+  readiness: ReturnType<typeof getOutboundProviderReadiness>
+) {
+  if (readiness.resend) return { provider: 'resend' as const, channel: 'resend_email' }
+  if (readiness.gmail) return { provider: 'gmail' as const, channel: 'gmail_email' }
+  throw new Error('Buyer dispatch requires a configured outbound email provider.')
+}
+
+async function authorizeBuyerEmailDispatch() {
+  const readiness = getOutboundProviderReadiness()
+  const adapter = selectEmailDispatchAdapter(readiness)
+  const binding = await authorizeOperatingStrategyDispatch({
+    namespace: GOVERNED_BUYER_NAMESPACE,
+    sourceIdentifier: GOVERNED_BUYER_SOURCE_IDENTIFIER,
+    channel: adapter.channel,
+    requestedExternalSends: 1,
+    requiredDispatchAuthority: 'vestblock_application',
+  })
+  return { binding, adapter, readiness }
+}
+
+async function buyerConsentSnapshot(buyerId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('participant_profiles')
+    .select('id,role,status,communication_preferences_json,outreach_consent,outreach_consent_at,consent_version,consent_recorded_at,operator_verified_at,legacy_claim_status')
+    .eq('legacy_entity_type', 'buyers')
+    .eq('legacy_entity_id', buyerId)
+    .limit(2)
+  if (error) throw error
+  if ((data || []).length !== 1) {
+    throw new Error('Buyer dispatch requires exactly one operator-verified participant-profile link with first-class outreach consent.')
+  }
+  const profile = data![0]
+  const preferences = (profile.communication_preferences_json || {}) as Record<string, unknown>
+  if (
+    profile.role !== 'buyer' ||
+    profile.status !== 'active' ||
+    profile.legacy_claim_status !== 'verified' ||
+    !profile.operator_verified_at ||
+    profile.outreach_consent !== true ||
+    !profile.outreach_consent_at ||
+    preferences.email !== true
+  ) {
+    throw new Error('Buyer dispatch is blocked until the linked active profile has verified ownership, email permission, and recorded outreach consent.')
+  }
+  return {
+    basis: 'participant_profile_outreach_consent',
+    dispatchAuthorized: true,
+    evidenceKey: `participant-profile:${profile.id}:outreach-consent:${profile.outreach_consent_at}`,
+    provenance: {
+      sourceTable: 'participant_profiles',
+      participantProfileId: profile.id,
+      legacyEntityType: 'buyers',
+      legacyEntityId: buyerId,
+      consentVersion: profile.consent_version,
+      consentRecordedAt: profile.consent_recorded_at,
+      outreachConsentAt: profile.outreach_consent_at,
+      operatorVerifiedAt: profile.operator_verified_at,
+    },
+  }
+}
+
+async function buyerSuppressionSnapshot(buyerId: string, email: string) {
+  const admin = createAdminClient()
+  const normalizedEmail = email.trim().toLowerCase()
+  const { data, error } = await admin
+    .from('lead_suppressions')
+    .select('id,reason')
+    .eq('email', normalizedEmail)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (data?.id) throw new Error(`Buyer recipient is suppressed: ${data.reason || 'active suppression'}.`)
+  const checkedAt = new Date().toISOString()
+  return {
+    checkedAt,
+    suppressionCleared: true,
+    evidenceKey: `buyer-suppression-preflight:${buyerId}:${checkedAt}`,
+    provenance: { sourceTable: 'lead_suppressions', matchField: 'email', subjectId: buyerId },
+    activeSuppression: false,
+    usableEmail: true,
+  }
+}
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -143,6 +238,14 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
   const effectiveLimit = Math.min(limit, remaining, circuitLimit)
   const approved = effectiveLimit > 0 ? await listApprovedBuyerEmailOutreach(effectiveLimit) : []
   const results: Array<{ buyerId: string; name: string; status: string }> = []
+  let authorization: Awaited<ReturnType<typeof authorizeBuyerEmailDispatch>> | null = null
+
+  const requireAuthorization = async () => {
+    if (!authorization) {
+      authorization = await authorizeBuyerEmailDispatch()
+    }
+    return authorization
+  }
 
   for (const row of approved) {
     const buyer = row.buyers as BuyerRecord | null
@@ -176,12 +279,108 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
       continue
     }
 
-    const sent = await sendBuyerOutreachEmail({ buyer, message: row })
+    const { binding, adapter } = await requireAuthorization()
+    if (buyer.outreach_status === 'do_not_contact') {
+      throw new Error('Buyer dispatch is blocked because the buyer is marked do not contact.')
+    }
+    const consentBasisSnapshot = await buyerConsentSnapshot(buyer.id)
+    const suppressionSnapshot = await buyerSuppressionSnapshot(buyer.id, buyer.contact_email!)
+    const dispatchIntentAt = new Date().toISOString()
+    const isFollowup = row.channel === 'email_followup'
+    const nextActionAt = isFollowup ? adminTaskDueDates.days(7) : adminTaskDueDates.days(4)
+    const messageVersionKey = `${row.id}:approved:${row.approved_at || row.updated_at}`
+    const reservation = await reserveOperatingStrategyDispatch({
+      binding,
+      channel: adapter.channel,
+      requestedCount: 1,
+      idempotencyKey: `buyer-outreach:${binding.operatingStrategyVersionId}:${messageVersionKey}`,
+    })
+    const enrollmentBase = {
+      strategyKey: binding.sourceIdentifier,
+      channel: 'email' as const,
+      messageId: row.id,
+      recipient: buyer.contact_email,
+      market: [buyer.headquarters_city, buyer.headquarters_state].filter(Boolean).join(', '),
+      binding,
+      governedStage: 'dispatch_intent' as const,
+      subjectNamespace: 'buyer',
+      subjectKey: buyer.id,
+      dispatchIntentAt,
+      dispatchReservationId: reservation.reservationId,
+      dispatchChannel: adapter.channel,
+      provider: adapter.provider,
+      outreachPurpose: 'legacy_buyer_network_outreach',
+      consentBasisSnapshot: {
+        ...consentBasisSnapshot,
+        messageStatus: row.status,
+        approvedAt: row.approved_at,
+        approvedByUserId: row.approved_by_user_id,
+        capturedAt: dispatchIntentAt,
+      },
+      suppressionSnapshot: {
+        ...suppressionSnapshot,
+        replyCaptureReady: replyCapture.ready,
+        deliveryCircuitAllowed: deliveryCircuitBreaker?.allowed === true,
+      },
+      messageVersionKey,
+    }
+    const dispatchIntent = await recordOutboundEnrollment({
+      ...enrollmentBase,
+      status: 'queued',
+      nextActionAt,
+      metadata: {
+        buyerId: buyer.id,
+        buyerCategory: buyer.category,
+        authorizedChannels: [adapter.channel],
+      },
+    })
+
+    const sent = await sendBuyerOutreachEmail({
+      buyer,
+      message: row,
+      provider: adapter.provider,
+      disableFallback: true,
+    })
     if (!sent.ok) {
+      const failedAt = new Date().toISOString()
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'failed',
+        provider: sent.provider,
+        suppressionReason: sent.error || 'send_failed',
+        nextActionAt: null,
+        metadata: {
+          buyerId: buyer.id,
+          buyerCategory: buyer.category,
+          authorizedChannels: [adapter.channel],
+          error: sent.error || 'send_failed',
+          providerResultAt: failedAt,
+        },
+      })
+      const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        subjectNamespace: 'buyer',
+        subjectKey: buyer.id,
+        messageId: row.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+        evidenceId: `buyer-outreach:${row.id}:${sent.provider}:failed`,
+        status: 'failed',
+        occurredAt: failedAt,
+      })
+      if (!failedDeliveryOutcome.updated) {
+        throw new Error(`Buyer delivery outcome attribution failed: ${failedDeliveryOutcome.reason}.`)
+      }
       await updateBuyerOutreachMessage(row.id, {
         status: 'failed',
         send_provider: sent.provider,
         send_error: sent.error || 'Send failed.',
+        metadata_json: {
+          ...(row.metadata_json || {}),
+          providerResultAt: failedAt,
+        },
       })
       await updateBuyerRecord(buyer.id, { outreach_status: 'failed' })
       await createAdminTask({
@@ -193,56 +392,69 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
         entityType: 'buyer',
         entityId: buyer.id,
         dueAt: adminTaskDueDates.now(),
-        metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider },
+        metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider, providerResultAt: failedAt },
       }).catch(() => null)
       results.push({ buyerId: buyer.id, name: buyer.name, status: 'failed' })
       continue
     }
 
+    const acceptedAt = new Date().toISOString()
+    await recordOutboundEnrollment({
+      ...enrollmentBase,
+      enrollmentId: dispatchIntent.id,
+      status: 'accepted',
+      provider: sent.provider,
+      providerMessageId: sent.providerMessageId || null,
+      nextActionAt,
+      metadata: {
+        buyerId: buyer.id,
+        buyerCategory: buyer.category,
+        authorizedChannels: [adapter.channel],
+        providerResultAt: acceptedAt,
+      },
+    })
+    const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+      subjectNamespace: 'buyer',
+      subjectKey: buyer.id,
+      messageId: row.id,
+      enrollmentId: dispatchIntent.id,
+      operatingStrategyVersionId: binding.operatingStrategyVersionId,
+      provider: sent.provider,
+      providerMessageId: sent.providerMessageId || null,
+      evidenceId: `buyer-outreach:${row.id}:${sent.provider}:${sent.providerMessageId || 'accepted'}`,
+      status: 'accepted',
+      occurredAt: acceptedAt,
+    })
+    if (!acceptedDeliveryOutcome.updated) {
+      throw new Error(`Buyer delivery outcome attribution failed: ${acceptedDeliveryOutcome.reason}.`)
+    }
     await updateBuyerOutreachMessage(row.id, {
       status: 'sent',
-      sent_at: new Date().toISOString(),
+      sent_at: acceptedAt,
       send_provider: sent.provider,
       send_error: null,
       metadata_json: {
         ...(row.metadata_json || {}),
         providerMessageId: sent.providerMessageId || null,
-        providerAcceptedAt: new Date().toISOString(),
+        providerAcceptedAt: acceptedAt,
       },
     })
-    const isFollowup = row.channel === 'email_followup'
-    const nextActionAt = isFollowup ? adminTaskDueDates.days(7) : adminTaskDueDates.days(4)
     await updateBuyerRecord(buyer.id, {
       relationship_stage: 'contacted',
       outreach_status: 'sent',
-      last_contacted_at: new Date().toISOString(),
+      last_contacted_at: acceptedAt,
       next_follow_up_at: isFollowup ? null : nextActionAt,
     })
     await updateBuyerPerformance(buyer.id, {
       outreach_sent_count: ((buyer.metadata_json?.outreachSentCount as number) || 0) + 1,
-      last_contacted_at: new Date().toISOString(),
+      last_contacted_at: acceptedAt,
     })
     await logEvent({
       eventType: 'buyer_outreach_sent',
       entityType: 'buyer',
       entityId: buyer.id,
-      metadata: { messageId: row.id, provider: sent.provider },
+      metadata: { messageId: row.id, provider: sent.provider, providerResultAt: acceptedAt },
     })
-    await recordOutboundEnrollment({
-      strategyKey: 'buyer-network',
-      channel: 'email',
-      status: 'accepted',
-      messageId: row.id,
-      recipient: buyer.contact_email,
-      market: [buyer.headquarters_city, buyer.headquarters_state].filter(Boolean).join(', '),
-      nextActionAt,
-      metadata: {
-        buyerId: buyer.id,
-        buyerCategory: buyer.category,
-        provider: sent.provider,
-        providerMessageId: sent.providerMessageId || null,
-      },
-    }).catch(() => null)
     results.push({ buyerId: buyer.id, name: buyer.name, status: 'accepted' })
   }
 

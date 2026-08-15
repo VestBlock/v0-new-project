@@ -7,6 +7,8 @@ type SendBuyerEmailInput = {
   buyer: BuyerRecord
   message: BuyerOutreachMessageRecord
   attachments?: BuyerEmailAttachment[]
+  provider?: 'gmail' | 'resend'
+  disableFallback?: boolean
 }
 
 type SendBuyerPacketEmailInput = {
@@ -14,6 +16,8 @@ type SendBuyerPacketEmailInput = {
   subject: string
   body: string
   attachments: BuyerEmailAttachment[]
+  provider?: 'gmail' | 'resend'
+  disableFallback?: boolean
 }
 
 type BuyerEmailAttachment = {
@@ -34,6 +38,8 @@ type BuyerEmailEnvelope = {
   subject: string
   body: string
   attachments?: BuyerEmailAttachment[]
+  provider?: 'gmail' | 'resend'
+  disableFallback?: boolean
 }
 
 const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
@@ -207,12 +213,32 @@ async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEm
   if (!isUsableContactEmail(input.buyer.contact_email)) {
     return { ok: false, provider: 'none', error: 'Buyer does not have a usable contact email.' }
   }
+  if (input.provider === 'gmail') {
+    if (!hasGmailConfig()) {
+      return { ok: false, provider: 'gmail', error: 'The selected Google Workspace provider is not configured.' }
+    }
+    try {
+      return await sendWithGmail(input)
+    } catch (error) {
+      return {
+        ok: false,
+        provider: 'gmail',
+        error: error instanceof Error ? error.message : 'Google Workspace sender failed.',
+      }
+    }
+  }
+  if (input.provider === 'resend') {
+    if (!hasResendConfig()) {
+      return { ok: false, provider: 'resend', error: 'The selected Resend provider is not configured.' }
+    }
+    return sendWithResend(input)
+  }
   if (hasGmailConfig()) {
     try {
       const gmailResult = await sendWithGmail(input)
-      if (gmailResult.ok || !hasResendConfig()) return gmailResult
+      if (gmailResult.ok || input.disableFallback || !hasResendConfig()) return gmailResult
     } catch (error) {
-      if (!hasResendConfig()) {
+      if (input.disableFallback || !hasResendConfig()) {
         return {
           ok: false,
           provider: 'gmail',
@@ -239,6 +265,8 @@ export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promis
     subject: input.message.subject || 'VestBlock partnership note',
     body: buildOutreachBody(input.message),
     attachments: input.attachments,
+    provider: input.provider,
+    disableFallback: input.disableFallback,
   })
 }
 
@@ -248,5 +276,7 @@ export async function sendBuyerPacketEmail(input: SendBuyerPacketEmailInput): Pr
     subject: input.subject,
     body: input.body,
     attachments: input.attachments,
+    provider: input.provider,
+    disableFallback: input.disableFallback,
   })
 }

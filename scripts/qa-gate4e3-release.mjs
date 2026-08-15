@@ -112,7 +112,8 @@ try {
   pass('material strategy changes require approve then apply and create a preserved next version')
 
   const baseMatch = {
-    strategyVersionId: promotedVersion.id, targetEntityType: 'roadmap_action', targetEntityId: `qa:${runId}`,
+    strategyIdentifierNamespace: 'command_center_autopilot', strategyIdentifier: 'buyer-demand-capture',
+    legacyStrategyVersionId: promotedVersion.id, targetEntityType: 'roadmap_action', targetEntityId: `qa:${runId}`,
     score: 84, scoreExplanation: { fit: ['Market overlaps', 'Asset type overlaps'], limits: ['Customer must verify availability'] }, exclusions: [],
     sourceProvenance: [{ source: 'Gate 4E.3 controlled fixture', observedAt: now }], sourceObservedAt: now, uncertainty: 'medium',
     customerSafeSummary: 'A potential roadmap-aligned opportunity matched the approved profile criteria. Availability and fit still require operator and customer review.',

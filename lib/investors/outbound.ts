@@ -40,6 +40,8 @@ function renderInvestorEmail(message: InvestorOutreachMessage) {
 export async function sendInvestorOutreachEmail(input: {
   investor: InvestorProfileRecord
   message: InvestorOutreachMessage
+  provider?: 'gmail' | 'resend'
+  disableFallback?: boolean
 }) {
   const replyCapture = getReplyCaptureReadiness()
   if (!replyCapture.ready) {
@@ -56,6 +58,8 @@ export async function sendInvestorOutreachEmail(input: {
     subject: input.message.subject || 'Strategic investor partnership with VestBlock',
     html: renderInvestorEmail(input.message),
     eventType: 'admin_lead_followup',
+    provider: input.provider,
+    disableFallback: input.disableFallback,
   })
 
   return {

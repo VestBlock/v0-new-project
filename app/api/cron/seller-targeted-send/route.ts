@@ -5,7 +5,8 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
-import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
+import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import {
   getLeadById,
   insertOutreachSendEvent,
@@ -15,11 +16,24 @@ import {
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  authorizeOperatingStrategyDispatch,
+  reserveOperatingStrategyDispatch,
+  resolveOperatingStrategyLeadMembership,
+} from '@/lib/strategy/runtime-governance'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 import { logEvent } from '@/lib/system/logEvent'
 
 const SUCCESSFUL_SEND_STATUSES = new Set(['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied'])
 const GOVERNED_SELLER_STRATEGY_KEY = 'seller-outreach'
+const GOVERNED_SELLER_NAMESPACE = 'legacy_runtime'
+
+function configuredEmailDispatchChannels() {
+  const readiness = getOutboundProviderReadiness()
+  if (readiness.resend) return ['resend_email']
+  if (readiness.gmail) return ['gmail_email']
+  return ['no_outreach']
+}
 
 function flag(value: string | null, fallback: boolean) {
   if (value === null) return fallback
@@ -106,8 +120,137 @@ export async function GET(request: Request) {
       })
     }
 
-    const sendResult = await sendLeadOutreachEmail({ lead, message })
+    const dispatchChannels = configuredEmailDispatchChannels()
+    if (dispatchChannels.length !== 1 || dispatchChannels[0] === 'no_outreach') {
+      throw new Error('Governed dispatch requires exactly one configured external email provider path.')
+    }
+    const selectedProvider = dispatchChannels[0] === 'resend_email' ? 'resend' as const : 'gmail' as const
+    const bindings = await Promise.all(
+      dispatchChannels.map((channel) =>
+        authorizeOperatingStrategyDispatch({
+          namespace: GOVERNED_SELLER_NAMESPACE,
+          sourceIdentifier: strategyKey,
+          channel,
+          requestedExternalSends: 1,
+          requiredDispatchAuthority: 'vestblock_application',
+        })
+      )
+    )
+    const binding = bindings[0]
+    if (
+      bindings.some(
+        (candidate) =>
+          candidate.operatingStrategyVersionId !== binding.operatingStrategyVersionId ||
+          candidate.contractFingerprint !== binding.contractFingerprint
+      )
+    ) {
+      throw new Error('Configured provider paths did not resolve to one canonical operating strategy version.')
+    }
+    const strategyLeadMembershipId = await resolveOperatingStrategyLeadMembership({ binding, leadId })
+    const dispatchChannel = dispatchChannels[0]
+    const dispatchReservation = await reserveOperatingStrategyDispatch({
+      binding,
+      channel: dispatchChannel,
+      requestedCount: 1,
+      idempotencyKey: `seller-targeted:${binding.operatingStrategyVersionId}:${message.id}`,
+    })
+
+    const dispatchIntentAt = new Date().toISOString()
+    const consentBasisSnapshot = {
+      basis: 'operator_approved_business_outreach',
+      dispatchAuthorized: true,
+      evidenceKey: `approved-outreach-message:${message.id}`,
+      provenance: {
+        messageId: message.id,
+        messageStatus: message.status,
+        approvalRecordedAt: message.approved_at || null,
+      },
+      messageStatus: message.status,
+      approvedAt: message.approved_at || null,
+      capturedAt: dispatchIntentAt,
+    }
+    const suppressionSnapshot = {
+      checkedAt: dispatchIntentAt,
+      suppressionCleared: true,
+      evidenceKey: `seller-targeted-preflight:${leadId}:${dispatchIntentAt}`,
+      activeSuppression: false,
+      priorReply: false,
+      priorSuccessfulSend: false,
+      usableEmail: true,
+      qualityApproved: true,
+    }
+    const enrollmentBase = {
+      strategyKey,
+      channel: 'email' as const,
+      messageId: message.id,
+      recipient: normalizedEmail,
+      leadId,
+      subjectNamespace: 'lead',
+      subjectKey: leadId,
+      market: [lead.city, lead.state].filter(Boolean).join(', '),
+      propertyAddress: lead.property_address,
+      binding,
+      governedStage: 'dispatch_intent' as const,
+      strategyLeadMembershipId,
+      dispatchReservationId: dispatchReservation.reservationId,
+      dispatchChannel,
+      dispatchIntentAt,
+      provider: selectedProvider,
+      outreachPurpose: 'seller_acquisition_first_touch',
+      consentBasisSnapshot,
+      suppressionSnapshot,
+      messageVersionKey: `${message.id}:approved:${message.approved_at || message.updated_at}`,
+    }
+    const dispatchIntent = await recordOutboundEnrollment({
+      ...enrollmentBase,
+      status: 'queued',
+      nextActionAt: null,
+      metadata: {
+        action: 'seller_targeted_send',
+        sequenceStep: 1,
+        marketSegment,
+        source: lead.source,
+        authorizedChannels: dispatchChannels,
+      },
+    })
+
+    const sendResult = await sendLeadOutreachEmail({
+      lead,
+      message,
+      provider: selectedProvider,
+      disableFallback: true,
+    })
     if (!sendResult.ok) {
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'failed',
+        provider: sendResult.provider,
+        suppressionReason: sendResult.error || 'send_failed',
+        metadata: {
+          action: 'seller_targeted_send',
+          sequenceStep: 1,
+          marketSegment,
+          source: lead.source,
+          authorizedChannels: dispatchChannels,
+          error: sendResult.error || 'send_failed',
+        },
+      })
+      const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        leadId,
+        subjectNamespace: 'lead',
+        subjectKey: leadId,
+        messageId: message.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        occurredAt: dispatchIntentAt,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId || null,
+        status: 'failed',
+      })
+      if (!failedDeliveryOutcome.updated) {
+        throw new Error(`Governed delivery attribution failed closed: ${failedDeliveryOutcome.reason}.`)
+      }
       await insertOutreachSendEvent({
         leadId,
         outreachMessageId: message.id,
@@ -124,6 +267,36 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString()
     const nextFollowUpAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+    await recordOutboundEnrollment({
+      ...enrollmentBase,
+      enrollmentId: dispatchIntent.id,
+      status: 'accepted',
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      nextActionAt: nextFollowUpAt,
+      metadata: {
+        action: 'seller_targeted_send',
+        sequenceStep: 1,
+        marketSegment,
+        source: lead.source,
+        authorizedChannels: dispatchChannels,
+      },
+    })
+    const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+      leadId,
+      subjectNamespace: 'lead',
+      subjectKey: leadId,
+      messageId: message.id,
+      enrollmentId: dispatchIntent.id,
+      operatingStrategyVersionId: binding.operatingStrategyVersionId,
+      occurredAt: dispatchIntentAt,
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      status: 'accepted',
+    })
+    if (!acceptedDeliveryOutcome.updated) {
+      throw new Error(`Governed delivery attribution failed closed: ${acceptedDeliveryOutcome.reason}.`)
+    }
     const auditWrites = await Promise.allSettled([
       updateOutreachMessage(message.id, {
         status: 'sent',
@@ -151,24 +324,6 @@ export async function GET(request: Request) {
           sequenceStep: 1,
           strategyKey,
           marketSegment,
-          providerMessageId: sendResult.providerMessageId || null,
-        },
-      }),
-      recordOutboundEnrollment({
-        strategyKey,
-        channel: 'email',
-        status: 'accepted',
-        messageId: message.id,
-        recipient: normalizedEmail,
-        leadId,
-        market: [lead.city, lead.state].filter(Boolean).join(', '),
-        propertyAddress: lead.property_address,
-        nextActionAt: nextFollowUpAt,
-        metadata: {
-          sequenceStep: 1,
-          marketSegment,
-          source: lead.source,
-          provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,
         },
       }),

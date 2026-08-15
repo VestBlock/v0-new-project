@@ -1,9 +1,11 @@
 import { createAdminTask, adminTaskDueDates } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { DEFAULT_LENDER_DISCOVERY_MARKETS, DEFAULT_LENDER_DISCOVERY_NICHES } from '@/lib/lenders/constants'
 import { listMarketsForExpansionLane, pickDiscoveryTermsForMarket } from '@/lib/leads/marketExpansion'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { sendLenderOutreachEmail } from '@/lib/lenders/outbound'
 import {
@@ -26,7 +28,101 @@ import { evaluateLenderAutoApproval } from '@/lib/lenders/automationCore'
 import { LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
 import { startLenderOutreachRun } from '@/lib/lenders/repository'
 import type { LenderRecord } from '@/lib/lenders/types'
+import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  authorizeOperatingStrategyDispatch,
+  reserveOperatingStrategyDispatch,
+} from '@/lib/strategy/runtime-governance'
 import { logEvent } from '@/lib/system/logEvent'
+
+const GOVERNED_LENDER_NAMESPACE = 'legacy_runtime'
+const GOVERNED_LENDER_SOURCE_IDENTIFIER = 'lender-network'
+
+function selectEmailDispatchAdapter(
+  readiness: ReturnType<typeof getOutboundProviderReadiness>
+) {
+  if (readiness.resend) return { provider: 'resend' as const, channel: 'resend_email' }
+  if (readiness.gmail) return { provider: 'gmail' as const, channel: 'gmail_email' }
+  throw new Error('Lender dispatch requires a configured outbound email provider.')
+}
+
+async function authorizeLenderEmailDispatch() {
+  const readiness = getOutboundProviderReadiness()
+  const adapter = selectEmailDispatchAdapter(readiness)
+  const binding = await authorizeOperatingStrategyDispatch({
+    namespace: GOVERNED_LENDER_NAMESPACE,
+    sourceIdentifier: GOVERNED_LENDER_SOURCE_IDENTIFIER,
+    channel: adapter.channel,
+    requestedExternalSends: 1,
+    requiredDispatchAuthority: 'vestblock_application',
+  })
+  return { binding, adapter, readiness }
+}
+
+async function lenderConsentSnapshot(lenderId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('participant_profiles')
+    .select('id,role,status,communication_preferences_json,outreach_consent,outreach_consent_at,consent_version,consent_recorded_at,operator_verified_at,legacy_claim_status')
+    .eq('legacy_entity_type', 'lenders')
+    .eq('legacy_entity_id', lenderId)
+    .limit(2)
+  if (error) throw error
+  if ((data || []).length !== 1) {
+    throw new Error('Lender dispatch requires exactly one operator-verified participant-profile link with first-class outreach consent.')
+  }
+  const profile = data![0]
+  const preferences = (profile.communication_preferences_json || {}) as Record<string, unknown>
+  if (
+    profile.role !== 'lender' ||
+    profile.status !== 'active' ||
+    profile.legacy_claim_status !== 'verified' ||
+    !profile.operator_verified_at ||
+    profile.outreach_consent !== true ||
+    !profile.outreach_consent_at ||
+    preferences.email !== true
+  ) {
+    throw new Error('Lender dispatch is blocked until the linked active profile has verified ownership, email permission, and recorded outreach consent.')
+  }
+  return {
+    basis: 'participant_profile_outreach_consent',
+    dispatchAuthorized: true,
+    evidenceKey: `participant-profile:${profile.id}:outreach-consent:${profile.outreach_consent_at}`,
+    provenance: {
+      sourceTable: 'participant_profiles',
+      participantProfileId: profile.id,
+      legacyEntityType: 'lenders',
+      legacyEntityId: lenderId,
+      consentVersion: profile.consent_version,
+      consentRecordedAt: profile.consent_recorded_at,
+      outreachConsentAt: profile.outreach_consent_at,
+      operatorVerifiedAt: profile.operator_verified_at,
+    },
+  }
+}
+
+async function lenderSuppressionSnapshot(lenderId: string, email: string) {
+  const admin = createAdminClient()
+  const normalizedEmail = email.trim().toLowerCase()
+  const { data, error } = await admin
+    .from('lead_suppressions')
+    .select('id,reason')
+    .eq('email', normalizedEmail)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (data?.id) throw new Error(`Lender recipient is suppressed: ${data.reason || 'active suppression'}.`)
+  const checkedAt = new Date().toISOString()
+  return {
+    checkedAt,
+    suppressionCleared: true,
+    evidenceKey: `lender-suppression-preflight:${lenderId}:${checkedAt}`,
+    provenance: { sourceTable: 'lead_suppressions', matchField: 'email', subjectId: lenderId },
+    activeSuppression: false,
+    usableEmail: true,
+  }
+}
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -119,6 +215,14 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
   const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
   const approved = await listApprovedLenderEmailOutreach(limit)
   const results: Array<{ lenderId: string; name: string; status: string }> = []
+  let authorization: Awaited<ReturnType<typeof authorizeLenderEmailDispatch>> | null = null
+
+  const requireAuthorization = async () => {
+    if (!authorization) {
+      authorization = await authorizeLenderEmailDispatch()
+    }
+    return authorization
+  }
 
   for (const row of approved) {
     const lender = row.lenders as LenderRecord | null
@@ -152,12 +256,107 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
       continue
     }
 
-    const sent = await sendLenderOutreachEmail({ lender, message: row })
+    const { binding, adapter } = await requireAuthorization()
+    if (lender.outreach_status === 'do_not_contact') {
+      throw new Error('Lender dispatch is blocked because the lender is marked do not contact.')
+    }
+    const consentBasisSnapshot = await lenderConsentSnapshot(lender.id)
+    const suppressionSnapshot = await lenderSuppressionSnapshot(lender.id, lender.contact_email!)
+    const dispatchIntentAt = new Date().toISOString()
+    const nextActionAt = adminTaskDueDates.days(4)
+    const messageVersionKey = `${row.id}:approved:${row.approved_at || row.updated_at}`
+    const reservation = await reserveOperatingStrategyDispatch({
+      binding,
+      channel: adapter.channel,
+      requestedCount: 1,
+      idempotencyKey: `lender-outreach:${binding.operatingStrategyVersionId}:${messageVersionKey}`,
+    })
+    const enrollmentBase = {
+      strategyKey: binding.sourceIdentifier,
+      channel: 'email' as const,
+      messageId: row.id,
+      recipient: lender.contact_email,
+      market: [lender.headquarters_city, lender.headquarters_state].filter(Boolean).join(', '),
+      binding,
+      governedStage: 'dispatch_intent' as const,
+      subjectNamespace: 'lender',
+      subjectKey: lender.id,
+      dispatchIntentAt,
+      dispatchReservationId: reservation.reservationId,
+      dispatchChannel: adapter.channel,
+      provider: adapter.provider,
+      outreachPurpose: 'legacy_lender_criteria_outreach',
+      consentBasisSnapshot: {
+        ...consentBasisSnapshot,
+        messageStatus: row.status,
+        approvedAt: row.approved_at,
+        approvedByUserId: row.approved_by_user_id,
+        capturedAt: dispatchIntentAt,
+      },
+      suppressionSnapshot: {
+        ...suppressionSnapshot,
+        replyCaptureReady: replyCapture.ready,
+        deliveryCircuitAllowed: deliveryCircuitBreaker?.allowed === true,
+      },
+      messageVersionKey,
+    }
+    const dispatchIntent = await recordOutboundEnrollment({
+      ...enrollmentBase,
+      status: 'queued',
+      nextActionAt,
+      metadata: {
+        lenderId: lender.id,
+        lenderCategory: lender.category,
+        authorizedChannels: [adapter.channel],
+      },
+    })
+
+    const sent = await sendLenderOutreachEmail({
+      lender,
+      message: row,
+      provider: adapter.provider,
+      disableFallback: true,
+    })
     if (!sent.ok) {
+      const failedAt = new Date().toISOString()
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'failed',
+        provider: sent.provider,
+        suppressionReason: sent.error || 'send_failed',
+        nextActionAt: null,
+        metadata: {
+          lenderId: lender.id,
+          lenderCategory: lender.category,
+          authorizedChannels: [adapter.channel],
+          error: sent.error || 'send_failed',
+          providerResultAt: failedAt,
+        },
+      })
+      const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        subjectNamespace: 'lender',
+        subjectKey: lender.id,
+        messageId: row.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        provider: sent.provider,
+        providerMessageId: sent.providerMessageId || null,
+        evidenceId: `lender-outreach:${row.id}:${sent.provider}:failed`,
+        status: 'failed',
+        occurredAt: failedAt,
+      })
+      if (!failedDeliveryOutcome.updated) {
+        throw new Error(`Lender delivery outcome attribution failed: ${failedDeliveryOutcome.reason}.`)
+      }
       await updateLenderOutreachMessage(row.id, {
         status: 'failed',
         send_provider: sent.provider,
         send_error: sent.error || 'Send failed.',
+        metadata_json: {
+          ...(row.metadata_json || {}),
+          providerResultAt: failedAt,
+        },
       })
       await updateLenderRecord(lender.id, { outreach_status: 'failed' })
       await createAdminTask({
@@ -169,54 +368,69 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
         entityType: 'lender',
         entityId: lender.id,
         dueAt: adminTaskDueDates.now(),
-        metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider },
+        metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider, providerResultAt: failedAt },
       }).catch(() => null)
       results.push({ lenderId: lender.id, name: lender.name, status: 'failed' })
       continue
     }
 
+    const acceptedAt = new Date().toISOString()
+    await recordOutboundEnrollment({
+      ...enrollmentBase,
+      enrollmentId: dispatchIntent.id,
+      status: 'accepted',
+      provider: sent.provider,
+      providerMessageId: sent.providerMessageId || null,
+      nextActionAt,
+      metadata: {
+        lenderId: lender.id,
+        lenderCategory: lender.category,
+        authorizedChannels: [adapter.channel],
+        providerResultAt: acceptedAt,
+      },
+    })
+    const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+      subjectNamespace: 'lender',
+      subjectKey: lender.id,
+      messageId: row.id,
+      enrollmentId: dispatchIntent.id,
+      operatingStrategyVersionId: binding.operatingStrategyVersionId,
+      provider: sent.provider,
+      providerMessageId: sent.providerMessageId || null,
+      evidenceId: `lender-outreach:${row.id}:${sent.provider}:${sent.providerMessageId || 'accepted'}`,
+      status: 'accepted',
+      occurredAt: acceptedAt,
+    })
+    if (!acceptedDeliveryOutcome.updated) {
+      throw new Error(`Lender delivery outcome attribution failed: ${acceptedDeliveryOutcome.reason}.`)
+    }
     await updateLenderOutreachMessage(row.id, {
       status: 'sent',
-      sent_at: new Date().toISOString(),
+      sent_at: acceptedAt,
       send_provider: sent.provider,
       send_error: null,
       metadata_json: {
         ...(row.metadata_json || {}),
         providerMessageId: sent.providerMessageId || null,
-        providerAcceptedAt: new Date().toISOString(),
+        providerAcceptedAt: acceptedAt,
       },
     })
     await updateLenderRecord(lender.id, {
       relationship_stage: 'contacted',
       outreach_status: 'sent',
-      last_contacted_at: new Date().toISOString(),
-      next_follow_up_at: adminTaskDueDates.days(4),
+      last_contacted_at: acceptedAt,
+      next_follow_up_at: nextActionAt,
     })
     await updateLenderPerformance(lender.id, {
       outreach_sent_count: ((lender.metadata_json?.outreachSentCount as number) || 0) + 1,
-      last_contacted_at: new Date().toISOString(),
+      last_contacted_at: acceptedAt,
     })
     await logEvent({
       eventType: 'lender_outreach_sent',
       entityType: 'lender',
       entityId: lender.id,
-      metadata: { messageId: row.id, provider: sent.provider },
+      metadata: { messageId: row.id, provider: sent.provider, providerResultAt: acceptedAt },
     })
-    await recordOutboundEnrollment({
-      strategyKey: 'lender-network',
-      channel: 'email',
-      status: 'accepted',
-      messageId: row.id,
-      recipient: lender.contact_email,
-      market: [lender.headquarters_city, lender.headquarters_state].filter(Boolean).join(', '),
-      nextActionAt: adminTaskDueDates.days(4),
-      metadata: {
-        lenderId: lender.id,
-        lenderCategory: lender.category,
-        provider: sent.provider,
-        providerMessageId: sent.providerMessageId || null,
-      },
-    }).catch(() => null)
     results.push({ lenderId: lender.id, name: lender.name, status: 'accepted' })
   }
 

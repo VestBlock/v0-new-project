@@ -8,12 +8,6 @@ import {
   createPaidCustomerNoUploadTask,
   createSignupNoUploadTask,
 } from '@/lib/admin/tasks';
-import {
-  sendAdminAbandonedCheckoutEmail,
-  sendAdminLeadFollowupEmail,
-  sendPaidCustomerUploadReminderEmail,
-  sendUserUploadReminderEmail,
-} from '@/lib/email/sendEmail';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isCronAuthorized } from '@/lib/system/cronAuth';
 import { logEvent } from '@/lib/system/logEvent';
@@ -58,12 +52,6 @@ type LeadRow = {
   updated_at?: string | null;
 };
 
-type LifecycleEmailType =
-  | 'user_upload_reminder'
-  | 'user_paid_upload_reminder'
-  | 'admin_lead_followup'
-  | 'admin_abandoned_checkout';
-
 async function safeRows<T>(
   query: PromiseLike<{ data: T[] | null; error: any }>,
   label: string
@@ -105,47 +93,11 @@ function latestPaymentByUser(payments: PaymentRow[]) {
   return byUser;
 }
 
-async function hasLifecycleEmailEvent(input: {
-  eventType: LifecycleEmailType;
-  userId?: string | null;
-  userEmail?: string | null;
-}) {
-  if (!input.userId && !input.userEmail) return false;
-
-  try {
-    const supabase = createAdminClient();
-    let query = supabase
-      .from('email_events')
-      .select('id,status')
-      .eq('event_type', input.eventType)
-      .in('status', ['sent', 'skipped'])
-      .limit(1);
-
-    if (input.userId) {
-      query = query.eq('user_id', input.userId);
-    } else if (input.userEmail) {
-      query = query.eq('user_email', input.userEmail);
-    }
-
-    const { data, error } = await query.maybeSingle();
-    if (error) return false;
-    return Boolean(data?.id);
-  } catch {
-    return false;
-  }
-}
-
-async function sendLifecycleEmailOnce(input: {
-  eventType: LifecycleEmailType;
-  userId?: string | null;
-  userEmail?: string | null;
-  send: () => Promise<unknown>;
-}) {
-  const alreadySent = await hasLifecycleEmailEvent(input);
-  if (alreadySent) return { skipped: true, reason: 'existing_email_event' };
-
-  await input.send();
-  return { skipped: false };
+function lifecycleControllerNoSend() {
+  return Promise.resolve({
+    skipped: true,
+    reason: 'gate3c_controller_routes_tasks_only',
+  });
 }
 
 export async function GET(request: Request) {
@@ -225,17 +177,7 @@ export async function GET(request: Request) {
             paidAt,
             ageHours: paidAgeHours ?? profileAgeHours,
           }),
-          sendLifecycleEmailOnce({
-            eventType: 'user_paid_upload_reminder',
-            userId,
-            userEmail: profile.email,
-            send: () =>
-              sendPaidCustomerUploadReminderEmail({
-                userId,
-                userEmail: profile.email,
-                amount: latestPayment?.amount,
-              }),
-          }),
+          lifecycleControllerNoSend(),
         ]);
 
         if (result.ok && !result.duplicate) {
@@ -262,17 +204,7 @@ export async function GET(request: Request) {
             fullName: profile.full_name,
             ageHours: profileAgeHours,
           }),
-          sendLifecycleEmailOnce({
-            eventType: 'user_upload_reminder',
-            userId,
-            userEmail: profile.email,
-            send: () =>
-              sendUserUploadReminderEmail({
-                userId,
-                userEmail: profile.email,
-                fullName: profile.full_name,
-              }),
-          }),
+          lifecycleControllerNoSend(),
         ]);
 
         if (result.ok && !result.duplicate) {
@@ -308,18 +240,7 @@ export async function GET(request: Request) {
           email: lead.email,
           ageHours: createdAgeHours,
         }),
-        sendLifecycleEmailOnce({
-          eventType: 'admin_lead_followup',
-          userEmail: lead.email || lead.id,
-          send: () =>
-            sendAdminLeadFollowupEmail({
-              leadId: lead.id,
-              leadType: lead.lead_type,
-              name: lead.name,
-              email: lead.email,
-              ageHours: createdAgeHours,
-            }),
-        }),
+        lifecycleControllerNoSend(),
       ]);
 
       if (result.ok && !result.duplicate) {
@@ -359,18 +280,7 @@ export async function GET(request: Request) {
           ageHours: checkoutAgeHours,
           source: 'lifecycle-monitor',
         }),
-        sendLifecycleEmailOnce({
-          eventType: 'admin_abandoned_checkout',
-          userId,
-          userEmail: profile.email,
-          send: () =>
-            sendAdminAbandonedCheckoutEmail({
-              checkoutId,
-              userId,
-              userEmail: profile.email,
-              ageHours: checkoutAgeHours,
-            }),
-        }),
+        lifecycleControllerNoSend(),
       ]);
 
       if (result.ok && !result.duplicate) {

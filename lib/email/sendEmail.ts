@@ -37,6 +37,8 @@ type SendEmailInput = {
   userId?: string | null;
   userEmail?: string | null;
   providerPreference?: 'resend' | 'google';
+  provider?: 'gmail' | 'resend';
+  disableFallback?: boolean;
 };
 
 const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
@@ -348,6 +350,17 @@ export async function sendEmail(input: SendEmailInput) {
     };
   }
 
+  if (input.provider === 'gmail' && !hasGoogleWorkspaceConfig()) {
+    const error = 'The selected Google Workspace provider is not configured.';
+    await recordEmailEvent(input, 'failed', null, error);
+    return { ok: false, error, provider: 'gmail' as const };
+  }
+  if (input.provider === 'resend' && !process.env.RESEND_API_KEY) {
+    const error = 'The selected Resend provider is not configured.';
+    await recordEmailEvent(input, 'failed', null, error);
+    return { ok: false, error, provider: 'resend' as const };
+  }
+
   if (!hasGoogleWorkspaceConfig() && !process.env.RESEND_API_KEY) {
     await recordEmailEvent(input, 'skipped', null, 'No email provider is configured.');
     return {
@@ -358,7 +371,9 @@ export async function sendEmail(input: SendEmailInput) {
   }
 
   let googleError: string | null = null;
-  const preferResend = input.providerPreference === 'resend' && Boolean(process.env.RESEND_API_KEY);
+  const preferResend =
+    input.provider === 'resend' ||
+    (input.providerPreference === 'resend' && Boolean(process.env.RESEND_API_KEY));
   if (hasGoogleWorkspaceConfig() && !preferResend) {
     try {
       const data = await sendEmailWithGoogle(input);
@@ -373,7 +388,7 @@ export async function sendEmail(input: SendEmailInput) {
       return { ok: true, id: data.id, provider: 'gmail' };
     } catch (error) {
       googleError = error instanceof Error ? error.message : String(error);
-      if (!process.env.RESEND_API_KEY) {
+      if (input.provider === 'gmail' || input.disableFallback || !process.env.RESEND_API_KEY) {
         await recordEmailEvent(input, 'failed', null, googleError);
         await logEvent({
           eventType: 'email_failed',

@@ -10,7 +10,9 @@ import { guardPublicMutation } from '@/lib/security/public-mutation'
 
 const createSchema = z.object({
   participantProfileId: z.string().uuid(),
-  strategyVersionId: z.string().uuid().nullable(),
+  strategyIdentifierNamespace: z.string().trim().min(1).max(100).regex(/^[a-z0-9_]+$/),
+  strategyIdentifier: z.string().trim().min(1).max(120),
+  legacyStrategyVersionId: z.string().uuid().nullable().optional(),
   targetEntityType: z.enum(['seller_case', 'capital_case', 'dealvault_opportunity', 'crm_lead', 'participant_profile', 'business_opportunity', 'roadmap_action']),
   targetEntityId: z.string().trim().min(1).max(200),
   score: z.number().min(0).max(100),

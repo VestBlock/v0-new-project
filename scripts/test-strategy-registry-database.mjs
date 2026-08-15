@@ -19,22 +19,54 @@ const psql = candidates.find((candidate) =>
 )
 if (!psql) throw new Error('psql was not found. Set PSQL_BIN to its absolute path.')
 
-const sqlPath = resolve(process.cwd(), 'scripts/test-strategy-registry-database.sql')
+const postgresEnv = {
+  ...process.env,
+  PGHOST: parsedDatabaseUrl.hostname,
+  PGPORT: parsedDatabaseUrl.port || '5432',
+  PGUSER: decodeURIComponent(parsedDatabaseUrl.username),
+  PGPASSWORD: decodeURIComponent(parsedDatabaseUrl.password),
+  PGDATABASE: decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, '')),
+  PGSSLMODE: parsedDatabaseUrl.searchParams.get('sslmode') || 'require',
+  PGCONNECT_TIMEOUT: process.env.PGCONNECT_TIMEOUT || '10',
+}
+const gate3cProbe = spawnSync(
+  psql,
+  [
+    '-X',
+    '--no-password',
+    '-A',
+    '-t',
+    '-c',
+    "SELECT (to_regclass('public.operating_strategy_runtime_controls') IS NOT NULL)::text",
+  ],
+  {
+    cwd: process.cwd(),
+    env: postgresEnv,
+    encoding: 'utf8',
+    timeout: 30_000,
+  }
+)
+if (gate3cProbe.error) throw gate3cProbe.error
+if (gate3cProbe.status !== 0) {
+  if (gate3cProbe.stderr) process.stderr.write(gate3cProbe.stderr)
+  throw new Error('Could not determine the installed strategy-registry database generation.')
+}
+const gate3cInstalled = gate3cProbe.stdout.trim() === 'true'
+const sqlPath = resolve(
+  process.cwd(),
+  gate3cInstalled
+    ? 'scripts/test-gate3c-governed-learning-database.sql'
+    : 'scripts/test-strategy-registry-database.sql'
+)
+if (gate3cInstalled) {
+  console.log('Gate 3C is installed; running the superseding governed-learning registry regression.')
+}
 const result = spawnSync(
   psql,
   ['-X', '--no-password', '-v', 'ON_ERROR_STOP=1', '-f', sqlPath],
   {
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      PGHOST: parsedDatabaseUrl.hostname,
-      PGPORT: parsedDatabaseUrl.port || '5432',
-      PGUSER: decodeURIComponent(parsedDatabaseUrl.username),
-      PGPASSWORD: decodeURIComponent(parsedDatabaseUrl.password),
-      PGDATABASE: decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, '')),
-      PGSSLMODE: parsedDatabaseUrl.searchParams.get('sslmode') || 'require',
-      PGCONNECT_TIMEOUT: process.env.PGCONNECT_TIMEOUT || '10',
-    },
+    env: postgresEnv,
     encoding: 'utf8',
     timeout: 120_000,
   }

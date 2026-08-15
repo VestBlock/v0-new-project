@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { WebhookEventPayload } from 'resend'
 
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type ProviderDeliveryStatus =
@@ -40,6 +41,20 @@ const LEAD_DELIVERY_STATUS: Record<ProviderDeliveryStatus, string> = {
   failed: 'failed',
   opened: 'delivered',
   clicked: 'delivered',
+}
+
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, canonicalJson(child)])
+  )
+}
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right))
 }
 
 function mapEventStatus(type: WebhookEventPayload['type']): ProviderDeliveryStatus | null {
@@ -112,6 +127,67 @@ async function findBuyerPacketSend(providerMessageId: string) {
     .maybeSingle()
   if (error) throw error
   return data
+}
+
+async function findGenericEmailEvent(providerMessageId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('email_events')
+    .select('id')
+    .eq('provider_message_id', providerMessageId)
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+async function findGovernedEnrollmentForDelivery(input: {
+  providerMessageId: string
+  localMessageId?: string | null
+}) {
+  const admin = createAdminClient()
+  const select = 'id,operating_strategy_version_id,dispatch_channel,provider,provider_message_id'
+  const byProvider = await admin
+    .from('command_center_outbound_enrollments')
+    .select(select)
+    .eq('strategy_binding_mode', 'governed_v1')
+    .eq('provider', 'resend')
+    .eq('provider_message_id', input.providerMessageId)
+    .limit(2)
+  if (byProvider.error) throw byProvider.error
+  if ((byProvider.data || []).length > 1) {
+    throw new Error('Resend callback matched more than one governed outbound enrollment.')
+  }
+  if (byProvider.data?.[0]) {
+    if (byProvider.data[0].dispatch_channel !== 'resend_email') {
+      throw new Error('Resend callback conflicts with the governed enrollment dispatch adapter.')
+    }
+    return byProvider.data[0]
+  }
+
+  const localMessageId = String(input.localMessageId || '').trim()
+  if (!localMessageId) return null
+  const byLocalMessage = await admin
+    .from('command_center_outbound_enrollments')
+    .select(select)
+    .eq('strategy_binding_mode', 'governed_v1')
+    .eq('channel', 'email')
+    .eq('last_message_id', localMessageId)
+    .limit(2)
+  if (byLocalMessage.error) throw byLocalMessage.error
+  if ((byLocalMessage.data || []).length > 1) {
+    throw new Error('Resend callback local message identity matched more than one governed enrollment.')
+  }
+  const matched = byLocalMessage.data?.[0]
+  if (
+    matched &&
+    (matched.dispatch_channel !== 'resend_email' ||
+      (matched.provider && matched.provider !== 'resend') ||
+      (matched.provider_message_id && matched.provider_message_id !== input.providerMessageId))
+  ) {
+    throw new Error('Resend callback provider identity conflicts with the governed local-message enrollment.')
+  }
+  return matched || null
 }
 
 function buyerPacketDeliveryStatus(status: ProviderDeliveryStatus) {
@@ -205,6 +281,7 @@ async function recordBuyerPacketDelivery(input: {
       updated_at: new Date().toISOString(),
     })
     .eq('last_message_id', `buyer-packet:${input.packetSend.buyer_packet_id}:${input.packetSend.buyer_id}`)
+    .is('operating_strategy_version_id', null)
 
   return {
     packetId: input.packetSend.buyer_packet_id,
@@ -284,12 +361,69 @@ export async function recordResendDeliveryEvent(input: {
     .maybeSingle()
 
   if (insertError) throw insertError
-  if (!inserted?.id) return { recorded: false, reason: 'duplicate' as const }
+  const duplicate = !inserted?.id
+  let occurredAt = event.created_at
+  if (duplicate) {
+    const existingEvent = await admin
+      .from('provider_delivery_events')
+      .select('id,provider_message_id,event_type,delivery_status,recipient,subject,reason,metadata_json,occurred_at')
+      .eq('provider', 'resend')
+      .eq('provider_event_id', providerEventId)
+      .single()
+    if (existingEvent.error) throw existingEvent.error
+    if (
+      existingEvent.data.provider_message_id !== providerMessageId ||
+      existingEvent.data.event_type !== event.type ||
+      existingEvent.data.delivery_status !== status ||
+      existingEvent.data.recipient !== recipient ||
+      existingEvent.data.subject !== subject ||
+      existingEvent.data.reason !== reason ||
+      !sameJson(existingEvent.data.metadata_json, metadata) ||
+      Date.parse(existingEvent.data.occurred_at) !== Date.parse(event.created_at)
+    ) {
+      throw new Error('Resend provider-event replay conflicts with immutable delivery evidence.')
+    }
+    occurredAt = existingEvent.data.occurred_at
+  }
 
-  const [outreachEvent, buyerPacketSend] = await Promise.all([
+  const [outreachEvent, buyerPacketSend, genericEmailEvent] = await Promise.all([
     findOutreachEvent(providerMessageId),
     findBuyerPacketSend(providerMessageId),
+    findGenericEmailEvent(providerMessageId),
   ])
+  const localMessageId =
+    outreachEvent?.outreach_message_id ||
+    (buyerPacketSend
+      ? `buyer-packet:${buyerPacketSend.buyer_packet_id}:${buyerPacketSend.buyer_id}`
+      : null)
+  const governedEnrollment = await findGovernedEnrollmentForDelivery({
+    providerMessageId,
+    localMessageId,
+  })
+  const governedStatus = status === 'delivery_delayed' ? 'accepted' : status
+  const governedAttribution = governedEnrollment && governedStatus !== 'queued'
+    ? await recordStrategyDeliveryOutcome({
+        messageId: localMessageId || `resend:${providerMessageId}`,
+        enrollmentId: governedEnrollment.id,
+        operatingStrategyVersionId: governedEnrollment.operating_strategy_version_id,
+        status: governedStatus,
+        occurredAt,
+        provider: 'resend',
+        providerMessageId,
+        providerEventId,
+      })
+    : null
+  if (governedAttribution && !governedAttribution.updated) {
+    throw new Error(
+      `Resend governed delivery attribution failed closed: ${governedAttribution.reason}.`
+    )
+  }
+  if (!governedEnrollment && !outreachEvent && !buyerPacketSend && !genericEmailEvent) {
+    throw new Error(
+      'Resend delivery event has no durable local message identity yet; retry attribution before acknowledging it.'
+    )
+  }
+
   await admin
     .from('email_events')
     .update({
@@ -303,7 +437,7 @@ export async function recordResendDeliveryEvent(input: {
         packetSend: buyerPacketSend,
         status,
         reason,
-        occurredAt: event.created_at,
+        occurredAt,
         providerEventId,
         providerMessageId,
       })
@@ -311,31 +445,47 @@ export async function recordResendDeliveryEvent(input: {
 
   if (!outreachEvent?.lead_id) {
     return {
-      recorded: true,
-      matched: Boolean(buyerPacket),
+      recorded: !duplicate,
+      ...(duplicate ? { reason: 'duplicate' as const } : {}),
+      matched: Boolean(buyerPacket || governedAttribution?.updated),
       status,
       providerMessageId,
       buyerPacket,
+      governedAttribution,
     }
   }
 
-  const { error: eventError } = await admin.from('outreach_send_events').insert({
-    lead_id: outreachEvent.lead_id,
-    outreach_message_id: outreachEvent.outreach_message_id || null,
-    channel: 'email',
-    provider: 'resend',
-    status,
-    recipient: recipient || outreachEvent.recipient || null,
-    subject: subject || outreachEvent.subject || null,
-    error_message: reason,
-    metadata_json: {
-      providerEventId,
-      providerMessageId,
-      eventType: event.type,
-      occurredAt: event.created_at,
-    },
-  })
-  if (eventError) throw eventError
+  let outreachDeliveryEventExists = false
+  if (duplicate) {
+    const existingOutreachDeliveryEvent = await admin
+      .from('outreach_send_events')
+      .select('id')
+      .eq('provider', 'resend')
+      .contains('metadata_json', { providerEventId })
+      .limit(1)
+      .maybeSingle()
+    if (existingOutreachDeliveryEvent.error) throw existingOutreachDeliveryEvent.error
+    outreachDeliveryEventExists = Boolean(existingOutreachDeliveryEvent.data?.id)
+  }
+  if (!outreachDeliveryEventExists) {
+    const { error: eventError } = await admin.from('outreach_send_events').insert({
+      lead_id: outreachEvent.lead_id,
+      outreach_message_id: outreachEvent.outreach_message_id || null,
+      channel: 'email',
+      provider: 'resend',
+      status,
+      recipient: recipient || outreachEvent.recipient || null,
+      subject: subject || outreachEvent.subject || null,
+      error_message: reason,
+      metadata_json: {
+        providerEventId,
+        providerMessageId,
+        eventType: event.type,
+        occurredAt,
+      },
+    })
+    if (eventError) throw eventError
+  }
 
   const leadUpdates: Record<string, unknown> = {
     delivery_status: LEAD_DELIVERY_STATUS[status],
@@ -359,10 +509,11 @@ export async function recordResendDeliveryEvent(input: {
     .from('strategy_lead_memberships')
     .update({
       status: membershipStatus,
-      last_outcome_at: event.created_at,
+      last_outcome_at: occurredAt,
       updated_at: new Date().toISOString(),
     })
     .eq('lead_id', outreachEvent.lead_id)
+    .is('operating_strategy_version_id', null)
     .select('campaign_run_id')
   if (membershipError) throw membershipError
 
@@ -374,6 +525,7 @@ export async function recordResendDeliveryEvent(input: {
     })
     .eq('lead_id', outreachEvent.lead_id)
     .eq('channel', 'email')
+    .is('operating_strategy_version_id', null)
   if (enrollmentError) throw enrollmentError
 
   const campaignRunIds = Array.from(
@@ -389,6 +541,7 @@ export async function recordResendDeliveryEvent(input: {
       .from('strategy_lead_memberships')
       .select('status')
       .eq('campaign_run_id', campaignRunId)
+      .is('operating_strategy_version_id', null)
     if (runMembershipError) throw runMembershipError
     const statuses = (runMemberships || []).map((row) => String(row.status || ''))
     const accepted = statuses.filter((value) => ['accepted', 'delivered', 'opened', 'clicked', 'replied'].includes(value)).length
@@ -405,15 +558,18 @@ export async function recordResendDeliveryEvent(input: {
         updated_at: new Date().toISOString(),
       })
       .eq('id', campaignRunId)
+      .is('operating_strategy_version_id', null)
     if (runError) throw runError
   }
 
   return {
-    recorded: true,
+    recorded: !duplicate,
+    ...(duplicate ? { reason: 'duplicate' as const } : {}),
     matched: true,
     status,
     providerMessageId,
     leadId: outreachEvent.lead_id,
     buyerPacket,
+    governedAttribution,
   }
 }

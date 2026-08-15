@@ -37,8 +37,127 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import {
+  authorizeOperatingStrategyDispatch,
+  fingerprintGovernedOutreachMessage,
+  recordOperatingStrategyActivity,
+  reserveOperatingStrategyDispatch,
+  resolveOperatingStrategyLeadMembership,
+  type OperatingStrategyBinding,
+} from '@/lib/strategy/runtime-governance'
 
 const GOVERNED_SELLER_STRATEGY_KEY = 'seller-outreach'
+const GOVERNED_SELLER_NAMESPACE = 'legacy_runtime'
+
+function configuredEmailDispatchChannels(
+  readiness: ReturnType<typeof getOutboundProviderReadiness>
+) {
+  if (readiness.resend) return ['resend_email']
+  if (readiness.gmail) return ['gmail_email']
+  return ['no_outreach']
+}
+
+async function authorizeConfiguredEmailDispatch(input: {
+  namespace: string
+  sourceIdentifier: string
+  readiness: ReturnType<typeof getOutboundProviderReadiness>
+}) {
+  const channels = configuredEmailDispatchChannels(input.readiness)
+  if (channels.length !== 1 || channels[0] === 'no_outreach') {
+    throw new Error('Governed dispatch requires exactly one configured external email provider path.')
+  }
+  const bindings = await Promise.all(
+    channels.map((channel) =>
+      authorizeOperatingStrategyDispatch({
+        namespace: input.namespace,
+        sourceIdentifier: input.sourceIdentifier,
+        channel,
+        requestedExternalSends: 1,
+        requiredDispatchAuthority: 'vestblock_application',
+      })
+    )
+  )
+  const binding = bindings[0]
+  if (
+    bindings.some(
+      (candidate) =>
+        candidate.operatingStrategyVersionId !== binding.operatingStrategyVersionId ||
+        candidate.contractFingerprint !== binding.contractFingerprint
+    )
+  ) {
+    throw new Error('Configured provider paths did not resolve to one canonical operating strategy version.')
+  }
+  return {
+    binding,
+    channels,
+    channel: channels[0],
+    provider: channels[0] === 'resend_email' ? 'resend' as const : 'gmail' as const,
+  }
+}
+
+async function recordStrategyDraftHandoff(input: {
+  binding: OperatingStrategyBinding
+  message: OutreachMessageRecord
+  leadId: string
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('operating_strategy_activities')
+    .select('id,operating_strategy_version_id,operating_contract_fingerprint,message_version_key,metadata_json')
+    .eq('activity_type', 'message')
+    .eq('activity_namespace', 'outreach_message_draft')
+    .eq('activity_key', input.message.id)
+    .eq('subject_namespace', 'lead')
+    .eq('subject_key', input.leadId)
+    .limit(2)
+  if (error) throw error
+  if ((data || []).length > 1) {
+    throw new Error('The outreach draft has ambiguous governed source lineage; dispatch is blocked.')
+  }
+  const sourceActivity = data?.[0]
+  const strategyEngineDraft = String(input.message.generated_with || '').startsWith('strategy_engine:')
+  if (!sourceActivity) {
+    if (strategyEngineDraft) {
+      throw new Error('A strategy-engine draft is missing its canonical source activity; dispatch is blocked.')
+    }
+    return null
+  }
+  const messageContentSha256 = fingerprintGovernedOutreachMessage(input.message)
+  const sourceMetadata = (sourceActivity.metadata_json || {}) as Record<string, unknown>
+  if (
+    String(sourceMetadata.messageContentSha256 || '') !== messageContentSha256 ||
+    !String(sourceActivity.message_version_key || '').endsWith(`:${messageContentSha256}`)
+  ) {
+    throw new Error('The outreach draft changed after its canonical source snapshot; dispatch is blocked.')
+  }
+
+  return recordOperatingStrategyActivity({
+    binding: input.binding,
+    activityType: 'handoff',
+    activityNamespace: 'outreach_message_handoff',
+    activityKey: input.message.id,
+    subjectNamespace: 'lead',
+    subjectKey: input.leadId,
+    idempotencyKey: `outreach-message-handoff:${input.binding.operatingStrategyVersionId}:${input.message.id}`,
+    occurredAt: input.message.approved_at || input.message.created_at,
+    parentActivityId: sourceActivity.id,
+    messageVersionKey: `${input.message.id}:approved:${input.message.approved_at || input.message.updated_at}:${messageContentSha256}`,
+    provenance: [
+      {
+        kind: 'governed_strategy_handoff',
+        sourceActivityId: sourceActivity.id,
+        sourceOperatingStrategyVersionId: sourceActivity.operating_strategy_version_id,
+        sourceContractFingerprint: sourceActivity.operating_contract_fingerprint,
+        sourceMessageContentSha256: messageContentSha256,
+      },
+    ],
+    metadata: {
+      messageId: input.message.id,
+      receivingSourceNamespace: input.binding.namespace,
+      receivingSourceIdentifier: input.binding.sourceIdentifier,
+    },
+  })
+}
 
 type MarketConfig = {
   id?: string
@@ -1775,8 +1894,121 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       continue
     }
 
-    await updateOutreachMessage(currentRow.id, { status: 'queued', send_provider: null, send_error: null })
     const revenueCampaign = classifyLeadRevenueCampaign(currentLead, currentRow.subject || '')
+    let authorization: Awaited<ReturnType<typeof authorizeConfiguredEmailDispatch>>
+    try {
+      authorization = await authorizeConfiguredEmailDispatch({
+        namespace: 'revenue_campaign',
+        sourceIdentifier: revenueCampaign.key,
+        readiness: outboundReadiness,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Governed strategy authorization failed.'
+      incrementCount(skipReasonCounts, 'strategy_runtime_blocked')
+      await persistSkippedSendEvent({
+        dryRun: false,
+        lead: currentLead,
+        outreachMessageId: currentRow.id,
+        subject: currentRow.subject,
+        reason: 'strategy_runtime_blocked',
+      })
+      sendResults.push({
+        leadId: currentLead.id,
+        status: 'blocked',
+        detail: reason,
+      })
+      continue
+    }
+
+    const { binding, channels: authorizedChannels, channel: dispatchChannel, provider: selectedProvider } = authorization
+    const handoffActivityId = await recordStrategyDraftHandoff({
+      binding,
+      message: currentRow,
+      leadId: currentLead.id,
+    })
+    let strategyLeadMembershipId: string | null
+    try {
+      strategyLeadMembershipId = await resolveOperatingStrategyLeadMembership({
+        binding,
+        leadId: currentLead.id,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Governed strategy membership resolution failed.'
+      incrementCount(skipReasonCounts, 'strategy_membership_blocked')
+      await persistSkippedSendEvent({
+        dryRun: false,
+        lead: currentLead,
+        outreachMessageId: currentRow.id,
+        subject: currentRow.subject,
+        reason: 'strategy_membership_blocked',
+      })
+      sendResults.push({ leadId: currentLead.id, status: 'blocked', detail: reason })
+      continue
+    }
+    const dispatchReservation = await reserveOperatingStrategyDispatch({
+      binding,
+      channel: dispatchChannel,
+      requestedCount: 1,
+      idempotencyKey: `daily-send:${binding.operatingStrategyVersionId}:${currentRow.id}`,
+    })
+    const dispatchIntentAt = new Date().toISOString()
+    const nextFollowUpAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+    const enrollmentBase = {
+      strategyKey: revenueCampaign.key,
+      channel: 'email' as const,
+      messageId: currentRow.id,
+      recipient: currentLead.email,
+      leadId: currentLead.id,
+      subjectNamespace: 'lead',
+      subjectKey: currentLead.id,
+      parentActivityId: handoffActivityId,
+      market: getLeadMarketKey(currentLead),
+      propertyAddress: currentLead.property_address,
+      binding,
+      governedStage: 'dispatch_intent' as const,
+      strategyLeadMembershipId,
+      dispatchReservationId: dispatchReservation.reservationId,
+      dispatchChannel,
+      dispatchIntentAt,
+      provider: selectedProvider,
+      outreachPurpose: `revenue_campaign:${revenueCampaign.key}`,
+      consentBasisSnapshot: {
+        basis: 'operator_approved_business_outreach',
+        dispatchAuthorized: true,
+        evidenceKey: `approved-outreach-message:${currentRow.id}`,
+        provenance: {
+          messageId: currentRow.id,
+          messageStatus: currentRow.status,
+          strategyEngineAutoApproval: strategyEngineAllowsAutoApproval(currentLead),
+        },
+        messageStatus: currentRow.status,
+        approvedAt: currentRow.approved_at || null,
+        source: currentLead.source || null,
+        capturedAt: dispatchIntentAt,
+      },
+      suppressionSnapshot: {
+        checkedAt: dispatchIntentAt,
+        suppressionCleared: true,
+        evidenceKey: `daily-send-preflight:${currentLead.id}:${dispatchIntentAt}`,
+        eligible: effectiveEligible,
+        guardrailDecision: decision.reason || null,
+        verifiedPublicEmailOverride: allowVerifiedPublicEmail,
+        replyCaptureReady: replyCaptureReadiness.ready,
+        deliveryCircuitAllowed: deliveryCircuitBreaker.allowed,
+      },
+      messageVersionKey: `${currentRow.id}:approved:${currentRow.approved_at || currentRow.updated_at}`,
+    }
+    const dispatchIntent = await recordOutboundEnrollment({
+      ...enrollmentBase,
+      status: 'queued',
+      nextActionAt: nextFollowUpAt,
+      metadata: {
+        campaignLabel: revenueCampaign.label,
+        authorizedChannels,
+      },
+    })
+
+    await updateOutreachMessage(currentRow.id, { status: 'queued', send_provider: null, send_error: null })
     await insertOutreachSendEvent({
       leadId: currentLead.id,
       outreachMessageId: currentRow.id,
@@ -1792,8 +2024,40 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         : undefined,
     })
 
-    const sendResult = await sendLeadOutreachEmail({ lead: currentLead, message: currentRow })
+    const sendResult = await sendLeadOutreachEmail({
+      lead: currentLead,
+      message: currentRow,
+      provider: selectedProvider,
+      disableFallback: true,
+    })
     if (sendResult.ok) {
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'accepted',
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId || null,
+        nextActionAt: nextFollowUpAt,
+        metadata: {
+          campaignLabel: revenueCampaign.label,
+          authorizedChannels,
+        },
+      })
+      const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        leadId: currentLead.id,
+        subjectNamespace: 'lead',
+        subjectKey: currentLead.id,
+        messageId: currentRow.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        occurredAt: dispatchIntentAt,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId || null,
+        status: 'accepted',
+      })
+      if (!acceptedDeliveryOutcome.updated) {
+        throw new Error(`Governed delivery attribution failed closed: ${acceptedDeliveryOutcome.reason}.`)
+      }
       await Promise.all([
         updateOutreachMessage(currentRow.id, {
           status: 'sent',
@@ -1806,7 +2070,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           outreach_status: 'sent',
           delivery_status: 'accepted',
           last_contacted_at: new Date().toISOString(),
-          next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          next_follow_up_at: nextFollowUpAt,
         }),
         insertOutreachSendEvent({
           leadId: currentLead.id,
@@ -1834,27 +2098,6 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           sourcePath: currentLead.source_url || currentLead.source || null,
           deliveryMode: 'queue',
         }),
-        recordOutboundEnrollment({
-          strategyKey: revenueCampaign.key,
-          channel: 'email',
-          status: 'accepted',
-          messageId: currentRow.id,
-          recipient: currentLead.email,
-          leadId: currentLead.id,
-          market: getLeadMarketKey(currentLead),
-          propertyAddress: currentLead.property_address,
-          nextActionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-          metadata: {
-            provider: sendResult.provider,
-            providerMessageId: sendResult.providerMessageId || null,
-            campaignLabel: revenueCampaign.label,
-          },
-        }).catch(() => null),
-        recordStrategyDeliveryOutcome({
-          leadId: currentLead.id,
-          messageId: currentRow.id,
-          status: 'accepted',
-        }).catch(() => null),
       ])
       sendResults.push({ leadId: currentLead.id, status: 'sent', provider: sendResult.provider })
       incrementCount(sentServiceCounts, classifyOutreachService(currentLead, currentRow.subject || ''))
@@ -1865,6 +2108,33 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       const countsAsProviderFailure =
         sendResult.provider !== 'none' && !/blocked before send/i.test(sendResult.error || '')
       if (countsAsProviderFailure) providerFailureCount += 1
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'failed',
+        provider: sendResult.provider,
+        suppressionReason: sendResult.error || 'send_failed',
+        metadata: {
+          campaignLabel: revenueCampaign.label,
+          authorizedChannels,
+          error: sendResult.error || 'send_failed',
+        },
+      })
+      const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        leadId: currentLead.id,
+        subjectNamespace: 'lead',
+        subjectKey: currentLead.id,
+        messageId: currentRow.id,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        occurredAt: dispatchIntentAt,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId || null,
+        status: 'failed',
+      })
+      if (!failedDeliveryOutcome.updated) {
+        throw new Error(`Governed delivery attribution failed closed: ${failedDeliveryOutcome.reason}.`)
+      }
       await updateOutreachMessage(currentRow.id, {
         status: 'failed',
         send_provider: sendResult.provider,
@@ -1885,22 +2155,6 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         errorMessage: sendResult.error,
         metadata: { reason: sendResult.error || 'send_failed' },
       })
-      await recordOutboundEnrollment({
-        strategyKey: revenueCampaign.key,
-        channel: 'email',
-        status: 'failed',
-        messageId: currentRow.id,
-        recipient: currentLead.email,
-        leadId: currentLead.id,
-        market: getLeadMarketKey(currentLead),
-        propertyAddress: currentLead.property_address,
-        metadata: { provider: sendResult.provider, error: sendResult.error || 'send_failed' },
-      }).catch(() => null)
-      await recordStrategyDeliveryOutcome({
-        leadId: currentLead.id,
-        messageId: currentRow.id,
-        status: 'failed',
-      }).catch(() => null)
       sendResults.push({
         leadId: currentLead.id,
         status: 'failed',
@@ -2235,6 +2489,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) {
   const limit = options.followupLimit || envInt('LEADS_DAILY_FOLLOWUP_SEND_LIMIT', 20)
   const replyCaptureReadiness = getReplyCaptureReadiness()
+  const outboundReadiness = getOutboundProviderReadiness()
   if (!options.dryRun && !replyCaptureReadiness.ready) {
     return {
       ok: false,
@@ -2297,9 +2552,134 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       continue
     }
 
-    const sendResult = await sendLeadOutreachEmail({ lead, message })
+    let authorization: Awaited<ReturnType<typeof authorizeConfiguredEmailDispatch>>
+    try {
+      authorization = await authorizeConfiguredEmailDispatch({
+        namespace: GOVERNED_SELLER_NAMESPACE,
+        sourceIdentifier: strategyKey,
+        readiness: outboundReadiness,
+      })
+    } catch (error) {
+      results.push({
+        leadId: lead.id,
+        label: leadLabel(lead),
+        status: 'strategy_runtime_blocked',
+        error: error instanceof Error ? error.message : 'Governed strategy authorization failed.',
+      })
+      continue
+    }
+    const { binding, channels: authorizedChannels, channel: dispatchChannel, provider: selectedProvider } = authorization
+    let strategyLeadMembershipId: string | null
+    try {
+      strategyLeadMembershipId = await resolveOperatingStrategyLeadMembership({
+        binding,
+        leadId: lead.id,
+      })
+    } catch (error) {
+      results.push({
+        leadId: lead.id,
+        label: leadLabel(lead),
+        status: 'strategy_membership_blocked',
+        error: error instanceof Error ? error.message : 'Governed strategy membership resolution failed.',
+      })
+      continue
+    }
+    const dispatchReservation = await reserveOperatingStrategyDispatch({
+      binding,
+      channel: dispatchChannel,
+      requestedCount: 1,
+      idempotencyKey: `seller-followup:${binding.operatingStrategyVersionId}:${initialMessage.id}:2`,
+    })
+    const dispatchIntentAt = new Date().toISOString()
+    const followupMessageId = `${initialMessage.id}:followup:2`
+    const enrollmentBase = {
+      strategyKey,
+      channel: 'email' as const,
+      messageId: followupMessageId,
+      recipient: lead.email,
+      leadId: lead.id,
+      subjectNamespace: 'lead',
+      subjectKey: lead.id,
+      market: [lead.city, lead.state].filter(Boolean).join(', '),
+      propertyAddress: lead.property_address,
+      binding,
+      governedStage: 'dispatch_intent' as const,
+      strategyLeadMembershipId,
+      dispatchReservationId: dispatchReservation.reservationId,
+      dispatchChannel,
+      dispatchIntentAt,
+      provider: selectedProvider,
+      outreachPurpose: 'seller_acquisition_followup',
+      consentBasisSnapshot: {
+        basis: 'followup_to_operator_approved_business_outreach',
+        dispatchAuthorized: true,
+        evidenceKey: `approved-followup:${followupMessageId}`,
+        provenance: {
+          initialMessageId: initialMessage.id,
+          followupDue: true,
+        },
+        initialMessageId: initialMessage.id,
+        initialMessageStatus: initialMessage.status,
+        capturedAt: dispatchIntentAt,
+      },
+      suppressionSnapshot: {
+        checkedAt: dispatchIntentAt,
+        suppressionCleared: true,
+        evidenceKey: `seller-followup-preflight:${lead.id}:${dispatchIntentAt}`,
+        replyCaptureReady: replyCaptureReadiness.ready,
+        followupDue: true,
+      },
+      messageVersionKey: `${followupMessageId}:${initialMessage.updated_at}`,
+    }
+    const dispatchIntent = await recordOutboundEnrollment({
+      ...enrollmentBase,
+      status: 'queued',
+      nextActionAt: null,
+      metadata: {
+        sequenceStep: 2,
+        initialMessageId: initialMessage.id,
+        marketSegment,
+        authorizedChannels,
+      },
+    })
+
+    const sendResult = await sendLeadOutreachEmail({
+      lead,
+      message,
+      provider: selectedProvider,
+      disableFallback: true,
+    })
     const now = new Date().toISOString()
     if (!sendResult.ok) {
+      await recordOutboundEnrollment({
+        ...enrollmentBase,
+        enrollmentId: dispatchIntent.id,
+        status: 'failed',
+        provider: sendResult.provider,
+        suppressionReason: sendResult.error || 'send_failed',
+        metadata: {
+          sequenceStep: 2,
+          initialMessageId: initialMessage.id,
+          marketSegment,
+          authorizedChannels,
+          error: sendResult.error || 'send_failed',
+        },
+      })
+      const failedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+        leadId: lead.id,
+        subjectNamespace: 'lead',
+        subjectKey: lead.id,
+        messageId: followupMessageId,
+        enrollmentId: dispatchIntent.id,
+        operatingStrategyVersionId: binding.operatingStrategyVersionId,
+        occurredAt: dispatchIntentAt,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId || null,
+        status: 'failed',
+      })
+      if (!failedDeliveryOutcome.updated) {
+        throw new Error(`Governed delivery attribution failed closed: ${failedDeliveryOutcome.reason}.`)
+      }
       await insertOutreachSendEvent({
         leadId: lead.id,
         outreachMessageId: initialMessage.id,
@@ -2326,6 +2706,35 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       continue
     }
 
+    await recordOutboundEnrollment({
+      ...enrollmentBase,
+      enrollmentId: dispatchIntent.id,
+      status: 'accepted',
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      nextActionAt: null,
+      metadata: {
+        sequenceStep: 2,
+        initialMessageId: initialMessage.id,
+        marketSegment,
+        authorizedChannels,
+      },
+    })
+    const acceptedDeliveryOutcome = await recordStrategyDeliveryOutcome({
+      leadId: lead.id,
+      subjectNamespace: 'lead',
+      subjectKey: lead.id,
+      messageId: followupMessageId,
+      enrollmentId: dispatchIntent.id,
+      operatingStrategyVersionId: binding.operatingStrategyVersionId,
+      occurredAt: dispatchIntentAt,
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId || null,
+      status: 'accepted',
+    })
+    if (!acceptedDeliveryOutcome.updated) {
+      throw new Error(`Governed delivery attribution failed closed: ${acceptedDeliveryOutcome.reason}.`)
+    }
     await Promise.all([
       insertOutreachSendEvent({
         leadId: lead.id,
@@ -2348,24 +2757,6 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         delivery_status: 'accepted',
         last_contacted_at: now,
         next_follow_up_at: null,
-      }),
-      recordOutboundEnrollment({
-        strategyKey,
-        channel: 'email',
-        status: 'accepted',
-        messageId: `${initialMessage.id}:followup:2`,
-        recipient: lead.email,
-        leadId: lead.id,
-        market: [lead.city, lead.state].filter(Boolean).join(', '),
-        propertyAddress: lead.property_address,
-        nextActionAt: null,
-        metadata: {
-          sequenceStep: 2,
-          initialMessageId: initialMessage.id,
-          marketSegment,
-          provider: sendResult.provider,
-          providerMessageId: sendResult.providerMessageId || null,
-        },
       }),
       logEvent({
         eventType: 'email_sent',
