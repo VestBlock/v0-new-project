@@ -78,6 +78,15 @@ assert.equal(OPERATING_STRATEGY_DEFINITIONS.length, 17)
 assert.equal(new Set(OPERATING_STRATEGY_DEFINITIONS.map((strategy) => strategy.key)).size, 17)
 assert.deepEqual(OPERATING_STRATEGY_PARENT, expectedParents)
 
+const expectedNonPublicDestinations = new Map<string, 'internal_only' | 'unresolved'>([
+  ['property_opportunity_discovery', 'internal_only'],
+  ['partner_referral_network', 'unresolved'],
+  ['public_sector_opportunity_readiness', 'internal_only'],
+  ['customer_lifecycle_orchestration', 'internal_only'],
+  ['business_acquisition_network', 'unresolved'],
+])
+let nonPublicDestinationCount = 0
+
 for (const definition of OPERATING_STRATEGY_DEFINITIONS) {
   assert.equal(definition.parent, expectedParents[definition.key])
   assert.equal(definition.initialVersionStatus, 'draft')
@@ -88,11 +97,17 @@ for (const definition of OPERATING_STRATEGY_DEFINITIONS) {
     assert.match(definition.destination.path, /^\//)
     assert.ok(definition.destination.cta.trim().length > 0)
   } else {
-    assert.equal(definition.key, 'customer_lifecycle_orchestration')
+    nonPublicDestinationCount += 1
+    assert.equal(
+      definition.destination.mode,
+      expectedNonPublicDestinations.get(definition.key),
+      `${definition.key} must retain its reviewed non-public destination mode.`
+    )
     assert.equal(definition.destination.path, null)
     assert.equal(definition.destination.cta, null)
   }
 }
+assert.equal(nonPublicDestinationCount, expectedNonPublicDestinations.size)
 
 for (const portfolio of PLATFORM_STRATEGY_LANES) {
   assert.ok(

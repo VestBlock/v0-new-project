@@ -244,6 +244,29 @@ BEGIN
     WHEN check_violation THEN NULL;
   END;
 
+  PERFORM public.validate_operating_strategy_review(v1_id);
+
+  BEGIN
+    PERFORM * FROM public.activate_operating_strategy_version(v1_id, v_actor);
+    RAISE EXCEPTION 'A Gate 3B contract with unresolved activation blockers was activated.';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  UPDATE public.operating_strategy_versions
+  SET contract_json = jsonb_set(
+    jsonb_set(
+      contract_json,
+      '{activationReadiness,status}',
+      '"ready"'::JSONB,
+      TRUE
+    ),
+    '{activationReadiness,blockers}',
+    '[]'::JSONB,
+    TRUE
+  )
+  WHERE id = v1_id;
+
   PERFORM * FROM public.activate_operating_strategy_version(v1_id, v_actor);
 
   SELECT COUNT(*)::INTEGER INTO v_count

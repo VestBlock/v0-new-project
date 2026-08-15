@@ -56,6 +56,8 @@
     "test:strategy-source-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-source-contracts.ts",
     "test:strategy-registry-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-registry-contracts.ts",
     "test:strategy-registry-database": "node --env-file=.env.local scripts/test-strategy-registry-database.mjs",
+    "test:gate3b-operating-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-gate3b-operating-contracts.ts",
+    "strategy:gate3b-contract-manifest": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/generate-gate3b-operating-contract-manifest.ts",
     "strategy:sources": "node scripts/run-strategy-source-orchestrator.mjs",
     "strategy:source-batch": "node scripts/push-strategy-source-batch.mjs",
     "test:contracts": "hardhat test",

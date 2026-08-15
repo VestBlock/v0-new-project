@@ -13,11 +13,19 @@ export {
   PROPOSED_PLATFORM_STRATEGY_LANES,
   STRATEGY_IDENTIFIER_CROSSWALK,
 } from '@/lib/strategy/registry'
+export { OPERATING_STRATEGY_VERSION_CONTRACTS } from '@/lib/strategy/operating-contracts'
 export type {
   OperatingStrategyKey,
   PlatformStrategyLaneKey,
   StrategyIdentifierNamespace,
 } from '@/lib/strategy/registry'
+export type {
+  OperatingStrategyVersionContractDefinition,
+  StrategyLifecycleContract as Gate3BStrategyLifecycleContract,
+  StrategyOperatingContract as Gate3BStrategyOperatingContract,
+  StrategyOutcomeContract as Gate3BStrategyOutcomeContract,
+  StrategyOwnerContract as Gate3BStrategyOwnerContract,
+} from '@/lib/strategy/operating-contracts'
 
 export type StrategyContract = {
   objective: string

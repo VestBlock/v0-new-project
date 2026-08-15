@@ -118,4 +118,4 @@ Supabase reports only the expected `RLS enabled, no policy` informational notice
 
 ## Boundary for Gate 3B
 
-Gate 3B must review and explicitly approve each draft operating contract before any activation. It should connect canonical IDs to the remaining application consumers and outcome capture without loosening the protections established here. External sending, n8n live mode, production outreach, and deployment remain separately gated.
+Gate 3B must complete each draft operating contract with truthful lane-specific routes, lifecycles, ownership, measurement, and zero-send controls. Gate 3C—not Gate 3B—will connect canonical version IDs to application consumers and outcome capture. External sending, n8n live mode, production outreach, and deployment remain separately gated.
