@@ -879,7 +879,6 @@ async function recordDealMachineSourceSync(
     contactable: sourceSync.contactable,
     contactless: sourceSync.contactless,
     mailReady: sourceSync.mailReady,
-    queuedForExport: sourceSync.queuedForExport,
     ingested: sourceSync.ingested,
     startAfter: sourceSync.startAfter,
     nextAfter: sourceSync.nextAfter,
@@ -1077,8 +1076,8 @@ async function sendStrategyExecutionReport(result: StrategyExecutionResult) {
       <p><strong>Provenance guard:</strong> ${result.unprovenCandidateLeadsExcluded} generic/unproven lead(s) and ${result.strategyContractMismatchExcluded} source-contract mismatch(es) were blocked from strategy automation.</p>
       <h3>Independent source progression</h3>
       <p>Property intelligence reviewed ${acquisition.propertiesSeen} record(s), found ${acquisition.candidatesStacked} contract-qualified stack(s), promoted ${acquisition.leadsPromoted} verified business-contact lead(s), and held ${acquisition.contactEnrichmentRequired} record(s) for compliant contact enrichment or mail/manual review.</p>
-      <h3>DealMachine source progression</h3>
-      <p>Cursor ${source.startAfter} to ${source.nextAfter}; ${source.fetched} property records fetched, ${source.contactable} already contactable, ${source.contactless} contactless, ${source.mailReady} mail-ready, ${source.queuedForExport} queued for contact export, and ${source.ingested} lead records ingested.</p>
+      <h3>DealMachine native API progression</h3>
+      <p>Strategy cursor ${source.startAfter} to ${source.nextAfter}; ${source.fetched} owner/property records fetched, ${source.contactable} had usable contact data, ${source.contactless} had no usable API contact, ${source.mailReady} were mail-ready, and ${source.ingested} lead records were deduplicated into the CRM.</p>
       <h3>Delivery gate</h3>
       <p>Provider: ${escapeReportHtml(result.outboundReadiness.provider)}. Circuit: ${escapeReportHtml(result.deliveryCircuit.mode)}. Per-run cap: ${escapeReportHtml(result.deliveryCircuit.maxBatchSize ?? 'normal configured limit')}.</p>
       <p>Reply capture: ${result.replyCaptureReadiness.ready ? 'ready' : 'blocked'} for ${escapeReportHtml(result.replyCaptureReadiness.mailbox)}.</p>
@@ -1133,7 +1132,6 @@ export async function runStrategyExecutionEngine(options: {
         contactable: 0,
         contactless: 0,
         mailReady: 0,
-        queuedForExport: 0,
         ingested: 0,
         startAfter: dealMachineCursor,
         nextAfter: dealMachineCursor,

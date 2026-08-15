@@ -157,7 +157,7 @@ export function buildOperatingLoopCards(input: OperatingLoopBuilderInput): Opera
       nextAction:
         input.blockedSources[0] ||
         (staleSources > 0
-          ? 'Refresh stale DealMachine/listing exports and remove duplicate daily scraping before the next send.'
+          ? 'Hold stale sources, verify DealMachine native API health where applicable, and remove duplicate daily scraping before the next send.'
           : 'Score each source by contactability, reply quality, motivation, and deal quality after every campaign.'),
     },
     {

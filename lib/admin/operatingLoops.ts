@@ -253,7 +253,7 @@ function buildBlockedSourceEvents(): CampaignLedgerEvent[] {
           selected: Number(parsed.selected || 0),
           limit: Number(parsed.limit || 100),
           byMarket: parsed.byMarket || {},
-          reason: 'DealMachine active/pending on-market owner contacts need export before email.',
+          reason: 'Historical DealMachine lead is held; a verified native API contact is required before email.',
         },
       })
     }

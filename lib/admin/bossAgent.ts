@@ -83,8 +83,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
   const topMarketNames = topMarkets.map((m) => m.market).join(', ') || 'active markets'
   const topMarketList = topMarkets.map((m) => m.market)
   const recommendedCityScenarios = recommendCityScenarioStrategies(topMarketList, 4)
-  const staleExports = data.localSignals.dmExports.filter((e) => e.ageDays > 7)
-  const freshExports = data.localSignals.dmExports.filter((e) => e.ageDays <= 7)
+  const freshExports = Array.from({ length: data.dealMachineFreshness.freshCount })
   const authorityAgent = data.agents.find((a) => a.key === 'authority')
   const published7d = Number(authorityAgent?.kpis.find((k) => k.label === 'Published 7d')?.value ?? 0)
   const builderPartners = data.summary.builderPartners
@@ -109,7 +108,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       `${remainingOutboundCapacity} configured outbound slot${remainingOutboundCapacity === 1 ? '' : 's'} remain today; ${sendReady} email-ready lead${sendReady === 1 ? '' : 's'} and ${needsReview} draft${needsReview === 1 ? '' : 's'} need review.`,
       topMarkets.length
         ? `Current market board points to ${topMarketNames}; use one as focus and one as challenger.`
-        : 'No dominant heat market yet — use fresh DealMachine exports and reply data as the first selector.',
+        : 'No dominant heat market yet — use verified CRM, public-record, and reply data as the first selector.',
       `${s.replySignals7d} reply signal${s.replySignals7d === 1 ? '' : 's'} in 7 days; winner selection should optimize for real replies, not send volume alone.`,
     ],
     score: clampScore(74 + (outreachGap > 0 ? 10 : 0) + (remainingOutboundCapacity > 0 ? 6 : 0) + (s.replySignals7d < 5 ? 6 : 0)),
@@ -121,14 +120,14 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'operator',
         action: 'Choose today’s focus and challenger strategy',
         detail:
-          'Compare yesterday’s replies, fresh exports, market heat, suppressions, and overdue follow-ups. Pick one lead source/market/offer angle as the focus and one challenger to test next.',
+          'Compare yesterday’s replies, fresh verified source rows, market heat, suppressions, and overdue follow-ups. Pick one lead source/market/offer angle as the focus and one challenger to test next.',
         priority: 'urgent',
       },
       {
         agent: 'acquisition',
         action: 'Refresh the lead source before increasing send volume',
         detail:
-          'Prefer fresh DealMachine contact exports, portfolio/out-of-state landlord filters, stale-listing creative terms, builder buy-box sourcing, or public-record distress stacks. Do not scrape stale websites just to create activity.',
+          'Prefer verified CRM records, stale-listing creative terms, builder buy-box sourcing, or public-record distress stacks. DealMachine stays excluded until its native API connection is verified.',
         priority: 'high',
       },
       {
@@ -147,9 +146,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     steps: [
-      { label: 'Preview seller cap run', command: 'npm run sellers:outreach:to-cap' },
-      { label: 'Send to safe configured cap', command: 'npm run sellers:outreach:to-cap -- --send' },
-      { label: 'Run portfolio landlord strategy', command: 'npm run sellers:outreach:portfolio-landlords -- --send' },
+      { label: 'Run strategy preview', command: 'npm run boss:daily-loop' },
       { label: 'Open command center', href: '/admin/command-center' },
     ],
     complianceNote:
@@ -188,7 +185,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'acquisition',
         action: 'Load the correct source stack for each chosen lane',
         detail:
-          'Use county/preforeclosure data for foreclosure lanes, DealMachine contact exports for landlord/tax/code lanes, and listing/public inventory for stale DOM or price-cut lanes.',
+          'Use county/preforeclosure data for foreclosure lanes and listing/public inventory for stale DOM or price-cut lanes. Native DealMachine contacts may join only after the connection gate passes.',
         priority: 'high',
       },
       {
@@ -208,7 +205,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     ],
     steps: [
       { label: 'Open command center', href: '/admin/command-center' },
-      { label: 'Run DealMachine export outreach dry run', command: 'npm run distress:dealmachine:export-outreach -- --strategy=<strategy-key> --market=<city-state>' },
+      { label: 'Check DealMachine native API gate', command: 'npm run dealmachine:health' },
       { label: 'Run county preforeclosure public OSINT lane', command: 'npm run distress:preforeclosure:county-public' },
     ],
     complianceNote:
@@ -331,40 +328,33 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       'This is agent-facing outreach from fresh public listing inventory. Treat 50-60% as a conditional indication only, not a binding purchase offer. Include opt-out language, protect the agent relationship, and never imply VestBlock is a brokerage, lender, title company, or guaranteed buyer.',
   })
 
-  // ── 2. Fresh-city DealMachine expansion ────────────────────────────────────
-  const dmBlocked = freshExports.length === 0
+  // ── 2. DealMachine native API readiness ────────────────────────────────────
+  const dmBlocked = data.dealMachineFreshness.freshCount === 0
   plays.push({
     key: 'fresh-city-dealmachine',
-    name: 'Fresh-City DealMachine Loop',
+    name: 'DealMachine Native API Readiness',
     category: 'acquisition',
     thesis:
-      'Philadelphia, Kansas City, and New Orleans have 14k+ DealMachine-ready addresses queued but zero contact exports. One Atlas session per city (build exact list → export Contacts with DNC fields → ingest) unlocks the whole automated outreach loop without making skip tracing the default.',
+      'DealMachine must remain a gated native data source. Authentication, cost estimates, pagination, provenance, DNC handling, and CRM deduplication must be proven before any records or outreach are enabled.',
     whyNow: [
       dmBlocked
-        ? 'No fresh contact exports on disk — the entire fresh-city lane is blocked on a 15-minute manual step.'
-        : `${freshExports.length} fresh export(s) ready to work.`,
-      staleExports.length ? `${staleExports.length} export(s) older than 7 days should be re-pulled.` : 'Export hygiene is clean.',
+        ? 'The adapter is intentionally gated until the new API key is verified.'
+        : `${freshExports.length} fresh native API sync event(s) are available for review.`,
+      'Legacy export files are archived evidence and cannot be used to restart acquisition or outreach.',
     ],
-    score: clampScore(dmBlocked ? 78 : 40),
+    score: clampScore(dmBlocked ? 55 : 40),
     effort: 'low',
-    expectedOutcome: 'Three untouched metros enter the outreach loop with verified DealMachine contact exports and DNC visibility.',
+    expectedOutcome: 'A verified, cost-bounded native API connection that remains CRM-owned and suppression-aware.',
     directives: [
       {
         agent: 'acquisition',
-        action: 'Build exact DealMachine contact-export lists for Philadelphia and Kansas City',
-        detail: 'Generate the export request package, build the exact saved/static list in Atlas, Export Contacts with phone type and DNC columns, then drop the CSV in data/dm-exports/. Do not run DealMachine skip tracing unless explicitly approved.',
-        priority: dmBlocked ? 'urgent' : 'normal',
-      },
-      {
-        agent: 'outreach',
-        action: 'Ingest and launch owner outreach per market',
-        detail: 'npm run distress:dealmachine:ingest-export:apply, then export-outreach dry-run → review → send.',
+        action: 'Keep DealMachine disabled until the activation checklist passes',
+        detail: 'Verify the account endpoint, inspect usage and rate limits, run a free cost estimate, then perform a small manual CRM sync with DNC and suppression review. Do not use browser sessions or CSV exports.',
         priority: 'high',
       },
     ],
     steps: [
-      { label: 'Build export request package', command: 'npm run distress:dealmachine:export-request:all' },
-      { label: 'Ingest latest export', command: 'npm run distress:dealmachine:ingest-export:apply' },
+      { label: 'Check native API health', command: 'npm run dealmachine:health' },
       { label: 'Open the operating doc', href: '/admin/market-expansion' },
     ],
   })
@@ -382,8 +372,8 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         ? `${data.localSignals.distressStackRows.toLocaleString()} public-record distress rows are already available for markets with adapters.`
         : 'The public-record stack is not visible in this environment.',
       freshExports.length
-        ? `${freshExports.length} fresh DealMachine export${freshExports.length === 1 ? '' : 's'} can be overlaid with public code rows.`
-        : 'Fresh DealMachine tax-delinquent exports are the current bottleneck.',
+        ? `${freshExports.length} fresh native API sync event${freshExports.length === 1 ? '' : 's'} can be reviewed against public code rows.`
+        : 'Use the public-record stack while the DealMachine native API remains gated.',
       'This gives Boss a different source/intent profile than on-market agents or portfolio landlords.',
     ],
     score: clampScore(66 + (dmBlocked ? 8 : 0) + (s.replySignals7d < 5 ? 8 : 0) + (remainingOutboundCapacity > 0 ? 4 : 0)),
@@ -395,7 +385,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'acquisition',
         action: 'Run the VestBlock tax/code stack play for new markets',
         detail:
-          'Use the single VestBlock runner so DealMachine harvest, public-record code overlay, missing-city export planning, and stack output stay in one repeatable lane. Keep this separate from on-market listing-agent data.',
+          'Use verified public-record tax and code sources in one repeatable lane. Keep this separate from on-market listing-agent data and exclude DealMachine until its native connection is active.',
         priority: 'high',
       },
       {
@@ -421,21 +411,8 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     steps: [
-      {
-        label: 'Run VestBlock tax/code play',
-        command:
-          'npm run vestblock:tax-code-stack -- --markets="Kansas City,MO|Omaha,NE|Des Moines,IA|Wichita,KS" --per-city=30',
-      },
-      {
-        label: 'Run and build missing DealMachine lists',
-        command:
-          'npm run vestblock:tax-code-stack:build -- --markets="Kansas City,MO|Omaha,NE|Des Moines,IA|Wichita,KS" --per-city=30',
-      },
-      {
-        label: 'Preview outreach from stack',
-        command:
-          'npm run distress:dealmachine:export-outreach -- --strategy=tax-code-stack --market=kansas-city-mo --queue-csv=data/distress-leads/dealmachine-tax-code-stack-<stamp>.csv --export-csv=data/dm-exports/kansas-city-mo-<date>.csv --limit=30',
-      },
+      { label: 'Run county preforeclosure/public-record source', command: 'npm run distress:preforeclosure:county-public' },
+      { label: 'Open command center', href: '/admin/command-center' },
     ],
     complianceNote:
       'Use public-record language carefully. Do not shame, threaten, imply government affiliation, promise legal/tax relief, or send texts without an approved consent lane. Email only after suppression and match-quality review.',
@@ -455,8 +432,8 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         .join(', ')}.`,
       `Sample route is ${data.foreclosureCommand.sampleRoute.urgency} with best exit ${data.foreclosureCommand.sampleRoute.bestExit.replace(/_/g, ' ')}.`,
       freshExports.length
-        ? `${freshExports.length} fresh DealMachine export${freshExports.length === 1 ? '' : 's'} can be stacked with public distress evidence now.`
-        : 'Fresh DealMachine exports are still the bottleneck before this can send at scale.',
+        ? `${freshExports.length} fresh native API sync event${freshExports.length === 1 ? '' : 's'} can be reviewed with public distress evidence.`
+        : 'Public-record sources remain active while the DealMachine native API is gated.',
     ],
     score: clampScore(
       70 +
@@ -498,12 +475,8 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
       },
     ],
     steps: [
-      {
-        label: 'Build fresh DealMachine lists',
-        command: 'pnpm run distress:dealmachine:website-list-builder:build -- --max-builds=30 --max-count=250',
-      },
-      { label: 'Request export package', command: 'pnpm run distress:dealmachine:export-request:all' },
-      { label: 'Ingest latest export', command: 'pnpm run distress:dealmachine:ingest-export:apply' },
+      { label: 'Run county preforeclosure/public-record source', command: 'npm run distress:preforeclosure:county-public' },
+      { label: 'Check DealMachine native API gate', command: 'npm run dealmachine:health' },
       { label: 'Open command center', href: '/admin/command-center' },
     ],
     complianceNote:
@@ -555,7 +528,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     whyNow: [
       `${HIGH_VALUE_BUYER_LANES.length} premium buyer lanes are defined for strategy selection.`,
       `${builderPartners} builder/developer profile${builderPartners === 1 ? '' : 's'} in the engine; ${partnerBuyBoxesConfirmed} confirmed buy box${partnerBuyBoxesConfirmed === 1 ? '' : 'es'} across all partners.`,
-      topMarkets.length ? `Use ${topMarketNames} first unless fresh exports point elsewhere.` : 'Use fresh DealMachine exports first until market heat is clearer.',
+      topMarkets.length ? `Use ${topMarketNames} first unless verified CRM outcomes point elsewhere.` : 'Use verified CRM and public-source evidence until market heat is clearer.',
       `${remainingOutboundCapacity} outbound slot${remainingOutboundCapacity === 1 ? '' : 's'} remain today; keep premium lanes separated from generic seller outreach.`,
     ],
     score: clampScore(62 + Math.min(18, builderPartners * 2) + Math.min(12, partnerBuyBoxesConfirmed * 2) + (remainingOutboundCapacity > 0 ? 8 : 0)),
@@ -573,7 +546,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
         agent: 'acquisition',
         action: 'Source seller lists that match premium buyer lanes',
         detail:
-          'Do not mix generic off-market leads into this lane. Use DealMachine tax/code, portfolio, property type, vacancy, lot, and value filters that match the selected buyer lane.',
+          'Do not mix generic off-market leads into this lane. Use verified public/CRM property type, vacancy, lot, value, and owner signals that match the selected buyer lane.',
         priority: 'high',
       },
       {
@@ -593,10 +566,7 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     ],
     steps: [
       { label: 'Discover builder partners', command: 'npm run investors:builders:discover' },
-      { label: 'Builder infill seller batch', command: 'npm run sellers:high-fee:builder-infill -- --market="milwaukee-wi|toledo-oh" --limit=100' },
-      { label: 'Land wholesale seller batch', command: 'npm run sellers:high-fee:land-wholesale -- --market="milwaukee-wi|toledo-oh|columbus-oh|cincinnati-oh" --limit=100 --cash-min-pct=0.30 --cash-max-pct=0.50' },
-      { label: 'Multifamily seller batch', command: 'npm run sellers:high-fee:small-multifamily -- --market="cleveland-oh|toledo-oh" --limit=100' },
-      { label: 'Commercial seller batch', command: 'npm run sellers:high-fee:commercial-distress -- --market="milwaukee-wi|cleveland-oh" --limit=100' },
+      { label: 'Open seller review queue', href: '/admin/leads' },
     ],
     complianceNote:
       'Premium-lane fees still require clean contracts, disclosure, suppression checks, and state/local compliance review. Novation and assignment language must be especially explicit.',
@@ -655,14 +625,14 @@ export function buildBossBriefing(data: CommandCenterData, learning?: BossLearni
     whyNow: [
       topMarkets.length ? `Best first markets: ${topMarketNames}.` : 'Start in the best current lead markets.',
       freshExports.length
-        ? `${freshExports.length} fresh DealMachine export(s) can feed builder-fit seller outreach once buy boxes are clear.`
-        : 'Builder recruiting should start before the next DealMachine export lands.',
+        ? `${freshExports.length} fresh DealMachine native sync event(s) can be reviewed once buy boxes are clear.`
+        : 'Builder recruiting can proceed through verified partner sources while DealMachine remains gated.',
       builderPartners > 0
         ? `${builderPartners} builder/developer profile${builderPartners === 1 ? '' : 's'} in the engine · ${partnerOutreachReady} outreach ready · ${partnerBuyBoxesConfirmed} confirmed.`
         : 'No builder criteria confirmed yet — this lane still needs partner-side sourcing.',
       dmAlignedPartners > 0
         ? `${dmAlignedPartners} partner profile${dmAlignedPartners === 1 ? '' : 's'} already overlap active DealMachine markets.`
-        : 'DealMachine market overlap still needs more partner coverage.',
+        : 'Native-source market overlap still needs more partner coverage.',
       `${openMatches} open matches and ${openChecklists} open checklists mean there is already deal-routing work to sharpen.`,
     ],
     score: clampScore(34 + (freshExports.length > 0 ? 16 : 6) + (openMatches > 4 ? 10 : 0) + Math.min(16, builderPartners * 2) + Math.min(8, partnerResearchReady)),

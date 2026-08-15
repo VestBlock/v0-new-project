@@ -46,7 +46,10 @@ assert.equal(blockedOutscraper.status, 'blocked')
 const cooldown = evaluateSourceCost('dealmachine', {
   now,
   lastRunAt: '2026-06-14T06:00:00.000Z',
-  env: {},
+  env: {
+    DEALMACHINE_API_KEY: 'dm_sk_live_test_only',
+    DEALMACHINE_SOURCE_ENABLED: 'true',
+  },
 })
 assert.equal(cooldown.status, 'cooldown')
 assert.equal(cooldown.canRun, false)
@@ -58,7 +61,8 @@ const snapshot = buildSourceGovernorSnapshot({
   dealMachineExports: [],
 })
 
-assert.equal(snapshot.status, 'yellow')
+assert.equal(snapshot.status, 'red')
+assert.equal(snapshot.lanes.some((lane) => lane.provider === 'dealmachine' && lane.status === 'blocked'), true)
 assert.equal(snapshot.paidSourcesBlocked >= 1, true)
 assert.equal(snapshot.lanes.some((lane) => lane.provider === 'outscraper' && lane.status === 'blocked'), true)
 

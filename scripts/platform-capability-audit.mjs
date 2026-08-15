@@ -105,7 +105,7 @@ async function strategyOperationalEvidence() {
   }
 }
 
-async function dealMachineContactExportEvidence() {
+async function dealMachineNativeApiEvidence() {
   if (!supabase) return { count: null, lastRunAt: null, error: 'Supabase is not configured.', operationalStatus: 'failed' }
   const cutoff = new Date(Date.now() - 48 * 3600000).toISOString()
   const { data, error } = await supabase
@@ -121,16 +121,12 @@ async function dealMachineContactExportEvidence() {
   const propertyRowsSynced = rows
     .filter((row) => row.status === 'completed' && row.event_type === 'scheduled_lead_sync')
     .reduce((sum, row) => sum + Number(row.rows_ingested || 0), 0)
-  const contactExportsPending = rows
-    .filter((row) => row.event_type === 'contact_export_needed' && row.status === 'received')
-    .reduce((sum, row) => sum + Number(row.rows_received || 0), 0)
   const contactRowsIngested = rows
-    .filter((row) => row.event_type === 'local_contacts_export_chunk' && row.status === 'completed')
+    .filter((row) => row.event_type === 'scheduled_lead_sync' && row.status === 'completed')
     .reduce((sum, row) => sum + Number(row.rows_ingested || 0), 0)
-  const lastRunAt = rows[0]?.created_at || null
-  const operationalStatus = contactExportsPending > 0
-    ? 'partial'
-    : contactRowsIngested > 0
+  const nativeRows = rows.filter((row) => row.event_type === 'scheduled_lead_sync')
+  const lastRunAt = nativeRows[0]?.created_at || null
+  const operationalStatus = contactRowsIngested > 0
       ? 'healthy'
       : 'unproven'
 
@@ -140,7 +136,7 @@ async function dealMachineContactExportEvidence() {
     error: null,
     operationalStatus,
     propertyRowsSynced,
-    contactExportsPending,
+    contactExportsPending: 0,
     contactRowsIngested,
   }
 }
@@ -201,7 +197,7 @@ async function main() {
     evidence({ table: 'property_intelligence_records', timestampColumn: 'updated_at' }),
     evidence({ table: 'command_center_reply_memory', timestampColumn: 'updated_at' }),
     strategyOperationalEvidence(),
-    dealMachineContactExportEvidence(),
+    dealMachineNativeApiEvidence(),
     evidence({ table: 'daily_operator_reports', timestampColumn: 'report_date' }),
     evidence({ table: 'aeo_audit_reports', timestampColumn: 'run_at' }),
     evidence({ table: 'entity_seo_runs', timestampColumn: 'created_at' }),
@@ -254,13 +250,18 @@ async function main() {
       note: `Completed source rows by provider: ${JSON.stringify(strategyEvidence.sourceRowsByProvider || {})}; verified non-DealMachine fallback rows: ${strategyEvidence.verifiedFallbackSourceRows || 0}; provider-accepted email events in 48h: ${strategyEvidence.providerAccepted || 0}.`,
     }),
     capability({
-      key: 'dealmachine_contacts', label: 'DealMachine contact export',
-      configured: fileExists('lib/dealmachine/api.ts') && fileExists('app/api/cron/dealmachine-export-ingest/route.ts'),
-      scheduled: fileExists('scripts/dealmachine-local-export-watcher.mjs') && fileExists('scripts/install-dealmachine-export-watcher-agent.sh'),
-      routeOrSource: 'Mac Pro export watcher -> POST /api/cron/dealmachine-export-ingest',
+      key: 'dealmachine_contacts', label: 'DealMachine native API',
+      configured:
+        fileExists('lib/dealmachine/api.ts') &&
+        fileExists('lib/dealmachine/v2-client.mjs') &&
+        /^dm_(?:sk|at)_live_\S+$/.test(String(process.env.DEALMACHINE_API_KEY || '')) &&
+        /^(1|true|yes|on)$/i.test(String(process.env.DEALMACHINE_SOURCE_ENABLED || '')),
+      scheduled: false,
+      requiresSchedule: false,
+      routeOrSource: 'Admin-gated native API adapter; no export watcher or export-ingest route',
       evidence: dealMachineEvidence,
       maxAgeHours: 48,
-      note: `Property rows synced: ${dealMachineEvidence.propertyRowsSynced || 0}; pending contact exports: ${dealMachineEvidence.contactExportsPending || 0}; contact rows ingested: ${dealMachineEvidence.contactRowsIngested || 0}. Public-record and HomeHarvest loops remain the active fallback.`,
+      note: `Native API rows synced: ${dealMachineEvidence.propertyRowsSynced || 0}. The adapter remains inactive until a verified key is installed; public-record and HomeHarvest loops remain the active fallback. Automated DealMachine exports are retired.`,
     }),
     capability({
       key: 'daily_reporting', label: 'Daily operator report', configured: fileExists('lib/improvement/continuous-improvement.ts'),

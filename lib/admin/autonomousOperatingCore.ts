@@ -190,7 +190,7 @@ export const SOURCE_DOCTRINE: SourceDoctrineLane[] = [
     dailyLoopRule:
       'Use DataPipe/Outscraper only when a stack, county source, map/local operator, builder, or public-record lane needs company/location evidence; do not spend it on generic network prospecting.',
     commandHints: [
-      'distress:dealmachine:export-request:all',
+      'dealmachine:health',
       'outscraper:county-records',
       'outscraper:fire-damage',
       'outscraper:land',
@@ -432,8 +432,8 @@ export const DEFAULT_AUTOPILOT_JOBS: AutopilotJobDefinition[] = [
       channel: 'email',
       sms: 'review_only',
       maxPerStrategy: 100,
-      dealMachineContactExportRequired: true,
-      noDealMachineSkipTraceDefault: true,
+      dealMachineNativeApiGated: true,
+      historicalDealMachineExportsReadOnly: true,
       forbiddenSources: ['instantly_supersearch', 'instantly_lead_finder'],
     },
   },
@@ -550,7 +550,6 @@ function strategyMarkets(input: AutopilotSnapshotInput, strategyKey: string) {
 }
 
 function strategyCommand(strategyKey: string, markets: string[], target: number) {
-  const marketArg = markets.map((market) => market.replace(', ', '-').toLowerCase()).join('|')
   const marketList = markets.join('|')
   if (strategyKey === 'buyer-demand-capture') {
     return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=buyer-demand-capture --market="${marketList}" --limit=${target}`
@@ -564,27 +563,21 @@ function strategyCommand(strategyKey: string, markets: string[], target: number)
   if (strategyKey === 'creative-finance-buyer-capture') {
     return `pnpm run instantly:doctor && pnpm run instantly:demand -- --lane=creative-finance-buyer-capture --market="${marketList}" --limit=${target}`
   }
-  if (strategyKey === 'tax-code-stack') return `pnpm run distress:dealmachine:export-request -- --strategy=tax-code-stack --markets="${marketArg}" --limit=${target}`
-  if (strategyKey === 'senior-out-of-state-landlord') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=senior-out-of-state-landlord --markets="${marketArg}" --limit=${target}`
-  }
-  if (strategyKey === 'builder-infill-teardown') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=builder-infill-teardown --markets="${marketArg}" --limit=${target}`
-  }
-  if (strategyKey === 'land-wholesale') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=land-wholesale --markets="${marketArg}" --limit=${target}`
-  }
-  if (strategyKey === 'small-multifamily-portfolio') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=small-multifamily-portfolio --markets="${marketArg}" --limit=${target}`
-  }
-  if (strategyKey === 'institutional-btr-buybox') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=institutional-btr-buybox --markets="${marketArg}" --limit=${target}`
+  if (
+    [
+      'tax-code-stack',
+      'senior-out-of-state-landlord',
+      'builder-infill-teardown',
+      'land-wholesale',
+      'small-multifamily-portfolio',
+      'institutional-btr-buybox',
+      'commercial-small-bay-distress',
+    ].includes(strategyKey)
+  ) {
+    return 'pnpm run dealmachine:health'
   }
   if (strategyKey === 'on-market-lowball-agent-sweep') {
     return `pnpm run sellers:on-market-lowball -- --limit=${target}`
-  }
-  if (strategyKey === 'commercial-small-bay-distress') {
-    return `pnpm run distress:dealmachine:export-request -- --strategy=commercial-small-bay-distress --markets="${marketArg}" --limit=${target}`
   }
   if (strategyKey === 'novation-retail-spread') {
     return `pnpm run boss:stale-listings -- --market="${markets.join('|')}" --offer-mode=novation --limit=${target}`
@@ -669,11 +662,11 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
         : 'Opt-outs and DNC records are visible before batching.',
     },
     {
-      label: 'DM exports',
-      value: 'contacts',
+      label: 'DM native API',
+      value: 'gated',
       status: 'yellow',
       detail:
-        'DealMachine lanes must generate an exact contact-export request, ingest the downloaded Contacts CSV, and verify DNC columns before sending. Skip tracing is not the default path.',
+        'Automated exports are retired. DealMachine lanes remain gated until a replacement API key passes health, rate-limit, mapping, deduplication, provenance, and DNC checks.',
     },
     {
       label: 'Source doctrine',
@@ -738,7 +731,9 @@ export function buildAutopilotSnapshot(input: AutopilotSnapshotInput): Autopilot
       : firstBlocked
         ? `${firstBlocked.strategyName}: ${firstBlocked.blockedReason}`
         : topBatch
-          ? `Run ${topBatch.strategyName} in ${topBatch.markets.slice(0, 2).join(' and ')} with ${topBatch.targetEmailCount || 100} separated emails and SMS review tasks. DealMachine lanes start with a contact-export request, not skip tracing.`
+          ? topBatch.sourceProvider === 'dealmachine'
+            ? `Verify the DealMachine native API connection before activating ${topBatch.strategyName}; automated exports remain retired.`
+            : `Run ${topBatch.strategyName} in ${topBatch.markets.slice(0, 2).join(' and ')} with ${topBatch.targetEmailCount || 100} separated emails and SMS review tasks.`
           : 'Seed the durable jobs, then run a dry autopilot pass.'
 
   return {

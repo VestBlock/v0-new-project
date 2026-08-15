@@ -7,6 +7,7 @@ import {
   createDealMachineV2Client,
   dealMachineApiKey,
   hasDealMachineCredentials,
+  isDealMachineSourceEnabled,
 } from '@/lib/dealmachine/v2-client.mjs'
 import {
   DEALMACHINE_STRATEGY_FIELDS,
@@ -24,7 +25,6 @@ export type DealMachineSyncResult = {
   contactable: number
   contactless: number
   mailReady: number
-  queuedForExport: number
   ingested: number
   startAfter: number
   nextAfter: number
@@ -35,6 +35,9 @@ export type DealMachineSyncResult = {
     market: string
     lowball: boolean
     requestedRows: number
+    page: number
+    hasNextPage: boolean
+    nextPage: number | null
     estimatedCredits: number
     fetched: number
     status: string
@@ -129,13 +132,24 @@ function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: stri
   const equityPercent = numberValue(property.estimated_equity_percentage ?? property.equity_percent)
   const mortgages = numberValue(property.num_mortgages)
   const market = String(plan.market)
+  const sourceRecordId = personId ? `${propertyId}:${personId}` : propertyId
+  const rawPhoneRows = Array.isArray(contact?.phones)
+    ? contact.phones
+    : Array.isArray(contact?.phone_numbers)
+      ? contact.phone_numbers
+      : []
+  const blockedPhoneCount = rawPhoneRows.filter((entry: unknown) => {
+    if (!entry || typeof entry !== 'object') return false
+    const phone = entry as RawRecord
+    return phone.do_not_call === true || phone.dnc === true || /do not call|\bdnc\b/i.test(String(phone.status || ''))
+  }).length
 
   return {
     leadType: 'sell_house',
-    source: 'dealmachine_v2_strategy_search',
-    sourceUrl: 'https://app.dealmachine.com/',
+    source: 'dealmachine_native_api',
+    sourceUrl: 'https://api.docs.dealmachine.com/',
     category: 'seller_lead',
-    externalId: propertyId,
+    externalId: sourceRecordId,
     name: ownerName || null,
     propertyAddress,
     mailingAddress: mailingAddress || null,
@@ -156,10 +170,13 @@ function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: stri
     deliveryStatus: 'not_sent',
     importedAt: observedAt,
     contactInfo: {
-      source: 'dealmachine_v2_strategy_search',
+      source: 'dealmachine_native_api',
       ownerName,
       emails,
       phones,
+      blockedPhoneCount,
+      providerDncReviewed: true,
+      emailConsent: 'unknown',
       smsConsent: false,
       smsOutreachAllowed: false,
       phoneUse: 'manual_review_only',
@@ -204,15 +221,16 @@ function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: stri
       strategyStackMatches: candidateOnly ? [] : [strategyKey],
       strategySignals: signals,
       strategySourceFamilies: ['dealmachine'],
-      strategySourceRecordId: propertyId,
+      strategySourceRecordId: sourceRecordId,
       strategySourceContractVersion: 2,
       sourceObservedAt: observedAt,
+      providerUpdatedAt: labelValue(raw.updated_at || raw.last_updated || property.updated_at) || null,
       strategyReviewOnly: Boolean(plan.reviewOnly || candidateOnly),
       strategyVariant: plan.variant?.key || null,
       strategySourceFilters: plan.filters,
       strategyMarket: market,
-      contactExportNeeded: !emails.length && !phones.length,
-      creditMode: 'official_v2_search',
+      contactSuppressionReviewed: true,
+      creditMode: 'official_v2_native_api',
     },
   }
 }
@@ -257,6 +275,7 @@ export async function syncDealMachineLeadSource(options: {
   maxCredits?: number
   includeLowball?: boolean
   maxLowballShare?: number
+  page?: number
 } = {}): Promise<DealMachineSyncResult> {
   const key = dealMachineApiKey()
   const startAfter = Math.max(0, Math.floor(options.startAfter || 0))
@@ -269,7 +288,24 @@ export async function syncDealMachineLeadSource(options: {
       contactable: 0,
       contactless: 0,
       mailReady: 0,
-      queuedForExport: 0,
+      ingested: 0,
+      startAfter,
+      nextAfter: startAfter,
+      wrapped: false,
+      creditsReserved: 0,
+      strategyRuns: [],
+      leads: [],
+    }
+  }
+  if (!isDealMachineSourceEnabled()) {
+    return {
+      configured: true,
+      ok: false,
+      blockedReason: 'DealMachine synchronization is intentionally inactive. Verify the replacement key, then explicitly enable DEALMACHINE_SOURCE_ENABLED.',
+      fetched: 0,
+      contactable: 0,
+      contactless: 0,
+      mailReady: 0,
       ingested: 0,
       startAfter,
       nextAfter: startAfter,
@@ -285,6 +321,7 @@ export async function syncDealMachineLeadSource(options: {
     maxRetries: 3,
   })
   const pageSize = Math.min(100, Math.max(1, options.pageSize || envInt('DEALMACHINE_SYNC_PAGE_SIZE', 25)))
+  const page = Math.min(10_000, Math.max(1, Math.floor(options.page || 1)))
   const maxPlans = Math.min(17, Math.max(1, options.maxPages || 3))
   const maxCredits = Math.max(1, options.maxCredits || envInt('DEALMACHINE_SYNC_MAX_CREDITS', 75))
   const includeLowball = Boolean(options.includeLowball)
@@ -329,6 +366,9 @@ export async function syncDealMachineLeadSource(options: {
         market: plan.market,
         lowball: Boolean(plan.lowball),
         requestedRows,
+        page,
+        hasNextPage: false,
+        nextPage: null,
         estimatedCredits: 0,
         fetched: 0,
         status: 'planning',
@@ -339,8 +379,7 @@ export async function syncDealMachineLeadSource(options: {
         const hydrated = await hydrateStrategyPlan(client, plan, filterMetadata)
         const fields = DEALMACHINE_STRATEGY_FIELDS.filter((field) => availableFields.has(field))
         hydrated.searchBody.fields = fields
-        hydrated.exportBody.fields = fields
-        const requestBody = { ...hydrated.searchBody, page: 1, per_page: requestedRows }
+        const requestBody = { ...hydrated.searchBody, page, per_page: requestedRows }
         const estimate = await client.estimatePropertySearch(requestBody)
         const cost = estimatedPageCredits(estimate)
         strategyRun.estimatedCredits = cost
@@ -364,6 +403,8 @@ export async function syncDealMachineLeadSource(options: {
         creditsReserved += Number(payload?.credits?.used || cost)
         const rows = Array.isArray(payload?.data) ? payload.data : []
         strategyRun.fetched = rows.length
+        strategyRun.hasNextPage = Boolean(payload?.pagination?.has_next_page)
+        strategyRun.nextPage = strategyRun.hasNextPage ? page + 1 : null
         strategyRun.status = 'searched'
         for (const raw of rows) rawRows.push({ raw, plan: hydrated })
       } catch (error) {
@@ -392,7 +433,6 @@ export async function syncDealMachineLeadSource(options: {
       contactable,
       contactless,
       mailReady: normalized.filter((lead) => !lead.email && !lead.phone && Boolean(lead.mailingAddress)).length,
-      queuedForExport: 0,
       ingested: ingested.length,
       startAfter,
       nextAfter,
@@ -410,7 +450,6 @@ export async function syncDealMachineLeadSource(options: {
       contactable: 0,
       contactless: 0,
       mailReady: 0,
-      queuedForExport: 0,
       ingested: 0,
       startAfter,
       nextAfter: startAfter,

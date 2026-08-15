@@ -6,6 +6,7 @@ import {
   DEALMACHINE_STRATEGY_FIELDS,
   buildDailyStrategyPlans,
   compileStrategyFilters,
+  hydrateStrategyPlan,
   selectDailyStrategyMarket,
 } from '../lib/dealmachine/v2-strategy-catalog.mjs'
 
@@ -68,10 +69,30 @@ for (const strategy of DEALMACHINE_STRATEGIES) {
 const activeSources = [
   fs.readFileSync(new URL('../lib/dealmachine/v2-client.mjs', import.meta.url), 'utf8'),
   fs.readFileSync(new URL('../lib/dealmachine/v2-strategy-catalog.mjs', import.meta.url), 'utf8'),
-  fs.readFileSync(new URL('./dealmachine-v2-strategy-run.mjs', import.meta.url), 'utf8'),
 ].join('\n')
 assert.equal(activeSources.includes('api.dealmachine.com/public'), false)
 assert.equal(activeSources.includes('next.v3.dealmachine.com'), false)
 assert.match(activeSources, /api\.v2\.dealmachine\.com/)
+assert.equal(activeSources.includes('/properties/export'), false)
+assert.equal(activeSources.includes('/exports'), false)
+assert.equal(activeSources.includes('exclude_previously_exported'), false)
+
+const samplePlan = buildDailyStrategyPlans({
+  date: '2026-08-01',
+  strategyKeys: ['tax-code-stack'],
+})[0]
+const sampleMetadata = samplePlan.variant.filters.map((spec) => ({
+  filter_id: spec.filterId,
+  type: typeof spec.value === 'boolean' ? 'BOOLEAN' : 'NUMBER',
+  allowed_operators: spec.operator ? [spec.operator] : [],
+}))
+const hydrated = await hydrateStrategyPlan(
+  { resolveCity: async () => ({ code: 'loc_test' }) },
+  samplePlan,
+  sampleMetadata
+)
+assert.equal('exportBody' in hydrated, false)
+assert.equal('exclude_previously_exported' in hydrated.searchBody, false)
+assert.equal(hydrated.searchBody.contact_audience, 'owners')
 
 console.log('DealMachine v2 strategy tests passed.')

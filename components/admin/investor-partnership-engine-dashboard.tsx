@@ -83,7 +83,7 @@ const discoverySources = [
   'Recent flip transactions',
   'County deed records',
   'LLC ownership records',
-  'DealMachine exports',
+  'DealMachine native API records',
   'Public property sales',
   'LinkedIn',
   'Facebook investor groups',

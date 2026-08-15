@@ -11,8 +11,35 @@ export class DealMachineApiError extends Error {
 export function dealMachineApiKey(env?: Record<string, string | undefined>): string
 export function isDealMachineCredentialFormat(value: unknown): boolean
 export function hasDealMachineCredentials(env?: Record<string, string | undefined>): boolean
+export function isDealMachineSourceEnabled(env?: Record<string, string | undefined>): boolean
 
-export type DealMachineDownload = { filename: string; url: string; size: number | null }
+export type DealMachineConnectionState =
+  | 'not_configured'
+  | 'configured_unverified'
+  | 'working'
+  | 'rate_limited'
+  | 'unauthorized'
+  | 'provider_unavailable'
+
+export type DealMachineRateLimit = {
+  limit: number | null
+  remaining: number | null
+  reset: string | null
+  dayLimit: number | null
+  dayRemaining: number | null
+  retryAfterSeconds: number | null
+}
+
+export type DealMachineConnectionHealth = {
+  configured: boolean
+  enabled: boolean
+  checkedAt: string
+  state: DealMachineConnectionState
+  message: string
+  requestId: string | null
+  rateLimit: DealMachineRateLimit | null
+}
+
 export type DealMachineV2Client = {
   request(path: string, options?: Record<string, unknown>): Promise<any>
   account(): Promise<any>
@@ -24,15 +51,10 @@ export type DealMachineV2Client = {
   countProperties(body: Record<string, unknown>): Promise<any>
   searchProperties(body: Record<string, unknown>): Promise<any>
   estimatePropertySearch(body: Record<string, unknown>): Promise<any>
-  exportProperties(body: Record<string, unknown>): Promise<any>
   listLists(query?: Record<string, unknown>): Promise<any>
   createList(body: Record<string, unknown>): Promise<any>
   getList(listId: string): Promise<any>
-  exportList(listId: string, body?: Record<string, unknown>): Promise<any>
-  listExports(query?: Record<string, unknown>): Promise<any>
-  getExport(exportId: string): Promise<any>
-  downloadUrls(payload: any): DealMachineDownload[]
-  getRateLimit(): { limit: number | null; remaining: number | null; reset: string | null } | null
+  getRateLimit(): DealMachineRateLimit | null
 }
 
 export function createDealMachineV2Client(options?: {
@@ -44,7 +66,10 @@ export function createDealMachineV2Client(options?: {
   userAgent?: string
 }): DealMachineV2Client
 
-export function downloadDealMachineExportFile(
-  download: DealMachineDownload,
-  options?: { fetchImpl?: typeof fetch; timeoutMs?: number }
-): Promise<Buffer>
+export function getDealMachineConnectionHealth(options?: {
+  apiKey?: string
+  env?: Record<string, string | undefined>
+  verify?: boolean
+  fetchImpl?: typeof fetch
+  timeoutMs?: number
+}): Promise<DealMachineConnectionHealth>

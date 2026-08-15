@@ -22,7 +22,7 @@ const baseInput: AutopilotSnapshotInput = {
   sourceLanes: [
     {
       provider: 'dealmachine',
-      label: 'DealMachine exports',
+      label: 'DealMachine native API',
       status: 'allowed',
       canRun: true,
       costTier: 'owned',
@@ -152,8 +152,8 @@ assert.ok(batches.find((batch) => batch.strategyKey === 'tax-code-stack')?.marke
 assert.equal(batches.find((batch) => batch.strategyKey === 'builder-infill-teardown')?.targetBuyerLane.includes('builders'), true)
 assert.equal(batches.find((batch) => batch.strategyKey === 'land-wholesale')?.targetBuyerLane.includes('land buyers'), true)
 assert.ok(
-  batches.find((batch) => batch.strategyKey === 'land-wholesale')?.command.includes('--strategy=land-wholesale'),
-  'Land wholesale lane should use the DealMachine export-request path'
+  batches.find((batch) => batch.strategyKey === 'land-wholesale')?.command.includes('dealmachine:health'),
+  'Land wholesale must remain behind the DealMachine native API health gate'
 )
 assert.ok(
   batches.find((batch) => batch.strategyKey === 'on-market-lowball-agent-sweep')?.markets.includes('Milwaukee, WI'),
@@ -182,6 +182,7 @@ assert.equal(
   'Autopilot should include dedicated Instantly demand-capture lanes'
 )
 assert.equal(snapshot.guardrails.find((guardrail) => guardrail.label === 'Source doctrine')?.status, 'green')
+assert.equal(snapshot.guardrails.find((guardrail) => guardrail.label === 'DM native API')?.value, 'gated')
 assert.equal(snapshot.durable.jobsConfigured, DEFAULT_AUTOPILOT_JOBS.length)
 assert.equal(snapshot.durable.jobsDue, 2)
 assert.equal(snapshot.durable.strategyRuns7d, 1)

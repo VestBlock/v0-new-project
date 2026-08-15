@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
-import { ALL_DEALMACHINE_STRATEGIES } from './lib/dealmachine-strategy-learning.mjs'
 
 const args = process.argv.slice(2)
 const getArg = (name, fallback = '') => {
@@ -20,13 +19,8 @@ const markets = getArg('markets', DEFAULT_MARKETS)
 const outscraperLanes = getArg('outscraper-lanes', DEFAULT_OUTSCRAPER_LANES).split('|').map((lane) => lane.trim()).filter(Boolean)
 const sellerLimit = getArg('seller-limit', '500')
 const sellerWaves = getArg('seller-waves', '5')
-const dealmachineTargetLeads = getArg('dealmachine-target-leads', '1000')
-const dealmachineMaxBuilds = getArg('dealmachine-max-builds', String(ALL_DEALMACHINE_STRATEGIES.length))
-const dealmachineStrategies = getArg('dealmachine-strategies', ALL_DEALMACHINE_STRATEGIES.join('|'))
-const dealmachineMode = getArg('dealmachine-mode', process.env.DEALMACHINE_WEB_TOKEN ? 'token-rebuilder' : 'website-builder')
 const runOutscraper = !hasFlag('skip-outscraper') && !hasFlag('verify-only')
 const runSellers = !hasFlag('skip-sellers') && !hasFlag('verify-only')
-const runDealMachine = hasFlag('dealmachine') && !hasFlag('verify-only')
 
 function run(label, command, commandArgs, options = {}) {
   console.log(`\n=== ${label} ===`)
@@ -108,36 +102,6 @@ async function main() {
     }
   }
 
-  if (runDealMachine) {
-    const chromeSessionEnv = { ...process.env, DEALMACHINE_WEB_TOKEN: '' }
-    const dmCommand =
-      dealmachineMode === 'token-rebuilder'
-        ? [
-            'scripts/dealmachine-token-list-rebuilder.mjs',
-            `--target-leads=${dealmachineTargetLeads}`,
-            `--max-builds=${dealmachineMaxBuilds}`,
-            `--markets=${markets}`,
-            `--strategies=${dealmachineStrategies}`,
-            '--cover-all-strategies-first=true',
-          ]
-        : [
-            'scripts/dealmachine-website-list-builder.mjs',
-            '--build',
-            `--max-builds=${dealmachineMaxBuilds}`,
-            '--max-count=220',
-            `--markets=${markets}`,
-            `--strategies=${dealmachineStrategies}`,
-          ]
-    const dm = run(
-      `DealMachine ${dealmachineMode}`,
-      'node',
-      dmCommand,
-      { env: dealmachineMode === 'token-rebuilder' ? process.env : chromeSessionEnv }
-    )
-    if (!dm.ok) dm.blocker = 'If Chrome says JavaScript from Apple Events is off, open Chrome on the Pro, go to View > Developer > Allow JavaScript from Apple Events, then rerun with --dealmachine.'
-    steps.push(dm)
-  }
-
   let verification = null
   try { verification = await verify() } catch (error) { verification = { ok: false, error: error instanceof Error ? error.message : String(error) } }
   const finishedAt = new Date().toISOString()
@@ -149,11 +113,7 @@ async function main() {
     outscraperLanes,
     runSellers,
     runOutscraper,
-    runDealMachine,
-    dealmachineMode,
-    dealmachineTargetLeads: Number.parseInt(dealmachineTargetLeads, 10),
-    dealmachineMaxBuilds: Number.parseInt(dealmachineMaxBuilds, 10),
-    dealmachineStrategies: dealmachineStrategies.split('|').map((value) => value.trim()).filter(Boolean),
+    dealMachineNativeApi: 'managed separately; intentionally inactive until a verified API key is installed',
     steps,
     verification,
   }

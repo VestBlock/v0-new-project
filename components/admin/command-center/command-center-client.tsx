@@ -1866,7 +1866,7 @@ export function CommandCenterClient({
                     </span>
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                    <p className="text-slate-200">Saved DealMachine exports</p>
+                    <p className="text-slate-200">Archived DealMachine exports</p>
                     <span className="vb-mono font-semibold tabular-nums text-cyan-200">
                       {data.localSignals.dmExports.length}
                     </span>
@@ -1884,15 +1884,13 @@ export function CommandCenterClient({
                   </div>
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-slate-200">DM contact export request</p>
+                      <p className="text-slate-200">DealMachine native API</p>
                       <span className="vb-mono font-semibold tabular-nums text-cyan-200">
-                        {data.localSignals.dealMachineExportRequest?.totalRows ?? 0}
+                        gated
                       </span>
                     </div>
                     <p className="mt-1 text-[0.65rem] leading-5 text-slate-500">
-                      {data.localSignals.dealMachineExportRequest
-                        ? `Latest package: ${data.localSignals.dealMachineExportRequest.csvPath || data.localSignals.dealMachineExportRequest.summaryFile || "generated"} · Contacts export only, DNC columns required, no DealMachine skip tracing by default.`
-                        : "No DealMachine contact-export package yet. Run npm run distress:dealmachine:export-request:all before retrying zero-sendable lanes."}
+                      Export acquisition and CSV ingestion are retired. The native adapter remains disabled until the new API key is verified.
                     </p>
                   </div>
                   {data.localSignals.dmExports.length ? (
@@ -1914,8 +1912,7 @@ export function CommandCenterClient({
                     ))
                   ) : (
                     <p className="leading-5 text-slate-500">
-                      No contact exports on disk. Export contacts from DealMachine, then run{" "}
-                      <code className="vb-mono text-cyan-300/90">npm run distress:dealmachine:ingest-export:apply</code>.
+                      No historical DealMachine export artifacts are present. New records must arrive through the native API after activation.
                     </p>
                   )}
                 </div>

@@ -99,7 +99,7 @@ function listPriorResults() {
   if (!fs.existsSync(RESULTS_DIR)) return []
   return fs
     .readdirSync(RESULTS_DIR)
-    .filter((name) => /^dealmachine-export-phone-send-results-.*\.json$/.test(name))
+    .filter((name) => /^(?:vestblock|dealmachine-export)-phone-send-results-.*\.json$/.test(name))
     .sort()
     .map((name) => path.join(RESULTS_DIR, name))
 }
@@ -185,7 +185,7 @@ function main() {
   }
   fs.mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = buildRunStamp()
-  const outPath = path.join(RESULTS_DIR, `dealmachine-export-phone-send-results-${stamp}.json`)
+  const outPath = path.join(RESULTS_DIR, `vestblock-phone-send-results-${stamp}.json`)
   const queue = parseCsv(fs.readFileSync(args.queue, "utf8"))
   const alreadySent = loadAlreadySent()
   const excludedPhones = new Set(args.excludePhones)

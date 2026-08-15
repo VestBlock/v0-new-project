@@ -8,8 +8,7 @@ import { adminNavGroups, adminNavItems } from '@/lib/admin/navigation'
 import { cn } from '@/lib/utils'
 
 const OPERATOR_COMMANDS = [
-  { label: 'Build DealMachine contact export request', command: 'npm run distress:dealmachine:export-request:all' },
-  { label: 'Ingest latest DealMachine export', command: 'npm run distress:dealmachine:ingest-export:apply' },
+  { label: 'Check DealMachine native API health', command: 'npm run dealmachine:health' },
   { label: 'Run distress stack (daily)', command: 'npm run distress:stack:daily' },
   { label: 'Outreach scorecard', command: 'npm run outreach:scorecard' },
   { label: 'AEO visibility scorecard', command: 'npm run visibility:aeo-scorecard' },

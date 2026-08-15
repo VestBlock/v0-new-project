@@ -10,25 +10,24 @@ export function LeadSourceRunner() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-white">
           <Terminal className="h-5 w-5 text-cyan-300" />
-          Website runtime is now trimmed to current real estate sourcing
+          Source runtime follows the approved VestBlock platform lanes
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-slate-300">
         <p>
-          Legacy small-business scrape loops have been retired from the deployed app.
-          What remains in runtime is the current VestBlock stack: buyer, lender,
-          and investor discovery plus public-record signals that support real
-          estate routing.
+          The source layer supports capital, real estate, opportunity, roadmap,
+          partner, and DealVault journeys. Each source must retain provenance,
+          route through the CRM, and pass its lane-specific qualification rules.
         </p>
         <p>
           Same-market partner discovery now respects cooldown windows, so we do
           not keep scraping the same source and market every day just to burn usage.
         </p>
         <p>
-          DealMachine harvesting, export review, and high-volume outreach still
-          run through the operator workflow. Use <code>npm run distress:dealmachine:market-harvest</code>,
-          <code>npm run distress:dealmachine:ingest-export:apply</code>, and the
-          export outreach scripts from Codex when you need fresh seller inventory.
+          DealMachine export automation is retired. Its native API adapter remains
+          intentionally inactive until a new key is verified; use{' '}
+          <code>npm run dealmachine:health</code> to check the connection without
+          starting acquisition or outreach.
         </p>
       </CardContent>
     </Card>

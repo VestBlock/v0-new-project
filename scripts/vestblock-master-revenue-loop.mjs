@@ -116,9 +116,7 @@ function envAudit() {
 
 function scriptAudit() {
   const scripts = [
-    ["DealMachine export autoloop", "scripts/dealmachine-export-autoloop.mjs"],
-    ["DealMachine export orchestrator", "scripts/dealmachine-export-orchestrator.mjs"],
-    ["DealMachine export outreach", "scripts/dealmachine-export-outreach.mjs"],
+    ["DealMachine native API health", "scripts/dealmachine-api-capabilities.mjs"],
     ["Seller outreach autopilot", "scripts/seller-outreach-autopilot.mjs"],
     ["SMS relay queue", "scripts/send-messages-batch.mjs"],
     ["SMS review queue", "scripts/sms-review-queue.mjs"],
@@ -136,8 +134,6 @@ function scriptAudit() {
 function findLatestTaxCodeStackCsv() {
   const dirs = [
     path.join(ROOT, "data", "distress-leads"),
-    path.join(ROOT, "data", "dm-exports"),
-    path.join(ROOT, "data", "dm-exports", "incoming"),
   ]
   const candidates = []
   for (const dir of dirs) {
@@ -198,7 +194,6 @@ async function main() {
     "--seller-markets",
     "buffalo-ny,kalamazoo-mi,flint-mi,toledo-oh,cleveland-oh,detroit-mi,akron-oh"
   )
-  const includeExports = !hasFlag("--skip-dealmachine")
   const includeBuyers = !hasFlag("--skip-buyers")
   const includeStackRouter = !hasFlag("--skip-stack-router")
   const steps = []
@@ -215,7 +210,7 @@ async function main() {
     steps.push(
       skippedStep(
         "primary-machine-guard",
-        "Command-center preview mode. Live exports and live outreach are intentionally reserved for the primary Pro host."
+        "Command-center preview mode. Live outreach is intentionally reserved for the primary Pro host."
       )
     )
   }
@@ -284,35 +279,10 @@ async function main() {
     })
   }
 
-  if (includeExports) {
-    if (isPrimaryMachine) {
-      const exportArgs = [
-        "--env-file=.env.local",
-        "scripts/dealmachine-export-autoloop.mjs",
-        `--daily-cap=${dailyCap}`,
-        "--saved-list-strategies-per-cycle=4",
-        "--allow-unverified-export",
-      ]
-      if (send) exportArgs.push("--send")
-      steps.push(runStep("dealmachine-export-autoloop", "node", exportArgs, { required: false }))
-    } else {
-      steps.push(
-        skippedStep(
-          "dealmachine-export-autoloop",
-          "Skipped on command-center machine. Live export autoloop is wired for the primary Pro host."
-        )
-      )
-    }
-  }
-
-  const outreachArgs = [
-    "--env-file=.env.local",
-    "scripts/seller-outreach-autopilot.mjs",
-    `--daily-cap=${dailyCap}`,
-    `--markets=${sellerMarkets}`,
-  ]
-  if (send) outreachArgs.push("--send")
-  steps.push(runStep("seller-outreach-autopilot", "node", outreachArgs, { required: false }))
+  steps.push(skippedStep(
+    "seller-outreach-autopilot",
+    "The legacy DealMachine-export sender is retired. Controlled outreach resumes only through the CRM-owned strategy pilot after its release gate."
+  ))
 
   if (includeBuyers) {
     const buyerLanes = ["buyer-developer", "investor-network", "land-developers", "county-records"]
@@ -331,8 +301,6 @@ async function main() {
     latestStackRoutes:
       newestFile(path.join(REPORT_DIR, "county-code-stacked-lanes"), (name) => /county-code-stacked-lanes-.*\.json$/i.test(name))
         ?.file || null,
-    latestDealMachineAutoloop:
-      newestFile(REPORT_DIR, (name) => /dealmachine-export-autoloop-.*\.json$/i.test(name))?.file || null,
     latestRevenueCommand:
       newestFile(REPORT_DIR, (name) => /revenue-command-scorecard.*\.json$/i.test(name))?.file || null,
   }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Build a compliant SMS review queue from existing DealMachine phone exports.
+ * Build a compliant SMS review queue from verified phone records.
  *
  * This never sends messages. It only prepares a review CSV/JSON and skips
  * DNC, suppressed, resident/renter, and uncertain phone records.

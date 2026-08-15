@@ -857,7 +857,7 @@ export function CommandCenterStrategyOpsPanel({
                   </span>
                 ))
               ) : (
-                <span className="text-xs text-slate-500">No saved export markets yet.</span>
+                <span className="text-xs text-slate-500">No native API refresh is due.</span>
               )}
             </div>
           </div>
@@ -865,39 +865,15 @@ export function CommandCenterStrategyOpsPanel({
           <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium text-cyan-100">Contact export package</p>
-                {dealMachineFreshness.latestExportRequest ? (
-                  <p className="mt-1 text-[0.65rem] leading-5 text-slate-400">
-                    {dealMachineFreshness.latestExportRequest.totalRows} row{dealMachineFreshness.latestExportRequest.totalRows === 1 ? "" : "s"} waiting for a DealMachine Contacts download
-                    {dealMachineFreshness.latestExportRequest.ageMinutes != null ? ` · ${dealMachineFreshness.latestExportRequest.ageMinutes}m old` : ""}.
-                  </p>
-                ) : (
-                  <p className="mt-1 text-[0.65rem] leading-5 text-slate-500">
-                    No export-request package yet. Generate one before retrying a zero-sendable DealMachine lane.
-                  </p>
-                )}
+                <p className="text-xs font-medium text-cyan-100">Native API migration</p>
+                <p className="mt-1 text-[0.65rem] leading-5 text-slate-500">
+                  Export automation is retired. The server-only adapter stays inactive until the new key passes authentication and an operator enables the source.
+                </p>
               </div>
-              <span className={cn("vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em]", dealMachineFreshness.latestExportRequest ? "text-amber-300" : "text-slate-500")}>
-                {dealMachineFreshness.latestExportRequest ? "export" : "none"}
+              <span className="vb-mono shrink-0 text-[0.58rem] uppercase tracking-[0.14em] text-amber-300">
+                gated
               </span>
             </div>
-            {dealMachineFreshness.latestExportRequest ? (
-              <div className="mt-2 space-y-1.5 text-[0.62rem] leading-4 text-slate-500">
-                <p>
-                  <span className="text-cyan-100/80">Strategies:</span>{" "}
-                  {dealMachineFreshness.latestExportRequest.strategies.join(", ") || "not tagged"}
-                </p>
-                <p>
-                  <span className="text-cyan-100/80">Rule:</span>{" "}
-                  Contacts export only, include phone type + DNC columns, no DealMachine skip tracing by default.
-                </p>
-                {dealMachineFreshness.latestExportRequest.csvPath ? (
-                  <p className="truncate">
-                    <span className="text-cyan-100/80">CSV:</span> {dealMachineFreshness.latestExportRequest.csvPath}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           <div className="mt-3 space-y-2">

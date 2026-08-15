@@ -2,32 +2,78 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { type NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
-import { isPropertyIntelligenceFeatureEnabled } from '@/lib/property-intelligence/feature-flags'
+import { getDealMachineConnectionHealth, isDealMachineSourceEnabled } from '@/lib/dealmachine/v2-client.mjs'
+
+const SyncRequestSchema = z.object({
+  apply: z.boolean().default(false),
+  maxStrategies: z.number().int().min(1).max(17).default(3),
+  pageSize: z.number().int().min(1).max(100).default(25),
+  startAfter: z.number().int().min(0).max(10_000).default(0),
+  page: z.number().int().min(1).max(10_000).default(1),
+}).strict()
+
+function statusForHealth(state: string) {
+  if (state === 'unauthorized') return 401
+  if (state === 'rate_limited') return 429
+  if (state === 'provider_unavailable') return 503
+  return 409
+}
+
+export async function GET(request: NextRequest) {
+  const { response } = await requireLeadAdmin(request)
+  if (response) return response
+
+  const verify = request.nextUrl.searchParams.get('verify') === 'true'
+  const health = await getDealMachineConnectionHealth({ verify })
+  return NextResponse.json({ success: health.state === 'working', health })
+}
 
 export async function POST(request: NextRequest) {
   const { response } = await requireLeadAdmin(request)
   if (response) return response
 
-  if (!isPropertyIntelligenceFeatureEnabled('DEALMACHINE_SYNC_ENABLED')) {
+  if (!isDealMachineSourceEnabled()) {
     return NextResponse.json({
       success: false,
-      error: 'DEALMACHINE_SYNC_ENABLED is disabled. Manual sync route is installed but intentionally blocked.',
+      health: await getDealMachineConnectionHealth(),
+      error: 'DEALMACHINE_SOURCE_ENABLED is disabled. Native API synchronization is intentionally blocked.',
     }, { status: 403 })
   }
 
-  const body = await request.json().catch(() => ({}))
-  const apply = body?.apply === true
+  const parsed = SyncRequestSchema.safeParse(await request.json().catch(() => ({})))
+  if (!parsed.success) {
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid DealMachine sync request.',
+      issues: parsed.error.flatten(),
+    }, { status: 400 })
+  }
+
+  const health = await getDealMachineConnectionHealth({ verify: true })
+  if (health.state !== 'working') {
+    return NextResponse.json({
+      success: false,
+      health,
+      error: health.message,
+    }, { status: statusForHealth(health.state) })
+  }
+
+  const body = parsed.data
   const result = await syncDealMachineLeadSource({
-    dryRun: !apply,
-    maxPages: Math.min(17, Math.max(1, Number(body?.maxStrategies || 3))),
-    pageSize: Math.min(100, Math.max(1, Number(body?.pageSize || 25))),
-    startAfter: Math.max(0, Number(body?.startAfter || 0)),
+    dryRun: !body.apply,
+    maxPages: body.maxStrategies,
+    pageSize: body.pageSize,
+    startAfter: body.startAfter,
+    page: body.page,
   })
   return NextResponse.json({
     success: result.configured && result.ok,
-    mode: apply ? 'official_v2_search_apply' : 'official_v2_free_estimate',
+    health,
+    mode: body.apply ? 'native_api_apply' : 'native_api_cost_estimate',
     ...result,
     leads: undefined,
   })

@@ -71,16 +71,11 @@ export function buildDatabaseDealMachineFreshness(
   const events = sourceEvents.filter((event) => String(event.provider || '').toLowerCase() === 'dealmachine')
   if (!events.length) return null
 
-  const pendingExports = events.filter(
-    (event) =>
-      event.event_type === 'contact_export_needed' &&
-      ['received', 'processing'].includes(String(event.status || '').toLowerCase())
-  )
   const sourceObservations = events.filter((event) => {
     const eventType = String(event.event_type || '')
     const rows = Number(event.rows_received || 0) + Number(event.rows_ingested || 0)
     return (
-      !['cursor_checkpoint', 'contact_export_needed'].includes(eventType) &&
+      eventType === 'scheduled_lead_sync' &&
       String(event.status || '').toLowerCase() === 'completed' &&
       rows > 0 &&
       timestamp(event) !== null
@@ -124,34 +119,13 @@ export function buildDatabaseDealMachineFreshness(
     )
   }).length
 
-  const pendingCreatedAt = pendingExports
-    .map((event) => timestamp(event))
-    .filter((value): value is number => value !== null)
-    .sort((a, b) => b - a)[0]
-  const latestExportRequest = pendingExports.length
-    ? {
-        createdAt: pendingCreatedAt ? new Date(pendingCreatedAt).toISOString() : null,
-        ageMinutes: pendingCreatedAt ? Math.max(0, Math.floor((now.getTime() - pendingCreatedAt) / 60_000)) : null,
-        totalRows: pendingExports.length,
-        strategies: unique(pendingExports.map((event) => event.strategy_key)),
-        markets: unique(pendingExports.map((event) => formatMarket(event.market))),
-        csvPath: null,
-        guidePath: null,
-        summaryFile: null,
-        noDealMachineSkipTraceDefault: true,
-      }
-    : null
-
-  const nextRefreshMarkets = unique([
-    ...stale.map((event) => event.market).filter((market) => market !== 'All markets'),
-    ...pendingExports.map((event) => formatMarket(event.market)).filter((market) => market !== 'All markets'),
-  ]).slice(0, 4)
+  const latestExportRequest = null
+  const nextRefreshMarkets = unique(
+    stale.map((event) => event.market).filter((market) => market !== 'All markets')
+  ).slice(0, 4)
   const evidenceSummary = observations.length
     ? `${fresh.length} fresh and ${stale.length} stale DealMachine source feed${observations.length === 1 ? '' : 's'} recorded in the production database.`
     : 'No completed DealMachine source feed with rows is recorded in the production database.'
-  const pendingSummary = pendingExports.length
-    ? ` ${pendingExports.length} contact export${pendingExports.length === 1 ? '' : 's'} waiting for usable contacts.`
-    : ''
   const blockedSummary = blockedRecent
     ? ` ${blockedRecent} source attempt${blockedRecent === 1 ? '' : 's'} blocked or failed in the last 7 days.`
     : ''
@@ -164,6 +138,6 @@ export function buildDatabaseDealMachineFreshness(
     nextRefreshMarkets,
     topStale: stale.slice(0, 4),
     latestExportRequest,
-    summary: `${evidenceSummary}${pendingSummary}${blockedSummary}`,
+    summary: `${evidenceSummary} Legacy export events remain archived and are excluded from freshness decisions.${blockedSummary}`,
   }
 }

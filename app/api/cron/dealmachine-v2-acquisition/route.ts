@@ -5,7 +5,7 @@ export const maxDuration = 300
 import { NextResponse } from 'next/server'
 
 import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
-import { hasDealMachineCredentials } from '@/lib/dealmachine/v2-client.mjs'
+import { hasDealMachineCredentials, isDealMachineSourceEnabled } from '@/lib/dealmachine/v2-client.mjs'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -26,6 +26,14 @@ function envInt(name: string, fallback: number, max: number) {
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 })
+  }
+  if (!isDealMachineSourceEnabled()) {
+    return NextResponse.json({
+      ok: false,
+      configured: hasDealMachineCredentials(),
+      enabled: false,
+      error: 'DealMachine native synchronization is intentionally inactive.',
+    }, { status: 503 })
   }
   if (!hasDealMachineCredentials()) {
     return NextResponse.json({

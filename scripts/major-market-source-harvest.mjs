@@ -447,7 +447,7 @@ async function harvestPhiladelphia() {
         last_status_date: dateOnly(row.mostrecentinsp || row.violationdate),
         inspection_task: row.violationdescription,
         source_url: "https://phl.carto.com/api/v2/sql",
-        notes: `Philadelphia open L&I violation. Owner in city source: ${row.ownername || row.organization || "unknown"}. Build DealMachine list, export contacts, then use several-options outreach.`,
+        notes: `Philadelphia open L&I violation. Owner in city source: ${row.ownername || row.organization || "unknown"}. Preserve public-source evidence; use native API contacts only after DealMachine activation, then route to reviewed several-options outreach.`,
       })
     )
   )
@@ -478,7 +478,7 @@ async function harvestPittsburgh() {
           last_status_date: dateOnly(row.investigation_date),
           inspection_task: row.investigation_findings || row.violation_spec_instructions,
           source_url: "https://data.wprdc.org/dataset/pittsburgh-pli-violations-report",
-          notes: "Pittsburgh active PLI/DOMI/ES violation. Build DealMachine list, export contacts, then use several-options outreach.",
+          notes: "Pittsburgh active PLI/DOMI/ES violation. Preserve public-source evidence; use native API contacts only after DealMachine activation, then route to reviewed several-options outreach.",
         })
       })
   )
@@ -506,7 +506,7 @@ async function harvestKansasCity() {
         last_status_date: dateOnly(row.creation_date),
         inspection_task: row.work_group,
         source_url: row.case_url?.url || "https://data.kcmo.org/resource/7at3-sxhp",
-        notes: "Kansas City open property/building case. Build DealMachine list, export contacts, then use several-options outreach.",
+        notes: "Kansas City open property/building case. Preserve public-source evidence; use native API contacts only after DealMachine activation, then route to reviewed several-options outreach.",
       })
     )
   )
@@ -534,7 +534,7 @@ async function harvestNewOrleans() {
         last_status_date: dateOnly(row.violationdate),
         inspection_task: row.description,
         source_url: "https://data.nola.gov/resource/3ehi-je3s",
-        notes: "New Orleans code violation. Build DealMachine list, export contacts, then use several-options outreach.",
+        notes: "New Orleans code violation. Preserve public-source evidence; use native API contacts only after DealMachine activation, then route to reviewed several-options outreach.",
       })
     )
   )

@@ -7,8 +7,8 @@ const snapshot = buildDatabaseDealMachineFreshness(
   [
     {
       provider: 'dealmachine',
-      external_event_id: 'fresh-export',
-      event_type: 'local_contacts_export_chunk',
+      external_event_id: 'fresh-native-sync',
+      event_type: 'scheduled_lead_sync',
       market: 'cleveland-oh',
       status: 'completed',
       rows_received: 50,
@@ -17,8 +17,8 @@ const snapshot = buildDatabaseDealMachineFreshness(
     },
     {
       provider: 'dealmachine',
-      external_event_id: 'stale-export',
-      event_type: 'local_contacts_export_chunk',
+      external_event_id: 'stale-native-sync',
+      event_type: 'scheduled_lead_sync',
       market: 'memphis-tn',
       status: 'completed',
       rows_received: 30,
@@ -27,7 +27,7 @@ const snapshot = buildDatabaseDealMachineFreshness(
     },
     {
       provider: 'dealmachine',
-      external_event_id: 'contact-export-needed:1',
+      external_event_id: 'legacy-contact-export-needed:1',
       event_type: 'contact_export_needed',
       strategy_key: 'vacant-equity',
       market: 'detroit-mi',
@@ -43,10 +43,9 @@ assert.ok(snapshot)
 assert.equal(snapshot.freshCount, 1)
 assert.equal(snapshot.staleCount, 1)
 assert.equal(snapshot.topStale[0]?.market, 'Memphis, TN')
-assert.equal(snapshot.latestExportRequest?.totalRows, 1)
-assert.deepEqual(snapshot.latestExportRequest?.strategies, ['vacant-equity'])
+assert.equal(snapshot.latestExportRequest, null)
 assert.ok(snapshot.nextRefreshMarkets.includes('Memphis, TN'))
-assert.ok(snapshot.nextRefreshMarkets.includes('Detroit, MI'))
 assert.match(snapshot.summary, /production database/i)
+assert.match(snapshot.summary, /archived/i)
 
 console.log('dealmachine-freshness: ok')

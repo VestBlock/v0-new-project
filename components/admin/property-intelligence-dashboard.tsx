@@ -229,16 +229,16 @@ export function PropertyIntelligenceDashboard() {
     setSyncMessage('')
     const token = await getToken()
     if (!token) return
-    const response = await fetch('/api/admin/property-intelligence/dealmachine-sync', {
-      method: 'POST',
+    const response = await fetch('/api/admin/property-intelligence/dealmachine-sync?verify=true', {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await response.json().catch(() => ({}))
-    setSyncMessage(data.error || data.message || 'DealMachine sync request completed.')
+    const message = data.health?.message || data.error || 'DealMachine health check completed.'
+    setSyncMessage(message)
     toast({
-      title: response.ok ? 'DealMachine sync checked' : 'DealMachine sync blocked',
-      description: data.error || 'Provider route responded.',
-      variant: response.ok ? 'default' : 'destructive',
+      title: data.health?.state === 'working' ? 'DealMachine API verified' : 'DealMachine API not ready',
+      description: message,
+      variant: data.health?.state === 'working' ? 'default' : 'destructive',
     })
   }
 
@@ -344,7 +344,7 @@ export function PropertyIntelligenceDashboard() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={triggerDealMachineSync}>Trigger DealMachine Sync Check</Button>
+            <Button type="button" variant="outline" onClick={triggerDealMachineSync}>Verify DealMachine API</Button>
             <Button type="button" onClick={triggerAttomEnrichment} disabled={isAttomEnriching}>
               {isAttomEnriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Enrich Priority Leads
             </Button>

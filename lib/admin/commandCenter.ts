@@ -1719,16 +1719,15 @@ export function buildForeclosureCommandSnapshot(input: {
       arvSpread: 32000,
     }
   )
-  const freshExports = Number(input.freshDealMachineExports || 0)
-  const status: CommandStatus = sampleRoute.urgency === 'urgent' ? 'red' : freshExports > 0 ? 'green' : 'yellow'
+  const freshApiRows = Number(input.freshDealMachineExports || 0)
+  const status: CommandStatus = sampleRoute.urgency === 'urgent' ? 'red' : freshApiRows > 0 ? 'green' : 'yellow'
 
   return {
     status,
     summary: `${FORECLOSURE_COUNTY_SOURCES.length} county lanes, ${FORECLOSURE_EXIT_BUCKETS.length} exit buckets, sample route ${sampleRoute.score}/100 into ${sampleRoute.bestExit.replace(/_/g, ' ')}.`,
-    nextMove:
-      freshExports > 0
-        ? 'Ingest the latest DealMachine exports, stack public distress signals, then route each lead to the best exit before drafting.'
-        : 'Build/export fresh DealMachine distress lists before sending; keep county evidence and exit route attached to each lead.',
+    nextMove: freshApiRows > 0
+      ? 'Stack fresh native-API records with public distress evidence, then route each lead before drafting.'
+      : 'Use verified county and public-record sources now; DealMachine remains gated until its native API key is verified.',
     countySources: FORECLOSURE_COUNTY_SOURCES,
     exitBuckets: FORECLOSURE_EXIT_BUCKETS,
     starterPlays: [
@@ -1894,8 +1893,8 @@ export function buildOsintSourceBoard(input: {
       ready.length > 0
         ? 'Work ready research checklists into the correct outreach lane before building more generic volume.'
         : freshDmExports.length
-          ? 'Convert fresh DealMachine exports into research checklists, then stack county/tax/code evidence before sends.'
-          : 'Build fresh DealMachine Contacts exports and public-record source evidence before new seller outreach.',
+          ? 'Convert fresh native-API records into research checklists, then stack county/tax/code evidence before sends.'
+          : 'Build public-record source evidence while the DealMachine native API remains gated.',
     totals: {
       checklists: open.length,
       ready: ready.length,
@@ -2957,7 +2956,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const cooldownSaves7d = recentPartnerRuns7d.filter((run) => isCooldownNote(run.note)).length
   const failedPartnerRuns7d = recentPartnerRuns7d.filter((run) => lower(run.status) === 'failed').length
   const archivedLegacyRuntimeRows = t.scrapeRuns.length
-  const staleExports = databaseDealMachineFreshness?.staleCount ?? local.dmExports.filter((e) => e.ageDays > 7).length
+  const staleExports = databaseDealMachineFreshness?.staleCount ?? 0
 
   const openTasks = t.adminTasks.filter(
     (task) => !['done', 'completed', 'closed'].includes(lower(task.status)) && isCurrentVestblockTask(task)
@@ -3047,16 +3046,10 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     .sort((a, b) => Date.parse(b?.createdAt || '') - Date.parse(a?.createdAt || ''))
     .slice(0, 5) as CommandCenterSuppressionCenter['recent']
 
-  const freshDmExports = local.dmExports.filter((file) => file.ageDays <= 7)
-  const staleDmExports = local.dmExports.filter((file) => file.ageDays > 7)
-  const nextRefreshMarkets = [
-    ...new Set(
-      (staleDmExports.length ? staleDmExports : local.dmExports)
-        .map((file) => marketFromDmExportFile(file.file))
-        .filter(Boolean)
-    ),
-  ].slice(0, 4)
-  const dmAges = local.dmExports.map((file) => file.ageDays)
+  const freshDmExports: typeof local.dmExports = []
+  const staleDmExports: typeof local.dmExports = []
+  const nextRefreshMarkets: string[] = []
+  const dmAges: number[] = []
   const localDealMachineFreshness: CommandCenterDealMachineFreshness = {
     freshCount: freshDmExports.length,
     staleCount: staleDmExports.length,
@@ -3068,10 +3061,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       ageDays: file.ageDays,
       market: marketFromDmExportFile(file.file),
     })),
-    latestExportRequest: local.dealMachineExportRequest,
-    summary: local.dmExports.length
-      ? `${freshDmExports.length} fresh export${freshDmExports.length === 1 ? '' : 's'} and ${staleDmExports.length} stale export${staleDmExports.length === 1 ? '' : 's'} on disk${local.dealMachineExportRequest?.totalRows ? `; latest request has ${local.dealMachineExportRequest.totalRows} row${local.dealMachineExportRequest.totalRows === 1 ? '' : 's'} waiting for a Contacts export` : ''}.`
-      : 'No DealMachine contact exports are on disk yet.',
+    latestExportRequest: null,
+    summary: 'DealMachine export automation is retired. Historical files are archived and excluded from source freshness.',
   }
   const dealMachineFreshness: CommandCenterDealMachineFreshness =
     databaseDealMachineFreshness || localDealMachineFreshness
@@ -3095,8 +3086,8 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
         : recommendedSprintTarget > 0 && sendReady > 0
         ? 'Push safe seller cap sprint'
         : dealMachineFreshness.freshCount > 0
-          ? 'Mine fresh DealMachine exports'
-          : 'Refresh portfolio landlord exports'
+          ? 'Review fresh DealMachine native API records'
+          : 'Expand verified public-record and partner sources'
   const leadMarketFallback = marketLabel(currentLeads.find((lead) => lead.city || lead.state))
   const strategyChallenger =
     (onMarketSweepRecent && local.onMarketSweep.markets[0]?.market
@@ -3112,9 +3103,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
         ? `Monitor replies from the ${local.onMarketSweep.sent} public listing-agent cash review email${local.onMarketSweep.sent === 1 ? '' : 's'} sent in the latest sweep, then let Boss decide whether to repeat or pivot.`
         : recommendedSprintTarget > 0 && sendReady > 0
         ? `Preview or push ${recommendedSprintTarget} acquisition email${recommendedSprintTarget === 1 ? '' : 's'} toward today’s cap.`
-        : staleDmExports.length > 0
-          ? `Refresh ${nextRefreshMarkets.slice(0, 2).join(' and ') || 'the stale DealMachine markets'} before sending more volume.`
-          : 'Source the next DealMachine export, then let the lab pick the strongest segment.'
+        : 'Use verified public-record and partner sources while DealMachine remains gated.'
   const strategyLab: CommandCenterStrategyLab = {
     status:
       missingSuppressionDb || !outboundReadiness.mailingAddressConfigured
@@ -3296,7 +3285,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const foreclosureCommand = buildForeclosureCommandSnapshot({
     buyerMatchesOpen: pendingBuyerMatches,
     lenderMatchesOpen: pendingLenderMatches,
-    freshDealMachineExports: freshDmExports.length,
+    freshDealMachineExports: dealMachineFreshness.freshCount,
   })
   const osintSourceBoard = buildOsintSourceBoard({
     researchChecklists: t.researchChecklists,
@@ -3493,22 +3482,6 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
             priority: 'warning' as const,
             href: '/admin/leads',
             actions: [navigateAction('alert-empty-send-ready-open', 'Open seller queue', '/admin/leads')],
-          },
-        ]
-      : []),
-    ...(staleExports === local.dmExports.length && local.dmExports.length > 0
-      ? [
-          {
-            id: 'alert-stale-exports',
-            lane: 'system' as const,
-            title: 'DealMachine exports are stale',
-            detail: `All ${local.dmExports.length} saved exports are older than 7 days.`,
-            hint: 'Pull a fresh export before another seller run.',
-            at: null,
-            statusLabel: 'Refresh needed',
-            priority: 'warning' as const,
-            href: '/admin/lead-sources',
-            actions: [navigateAction('alert-stale-exports-open', 'Open sources', '/admin/lead-sources')],
           },
         ]
       : []),
@@ -3818,12 +3791,6 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       href: '/admin/scrape-runs',
     })
   }
-  if (local.dmExports.length > 0 && local.dmExports.every((e) => e.ageDays > 7)) {
-    alerts.push({
-      severity: 'warning',
-      message: `All ${staleExports} DealMachine contact exports on disk are older than 7 days. Export fresh contacts before the next send.`,
-    })
-  }
   if (sourceGovernor.paidSourcesBlocked > 0) {
     alerts.push({
       severity: 'info',
@@ -3903,7 +3870,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       role: 'Sellers, distress stacks, DealMachine lanes, partner signups',
       status: agentStatus(
         newLeads7d > 0 || activePartnerDiscoveryRuns7d > 0,
-        failedScrapes24h > 0 || failedPartnerRuns7d > 0 || (local.dmExports.length > 0 && staleExports === local.dmExports.length)
+        failedScrapes24h > 0 || failedPartnerRuns7d > 0
       ),
       statusReason:
         failedScrapes24h > 0 || failedPartnerRuns7d > 0
@@ -4136,12 +4103,12 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       signals: [
         { label: 'New 24h', value: newLeads24h, status: newLeads24h > 0 ? 'green' : 'yellow' },
         { label: 'Discovery 7d', value: activePartnerDiscoveryRuns7d, helper: `${cooldownSaves7d} duplicate runs skipped` },
-        { label: 'DM exports', value: local.dmExports.length, helper: staleExports === local.dmExports.length && local.dmExports.length > 0 ? 'all stale' : 'saved on disk' },
+        { label: 'DM API rows', value: dealMachineFreshness.freshCount, helper: dealMachineFreshness.freshCount > 0 ? 'fresh CRM sync' : 'adapter gated' },
       ],
       watchItems: [
-        staleExports === local.dmExports.length && local.dmExports.length > 0
-          ? 'Refresh DealMachine exports before another seller push.'
-          : 'Fresh contact exports are available for the next seller run.',
+        dealMachineFreshness.freshCount > 0
+          ? 'Fresh native API records are available for review.'
+          : 'DealMachine remains gated; use verified public-record and partner sources.',
         partnerResearchReady > 0
           ? `${partnerResearchReady} partner profiles are ready for internal review.`
           : 'No partner profiles are staged for review yet.',

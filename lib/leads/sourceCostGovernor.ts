@@ -59,6 +59,7 @@ type SourceCostInput = {
 type SourceGovernorInput = {
   now?: Date
   scrapeRuns?: Array<Record<string, any>>
+  /** Historical only. Retained for compatibility; never used to authorize or pace the native API. */
   dealMachineExports?: Array<{ file: string; ageDays: number }>
   env?: EnvShape
 }
@@ -66,11 +67,13 @@ type SourceGovernorInput = {
 const DEFAULT_POLICIES: Record<SourceCostProvider, SourcePolicy> = {
   dealmachine: {
     provider: 'dealmachine',
-    label: 'DealMachine exports',
+    label: 'DealMachine native API',
     costTier: 'owned',
     dailyLimit: 4,
     cooldownHours: 18,
-    defaultEnabled: true,
+    requiresApiKey: 'DEALMACHINE_API_KEY',
+    envEnableFlag: 'DEALMACHINE_SOURCE_ENABLED',
+    defaultEnabled: false,
   },
   homeharvest: {
     provider: 'homeharvest',
@@ -333,15 +336,11 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
   ]
   const lanes = providers.map((provider) => {
     const runStats = recentRunsForProvider(scrapeRuns, provider, now)
-    const dmLatest =
-      provider === 'dealmachine' && input.dealMachineExports?.length
-        ? new Date(now.getTime() - Math.min(...input.dealMachineExports.map((item) => item.ageDays)) * 864e5).toISOString()
-        : runStats.latest
     return evaluateSourceCost(provider, {
       now,
       env,
-      usedToday: provider === 'dealmachine' ? Math.min(input.dealMachineExports?.length || 0, runStats.usedToday || input.dealMachineExports?.length || 0) : runStats.usedToday,
-      lastRunAt: dmLatest,
+      usedToday: runStats.usedToday,
+      lastRunAt: runStats.latest,
     })
   })
 
@@ -354,7 +353,7 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
   const nextActions = [
     paidSourcesBlocked > 0 ? 'Keep paid sources controlled until funded credits, explicit approval flags, and daily source limits are configured.' : null,
     cooldownsActive > 0 ? 'Do not rerun cooled-down markets; rotate into a different source or market first.' : null,
-    runnable > 0 ? 'Use allowed lanes first: DealMachine seller exports, public records, HomeHarvest/on-market sweeps, Instantly network building, or manual CSV.' : null,
+    runnable > 0 ? 'Use allowed lanes first: verified DealMachine native API records, public records, HomeHarvest/on-market sweeps, Instantly network building, or reviewed manual CSV.' : null,
   ].filter(Boolean) as string[]
 
   return {
