@@ -19,6 +19,7 @@ import { isCronAuthorized } from '@/lib/system/cronAuth'
 import { logEvent } from '@/lib/system/logEvent'
 
 const SUCCESSFUL_SEND_STATUSES = new Set(['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied'])
+const GOVERNED_SELLER_STRATEGY_KEY = 'seller-outreach'
 
 function flag(value: string | null, fallback: boolean) {
   if (value === null) return fallback
@@ -89,6 +90,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: `Message quality blocked: ${qualityIssue}.` }, { status: 400 })
     }
 
+    const strategyKey = GOVERNED_SELLER_STRATEGY_KEY
+    const marketSegment = lead.market_segment || null
+
     if (dryRun) {
       return NextResponse.json({
         success: true,
@@ -97,7 +101,8 @@ export async function GET(request: Request) {
         leadId,
         recipient: normalizedEmail,
         subject: message.subject,
-        strategyKey: lead.market_segment || 'seller-outreach',
+        strategyKey,
+        marketSegment,
       })
     }
 
@@ -119,7 +124,6 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString()
     const nextFollowUpAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
-    const strategyKey = lead.market_segment || 'seller-outreach'
     const auditWrites = await Promise.allSettled([
       updateOutreachMessage(message.id, {
         status: 'sent',
@@ -146,6 +150,7 @@ export async function GET(request: Request) {
           action: 'seller_targeted_send',
           sequenceStep: 1,
           strategyKey,
+          marketSegment,
           providerMessageId: sendResult.providerMessageId || null,
         },
       }),
@@ -161,6 +166,7 @@ export async function GET(request: Request) {
         nextActionAt: nextFollowUpAt,
         metadata: {
           sequenceStep: 1,
+          marketSegment,
           source: lead.source,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,
@@ -170,7 +176,7 @@ export async function GET(request: Request) {
         eventType: 'email_sent',
         entityType: 'lead',
         entityId: leadId,
-        metadata: { action: 'seller_targeted_send', provider: sendResult.provider, strategyKey },
+        metadata: { action: 'seller_targeted_send', provider: sendResult.provider, strategyKey, marketSegment },
       }),
     ])
     const auditWarnings = auditWrites.flatMap((result, index) =>

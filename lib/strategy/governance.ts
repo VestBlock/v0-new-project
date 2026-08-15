@@ -1,21 +1,23 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  PLATFORM_STRATEGY_LANES,
+  type PlatformStrategyLaneKey,
+} from '@/lib/strategy/registry'
 
-export const PLATFORM_STRATEGY_LANES = [
-  'capital_funding',
-  'real_estate_buyers_investors',
-  'seller_property_acquisition',
-  'lenders_capital_providers',
-  'real_estate_professionals_providers',
-  'business_buyers_sellers',
-  'next_move_roadmaps',
-  'dealvault_opportunities',
-  'partnerships_referrals',
-  'content_visibility',
-] as const
-
-export type PlatformStrategyLaneKey = (typeof PLATFORM_STRATEGY_LANES)[number]
+export {
+  OPERATING_STRATEGY_DEFINITIONS,
+  OPERATING_STRATEGY_KEYS,
+  PLATFORM_STRATEGY_LANES,
+  PROPOSED_PLATFORM_STRATEGY_LANES,
+  STRATEGY_IDENTIFIER_CROSSWALK,
+} from '@/lib/strategy/registry'
+export type {
+  OperatingStrategyKey,
+  PlatformStrategyLaneKey,
+  StrategyIdentifierNamespace,
+} from '@/lib/strategy/registry'
 
 export type StrategyContract = {
   objective: string
@@ -45,6 +47,46 @@ export type StrategyLaneVersion = {
   source_provenance_json: Array<Record<string, unknown>>
   approved_at: string | null
   created_at: string
+}
+
+export type OperatingStrategyContract = {
+  objective: string
+  targetParticipant: string
+  problem: string
+  valueExchange: string
+  eligibilityCriteria: string[]
+  disqualificationCriteria: string[]
+  sourceData: string[]
+  primaryChannels: string[]
+  secondaryChannels: string[]
+  followupCadence: string[]
+  humanApprovalPoints: string[]
+  complianceLimits: string[]
+  learningInputs: string[]
+  failureConditions: string[]
+  stopRules: string[]
+  handoffRules: string[]
+  versionDecisionRule: Record<string, string>
+}
+
+export type StrategyLifecycleContract = {
+  states: string[]
+  initialState: string
+  terminalStates: string[]
+  transitions: Array<{ from: string; to: string; event: string }>
+  cadence: string[]
+  stopConditions: string[]
+}
+
+export type StrategyOutcomeContract = {
+  primaryConversionEvent: string
+  leadingIndicators: string[]
+  businessValue: string
+  learningInputs: string[]
+  learningWindowDays: number
+  minimumExposure: number
+  attributionDimensions: string[]
+  stopConditions: string[]
 }
 
 const REQUIRED_CONTRACT_KEYS: Array<keyof StrategyContract> = [
@@ -80,10 +122,106 @@ export function validateStrategyContract(value: unknown): StrategyContract {
   return contract as StrategyContract
 }
 
+const OPERATING_CONTRACT_KEYS: Array<keyof OperatingStrategyContract> = [
+  'objective',
+  'targetParticipant',
+  'problem',
+  'valueExchange',
+  'eligibilityCriteria',
+  'disqualificationCriteria',
+  'sourceData',
+  'primaryChannels',
+  'secondaryChannels',
+  'followupCadence',
+  'humanApprovalPoints',
+  'complianceLimits',
+  'learningInputs',
+  'failureConditions',
+  'stopRules',
+  'handoffRules',
+  'versionDecisionRule',
+]
+
+function requireObject(value: unknown, label: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`)
+  return value as Record<string, unknown>
+}
+
+function requireNonEmptyArray(value: unknown, label: string) {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`${label} must be a non-empty array.`)
+}
+
+export function validateOperatingStrategyContract(value: unknown): OperatingStrategyContract {
+  const contract = requireObject(value, 'Operating strategy contract')
+  for (const key of OPERATING_CONTRACT_KEYS) {
+    if (contract[key] === undefined || contract[key] === null || contract[key] === '') {
+      throw new Error(`Operating strategy contract is missing ${key}.`)
+    }
+  }
+  for (const key of [
+    'eligibilityCriteria',
+    'disqualificationCriteria',
+    'sourceData',
+    'primaryChannels',
+    'followupCadence',
+    'humanApprovalPoints',
+    'complianceLimits',
+    'learningInputs',
+    'failureConditions',
+    'stopRules',
+    'handoffRules',
+  ] as const) {
+    requireNonEmptyArray(contract[key], key)
+  }
+  requireObject(contract.versionDecisionRule, 'versionDecisionRule')
+  return contract as OperatingStrategyContract
+}
+
+export function validateStrategyLifecycleContract(value: unknown): StrategyLifecycleContract {
+  const contract = requireObject(value, 'Strategy lifecycle contract')
+  requireNonEmptyArray(contract.states, 'lifecycle states')
+  requireNonEmptyArray(contract.terminalStates, 'lifecycle terminalStates')
+  requireNonEmptyArray(contract.transitions, 'lifecycle transitions')
+  requireNonEmptyArray(contract.cadence, 'lifecycle cadence')
+  requireNonEmptyArray(contract.stopConditions, 'lifecycle stopConditions')
+  if (!contract.initialState || typeof contract.initialState !== 'string') {
+    throw new Error('Strategy lifecycle contract needs an initialState.')
+  }
+  return contract as StrategyLifecycleContract
+}
+
+export function validateStrategyOutcomeContract(value: unknown): StrategyOutcomeContract {
+  const contract = requireObject(value, 'Strategy outcome contract')
+  for (const key of ['leadingIndicators', 'learningInputs', 'attributionDimensions', 'stopConditions'] as const) {
+    requireNonEmptyArray(contract[key], `outcome ${key}`)
+  }
+  if (!contract.primaryConversionEvent || !contract.businessValue) {
+    throw new Error('Strategy outcome contract needs a conversion event and business value.')
+  }
+  if (!Number.isInteger(contract.learningWindowDays) || Number(contract.learningWindowDays) < 1) {
+    throw new Error('Strategy outcome learning window must be at least one day.')
+  }
+  if (!Number.isInteger(contract.minimumExposure) || Number(contract.minimumExposure) < 1) {
+    throw new Error('Strategy outcome minimum exposure must be at least one.')
+  }
+  return contract as StrategyOutcomeContract
+}
+
 export async function getStrategyGovernanceSnapshot() {
   const admin = createAdminClient()
-  const [versions, proposals, evidence, outcomes] = await Promise.all([
+  const [portfolios, versions, operatingStrategies, crosswalk, proposals, evidence, outcomes] = await Promise.all([
+    admin.from('strategy_portfolios').select('*').order('portfolio_key'),
     admin.from('strategy_lane_versions').select('*').eq('status', 'active').order('lane_key'),
+    admin
+      .from('operating_strategy_versions')
+      .select('*,operating_strategies!inner(strategy_key,portfolio_key,title)')
+      .in('status', ['draft', 'active'])
+      .order('created_at'),
+    admin
+      .from('strategy_identifier_crosswalk')
+      .select('source_namespace,source_identifier,identifier_kind,resolution_status,allows_new_activity,portfolio_key,operating_strategy_id,valid_from,valid_to')
+      .order('source_namespace')
+      .order('source_identifier'),
     admin
       .from('strategy_updates')
       .select('id,category,target_type,target_key,risk_level,approval_status,title,rationale,proposed_change_json,requires_admin_review,created_at,updated_at')
@@ -102,15 +240,41 @@ export async function getStrategyGovernanceSnapshot() {
       .order('created_at', { ascending: false })
       .limit(20),
   ])
-  for (const result of [versions, proposals, evidence, outcomes]) {
+  for (const result of [portfolios, versions, operatingStrategies, crosswalk, proposals, evidence, outcomes]) {
     if (result.error) throw result.error
   }
   return {
+    portfolios: portfolios.data || [],
     lanes: (versions.data || []) as StrategyLaneVersion[],
+    operatingStrategies: operatingStrategies.data || [],
+    identifierCrosswalk: crosswalk.data || [],
     proposals: proposals.data || [],
     evidence: evidence.data || [],
     outcomes: outcomes.data || [],
     generatedAt: new Date().toISOString(),
+  }
+}
+
+export async function resolveOperatingStrategyIdentifier(input: {
+  namespace: string
+  sourceIdentifier: string
+  asOf?: string
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('resolve_operating_strategy_identifier', {
+    p_source_namespace: input.namespace,
+    p_source_identifier: input.sourceIdentifier,
+    p_as_of: input.asOf || new Date().toISOString(),
+  })
+  if (error) throw error
+  const rows = Array.isArray(data) ? data : data ? [data] : []
+  if (rows.length !== 1) throw new Error('Strategy identifier did not resolve to exactly one active version.')
+  return rows[0] as {
+    portfolio_key: PlatformStrategyLaneKey
+    strategy_key: string
+    operating_strategy_id: string
+    operating_strategy_version_id: string
+    operating_strategy_version: number
   }
 }
 
@@ -172,42 +336,20 @@ export async function decideStrategyProposal(input: {
     if (result.error) throw result.error
     return { proposal: result.data, version: null }
   }
-  if (proposal.approval_status !== 'approved') throw new Error('Approve this material strategy change before applying it.')
-
-  const { data: current, error: currentError } = await admin
-    .from('strategy_lane_versions').select('*')
-    .eq('lane_key', proposal.target_key).eq('status', 'active').single()
-  if (currentError || !current) throw currentError || new Error('Active strategy version not found.')
-  const change = (proposal.proposed_change_json || {}) as Record<string, unknown>
-  const patch = (change.contractPatch || {}) as Record<string, unknown>
-  const contract = validateStrategyContract({ ...(current.contract_json || {}), ...patch })
-  const provenance = Array.isArray(change.sourcedFacts) ? change.sourcedFacts : []
-  if (!provenance.length) throw new Error('Cannot apply a strategy change without sourced evidence.')
-
-  const retire = await admin.from('strategy_lane_versions').update({ status: 'retired', updated_at: now })
-    .eq('id', current.id).eq('status', 'active')
-  if (retire.error) throw retire.error
-  const inserted = await admin.from('strategy_lane_versions').insert({
-    lane_key: current.lane_key,
-    version: Number(current.version) + 1,
-    title: current.title,
-    status: 'active',
-    contract_json: contract,
-    source_provenance_json: provenance,
-    approved_by_user_id: input.actorUserId,
-    approved_at: now,
-    supersedes_id: current.id,
-  }).select('*').single()
-  if (inserted.error) {
-    await admin.from('strategy_lane_versions').update({ status: 'active', updated_at: new Date().toISOString() }).eq('id', current.id)
-    throw inserted.error
-  }
-  const applied = await admin.from('strategy_updates').update({
-    approval_status: 'auto_applied',
-    applied_change_json: { strategyVersionId: inserted.data.id, version: inserted.data.version },
-    applied_at: now,
-    updated_at: now,
-  }).eq('id', input.id).eq('approval_status', 'approved').select('*').single()
+  const applied = await admin.rpc('apply_strategy_lane_proposal', {
+    p_proposal_id: input.id,
+    p_actor_user_id: input.actorUserId,
+  })
   if (applied.error) throw applied.error
-  return { proposal: applied.data, version: inserted.data }
+  const row = (Array.isArray(applied.data) ? applied.data[0] : applied.data) as {
+    proposal_json?: unknown
+    version_json?: unknown
+  } | null
+  if (!row?.proposal_json || !row.version_json) {
+    throw new Error('Atomic proposal application returned no result.')
+  }
+  return {
+    proposal: row.proposal_json,
+    version: row.version_json as StrategyLaneVersion,
+  }
 }

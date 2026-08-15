@@ -54,6 +54,8 @@
     "test:dealmachine-v2": "node scripts/test-dealmachine-v2-client.mjs && node scripts/test-dealmachine-v2-strategies.mjs",
     "test:strategy-execution": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-execution.ts",
     "test:strategy-source-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-source-contracts.ts",
+    "test:strategy-registry-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-registry-contracts.ts",
+    "test:strategy-registry-database": "node --env-file=.env.local scripts/test-strategy-registry-database.mjs",
     "strategy:sources": "node scripts/run-strategy-source-orchestrator.mjs",
     "strategy:source-batch": "node scripts/push-strategy-source-batch.mjs",
     "test:contracts": "hardhat test",

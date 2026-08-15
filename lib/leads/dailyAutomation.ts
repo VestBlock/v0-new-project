@@ -38,6 +38,8 @@ import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 
+const GOVERNED_SELLER_STRATEGY_KEY = 'seller-outreach'
+
 type MarketConfig = {
   id?: string
   city: string
@@ -2252,7 +2254,8 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
   for (const { lead, initialMessage } of dueFollowups) {
     const address = String(lead.property_address || '').trim()
     const firstName = String(lead.name || lead.business_name || '').trim().split(/\s+/)[0] || 'there'
-    const strategy = lead.market_segment || classifyLeadRevenueCampaign(lead).key
+    const strategyKey = GOVERNED_SELLER_STRATEGY_KEY
+    const marketSegment = lead.market_segment || classifyLeadRevenueCampaign(lead).key
     const contactInfo = (lead.contact_info || {}) as Record<string, unknown>
     const listingAgent =
       String(contactInfo.contactRole || '').toLowerCase() === 'listing_agent' ||
@@ -2290,7 +2293,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
 
     if (options.dryRun) {
       results.push({ leadId: lead.id, label: leadLabel(lead), status: 'would_send' })
-      followupItems.push(`${leadLabel(lead)} — ${strategy}`)
+      followupItems.push(`${leadLabel(lead)} — ${marketSegment}`)
       continue
     }
 
@@ -2306,7 +2309,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         recipient: lead.email,
         subject: message.subject,
         errorMessage: sendResult.error || 'Follow-up send failed.',
-        metadata: { sequenceStep: 2, initialMessageId: initialMessage.id, strategyKey: strategy },
+        metadata: { sequenceStep: 2, initialMessageId: initialMessage.id, strategyKey, marketSegment },
       })
       await updateLeadRecord(lead.id, { next_follow_up_at: null })
       await createAdminTask({
@@ -2335,7 +2338,8 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         metadata: {
           sequenceStep: 2,
           initialMessageId: initialMessage.id,
-          strategyKey: strategy,
+          strategyKey,
+          marketSegment,
           providerMessageId: sendResult.providerMessageId || null,
         },
       }),
@@ -2346,7 +2350,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         next_follow_up_at: null,
       }),
       recordOutboundEnrollment({
-        strategyKey: strategy,
+        strategyKey,
         channel: 'email',
         status: 'accepted',
         messageId: `${initialMessage.id}:followup:2`,
@@ -2358,6 +2362,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         metadata: {
           sequenceStep: 2,
           initialMessageId: initialMessage.id,
+          marketSegment,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,
         },
@@ -2366,10 +2371,10 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         eventType: 'email_sent',
         entityType: 'lead',
         entityId: lead.id,
-        metadata: { action: 'seller_followup_accepted', sequenceStep: 2, provider: sendResult.provider, strategyKey: strategy },
+        metadata: { action: 'seller_followup_accepted', sequenceStep: 2, provider: sendResult.provider, strategyKey, marketSegment },
       }),
     ])
-    followupItems.push(`${leadLabel(lead)} — ${strategy}`)
+    followupItems.push(`${leadLabel(lead)} — ${marketSegment}`)
     results.push({ leadId: lead.id, label: leadLabel(lead), status: 'accepted' })
   }
 
