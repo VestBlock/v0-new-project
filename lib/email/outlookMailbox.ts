@@ -3,9 +3,19 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
+import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { updateBuyerRecord, upsertBuyer } from '@/lib/buyers/repository'
+import { getConfiguredGate3d1InboundMailboxScope } from '@/lib/email/gate3d1InboundMailboxScope'
+import {
+  isConservativePositiveSellerReplyText,
+  isExplicitEmailOptOutText,
+  isExactGate3d1GraphReplyCallback,
+  resolveMicrosoftGraphAccessTokenTenantId,
+  type Gate3d1GraphThreadEvidence,
+} from '@/lib/email/graphSameThreadReplyCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE } from '@/lib/strategy/gate3d1-seller-reply-canary'
 import { recordOperatingStrategyAttributionQuarantine } from '@/lib/strategy/runtime-governance'
 import { logEvent } from '@/lib/system/logEvent'
 
@@ -21,6 +31,7 @@ type GraphMessage = {
   isRead?: boolean
   categories?: string[]
   webLink?: string | null
+  internetMessageHeaders?: Array<{ name?: string | null; value?: string | null }>
 }
 
 type MailboxClassification =
@@ -42,6 +53,7 @@ function mailboxConfig() {
   const refreshToken = process.env.MICROSOFT_GRAPH_REFRESH_TOKEN || process.env.MICROSOFT_REFRESH_TOKEN || ''
   const tenantId = process.env.MICROSOFT_TENANT_ID || ''
   const mailbox = process.env.OUTLOOK_ACQUISITIONS_MAILBOX || 'acquisitions@vestblock.io'
+  const mailboxObjectId = process.env.OUTLOOK_ACQUISITIONS_MAILBOX_ID || ''
   const autoCleanSpam = envBool('OUTLOOK_AUTO_CLEAN_SPAM', false)
   const delegatedScopes =
     process.env.MICROSOFT_GRAPH_DELEGATED_SCOPES ||
@@ -60,6 +72,7 @@ function mailboxConfig() {
     refreshToken,
     tenantId,
     mailbox,
+    mailboxObjectId,
     autoCleanSpam,
     delegatedScopes,
     configured: delegatedCredentialsReady || applicationCredentialsReady,
@@ -69,11 +82,16 @@ function mailboxConfig() {
 
 export function getOutlookMailboxStatus() {
   const config = mailboxConfig()
+  const gate3d1CallbackScope = getConfiguredGate3d1InboundMailboxScope()
   return {
     configured: config.configured,
+    applicationCredentialsReady: Boolean(config.clientId && config.clientSecret && config.tenantId),
+    delegatedCredentialsReady: Boolean(config.clientId && config.refreshToken),
     mailbox: config.mailbox,
     authMode: config.authMode,
     autoCleanSpam: config.autoCleanSpam,
+    gate3d1CallbackScopeReady: gate3d1CallbackScope.ready,
+    gate3d1CallbackScopeBlocker: gate3d1CallbackScope.blocker,
     missing: [
       !config.clientId ? 'MICROSOFT_GRAPH_CLIENT_ID' : null,
       !config.refreshToken && !config.clientSecret
@@ -115,7 +133,14 @@ async function getMicrosoftAccessToken() {
         : `Microsoft token request failed with ${response.status}.`
     )
   }
-  return data.access_token as string
+  const accessToken = data.access_token as string
+  let tokenTenantId: string | null = null
+  try {
+    tokenTenantId = resolveMicrosoftGraphAccessTokenTenantId(accessToken)
+  } catch (error) {
+    if (envBool('GATE3D1_GRAPH_REPLY_CANARY_ENABLED', false)) throw error
+  }
+  return { accessToken, tokenTenantId }
 }
 
 async function moveMessageToJunk(input: {
@@ -147,6 +172,27 @@ async function moveMessageToJunk(input: {
 
 function cleanText(value: string | null | undefined) {
   return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function exactGraphThreadFromEnrollment(
+  enrollment: Record<string, unknown>
+): Gate3d1GraphThreadEvidence | null {
+  const metadata = enrollment.metadata_json
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const raw = (metadata as Record<string, unknown>).graphReplyThread
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const thread = raw as Record<string, unknown>
+  const result: Gate3d1GraphThreadEvidence = {
+    mailboxObjectId: String(thread.mailboxObjectId || ''),
+    mailboxAddress: String(thread.mailboxAddress || '').trim().toLowerCase(),
+    recipientEmail: String(thread.recipientEmail || '').trim().toLowerCase(),
+    targetInboundImmutableMessageId: String(thread.targetInboundImmutableMessageId || ''),
+    targetConversationId: String(thread.targetConversationId || ''),
+    targetInternetMessageId: String(thread.targetInternetMessageId || ''),
+    outboundImmutableMessageId: String(thread.outboundImmutableMessageId || ''),
+    outboundInternetMessageId: String(thread.outboundInternetMessageId || ''),
+  }
+  return Object.values(result).every(Boolean) ? result : null
 }
 
 function isAutomaticReply(message: GraphMessage) {
@@ -184,8 +230,10 @@ function classifyMessage(message: GraphMessage): MailboxClassification {
 }
 
 function isExplicitOptOut(message: GraphMessage) {
-  const combined = `${cleanText(message.subject)} ${cleanText(message.bodyPreview)}`
-  return /\b(unsubscribe|do not contact|don't contact|stop emailing|stop contacting|opt[ -]?out|remove me)\b/i.test(combined)
+  return isExplicitEmailOptOutText({
+    subject: message.subject,
+    bodyPreview: message.bodyPreview,
+  })
 }
 
 function extractPropertyAddress(text: string) {
@@ -289,18 +337,38 @@ export async function syncOutlookMailbox(options: {
   }
 
   try {
-    const accessToken = await getMicrosoftAccessToken()
+    const graphSession = await getMicrosoftAccessToken()
+    const accessToken = graphSession.accessToken
+    const gate3d1CallbackScope = getConfiguredGate3d1InboundMailboxScope(
+      graphSession.tokenTenantId
+    )
+    if (
+      envBool('GATE3D1_GRAPH_REPLY_CANARY_ENABLED', false) &&
+      !gate3d1CallbackScope.ready
+    ) {
+      throw new Error(
+        gate3d1CallbackScope.blocker ||
+          'Gate 3D.1 inbound callback scope could not be verified before mailbox query.'
+      )
+    }
     const since = new Date(Date.now() - (options.sinceHours || 72) * 60 * 60 * 1000).toISOString()
     const limit = Math.min(Math.max(options.limit || 50, 1), 100)
     const params = new URLSearchParams({
-      '$select': 'id,conversationId,internetMessageId,subject,bodyPreview,receivedDateTime,from,toRecipients,isRead,categories,webLink',
+      '$select': 'id,conversationId,internetMessageId,internetMessageHeaders,subject,bodyPreview,receivedDateTime,from,toRecipients,isRead,categories,webLink',
       '$filter': `receivedDateTime ge ${since}`,
       '$orderby': 'receivedDateTime desc',
       '$top': String(limit),
     })
+    const mailboxResource = config.mailboxObjectId || config.mailbox
     const response = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.mailbox)}/mailFolders/inbox/messages?${params}`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) }
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailboxResource)}/mailFolders/inbox/messages?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: 'IdType="ImmutableId"',
+        },
+        signal: AbortSignal.timeout(20_000),
+      }
     )
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
@@ -322,7 +390,7 @@ export async function syncOutlookMailbox(options: {
           admin.from('investor_profiles').select('id,display_name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
           admin
             .from('command_center_outbound_enrollments')
-            .select('id,recipient_hash,operating_strategy_id,operating_strategy_version_id,operating_contract_fingerprint,provider,provider_message_id,canonical_activity_id')
+            .select('id,lead_id,last_message_id,recipient_hash,operating_strategy_id,operating_strategy_version_id,operating_contract_fingerprint,provider,provider_message_id,canonical_activity_id,metadata_json')
             .eq('channel', 'email')
             .eq('strategy_binding_mode', 'governed_v1')
             .in('recipient', senderEmails),
@@ -371,7 +439,14 @@ export async function syncOutlookMailbox(options: {
       let classification = classifyMessage(message)
       if (!explicitOptOut && !['spam_noise', 'operational_alert'].includes(classification)) {
         if (buyer || lender || investor) classification = 'partner_reply'
-        else if (lead) classification = 'hot_seller_lead'
+        else if (lead) {
+          classification = isConservativePositiveSellerReplyText({
+            subject: message.subject,
+            bodyPreview: message.bodyPreview,
+          })
+            ? 'hot_seller_lead'
+            : 'low_priority'
+        }
       }
       classifications[classification] = (classifications[classification] || 0) + 1
       if (classification === 'spam_noise') confirmedSpamMessageIds.push(message.id)
@@ -438,6 +513,8 @@ export async function syncOutlookMailbox(options: {
           categories: message.categories || [],
           webLink: message.webLink || null,
           syncSource: 'microsoft_graph',
+          observedTenantId: graphSession.tokenTenantId,
+          observedMailboxObjectId: config.mailboxObjectId || null,
           buyerId: buyer?.id || null,
           lenderId: lender?.id || null,
           investorId: investor?.id || null,
@@ -462,6 +539,45 @@ export async function syncOutlookMailbox(options: {
       const newMessageIds = new Set(messageIds.filter((messageId) => !existingMessageIds.has(messageId)))
       newMessages = newMessageIds.size
 
+      // Persist every explicit suppression before governed attribution. A STOP
+      // reply must close outreach first; only then may its exact callback be
+      // recorded as a suppressed outcome for the already-pinned enrollment.
+      const newOptOutEmails = new Set(
+        rows
+          .filter((row) => newMessageIds.has(row.message_id) && row.metadata_json.explicitOptOut && row.from_email)
+          .map((row) => String(row.from_email).toLowerCase())
+      )
+      for (const email of newOptOutEmails) {
+        const { data: existingSuppression, error: suppressionLookupError } = await admin
+          .from('lead_suppressions')
+          .select('id')
+          .eq('email', email)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle()
+        if (suppressionLookupError) throw suppressionLookupError
+        if (!existingSuppression?.id) {
+          const { error: suppressionInsertError } = await admin
+            .from('lead_suppressions')
+            .insert({ email, reason: 'Explicit email opt-out received in Outlook.' })
+          if (suppressionInsertError) throw suppressionInsertError
+        }
+        const suppressionWrites = await Promise.all([
+          admin.from('leads').update({ delivery_status: 'suppressed', suppression_reason: 'Explicit email opt-out.' }).eq('email', email),
+          admin.from('buyers').update({ outreach_status: 'do_not_contact' }).eq('contact_email', email),
+          admin.from('lenders').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email),
+          admin.from('investor_profiles').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email),
+          admin
+            .from('command_center_outbound_enrollments')
+            .update({ status: 'suppressed', suppression_reason: 'Explicit email opt-out.', next_action_at: null, updated_at: new Date().toISOString() })
+            .eq('recipient', email)
+            .eq('channel', 'email')
+            .is('operating_strategy_version_id', null),
+        ])
+        const suppressionWriteError = suppressionWrites.find((result) => result.error)?.error
+        if (suppressionWriteError) throw suppressionWriteError
+      }
+
       for (const row of rows.filter((item) => newMessageIds.has(item.message_id) && item.from_email)) {
         const senderEmailHash = createHash('sha256')
           .update(String(row.from_email).trim().toLowerCase())
@@ -470,6 +586,48 @@ export async function syncOutlookMailbox(options: {
         if (!candidates.length) continue
         const originalMessage = messages.find((message) => message.id === row.message_id)
         const occurredAt = row.received_at || new Date().toISOString()
+        const exactCandidates = gate3d1CallbackScope.ready &&
+          gate3d1CallbackScope.observedMailboxObjectId &&
+          gate3d1CallbackScope.observedMailboxAddress &&
+          originalMessage
+          ? candidates.filter((candidate) => {
+              const thread = exactGraphThreadFromEnrollment(candidate as Record<string, unknown>)
+              return Boolean(thread && isExactGate3d1GraphReplyCallback({
+                mailboxObjectId: gate3d1CallbackScope.observedMailboxObjectId!,
+                mailboxAddress: gate3d1CallbackScope.observedMailboxAddress!,
+                immutableMessageId: originalMessage.id,
+                conversationId: String(originalMessage.conversationId || ''),
+                internetMessageId: String(originalMessage.internetMessageId || ''),
+                fromAddress: String(originalMessage.from?.emailAddress?.address || ''),
+                toAddresses: (originalMessage.toRecipients || [])
+                  .map((recipient) => String(recipient.emailAddress?.address || '')),
+                internetMessageHeaders: (originalMessage.internetMessageHeaders || [])
+                  .map((header) => ({
+                    name: String(header.name || ''),
+                    value: String(header.value || ''),
+                  })),
+              }, thread))
+            })
+          : []
+        if (exactCandidates.length === 1) {
+          const exactEnrollment = exactCandidates[0]
+          const thread = exactGraphThreadFromEnrollment(exactEnrollment as Record<string, unknown>)!
+          const outcome = await recordStrategyDeliveryOutcome({
+            leadId: exactEnrollment.lead_id || null,
+            messageId: exactEnrollment.last_message_id,
+            enrollmentId: exactEnrollment.id,
+            operatingStrategyVersionId: exactEnrollment.operating_strategy_version_id,
+            provider: 'outlook_graph',
+            providerMessageId: thread.outboundImmutableMessageId,
+            providerEventId: row.message_id,
+            status: row.metadata_json.explicitOptOut === true ? 'suppressed' : 'replied',
+            occurredAt,
+          })
+          if (!outcome.updated) {
+            throw new Error(`Exact governed Outlook reply attribution failed: ${outcome.reason}.`)
+          }
+          continue
+        }
         const evidence = {
           mailbox_hash: createHash('sha256').update(config.mailbox.toLowerCase()).digest('hex'),
           graph_message_id: row.message_id,
@@ -485,10 +643,15 @@ export async function syncOutlookMailbox(options: {
           occurred_at: occurredAt,
         }
         const payloadHash = createHash('sha256').update(JSON.stringify(evidence)).digest('hex')
+        const hasGate3d1Candidate = candidates.some((candidate) => {
+          const metadata = candidate.metadata_json
+          return metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
+            (metadata as Record<string, unknown>).deliveryMode === 'gate3d1_exact_same_thread_canary'
+        })
         const quarantineId = await recordOperatingStrategyAttributionQuarantine({
           sourceDomain: 'outlook_mailbox',
           sourceEventKey: `${evidence.mailbox_hash}:${row.message_id}`,
-          reasonCode: candidates.length > 1
+          reasonCode: exactCandidates.length > 1 || candidates.length > 1
             ? 'ambiguous_governed_enrollment'
             : 'provider_identity_missing',
           identifiers: evidence,
@@ -504,6 +667,9 @@ export async function syncOutlookMailbox(options: {
           })),
           payloadHash,
           occurredAt,
+          writerRelease: hasGate3d1Candidate
+            ? GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE
+            : undefined,
         })
         const attributionTask = await createAdminTask({
           title: 'Reconcile governed Outlook reply attribution',
@@ -619,34 +785,6 @@ export async function syncOutlookMailbox(options: {
           dueAt: adminTaskDueDates.now(),
           metadata: { messageId: reply.messageId, mailbox: config.mailbox },
         })
-      }
-
-      const newOptOutEmails = new Set(
-        rows
-          .filter((row) => newMessageIds.has(row.message_id) && row.metadata_json.explicitOptOut && row.from_email)
-          .map((row) => String(row.from_email).toLowerCase())
-      )
-      for (const email of newOptOutEmails) {
-        const { data: existingSuppression } = await admin
-          .from('lead_suppressions')
-          .select('id')
-          .eq('email', email)
-          .eq('status', 'active')
-          .limit(1)
-          .maybeSingle()
-        if (!existingSuppression?.id) {
-          await admin.from('lead_suppressions').insert({ email, reason: 'Explicit email opt-out received in Outlook.' })
-        }
-        await admin.from('leads').update({ delivery_status: 'suppressed', suppression_reason: 'Explicit email opt-out.' }).eq('email', email)
-        await admin.from('buyers').update({ outreach_status: 'do_not_contact' }).eq('contact_email', email)
-        await admin.from('lenders').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email)
-        await admin.from('investor_profiles').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email)
-        await admin
-          .from('command_center_outbound_enrollments')
-          .update({ status: 'suppressed', suppression_reason: 'Explicit email opt-out.', next_action_at: null, updated_at: new Date().toISOString() })
-          .eq('recipient', email)
-          .eq('channel', 'email')
-          .is('operating_strategy_version_id', null)
       }
 
       for (const lead of leadsByEmail.values()) {

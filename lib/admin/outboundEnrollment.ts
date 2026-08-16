@@ -51,6 +51,7 @@ export async function recordOutboundEnrollment(input: {
   subjectNamespace?: string | null
   subjectKey?: string | null
   parentActivityId?: string | null
+  writerRelease?: string
 }) {
   const admin = createAdminClient()
   const now = new Date().toISOString()
@@ -58,6 +59,8 @@ export async function recordOutboundEnrollment(input: {
   const recipientHash = recipient ? createHash('sha256').update(recipient).digest('hex') : null
   const binding = input.binding || null
   const governedStage = input.governedStage || (input.dispatchIntentAt ? 'dispatch_intent' : 'draft')
+  const writerRelease = String(input.writerRelease || 'gate_3c').trim()
+  if (!writerRelease) throw new Error('Outbound enrollment writer release is required.')
   const subjectNamespace = String(input.subjectNamespace || '').trim()
   const subjectKey = String(input.subjectKey || '').trim()
   if (
@@ -201,7 +204,7 @@ export async function recordOutboundEnrollment(input: {
           strategy_binding_mode: 'governed_v1',
           governed_stage: governedStage,
           strategy_binding_recorded_at: now,
-          strategy_writer_release: 'gate_3c',
+          strategy_writer_release: writerRelease,
           destination_mode_snapshot: binding.destinationMode,
           destination_path_snapshot: binding.destinationPath,
           cta_label_snapshot: binding.ctaLabel,
@@ -223,7 +226,7 @@ export async function recordOutboundEnrollment(input: {
 
   let lookup = admin
     .from('command_center_outbound_enrollments')
-    .select('id,strategy_binding_mode,strategy_binding_recorded_at,operating_strategy_version_id,operating_contract_fingerprint,canonical_activity_id,governed_stage')
+    .select('id,strategy_binding_mode,strategy_binding_recorded_at,strategy_writer_release,operating_strategy_version_id,operating_contract_fingerprint,canonical_activity_id,governed_stage')
   lookup = input.enrollmentId
     ? lookup.eq('id', input.enrollmentId)
     : lookup.eq('channel', input.channel).eq('last_message_id', input.messageId)
@@ -257,6 +260,7 @@ export async function recordOutboundEnrollment(input: {
     if (
       binding &&
       (existing.strategy_binding_mode !== 'governed_v1' ||
+        existing.strategy_writer_release !== writerRelease ||
         existing.operating_strategy_version_id !== binding.operatingStrategyVersionId ||
         existing.operating_contract_fingerprint !== binding.contractFingerprint)
     ) {
@@ -321,6 +325,7 @@ export async function recordOutboundEnrollment(input: {
         dispatchReservationId: input.dispatchReservationId,
         dispatchChannel: input.dispatchChannel,
       },
+      writerRelease,
     })
     const { data: linkedRows, error: linkError } = await admin
       .from('command_center_outbound_enrollments')

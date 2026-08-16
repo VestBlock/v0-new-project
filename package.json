@@ -60,6 +60,8 @@
     "strategy:gate3b-contract-manifest": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/generate-gate3b-operating-contract-manifest.ts",
     "test:gate3c-runtime-governance": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-gate3c-runtime-governance.ts",
     "test:gate3c-secondary-outbound-guards": "node scripts/test-gate3c-secondary-outbound-guards.mjs",
+    "test:gate3d1-graph-reply": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-gate3d1-graph-same-thread-reply.ts",
+    "test:gate3d1-founder-control": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-gate3d1-founder-control-surface.ts",
     "test:gate3c-opportunity-match-retry-guards": "node scripts/test-gate3c-opportunity-match-retry-guards.mjs",
     "test:gate3c-consumer-cutover-guards": "node scripts/test-gate3c-consumer-cutover-guards.mjs",
     "test:gate3c-governed-learning-database": "node --env-file=.env.local scripts/test-gate3c-governed-learning-database.mjs",

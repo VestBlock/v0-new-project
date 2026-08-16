@@ -107,7 +107,7 @@ export async function recordStrategyDeliveryOutcome(input: {
   const channel = input.channel || 'email'
   let enrollmentLookup = admin
     .from('command_center_outbound_enrollments')
-    .select('id,lead_id,status,campaign_run_id,strategy_key,strategy_identifier_namespace,operating_strategy_id,strategy_lead_membership_id,operating_strategy_version_id,operating_contract_fingerprint,strategy_binding_mode,destination_mode_snapshot,destination_path_snapshot,cta_label_snapshot,canonical_activity_id,dispatch_channel,provider,provider_message_id,metadata_json')
+    .select('id,lead_id,status,campaign_run_id,strategy_key,strategy_identifier_namespace,strategy_writer_release,operating_strategy_id,strategy_lead_membership_id,operating_strategy_version_id,operating_contract_fingerprint,strategy_binding_mode,destination_mode_snapshot,destination_path_snapshot,cta_label_snapshot,canonical_activity_id,dispatch_channel,provider,provider_message_id,metadata_json')
     .eq('strategy_binding_mode', 'governed_v1')
   if (input.enrollmentId) {
     enrollmentLookup = enrollmentLookup.eq('id', input.enrollmentId)
@@ -160,6 +160,10 @@ export async function recordStrategyDeliveryOutcome(input: {
       enrollmentId: enrollment.id,
     })
     return { updated: false, reason: 'missing_canonical_enrollment_activity' }
+  }
+  const writerRelease = String(enrollment.strategy_writer_release || '').trim()
+  if (!writerRelease) {
+    return { updated: false, reason: 'missing_governed_writer_release' }
   }
   const subject = subjectFromEnrollment(enrollment)
   if (
@@ -217,7 +221,9 @@ export async function recordStrategyDeliveryOutcome(input: {
       ? 'resend_email'
       : provider === 'gmail'
         ? 'gmail_email'
-        : null
+        : provider === 'outlook_graph'
+          ? 'outlook_graph'
+          : null
     if (
       !expectedDispatchChannel ||
       enrollment.dispatch_channel !== expectedDispatchChannel ||
@@ -291,6 +297,7 @@ export async function recordStrategyDeliveryOutcome(input: {
       providerEventId: input.providerEventId || null,
       evidenceId,
     },
+    writerRelease,
   })
 
   const { data: updatedEnrollments, error: enrollmentError } = await admin

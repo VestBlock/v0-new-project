@@ -2,31 +2,31 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "crons": [
     {
-      "path": "/api/cron/boss-daily-loop",
+      "path": "/api/cron/boss-daily-loop?dryRun=true&dispatch=false&send=false",
       "schedule": "0 14,17,20,23 * * *"
     },
     {
-      "path": "/api/cron/daily-ops-report",
+      "path": "/api/cron/daily-ops-report?dryRun=true",
       "schedule": "30 4 * * *"
     },
     {
-      "path": "/api/cron/strategy-engine",
+      "path": "/api/cron/strategy-engine?execute=false&syncDealMachine=false",
       "schedule": "30 13,19 * * *"
     },
     {
-      "path": "/api/cron/strategy-source-orchestrator",
+      "path": "/api/cron/strategy-source-orchestrator?dryRun=true",
       "schedule": "0 11,18 * * *"
     },
     {
-      "path": "/api/cron/seller-followup?excludeDealMachine=true",
+      "path": "/api/cron/seller-followup?excludeDealMachine=true&dryRun=true",
       "schedule": "30 21 * * *"
     },
     {
-      "path": "/api/cron/partner-network-pipeline",
+      "path": "/api/cron/partner-network-pipeline?dryRun=true",
       "schedule": "15 15 * * *"
     },
     {
-      "path": "/api/cron/linkedin-task-queue?limit=40",
+      "path": "/api/cron/linkedin-task-queue?limit=40&dryRun=true",
       "schedule": "45 15 * * *"
     },
     {
@@ -34,27 +34,27 @@
       "schedule": "15 * * * *"
     },
     {
-      "path": "/api/cron/attom-enrichment?limit=10&mode=smart",
+      "path": "/api/cron/attom-enrichment?limit=10&mode=smart&dryRun=true",
       "schedule": "30 12 * * *"
     },
     {
-      "path": "/api/cron/improvement-review",
+      "path": "/api/cron/improvement-review?dryRun=true",
       "schedule": "15 5 * * *"
     },
     {
-      "path": "/api/cron/aeo-site-audit",
+      "path": "/api/cron/aeo-site-audit?dryRun=true",
       "schedule": "0 10 * * *"
     },
     {
-      "path": "/api/cron/entity-seo-expansion",
+      "path": "/api/cron/entity-seo-expansion?dryRun=true",
       "schedule": "15 10 * * *"
     },
     {
-      "path": "/api/cron/visibility-aeo-publisher?limit=2",
+      "path": "/api/cron/visibility-aeo-publisher?limit=2&dryRun=true",
       "schedule": "30 10 * * *"
     },
     {
-      "path": "/api/cron/visibility-indexing-push?inspectLimit=5",
+      "path": "/api/cron/visibility-indexing-push?inspectLimit=5&dryRun=true",
       "schedule": "0 12 * * *"
     }
   ]

@@ -3,6 +3,10 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  GATE3D1_SELLER_REPLY_CANARY_MANIFEST_KEY,
+  GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+} from '@/lib/strategy/gate3d1-seller-reply-canary'
 
 export type OperatingStrategyBinding = {
   namespace: string
@@ -50,6 +54,7 @@ export type ReserveOperatingStrategyDispatchInput = {
   requestedCount?: number
   idempotencyKey: string
   ttlSeconds?: number
+  writerRelease?: string
 }
 
 export type OperatingStrategyActivityType =
@@ -81,6 +86,7 @@ export type RecordOperatingStrategyAttributionQuarantineInput = {
   candidateBindings?: Array<Record<string, unknown>>
   payloadHash: string
   occurredAt: string
+  writerRelease?: string
 }
 
 export type RecordOperatingStrategyActivityInput = {
@@ -106,6 +112,7 @@ export type RecordOperatingStrategyActivityInput = {
   messageVersionKey?: string | null
   provenance?: Array<Record<string, unknown>>
   metadata?: Record<string, unknown>
+  writerRelease?: string
 }
 
 export function fingerprintGovernedOutreachMessage(message: {
@@ -367,6 +374,130 @@ export async function authorizeOperatingStrategyDispatch(
   return binding
 }
 
+/**
+ * Dedicated, one-recipient Gate 3D.1 authorization. This path deliberately
+ * does not read OUTREACH_LIVE_SEND_ENABLED, so opening the canary cannot open
+ * any legacy sender. Its exact writer, contract, channel, cap, environment,
+ * and both database controls are independently pinned.
+ */
+export async function authorizeGate3d1CanaryDispatch(): Promise<OperatingStrategyBinding> {
+  if (
+    process.env.GATE3D1_GRAPH_REPLY_CANARY_ENABLED !== 'true' ||
+    process.env.GATE3D1_GRAPH_REPLY_CANARY_MAX_SENDS !== '1' ||
+    process.env.GATE3D1_GRAPH_REPLY_CANARY_APPROVAL_MANIFEST_KEY !==
+      GATE3D1_SELLER_REPLY_CANARY_MANIFEST_KEY
+  ) {
+    throw new Error('The dedicated Gate 3D.1 Graph canary environment is not exactly enabled and pinned.')
+  }
+  const runtime = await resolveRuntime({
+    namespace: 'operating_strategy',
+    sourceIdentifier: 'seller_options_intake',
+  })
+  const { binding } = runtime
+  const allowedChannels = new Set([...runtime.primaryChannels, ...runtime.secondaryChannels])
+  if (
+    binding.namespace !== 'operating_strategy' ||
+    binding.sourceIdentifier !== 'seller_options_intake' ||
+    binding.strategyKey !== 'seller_options_intake' ||
+    binding.version !== 1 ||
+    binding.executionMode !== 'approved_live' ||
+    binding.externalSendCap !== 1 ||
+    binding.dispatchAuthority !== 'vestblock_application' ||
+    !allowedChannels.has('outlook_graph')
+  ) {
+    throw new Error('The active operating strategy is not the exact reviewed Gate 3D.1 seller canary.')
+  }
+
+  const admin = createAdminClient()
+  const [globalResult, strategyResult] = await Promise.all([
+    admin
+      .from('operating_strategy_runtime_controls')
+      .select('canary_enforcement_status,canary_operating_strategy_version_id,canary_required_writer_release,outbound_kill_switch')
+      .eq('control_key', 'canonical_binding')
+      .limit(2),
+    admin
+      .from('operating_strategy_outbound_controls')
+      .select('operating_strategy_id,paused,writer_release')
+      .eq('operating_strategy_id', binding.operatingStrategyId)
+      .limit(2),
+  ])
+  if (globalResult.error || strategyResult.error) {
+    throw new Error('Dedicated Gate 3D.1 database controls are unavailable; dispatch remains blocked.')
+  }
+  if ((globalResult.data || []).length !== 1 || (strategyResult.data || []).length !== 1) {
+    throw new Error('Dedicated Gate 3D.1 requires exactly one global and strategy control record.')
+  }
+  const globalControl = globalResult.data![0]
+  const strategyControl = strategyResult.data![0]
+  if (
+    globalControl.canary_enforcement_status !== 'reviewed_cap_one' ||
+    globalControl.canary_operating_strategy_version_id !== binding.operatingStrategyVersionId ||
+    globalControl.canary_required_writer_release !== GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE ||
+    globalControl.outbound_kill_switch !== false ||
+    strategyControl.operating_strategy_id !== binding.operatingStrategyId ||
+    strategyControl.paused !== false ||
+    strategyControl.writer_release !== GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE
+  ) {
+    throw new Error('Dedicated Gate 3D.1 requires the exact founder-released cap-one database controls.')
+  }
+  return binding
+}
+
+export async function reserveGate3d1CanaryDispatch(input: {
+  binding: OperatingStrategyBinding
+  idempotencyKey: string
+}): Promise<OperatingStrategyDispatchReservation> {
+  const idempotencyKey = requireIdentifier(input.idempotencyKey, 'Gate 3D.1 reservation idempotency key')
+  const authorized = await authorizeGate3d1CanaryDispatch()
+  if (
+    authorized.operatingStrategyVersionId !== input.binding.operatingStrategyVersionId ||
+    authorized.contractFingerprint !== input.binding.contractFingerprint
+  ) {
+    throw new Error('Gate 3D.1 reservation resolved to a different operating strategy version.')
+  }
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('reserve_operating_strategy_dispatch', {
+    p_operating_strategy_version_id: authorized.operatingStrategyVersionId,
+    p_operating_contract_fingerprint: authorized.contractFingerprint,
+    p_channel: 'outlook_graph',
+    p_requested_count: 1,
+    p_idempotency_key: idempotencyKey,
+    p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+    p_ttl_seconds: 300,
+    p_fallback_channels: [],
+  })
+  if (error) {
+    throw new Error(`Gate 3D.1 one-shot capacity could not be reserved: ${error.message}`)
+  }
+  const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<{
+    reservation_id: string
+    reserved_count: number
+    remaining_daily_capacity: number
+    expires_at: string
+    capacity_window_ends_at: string
+  }>
+  if (rows.length !== 1) {
+    throw new Error(`Gate 3D.1 reservation returned ${rows.length} rows; exactly one is required.`)
+  }
+  const row = rows[0]
+  if (
+    !row.reservation_id ||
+    row.reserved_count !== 1 ||
+    !Number.isInteger(row.remaining_daily_capacity) ||
+    !Number.isFinite(Date.parse(row.expires_at)) ||
+    !Number.isFinite(Date.parse(row.capacity_window_ends_at))
+  ) {
+    throw new Error('Gate 3D.1 reservation returned incomplete or conflicting one-shot evidence.')
+  }
+  return {
+    reservationId: row.reservation_id,
+    reservedCount: row.reserved_count,
+    remainingDailyCapacity: row.remaining_daily_capacity,
+    expiresAt: row.expires_at,
+    capacityWindowEndsAt: row.capacity_window_ends_at,
+  }
+}
+
 export async function reserveOperatingStrategyDispatch(
   input: ReserveOperatingStrategyDispatchInput
 ): Promise<OperatingStrategyDispatchReservation> {
@@ -381,6 +512,7 @@ export async function reserveOperatingStrategyDispatch(
   const idempotencyKey = requireIdentifier(input.idempotencyKey, 'Dispatch reservation idempotency key')
   const requestedCount = input.requestedCount ?? 1
   const ttlSeconds = input.ttlSeconds ?? 300
+  const writerRelease = requireIdentifier(input.writerRelease || 'gate_3c', 'Dispatch writer release')
   if (!Number.isInteger(requestedCount) || requestedCount < 1) {
     throw new Error('Dispatch reservation count must be a positive integer.')
   }
@@ -423,7 +555,7 @@ export async function reserveOperatingStrategyDispatch(
     p_channel: channel,
     p_requested_count: requestedCount,
     p_idempotency_key: idempotencyKey,
-    p_writer_release: 'gate_3c',
+    p_writer_release: writerRelease,
     p_ttl_seconds: ttlSeconds,
     p_fallback_channels: fallbackChannels,
   })
@@ -541,7 +673,7 @@ export async function recordOperatingStrategyAttributionQuarantine(
     p_candidate_bindings_json: candidateBindings,
     p_payload_hash: input.payloadHash,
     p_occurred_at: input.occurredAt,
-    p_writer_release: 'gate_3c',
+    p_writer_release: requireIdentifier(input.writerRelease || 'gate_3c', 'Quarantine writer release'),
   })
   if (error) {
     const message = `${error.message || ''} ${error.details || ''}`.toLowerCase()
@@ -613,7 +745,7 @@ export async function recordOperatingStrategyActivity(
     p_subject_namespace: subjectNamespace,
     p_subject_key: subjectKey,
     p_idempotency_key: idempotencyKey,
-    p_writer_release: 'gate_3c',
+    p_writer_release: requireIdentifier(input.writerRelease || 'gate_3c', 'Activity writer release'),
     p_occurred_at: input.occurredAt,
     p_parent_activity_id: input.parentActivityId || null,
     p_source_namespace: input.binding.namespace,
