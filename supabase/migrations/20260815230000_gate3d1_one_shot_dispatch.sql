@@ -116,6 +116,73 @@ $$;
 REVOKE ALL ON FUNCTION private.gate3d1_dispatch_evaluation_time()
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- Isolated behind a helper so the rollback regression can prove hard expiry
+-- without sleeping. Production resolves this to the statement clock.
+CREATE OR REPLACE FUNCTION private.gate3d1_authority_evaluation_time()
+RETURNS TIMESTAMPTZ
+LANGUAGE SQL
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+  SELECT statement_timestamp();
+$$;
+
+REVOKE ALL ON FUNCTION private.gate3d1_authority_evaluation_time()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- A reply may omit a property, repeat the canonical property, or contain the
+-- complete numbered street component of a canonical comma-delimited address.
+-- It may never reduce a unit-specific canonical property to its street alone.
+CREATE OR REPLACE FUNCTION private.gate3d1_reply_property_matches_canonical(
+  p_reply_property TEXT,
+  p_canonical_property TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  reply_property TEXT := pg_catalog.regexp_replace(
+    btrim(p_reply_property), '[[:space:]]+', ' ', 'g'
+  );
+  canonical_property TEXT := pg_catalog.regexp_replace(
+    btrim(p_canonical_property), '[[:space:]]+', ' ', 'g'
+  );
+  canonical_remainder TEXT;
+BEGIN
+  IF canonical_property = '' THEN
+    RETURN FALSE;
+  END IF;
+  IF reply_property = '' OR lower(reply_property) = lower(canonical_property) THEN
+    RETURN TRUE;
+  END IF;
+  IF left(lower(canonical_property), length(reply_property) + 1)
+      IS DISTINCT FROM lower(reply_property) || ',' THEN
+    RETURN FALSE;
+  END IF;
+  IF reply_property ~* '(^|[[:space:],])(apt|apartment|unit|suite|ste)([[:space:]#.-]|$)'
+    OR reply_property ~ '(^|[[:space:],])#[[:space:]]*[[:alnum:]]+' THEN
+    RETURN FALSE;
+  END IF;
+  IF reply_property !~* '^[[:space:]]*[0-9]+[[:alnum:]-]*[[:space:]]+.+[[:space:]]+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|circle|cir|parkway|pkwy|way|place|pl|terrace|ter|trail|trl|highway|hwy)([[:space:]]+(north|south|east|west|n|s|e|w|ne|nw|se|sw))?[[:space:]]*$' THEN
+    RETURN FALSE;
+  END IF;
+  canonical_remainder := btrim(substr(canonical_property, length(reply_property) + 2));
+  IF canonical_remainder ~* '(^|[[:space:],])(apt|apartment|unit|suite|ste)([[:space:]#.-]|$)'
+    OR canonical_remainder ~ '(^|[[:space:],])#[[:space:]]*[[:alnum:]]+' THEN
+    RETURN FALSE;
+  END IF;
+  RETURN canonical_remainder <> '';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.gate3d1_reply_property_matches_canonical(TEXT, TEXT)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION private.gate3d1_assert_founder_actor(p_actor_user_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -258,6 +325,9 @@ CREATE TABLE private.inbound_reply_continuation_authorizations (
     mailbox_address = lower(btrim(mailbox_address))
     AND mailbox_address ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
   ),
+  inbound_source_message_id TEXT NOT NULL CHECK (
+    NULLIF(btrim(inbound_source_message_id), '') IS NOT NULL
+  ),
   inbound_message_id TEXT NOT NULL CHECK (NULLIF(btrim(inbound_message_id), '') IS NOT NULL),
   inbound_conversation_id TEXT NOT NULL CHECK (
     NULLIF(btrim(inbound_conversation_id), '') IS NOT NULL
@@ -304,7 +374,9 @@ CREATE TABLE private.inbound_reply_continuation_authorizations (
   UNIQUE (inbound_provider, inbound_message_id, inbound_conversation_id, purpose_key),
   CONSTRAINT inbound_reply_continuation_authorizations_time_check CHECK (
     expires_at > approved_at
-    AND expires_at <= approved_at + INTERVAL '7 days'
+    AND expires_at <= approved_at + INTERVAL '24 hours'
+    AND approved_at < authorized_reply_received_at + INTERVAL '10 days'
+    AND expires_at <= authorized_reply_received_at + INTERVAL '10 days'
     AND authorized_reply_received_at <= approved_at
     AND allowed_local_start < allowed_local_end
     AND allowed_local_start >= '10:30'::TIME
@@ -445,10 +517,94 @@ CREATE TABLE private.gate3d1_outbound_control_events (
   )
 );
 
+-- Append-only proof that the historical reply row was re-read through Graph
+-- with ImmutableId semantics without rewriting its original stored message ID.
+CREATE TABLE private.gate3d1_reply_provenance_refreshes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  operating_strategy_version_id UUID NOT NULL
+    REFERENCES public.operating_strategy_versions(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  reply_memory_id UUID NOT NULL UNIQUE
+    REFERENCES public.command_center_reply_memory(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  lead_id UUID NOT NULL REFERENCES public.leads(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  inbound_source_message_id TEXT NOT NULL CHECK (
+    NULLIF(btrim(inbound_source_message_id), '') IS NOT NULL
+  ),
+  inbound_conversation_id TEXT NOT NULL CHECK (
+    NULLIF(btrim(inbound_conversation_id), '') IS NOT NULL
+  ),
+  inbound_internet_message_id TEXT NOT NULL CHECK (
+    NULLIF(btrim(inbound_internet_message_id), '') IS NOT NULL
+  ),
+  normalized_sender_hash TEXT NOT NULL CHECK (normalized_sender_hash ~ '^[0-9a-f]{64}$'),
+  normalized_recipient_hash TEXT NOT NULL CHECK (normalized_recipient_hash ~ '^[0-9a-f]{64}$'),
+  subject_fingerprint TEXT NOT NULL CHECK (subject_fingerprint ~ '^[0-9a-f]{64}$'),
+  reply_summary_fingerprint TEXT NOT NULL CHECK (
+    reply_summary_fingerprint ~ '^[0-9a-f]{64}$'
+  ),
+  authorized_reply_received_at TIMESTAMPTZ NOT NULL,
+  source_metadata_fingerprint TEXT NOT NULL CHECK (
+    source_metadata_fingerprint ~ '^[0-9a-f]{64}$'
+  ),
+  merged_metadata_fingerprint TEXT NOT NULL CHECK (
+    merged_metadata_fingerprint ~ '^[0-9a-f]{64}$'
+  ),
+  observed_tenant_id UUID NOT NULL,
+  observed_mailbox_object_id UUID NOT NULL,
+  observed_immutable_message_id TEXT NOT NULL CHECK (
+    NULLIF(btrim(observed_immutable_message_id), '') IS NOT NULL
+  ),
+  preference_applied TEXT NOT NULL CHECK (preference_applied = 'IdType=ImmutableId'),
+  writer_release TEXT NOT NULL CHECK (NULLIF(btrim(writer_release), '') IS NOT NULL),
+  idempotency_key TEXT NOT NULL UNIQUE CHECK (NULLIF(btrim(idempotency_key), '') IS NOT NULL),
+  refresh_fingerprint TEXT NOT NULL CHECK (refresh_fingerprint ~ '^[0-9a-f]{64}$'),
+  refreshed_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+
+-- A release is never a reusable global mode. It is a short lease for the one
+-- reviewed authorization, message, version, and writer, and is append-only.
+CREATE TABLE private.gate3d1_outbound_release_leases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  authorization_id UUID NOT NULL UNIQUE
+    REFERENCES private.inbound_reply_continuation_authorizations(id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  outreach_message_id UUID NOT NULL
+    REFERENCES public.outreach_messages(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  operating_strategy_id UUID NOT NULL
+    REFERENCES public.operating_strategies(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  operating_strategy_version_id UUID NOT NULL
+    REFERENCES public.operating_strategy_versions(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  authorization_fingerprint TEXT NOT NULL CHECK (authorization_fingerprint ~ '^[0-9a-f]{32}$'),
+  approved_content_fingerprint TEXT NOT NULL CHECK (
+    approved_content_fingerprint ~ '^[0-9a-f]{64}$'
+  ),
+  writer_release TEXT NOT NULL CHECK (NULLIF(btrim(writer_release), '') IS NOT NULL),
+  released_by_user_id UUID NOT NULL REFERENCES auth.users(id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  requested_ttl_seconds INTEGER NOT NULL CHECK (requested_ttl_seconds BETWEEN 1 AND 300),
+  released_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  reason TEXT NOT NULL CHECK (length(btrim(reason)) >= 20),
+  idempotency_key TEXT NOT NULL UNIQUE CHECK (NULLIF(btrim(idempotency_key), '') IS NOT NULL),
+  lease_fingerprint TEXT NOT NULL CHECK (lease_fingerprint ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT gate3d1_outbound_release_leases_time_check CHECK (
+    expires_at > released_at AND expires_at <= released_at + INTERVAL '5 minutes'
+  ),
+  CONSTRAINT gate3d1_outbound_release_leases_auth_message_unique
+    UNIQUE (authorization_id, outreach_message_id),
+  CONSTRAINT gate3d1_outbound_release_leases_version_strategy_fkey
+    FOREIGN KEY (operating_strategy_version_id, operating_strategy_id)
+    REFERENCES public.operating_strategy_versions(id, operating_strategy_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
 CREATE INDEX gate3d1_canary_dispatch_events_latest_idx
   ON private.gate3d1_canary_dispatch_events(claim_id, sequence_number DESC);
 CREATE INDEX gate3d1_outbound_control_events_scope_idx
   ON private.gate3d1_outbound_control_events(control_scope, operating_strategy_id, recorded_at DESC);
+CREATE INDEX gate3d1_release_leases_active_idx
+  ON private.gate3d1_outbound_release_leases(
+    operating_strategy_version_id, writer_release, expires_at DESC
+  );
 
 CREATE TRIGGER inbound_reply_continuation_authorizations_append_only_guard
 BEFORE UPDATE OR DELETE ON private.inbound_reply_continuation_authorizations
@@ -480,6 +636,18 @@ FOR EACH ROW EXECUTE FUNCTION private.gate3c_reject_append_only_change();
 CREATE TRIGGER gate3d1_outbound_control_events_truncate_guard
 BEFORE TRUNCATE ON private.gate3d1_outbound_control_events
 FOR EACH STATEMENT EXECUTE FUNCTION private.gate3c_reject_append_only_change();
+CREATE TRIGGER gate3d1_reply_provenance_refreshes_append_only_guard
+BEFORE UPDATE OR DELETE ON private.gate3d1_reply_provenance_refreshes
+FOR EACH ROW EXECUTE FUNCTION private.gate3c_reject_append_only_change();
+CREATE TRIGGER gate3d1_reply_provenance_refreshes_truncate_guard
+BEFORE TRUNCATE ON private.gate3d1_reply_provenance_refreshes
+FOR EACH STATEMENT EXECUTE FUNCTION private.gate3c_reject_append_only_change();
+CREATE TRIGGER gate3d1_outbound_release_leases_append_only_guard
+BEFORE UPDATE OR DELETE ON private.gate3d1_outbound_release_leases
+FOR EACH ROW EXECUTE FUNCTION private.gate3c_reject_append_only_change();
+CREATE TRIGGER gate3d1_outbound_release_leases_truncate_guard
+BEFORE TRUNCATE ON private.gate3d1_outbound_release_leases
+FOR EACH STATEMENT EXECUTE FUNCTION private.gate3c_reject_append_only_change();
 
 ALTER TABLE private.inbound_reply_continuation_authorizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.inbound_reply_continuation_authorizations FORCE ROW LEVEL SECURITY;
@@ -491,11 +659,17 @@ ALTER TABLE private.gate3d1_canary_dispatch_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.gate3d1_canary_dispatch_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE private.gate3d1_outbound_control_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.gate3d1_outbound_control_events FORCE ROW LEVEL SECURITY;
+ALTER TABLE private.gate3d1_reply_provenance_refreshes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE private.gate3d1_reply_provenance_refreshes FORCE ROW LEVEL SECURITY;
+ALTER TABLE private.gate3d1_outbound_release_leases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE private.gate3d1_outbound_release_leases FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE private.inbound_reply_continuation_authorizations,
   private.inbound_reply_continuation_revocations,
   private.gate3d1_canary_dispatch_claims,
   private.gate3d1_canary_dispatch_events,
-  private.gate3d1_outbound_control_events
+  private.gate3d1_outbound_control_events,
+  private.gate3d1_reply_provenance_refreshes,
+  private.gate3d1_outbound_release_leases
   FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION private.gate3d1_current_claim_state(p_claim_id UUID)
@@ -623,6 +797,256 @@ REVOKE ALL ON FUNCTION public.get_gate3d1_canary_dispatch_state(UUID, UUID, TEXT
 GRANT EXECUTE ON FUNCTION public.get_gate3d1_canary_dispatch_state(UUID, UUID, TEXT)
   TO service_role;
 
+CREATE OR REPLACE FUNCTION public.refresh_gate3d1_reply_provenance(
+  p_operating_strategy_version_id UUID,
+  p_reply_memory_id UUID,
+  p_lead_id UUID,
+  p_expected_stored_message_id TEXT,
+  p_expected_conversation_id TEXT,
+  p_expected_internet_message_id TEXT,
+  p_expected_sender_hash TEXT,
+  p_expected_recipient_hash TEXT,
+  p_expected_subject TEXT,
+  p_expected_reply_summary TEXT,
+  p_expected_received_at TIMESTAMPTZ,
+  p_expected_metadata_json JSONB,
+  p_observed_tenant_id UUID,
+  p_observed_mailbox_object_id UUID,
+  p_observed_immutable_message_id TEXT,
+  p_preference_applied TEXT,
+  p_writer_release TEXT,
+  p_idempotency_key TEXT
+)
+RETURNS TABLE (
+  refresh_id UUID,
+  reply_memory_id UUID,
+  lead_id UUID,
+  observed_tenant_id UUID,
+  observed_mailbox_object_id UUID,
+  observed_immutable_message_id TEXT,
+  preference_applied TEXT,
+  refreshed_at TIMESTAMPTZ,
+  merged_metadata_fingerprint TEXT,
+  provenance_refresh_fingerprint TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  runtime_control public.operating_strategy_runtime_controls;
+  reply_memory public.command_center_reply_memory;
+  lead_record public.leads;
+  existing_refresh private.gate3d1_reply_provenance_refreshes;
+  merged_metadata JSONB;
+  result_id UUID;
+  result_refreshed_at TIMESTAMPTZ;
+  source_metadata_fingerprint TEXT;
+  result_metadata_fingerprint TEXT;
+  result_fingerprint TEXT;
+BEGIN
+  IF lower(COALESCE(p_expected_sender_hash, '')) !~ '^[0-9a-f]{64}$'
+    OR lower(COALESCE(p_expected_recipient_hash, '')) !~ '^[0-9a-f]{64}$'
+    OR NULLIF(btrim(p_expected_stored_message_id), '') IS NULL
+    OR NULLIF(btrim(p_expected_conversation_id), '') IS NULL
+    OR NULLIF(btrim(p_expected_internet_message_id), '') IS NULL
+    OR NULLIF(p_expected_subject, '') IS NULL
+    OR NULLIF(btrim(p_expected_reply_summary), '') IS NULL
+    OR jsonb_typeof(p_expected_metadata_json) IS DISTINCT FROM 'object'
+    OR NULLIF(btrim(p_observed_immutable_message_id), '') IS NULL
+    OR p_preference_applied IS DISTINCT FROM 'IdType=ImmutableId'
+    OR NULLIF(btrim(p_writer_release), '') IS NULL
+    OR NULLIF(btrim(p_idempotency_key), '') IS NULL THEN
+    RAISE EXCEPTION 'Exact source-row, ImmutableId header, participant, and idempotency evidence are required.'
+      USING ERRCODE = '23514';
+  END IF;
+  IF p_expected_metadata_json ? 'observedTenantId'
+    OR p_expected_metadata_json ? 'observedMailboxObjectId'
+    OR p_expected_metadata_json ? 'observedImmutableMessageId' THEN
+    RAISE EXCEPTION 'The provenance refresh accepts only a pre-observation metadata snapshot.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding';
+  IF runtime_control.canary_enforcement_status <> 'reviewed_cap_one'
+    OR runtime_control.canary_operating_strategy_version_id
+      IS DISTINCT FROM p_operating_strategy_version_id
+    OR runtime_control.canary_required_writer_release IS DISTINCT FROM p_writer_release
+    OR NOT runtime_control.outbound_kill_switch THEN
+    RAISE EXCEPTION 'Provenance refresh requires the exact reviewed canary while globally stopped.'
+      USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM private.exchange_application_rbac_attestations proof
+    WHERE proof.tenant_id = p_observed_tenant_id
+      AND proof.mailbox_object_id = p_observed_mailbox_object_id
+      AND proof.writer_release = p_writer_release
+      AND proof.expires_at > statement_timestamp()
+      AND proof.rbac_role_set_json =
+        '["Application Mail.ReadWrite","Application Mail.Send"]'::JSONB
+      AND NOT EXISTS (
+        SELECT 1
+        FROM private.exchange_application_rbac_attestation_revocations revocation
+        WHERE revocation.attestation_id = proof.id
+      )
+  ) THEN
+    RAISE EXCEPTION 'Provenance refresh requires the exact unexpired scoped Exchange proof.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  merged_metadata := p_expected_metadata_json || jsonb_build_object(
+    'observedTenantId', p_observed_tenant_id::TEXT,
+    'observedMailboxObjectId', p_observed_mailbox_object_id::TEXT,
+    'observedImmutableMessageId', p_observed_immutable_message_id
+  );
+
+  SELECT refresh.* INTO existing_refresh
+  FROM private.gate3d1_reply_provenance_refreshes refresh
+  WHERE refresh.idempotency_key = p_idempotency_key
+     OR refresh.reply_memory_id = p_reply_memory_id
+  ORDER BY refresh.idempotency_key = p_idempotency_key DESC
+  LIMIT 1;
+
+  SELECT memory.* INTO reply_memory
+  FROM public.command_center_reply_memory memory
+  WHERE memory.id = p_reply_memory_id
+  FOR UPDATE;
+  SELECT lead.* INTO lead_record
+  FROM public.leads lead
+  WHERE lead.id = p_lead_id
+  FOR UPDATE;
+  IF reply_memory.id IS NULL
+    OR lead_record.id IS NULL
+    OR reply_memory.lead_id IS DISTINCT FROM p_lead_id
+    OR reply_memory.classification <> 'hot_seller_lead'
+    OR reply_memory.message_id IS DISTINCT FROM p_expected_stored_message_id
+    OR reply_memory.thread_id IS DISTINCT FROM p_expected_conversation_id
+    OR reply_memory.metadata_json ->> 'internetMessageId'
+      IS DISTINCT FROM p_expected_internet_message_id
+    OR reply_memory.subject IS DISTINCT FROM p_expected_subject
+    OR reply_memory.reply_summary IS DISTINCT FROM p_expected_reply_summary
+    OR reply_memory.received_at IS DISTINCT FROM p_expected_received_at
+    OR (
+      existing_refresh.id IS NULL
+      AND reply_memory.metadata_json IS DISTINCT FROM p_expected_metadata_json
+    )
+    OR (
+      existing_refresh.id IS NOT NULL
+      AND reply_memory.metadata_json IS DISTINCT FROM merged_metadata
+    )
+    OR private.gate3d1_sha256_text(lower(btrim(COALESCE(reply_memory.from_email, ''))))
+      IS DISTINCT FROM lower(p_expected_sender_hash)
+    OR private.gate3d1_sha256_text(lower(btrim(COALESCE(reply_memory.to_email, ''))))
+      IS DISTINCT FROM lower(p_expected_recipient_hash)
+    OR NULLIF(btrim(lead_record.email), '') IS NULL
+    OR private.gate3d1_sha256_text(lower(btrim(lead_record.email)))
+      IS DISTINCT FROM lower(p_expected_sender_hash)
+    OR NULLIF(btrim(lead_record.property_address), '') IS NULL
+    OR NOT private.gate3d1_reply_property_matches_canonical(
+      COALESCE(reply_memory.property_address, ''), lead_record.property_address
+    )
+    OR reply_memory.metadata_json -> 'explicitOptOut' IS NOT DISTINCT FROM 'true'::JSONB
+    OR lower(COALESCE(lead_record.status, ''))
+      IN ('bounced', 'complained', 'suppressed', 'do_not_contact', 'failed')
+    OR lower(COALESCE(lead_record.outreach_status, ''))
+      IN ('bounced', 'complained', 'suppressed', 'do_not_contact', 'failed')
+    OR lower(COALESCE(lead_record.delivery_status, ''))
+      IN ('bounced', 'complained', 'suppressed', 'do_not_contact', 'failed')
+    OR NULLIF(btrim(lead_record.suppression_reason), '') IS NOT NULL
+    OR EXISTS (
+      SELECT 1 FROM public.lead_suppressions suppression
+      WHERE suppression.status = 'active'
+        AND lower(btrim(COALESCE(suppression.email, '')))
+          = lower(btrim(reply_memory.from_email))
+    ) THEN
+    RAISE EXCEPTION 'The stored reply, canonical lead, or suppression state changed during provenance refresh.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  source_metadata_fingerprint :=
+    private.gate3d1_sha256_text(p_expected_metadata_json::TEXT);
+  result_metadata_fingerprint := private.gate3d1_sha256_text(merged_metadata::TEXT);
+  result_id := COALESCE(existing_refresh.id, gen_random_uuid());
+  result_refreshed_at := COALESCE(existing_refresh.refreshed_at, statement_timestamp());
+  result_fingerprint := private.gate3d1_sha256_text(jsonb_build_object(
+    'refreshId', result_id,
+    'operatingStrategyVersionId', p_operating_strategy_version_id,
+    'replyMemoryId', p_reply_memory_id,
+    'leadId', p_lead_id,
+    'inboundSourceMessageId', p_expected_stored_message_id,
+    'inboundConversationId', p_expected_conversation_id,
+    'inboundInternetMessageId', p_expected_internet_message_id,
+    'normalizedSenderHash', lower(p_expected_sender_hash),
+    'normalizedRecipientHash', lower(p_expected_recipient_hash),
+    'subjectFingerprint', private.gate3d1_sha256_text(p_expected_subject),
+    'replySummaryFingerprint', private.gate3d1_sha256_text(p_expected_reply_summary),
+    'authorizedReplyReceivedAt', p_expected_received_at,
+    'sourceMetadataFingerprint', source_metadata_fingerprint,
+    'mergedMetadataFingerprint', result_metadata_fingerprint,
+    'observedTenantId', p_observed_tenant_id,
+    'observedMailboxObjectId', p_observed_mailbox_object_id,
+    'observedImmutableMessageId', p_observed_immutable_message_id,
+    'preferenceApplied', p_preference_applied,
+    'writerRelease', p_writer_release,
+    'idempotencyKey', p_idempotency_key,
+    'refreshedAt', result_refreshed_at
+  )::TEXT);
+  IF existing_refresh.id IS NOT NULL THEN
+    IF existing_refresh.refresh_fingerprint IS DISTINCT FROM result_fingerprint
+      OR reply_memory.metadata_json IS DISTINCT FROM merged_metadata THEN
+      RAISE EXCEPTION 'Provenance refresh replay conflicts with immutable evidence.'
+        USING ERRCODE = '23505';
+    END IF;
+  ELSE
+    UPDATE public.command_center_reply_memory memory
+    SET metadata_json = merged_metadata
+    WHERE memory.id = p_reply_memory_id
+      AND memory.metadata_json IS NOT DISTINCT FROM p_expected_metadata_json;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Provenance metadata compare-and-swap lost a concurrent update.'
+        USING ERRCODE = '40001';
+    END IF;
+    INSERT INTO private.gate3d1_reply_provenance_refreshes(
+      id, operating_strategy_version_id, reply_memory_id, lead_id,
+      inbound_source_message_id, inbound_conversation_id,
+      inbound_internet_message_id, normalized_sender_hash,
+      normalized_recipient_hash, subject_fingerprint, reply_summary_fingerprint,
+      authorized_reply_received_at, source_metadata_fingerprint,
+      merged_metadata_fingerprint, observed_tenant_id,
+      observed_mailbox_object_id, observed_immutable_message_id,
+      preference_applied, writer_release, idempotency_key, refresh_fingerprint,
+      refreshed_at
+    ) VALUES (
+      result_id, p_operating_strategy_version_id, p_reply_memory_id, p_lead_id,
+      p_expected_stored_message_id, p_expected_conversation_id,
+      p_expected_internet_message_id, lower(p_expected_sender_hash),
+      lower(p_expected_recipient_hash), private.gate3d1_sha256_text(p_expected_subject),
+      private.gate3d1_sha256_text(p_expected_reply_summary), p_expected_received_at,
+      source_metadata_fingerprint, result_metadata_fingerprint,
+      p_observed_tenant_id, p_observed_mailbox_object_id,
+      p_observed_immutable_message_id, p_preference_applied, p_writer_release,
+      p_idempotency_key, result_fingerprint, result_refreshed_at
+    );
+  END IF;
+  RETURN QUERY SELECT result_id, p_reply_memory_id, p_lead_id,
+    p_observed_tenant_id, p_observed_mailbox_object_id,
+    p_observed_immutable_message_id, p_preference_applied,
+    result_refreshed_at, result_metadata_fingerprint, result_fingerprint;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.refresh_gate3d1_reply_provenance(
+  UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ,
+  JSONB, UUID, UUID, TEXT, TEXT, TEXT, TEXT
+) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.refresh_gate3d1_reply_provenance(
+  UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ,
+  JSONB, UUID, UUID, TEXT, TEXT, TEXT, TEXT
+) TO service_role;
+
 CREATE OR REPLACE FUNCTION private.gate3d1_assert_open_canary_controls(
   p_operating_strategy_version_id UUID,
   p_writer_release TEXT
@@ -637,6 +1061,9 @@ DECLARE
   runtime_control public.operating_strategy_runtime_controls;
   candidate public.operating_strategy_versions;
   strategy_control public.operating_strategy_outbound_controls;
+  authz private.inbound_reply_continuation_authorizations;
+  release_lease private.gate3d1_outbound_release_leases;
+  matching_leases INTEGER;
 BEGIN
   SELECT controls.* INTO runtime_control
   FROM public.operating_strategy_runtime_controls controls
@@ -679,6 +1106,46 @@ BEGIN
     RAISE EXCEPTION 'The selected canary strategy remains paused or has a mismatched writer.'
       USING ERRCODE = '23514';
   END IF;
+
+  SELECT COUNT(*)::INTEGER INTO matching_leases
+  FROM private.gate3d1_outbound_release_leases lease
+  JOIN private.inbound_reply_continuation_authorizations auth_candidate
+    ON auth_candidate.id = lease.authorization_id
+  WHERE lease.operating_strategy_version_id = p_operating_strategy_version_id
+    AND lease.operating_strategy_id = candidate.operating_strategy_id
+    AND lease.writer_release = p_writer_release
+    AND lease.authorization_fingerprint = auth_candidate.authorization_fingerprint
+    AND lease.approved_content_fingerprint = auth_candidate.approved_content_fingerprint
+    AND lease.outreach_message_id = auth_candidate.outreach_message_id
+    AND lease.released_at <= private.gate3d1_authority_evaluation_time()
+    AND lease.expires_at > private.gate3d1_authority_evaluation_time()
+    AND NOT EXISTS (
+      SELECT 1 FROM private.inbound_reply_continuation_revocations revocation
+      WHERE revocation.authorization_id = auth_candidate.id
+    );
+  IF matching_leases <> 1 THEN
+    RAISE EXCEPTION 'Open canary controls require exactly one current authorization-bound release lease.'
+      USING ERRCODE = '23514';
+  END IF;
+  SELECT lease.* INTO release_lease
+  FROM private.gate3d1_outbound_release_leases lease
+  WHERE lease.operating_strategy_version_id = p_operating_strategy_version_id
+    AND lease.operating_strategy_id = candidate.operating_strategy_id
+    AND lease.writer_release = p_writer_release
+    AND lease.released_at <= private.gate3d1_authority_evaluation_time()
+    AND lease.expires_at > private.gate3d1_authority_evaluation_time();
+  SELECT auth_candidate.* INTO authz
+  FROM private.inbound_reply_continuation_authorizations auth_candidate
+  WHERE auth_candidate.id = release_lease.authorization_id;
+  IF release_lease.id IS NULL OR authz.id IS NULL
+    OR release_lease.outreach_message_id IS DISTINCT FROM authz.outreach_message_id
+    OR release_lease.authorization_fingerprint IS DISTINCT FROM authz.authorization_fingerprint
+    OR release_lease.approved_content_fingerprint IS DISTINCT FROM authz.approved_content_fingerprint
+    OR runtime_control.outbound_control_updated_at IS DISTINCT FROM release_lease.released_at
+    OR strategy_control.updated_at IS DISTINCT FROM release_lease.released_at THEN
+    RAISE EXCEPTION 'Open canary controls lack the exact current five-minute authorization release lease.'
+      USING ERRCODE = '23514';
+  END IF;
 END;
 $$;
 
@@ -700,6 +1167,7 @@ DECLARE
   reply_memory public.command_center_reply_memory;
   lead_record public.leads;
   outreach_record public.outreach_messages;
+  provenance private.gate3d1_reply_provenance_refreshes;
   local_dispatch_time TIMESTAMP;
 BEGIN
   SELECT candidate.* INTO authz
@@ -707,6 +1175,9 @@ BEGIN
   WHERE candidate.id = p_authorization_id;
   IF authz.id IS NULL
     OR authz.expires_at <= statement_timestamp()
+    OR statement_timestamp() >= authz.authorized_reply_received_at + INTERVAL '10 days'
+    OR authz.expires_at > authz.approved_at + INTERVAL '24 hours'
+    OR authz.expires_at > authz.authorized_reply_received_at + INTERVAL '10 days'
     OR EXISTS (
       SELECT 1
       FROM private.inbound_reply_continuation_revocations revocation
@@ -723,7 +1194,7 @@ BEGIN
     OR reply_memory.lead_id IS DISTINCT FROM authz.lead_id
     OR reply_memory.classification <> 'hot_seller_lead'
     OR reply_memory.mailbox IS DISTINCT FROM authz.mailbox_address
-    OR reply_memory.message_id IS DISTINCT FROM authz.inbound_message_id
+    OR reply_memory.message_id IS DISTINCT FROM authz.inbound_source_message_id
     OR reply_memory.thread_id IS DISTINCT FROM authz.inbound_conversation_id
     OR reply_memory.metadata_json ->> 'internetMessageId'
       IS DISTINCT FROM authz.inbound_internet_message_id
@@ -733,6 +1204,8 @@ BEGIN
     OR lower(btrim(COALESCE(
       reply_memory.metadata_json ->> 'observedMailboxObjectId', ''
     ))) IS DISTINCT FROM authz.mailbox_object_id::TEXT
+    OR reply_memory.metadata_json ->> 'observedImmutableMessageId'
+      IS DISTINCT FROM authz.inbound_message_id
     OR NULLIF(btrim(reply_memory.reply_summary), '') IS NULL
     OR lower(btrim(reply_memory.reply_summary)) = ANY(ARRAY[
       '-', '--', '.', 'n/a', 'na', 'none', 'null', 'unknown', 'pending',
@@ -742,9 +1215,8 @@ BEGIN
     ]::TEXT[])
     OR private.gate3d1_sha256_text(reply_memory.reply_summary)
       IS DISTINCT FROM authz.positive_classification_evidence_fingerprint
-    OR (
-      NULLIF(btrim(reply_memory.property_address), '') IS NOT NULL
-      AND btrim(reply_memory.property_address) IS DISTINCT FROM authz.property_reference_key
+    OR NOT private.gate3d1_reply_property_matches_canonical(
+      COALESCE(reply_memory.property_address, ''), authz.property_reference_key
     )
     OR private.gate3d1_sha256_text(lower(btrim(COALESCE(reply_memory.from_email, ''))))
       IS DISTINCT FROM authz.normalized_sender_hash
@@ -753,6 +1225,35 @@ BEGIN
     OR reply_memory.received_at IS DISTINCT FROM authz.authorized_reply_received_at
     OR reply_memory.metadata_json -> 'explicitOptOut' IS NOT DISTINCT FROM 'true'::JSONB THEN
     RAISE EXCEPTION 'The immutable positive inbound reply evidence is missing, changed, or opted out.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT refresh.* INTO provenance
+  FROM private.gate3d1_reply_provenance_refreshes refresh
+  WHERE refresh.reply_memory_id = authz.reply_memory_id;
+  IF provenance.id IS NULL
+    OR provenance.operating_strategy_version_id
+      IS DISTINCT FROM authz.operating_strategy_version_id
+    OR provenance.lead_id IS DISTINCT FROM authz.lead_id
+    OR provenance.inbound_source_message_id IS DISTINCT FROM authz.inbound_source_message_id
+    OR provenance.inbound_conversation_id IS DISTINCT FROM authz.inbound_conversation_id
+    OR provenance.inbound_internet_message_id IS DISTINCT FROM authz.inbound_internet_message_id
+    OR provenance.normalized_sender_hash IS DISTINCT FROM authz.normalized_sender_hash
+    OR provenance.normalized_recipient_hash IS DISTINCT FROM authz.normalized_recipient_hash
+    OR provenance.subject_fingerprint
+      IS DISTINCT FROM private.gate3d1_sha256_text(reply_memory.subject)
+    OR provenance.reply_summary_fingerprint
+      IS DISTINCT FROM authz.positive_classification_evidence_fingerprint
+    OR provenance.authorized_reply_received_at
+      IS DISTINCT FROM authz.authorized_reply_received_at
+    OR provenance.merged_metadata_fingerprint
+      IS DISTINCT FROM private.gate3d1_sha256_text(reply_memory.metadata_json::TEXT)
+    OR provenance.observed_tenant_id IS DISTINCT FROM authz.tenant_id
+    OR provenance.observed_mailbox_object_id IS DISTINCT FROM authz.mailbox_object_id
+    OR provenance.observed_immutable_message_id IS DISTINCT FROM authz.inbound_message_id
+    OR provenance.preference_applied <> 'IdType=ImmutableId'
+    OR provenance.writer_release IS DISTINCT FROM authz.writer_release THEN
+    RAISE EXCEPTION 'The exact immutable Graph provenance refresh is missing or changed.'
       USING ERRCODE = '23514';
   END IF;
 
@@ -1017,6 +1518,72 @@ SELECT
   controls.updated_at
 FROM public.operating_strategy_outbound_controls controls;
 
+CREATE OR REPLACE FUNCTION private.gate3d1_engage_selected_canary_stops(
+  p_operating_strategy_version_id UUID,
+  p_writer_release TEXT,
+  p_reason TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  runtime_control public.operating_strategy_runtime_controls;
+  candidate public.operating_strategy_versions;
+BEGIN
+  IF length(btrim(COALESCE(p_reason, ''))) < 12
+    OR NULLIF(btrim(p_writer_release), '') IS NULL THEN
+    RAISE EXCEPTION 'A durable exact-writer stop reason is required.' USING ERRCODE = '23514';
+  END IF;
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding'
+  FOR UPDATE;
+  SELECT version.* INTO candidate
+  FROM public.operating_strategy_versions version
+  WHERE version.id = p_operating_strategy_version_id
+  FOR SHARE;
+  IF candidate.id IS NULL
+    OR runtime_control.canary_operating_strategy_version_id
+      IS DISTINCT FROM p_operating_strategy_version_id
+    OR runtime_control.canary_required_writer_release IS DISTINCT FROM p_writer_release THEN
+    RAISE EXCEPTION 'Stops must target the exact selected canary and writer.'
+      USING ERRCODE = '23514';
+  END IF;
+  -- Global first: no intermediate statement can observe an open global gate
+  -- while the narrower strategy stop is being re-engaged.
+  UPDATE public.operating_strategy_runtime_controls
+  SET outbound_kill_switch = TRUE,
+      outbound_control_reason = btrim(p_reason),
+      outbound_control_writer_release = p_writer_release,
+      outbound_control_updated_by_user_id = runtime_control.canary_approved_by_user_id,
+      outbound_control_updated_at = statement_timestamp(),
+      updated_at = statement_timestamp()
+  WHERE control_key = 'canonical_binding';
+  UPDATE public.operating_strategy_outbound_controls
+  SET paused = TRUE,
+      pause_reason = btrim(p_reason),
+      writer_release = p_writer_release,
+      updated_by_user_id = runtime_control.canary_approved_by_user_id,
+      updated_at = statement_timestamp()
+  WHERE operating_strategy_id = candidate.operating_strategy_id;
+  IF NOT (SELECT controls.outbound_kill_switch
+          FROM public.operating_strategy_runtime_controls controls
+          WHERE controls.control_key = 'canonical_binding')
+    OR NOT COALESCE((
+      SELECT controls.paused
+      FROM public.operating_strategy_outbound_controls controls
+      WHERE controls.operating_strategy_id = candidate.operating_strategy_id
+    ), FALSE) THEN
+    RAISE EXCEPTION 'Both Gate 3D.1 outbound stops failed to engage.' USING ERRCODE = '23514';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.gate3d1_engage_selected_canary_stops(UUID, TEXT, TEXT)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION private.gate3d1_engage_stops(
   p_claim_id UUID,
   p_reason TEXT
@@ -1028,7 +1595,6 @@ SET search_path = ''
 AS $$
 DECLARE
   claim private.gate3d1_canary_dispatch_claims;
-  runtime_control public.operating_strategy_runtime_controls;
 BEGIN
   IF length(btrim(COALESCE(p_reason, ''))) < 12 THEN
     RAISE EXCEPTION 'A durable stop reason is required.' USING ERRCODE = '23514';
@@ -1040,30 +1606,377 @@ BEGIN
   IF claim.id IS NULL THEN
     RAISE EXCEPTION 'Canary dispatch claim not found.' USING ERRCODE = '23514';
   END IF;
-  SELECT controls.* INTO runtime_control
-  FROM public.operating_strategy_runtime_controls controls
-  WHERE controls.control_key = 'canonical_binding'
-  FOR UPDATE;
   PERFORM set_config('gate3d1.control_event_claim_id', claim.id::TEXT, TRUE);
-  UPDATE public.operating_strategy_runtime_controls
-  SET outbound_kill_switch = TRUE,
-      outbound_control_reason = btrim(p_reason),
-      outbound_control_writer_release = claim.writer_release,
-      outbound_control_updated_by_user_id = runtime_control.canary_approved_by_user_id,
-      outbound_control_updated_at = statement_timestamp()
-  WHERE control_key = 'canonical_binding';
-  UPDATE public.operating_strategy_outbound_controls
-  SET paused = TRUE,
-      pause_reason = btrim(p_reason),
-      writer_release = claim.writer_release,
-      updated_by_user_id = runtime_control.canary_approved_by_user_id,
-      updated_at = statement_timestamp()
-  WHERE operating_strategy_id = claim.operating_strategy_id;
+  PERFORM private.gate3d1_engage_selected_canary_stops(
+    claim.operating_strategy_version_id, claim.writer_release, p_reason
+  );
 END;
 $$;
 
 REVOKE ALL ON FUNCTION private.gate3d1_engage_stops(UUID, TEXT)
   FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.release_gate3d1_canary_for_authorization(
+  p_authorization_id UUID,
+  p_outreach_message_id UUID,
+  p_operating_strategy_version_id UUID,
+  p_actor_user_id UUID,
+  p_writer_release TEXT,
+  p_reason TEXT,
+  p_idempotency_key TEXT,
+  p_ttl_seconds INTEGER DEFAULT 300
+)
+RETURNS TABLE (
+  lease_id UUID,
+  authorization_id UUID,
+  outreach_message_id UUID,
+  operating_strategy_version_id UUID,
+  writer_release TEXT,
+  released_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  lease_fingerprint TEXT,
+  global_released BOOLEAN,
+  strategy_released BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  runtime_control public.operating_strategy_runtime_controls;
+  strategy_control public.operating_strategy_outbound_controls;
+  authz private.inbound_reply_continuation_authorizations;
+  attestation private.exchange_application_rbac_attestations;
+  candidate public.operating_strategy_versions;
+  existing_lease private.gate3d1_outbound_release_leases;
+  result_id UUID;
+  result_released_at TIMESTAMPTZ;
+  result_expires_at TIMESTAMPTZ;
+  result_fingerprint TEXT;
+BEGIN
+  PERFORM private.gate3d1_assert_founder_actor(p_actor_user_id);
+  IF p_ttl_seconds IS NULL OR p_ttl_seconds < 1 OR p_ttl_seconds > 300
+    OR length(btrim(COALESCE(p_reason, ''))) < 20
+    OR NULLIF(btrim(p_idempotency_key), '') IS NULL
+    OR NULLIF(btrim(p_writer_release), '') IS NULL THEN
+    RAISE EXCEPTION 'Exact founder release reason, writer, idempotency, and a one-to-300-second TTL are required.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT auth_candidate.* INTO authz
+  FROM private.inbound_reply_continuation_authorizations auth_candidate
+  WHERE auth_candidate.id = p_authorization_id
+    AND auth_candidate.outreach_message_id = p_outreach_message_id
+    AND auth_candidate.operating_strategy_version_id = p_operating_strategy_version_id
+    AND auth_candidate.approved_by_user_id = p_actor_user_id
+    AND auth_candidate.writer_release = p_writer_release
+  FOR SHARE;
+  IF authz.id IS NULL THEN
+    RAISE EXCEPTION 'Release must bind the exact founder authorization, message, version, and writer.'
+      USING ERRCODE = '23514';
+  END IF;
+  PERFORM private.gate3d1_assert_continuation_safe(authz.id, TRUE);
+
+  SELECT version.* INTO candidate
+  FROM public.operating_strategy_versions version
+  WHERE version.id = p_operating_strategy_version_id
+  FOR SHARE;
+  SELECT proof.* INTO attestation
+  FROM private.exchange_application_rbac_attestations proof
+  WHERE proof.id = authz.exchange_rbac_attestation_id
+  FOR SHARE;
+  IF candidate.id IS NULL
+    OR candidate.status <> 'active'
+    OR candidate.execution_mode <> 'approved_live'
+    OR candidate.external_send_cap <> 1
+    OR attestation.id IS NULL
+    OR attestation.tenant_id IS DISTINCT FROM authz.tenant_id
+    OR attestation.client_id IS DISTINCT FROM authz.client_id
+    OR attestation.mailbox_object_id IS DISTINCT FROM authz.mailbox_object_id
+    OR attestation.mailbox_address IS DISTINCT FROM authz.mailbox_address
+    OR attestation.expires_at <= private.gate3d1_authority_evaluation_time()
+    OR attestation.writer_release IS DISTINCT FROM p_writer_release
+    OR attestation.rbac_role_set_json IS DISTINCT FROM
+      '["Application Mail.ReadWrite","Application Mail.Send"]'::JSONB
+    OR EXISTS (
+      SELECT 1 FROM private.exchange_application_rbac_attestation_revocations revocation
+      WHERE revocation.attestation_id = attestation.id
+    ) THEN
+    RAISE EXCEPTION 'Release requires the active cap-one version and exact current RBAC proof.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding'
+  FOR UPDATE;
+  SELECT controls.* INTO strategy_control
+  FROM public.operating_strategy_outbound_controls controls
+  WHERE controls.operating_strategy_id = candidate.operating_strategy_id
+  FOR UPDATE;
+  IF runtime_control.canary_enforcement_status <> 'reviewed_cap_one'
+    OR runtime_control.canary_operating_strategy_version_id
+      IS DISTINCT FROM candidate.id
+    OR runtime_control.canary_required_writer_release IS DISTINCT FROM p_writer_release
+    OR runtime_control.canary_approved_by_user_id IS DISTINCT FROM p_actor_user_id
+    OR strategy_control.operating_strategy_id IS NULL
+    OR (
+      (NOT runtime_control.outbound_kill_switch OR NOT strategy_control.paused)
+      AND NOT EXISTS (
+        SELECT 1 FROM private.gate3d1_outbound_release_leases lease
+        WHERE lease.authorization_id = authz.id
+          AND lease.idempotency_key = p_idempotency_key
+      )
+    )
+    OR EXISTS (SELECT 1 FROM private.gate3d1_canary_dispatch_claims)
+    OR EXISTS (
+      SELECT 1 FROM public.operating_strategy_dispatch_reservations reservation
+      WHERE reservation.operating_strategy_version_id = candidate.id
+    ) THEN
+    RAISE EXCEPTION 'Release requires both stops, exact selected posture, and no prior claim or reservation.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT lease.* INTO existing_lease
+  FROM private.gate3d1_outbound_release_leases lease
+  WHERE lease.authorization_id = authz.id
+     OR lease.idempotency_key = p_idempotency_key
+  ORDER BY lease.authorization_id = authz.id DESC
+  LIMIT 1;
+  IF existing_lease.id IS NOT NULL THEN
+    IF existing_lease.authorization_id IS DISTINCT FROM authz.id
+      OR existing_lease.outreach_message_id IS DISTINCT FROM p_outreach_message_id
+      OR existing_lease.operating_strategy_id IS DISTINCT FROM candidate.operating_strategy_id
+      OR existing_lease.operating_strategy_version_id IS DISTINCT FROM candidate.id
+      OR existing_lease.authorization_fingerprint IS DISTINCT FROM authz.authorization_fingerprint
+      OR existing_lease.approved_content_fingerprint
+        IS DISTINCT FROM authz.approved_content_fingerprint
+      OR existing_lease.writer_release IS DISTINCT FROM p_writer_release
+      OR existing_lease.released_by_user_id IS DISTINCT FROM p_actor_user_id
+      OR existing_lease.requested_ttl_seconds IS DISTINCT FROM p_ttl_seconds
+      OR existing_lease.reason IS DISTINCT FROM btrim(p_reason)
+      OR existing_lease.idempotency_key IS DISTINCT FROM p_idempotency_key
+      OR existing_lease.expires_at <= private.gate3d1_authority_evaluation_time() THEN
+      RAISE EXCEPTION 'Release replay conflicts with immutable evidence or an expired lease.'
+        USING ERRCODE = '23505';
+    END IF;
+    -- A replay never reopens stopped controls and never extends the lease.
+    IF runtime_control.outbound_kill_switch OR strategy_control.paused
+      OR runtime_control.outbound_control_updated_at
+        IS DISTINCT FROM existing_lease.released_at
+      OR strategy_control.updated_at IS DISTINCT FROM existing_lease.released_at THEN
+      RAISE EXCEPTION 'Release replay cannot reopen or extend a stopped lease.'
+        USING ERRCODE = '23514';
+    END IF;
+    RETURN QUERY SELECT existing_lease.id, existing_lease.authorization_id,
+      existing_lease.outreach_message_id, existing_lease.operating_strategy_version_id,
+      existing_lease.writer_release, existing_lease.released_at,
+      existing_lease.expires_at, existing_lease.lease_fingerprint, TRUE, TRUE;
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM private.gate3d1_outbound_release_leases) THEN
+    RAISE EXCEPTION 'The lifetime canary already consumed its only release lease.'
+      USING ERRCODE = '23505';
+  END IF;
+
+  result_id := gen_random_uuid();
+  result_released_at := private.gate3d1_authority_evaluation_time();
+  result_expires_at := LEAST(
+    result_released_at + make_interval(secs => p_ttl_seconds),
+    authz.expires_at,
+    attestation.expires_at
+  );
+  IF result_expires_at <= result_released_at THEN
+    RAISE EXCEPTION 'Authorization or RBAC proof expires before a release lease can open.'
+      USING ERRCODE = '23514';
+  END IF;
+  result_fingerprint := private.gate3d1_sha256_text(jsonb_build_object(
+    'leaseId', result_id,
+    'authorizationId', authz.id,
+    'outreachMessageId', authz.outreach_message_id,
+    'operatingStrategyId', candidate.operating_strategy_id,
+    'operatingStrategyVersionId', candidate.id,
+    'authorizationFingerprint', authz.authorization_fingerprint,
+    'approvedContentFingerprint', authz.approved_content_fingerprint,
+    'writerRelease', p_writer_release,
+    'releasedByUserId', p_actor_user_id,
+    'requestedTtlSeconds', p_ttl_seconds,
+    'releasedAt', result_released_at,
+    'expiresAt', result_expires_at,
+    'reason', btrim(p_reason),
+    'idempotencyKey', p_idempotency_key
+  )::TEXT);
+  INSERT INTO private.gate3d1_outbound_release_leases(
+    id, authorization_id, outreach_message_id, operating_strategy_id,
+    operating_strategy_version_id, authorization_fingerprint,
+    approved_content_fingerprint, writer_release, released_by_user_id,
+    requested_ttl_seconds, released_at, expires_at, reason, idempotency_key,
+    lease_fingerprint
+  ) VALUES (
+    result_id, authz.id, authz.outreach_message_id, candidate.operating_strategy_id,
+    candidate.id, authz.authorization_fingerprint, authz.approved_content_fingerprint,
+    p_writer_release, p_actor_user_id, p_ttl_seconds, result_released_at, result_expires_at,
+    btrim(p_reason), p_idempotency_key, result_fingerprint
+  );
+  PERFORM set_config('gate3d1.control_event_claim_id', '', TRUE);
+  PERFORM set_config('gate3d1.control_event_evidence_fingerprint', result_fingerprint, TRUE);
+  -- Narrow strategy first, global last; the system is never globally open with
+  -- the strategy still paused due to a partial statement sequence.
+  UPDATE public.operating_strategy_outbound_controls
+  SET paused = FALSE,
+      pause_reason = 'Exact Gate 3D.1 authorization-bound release lease.',
+      writer_release = p_writer_release,
+      updated_by_user_id = p_actor_user_id,
+      updated_at = result_released_at
+  WHERE operating_strategy_id = candidate.operating_strategy_id;
+  UPDATE public.operating_strategy_runtime_controls
+  SET outbound_kill_switch = FALSE,
+      outbound_control_reason = 'Exact Gate 3D.1 authorization-bound release lease.',
+      outbound_control_writer_release = p_writer_release,
+      outbound_control_updated_by_user_id = p_actor_user_id,
+      outbound_control_updated_at = result_released_at,
+      updated_at = result_released_at
+  WHERE control_key = 'canonical_binding';
+  RETURN QUERY SELECT result_id, authz.id, authz.outreach_message_id,
+    candidate.id, p_writer_release, result_released_at, result_expires_at,
+    result_fingerprint, TRUE, TRUE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.release_gate3d1_canary_for_authorization(
+  UUID, UUID, UUID, UUID, TEXT, TEXT, TEXT, INTEGER
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.release_gate3d1_canary_for_authorization(
+  UUID, UUID, UUID, UUID, TEXT, TEXT, TEXT, INTEGER
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.assert_gate3d1_canary_stops_engaged(
+  p_operating_strategy_version_id UUID,
+  p_writer_release TEXT
+)
+RETURNS TABLE (
+  global_blocked BOOLEAN,
+  strategy_paused BOOLEAN,
+  global_updated_at TIMESTAMPTZ,
+  strategy_updated_at TIMESTAMPTZ,
+  stop_evidence_fingerprint TEXT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  runtime_control public.operating_strategy_runtime_controls;
+  strategy_control public.operating_strategy_outbound_controls;
+  candidate public.operating_strategy_versions;
+  result_fingerprint TEXT;
+BEGIN
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding';
+  SELECT version.* INTO candidate
+  FROM public.operating_strategy_versions version
+  WHERE version.id = p_operating_strategy_version_id;
+  SELECT controls.* INTO strategy_control
+  FROM public.operating_strategy_outbound_controls controls
+  WHERE controls.operating_strategy_id = candidate.operating_strategy_id;
+  IF candidate.id IS NULL
+    OR runtime_control.canary_operating_strategy_version_id
+      IS DISTINCT FROM p_operating_strategy_version_id
+    OR runtime_control.canary_required_writer_release IS DISTINCT FROM p_writer_release
+    OR NOT runtime_control.outbound_kill_switch
+    OR strategy_control.operating_strategy_id IS NULL
+    OR NOT strategy_control.paused THEN
+    RAISE EXCEPTION 'Both exact Gate 3D.1 outbound stops are not engaged.'
+      USING ERRCODE = '23514';
+  END IF;
+  result_fingerprint := private.gate3d1_sha256_text(jsonb_build_object(
+    'operatingStrategyVersionId', candidate.id,
+    'writerRelease', p_writer_release,
+    'globalBlocked', runtime_control.outbound_kill_switch,
+    'strategyPaused', strategy_control.paused,
+    'globalUpdatedAt', runtime_control.outbound_control_updated_at,
+    'strategyUpdatedAt', strategy_control.updated_at
+  )::TEXT);
+  RETURN QUERY SELECT TRUE, TRUE, runtime_control.outbound_control_updated_at,
+    strategy_control.updated_at, result_fingerprint;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_gate3d1_canary_stops_engaged(UUID, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.assert_gate3d1_canary_stops_engaged(UUID, TEXT)
+  TO service_role;
+
+-- This legacy control surface remains useful for reducing authority only.
+-- The sole release path is the exact authorization-bound lease RPC above.
+CREATE OR REPLACE FUNCTION public.set_operating_strategy_outbound_control(
+  p_operating_strategy_id UUID,
+  p_blocked BOOLEAN,
+  p_actor_user_id UUID,
+  p_reason TEXT,
+  p_writer_release TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  runtime_control public.operating_strategy_runtime_controls;
+  candidate public.operating_strategy_versions;
+BEGIN
+  PERFORM private.gate3d1_assert_founder_actor(p_actor_user_id);
+  IF p_blocked IS DISTINCT FROM TRUE THEN
+    RAISE EXCEPTION 'General outbound controls cannot release Gate 3D.1; use the exact authorization-bound lease.'
+      USING ERRCODE = '23514';
+  END IF;
+  IF length(btrim(COALESCE(p_reason, ''))) < 12
+    OR NULLIF(btrim(p_writer_release), '') IS NULL THEN
+    RAISE EXCEPTION 'A stop reason and writer release are required.' USING ERRCODE = '23514';
+  END IF;
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding';
+  IF runtime_control.canary_required_writer_release IS DISTINCT FROM p_writer_release THEN
+    RAISE EXCEPTION 'Stop writer does not match the selected canary.' USING ERRCODE = '23514';
+  END IF;
+  IF p_operating_strategy_id IS NULL THEN
+    UPDATE public.operating_strategy_runtime_controls
+    SET outbound_kill_switch = TRUE,
+        outbound_control_reason = btrim(p_reason),
+        outbound_control_writer_release = p_writer_release,
+        outbound_control_updated_by_user_id = p_actor_user_id,
+        outbound_control_updated_at = statement_timestamp(),
+        updated_at = statement_timestamp()
+    WHERE control_key = 'canonical_binding';
+    RETURN jsonb_build_object('scope','global','blocked',TRUE,
+      'actorUserId',p_actor_user_id,'writerRelease',p_writer_release);
+  END IF;
+  SELECT version.* INTO candidate
+  FROM public.operating_strategy_versions version
+  WHERE version.id = runtime_control.canary_operating_strategy_version_id
+    AND version.operating_strategy_id = p_operating_strategy_id;
+  IF candidate.id IS NULL THEN
+    RAISE EXCEPTION 'Stop must target the selected canary strategy.' USING ERRCODE = '23514';
+  END IF;
+  UPDATE public.operating_strategy_outbound_controls
+  SET paused = TRUE, pause_reason = btrim(p_reason), writer_release = p_writer_release,
+      updated_by_user_id = p_actor_user_id, updated_at = statement_timestamp()
+  WHERE operating_strategy_id = p_operating_strategy_id;
+  RETURN jsonb_build_object('scope','strategy','operatingStrategyId',p_operating_strategy_id,
+    'blocked',TRUE,'actorUserId',p_actor_user_id,'writerRelease',p_writer_release);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_operating_strategy_outbound_control(
+  UUID, BOOLEAN, UUID, TEXT, TEXT
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.set_operating_strategy_outbound_control(
+  UUID, BOOLEAN, UUID, TEXT, TEXT
+) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.engage_gate3d1_canary_stop(
   p_operating_strategy_version_id UUID,
@@ -1508,6 +2421,7 @@ DECLARE
   lead_record public.leads;
   outreach_record public.outreach_messages;
   attestation private.exchange_application_rbac_attestations;
+  provenance private.gate3d1_reply_provenance_refreshes;
   existing_authz private.inbound_reply_continuation_authorizations;
   normalized_weekdays SMALLINT[];
   result_id UUID;
@@ -1555,8 +2469,8 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
   IF p_expires_at <= statement_timestamp()
-    OR p_expires_at > statement_timestamp() + INTERVAL '7 days' THEN
-    RAISE EXCEPTION 'Continuation authorization must expire within seven days.'
+    OR p_expires_at > statement_timestamp() + INTERVAL '24 hours' THEN
+    RAISE EXCEPTION 'Continuation authorization must expire within 24 hours.'
       USING ERRCODE = '23514';
   END IF;
 
@@ -1592,7 +2506,6 @@ BEGIN
     OR reply_memory.lead_id IS DISTINCT FROM p_lead_id
     OR reply_memory.classification <> 'hot_seller_lead'
     OR lower(btrim(reply_memory.mailbox)) IS DISTINCT FROM lower(btrim(p_mailbox_address))
-    OR reply_memory.message_id IS DISTINCT FROM btrim(p_inbound_message_id)
     OR reply_memory.thread_id IS DISTINCT FROM btrim(p_inbound_conversation_id)
     OR reply_memory.metadata_json ->> 'internetMessageId'
       IS DISTINCT FROM btrim(p_inbound_internet_message_id)
@@ -1602,6 +2515,8 @@ BEGIN
     OR lower(btrim(COALESCE(
       reply_memory.metadata_json ->> 'observedMailboxObjectId', ''
     ))) IS DISTINCT FROM p_mailbox_object_id::TEXT
+    OR reply_memory.metadata_json ->> 'observedImmutableMessageId'
+      IS DISTINCT FROM btrim(p_inbound_message_id)
     OR NULLIF(btrim(reply_memory.reply_summary), '') IS NULL
     OR lower(btrim(reply_memory.reply_summary)) = ANY(ARRAY[
       '-', '--', '.', 'n/a', 'na', 'none', 'null', 'unknown', 'pending',
@@ -1611,10 +2526,8 @@ BEGIN
     ]::TEXT[])
     OR resolved_positive_evidence_fingerprint
       IS DISTINCT FROM lower(p_positive_classification_evidence_fingerprint)
-    OR (
-      NULLIF(btrim(reply_memory.property_address), '') IS NOT NULL
-      AND btrim(reply_memory.property_address)
-        IS DISTINCT FROM btrim(p_property_reference_key)
+    OR NOT private.gate3d1_reply_property_matches_canonical(
+      COALESCE(reply_memory.property_address, ''), p_property_reference_key
     )
     OR private.gate3d1_sha256_text(lower(btrim(COALESCE(reply_memory.from_email, ''))))
       IS DISTINCT FROM lower(p_normalized_sender_hash)
@@ -1622,6 +2535,39 @@ BEGIN
       IS DISTINCT FROM lower(p_normalized_recipient_hash)
     OR reply_memory.metadata_json -> 'explicitOptOut' IS NOT DISTINCT FROM 'true'::JSONB THEN
     RAISE EXCEPTION 'The reviewed Graph identifiers, mailbox, participant hashes, property, or positive reply do not match reply memory.'
+      USING ERRCODE = '23514';
+  END IF;
+  IF statement_timestamp() >= reply_memory.received_at + INTERVAL '10 days'
+    OR p_expires_at > reply_memory.received_at + INTERVAL '10 days' THEN
+    RAISE EXCEPTION 'Continuation authorization requires a reply younger than ten days and cannot outlive that boundary.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT refresh.* INTO provenance
+  FROM private.gate3d1_reply_provenance_refreshes refresh
+  WHERE refresh.reply_memory_id = p_reply_memory_id;
+  IF provenance.id IS NULL
+    OR provenance.operating_strategy_version_id
+      IS DISTINCT FROM p_operating_strategy_version_id
+    OR provenance.lead_id IS DISTINCT FROM p_lead_id
+    OR provenance.inbound_source_message_id IS DISTINCT FROM reply_memory.message_id
+    OR provenance.inbound_conversation_id IS DISTINCT FROM p_inbound_conversation_id
+    OR provenance.inbound_internet_message_id IS DISTINCT FROM p_inbound_internet_message_id
+    OR provenance.normalized_sender_hash IS DISTINCT FROM lower(p_normalized_sender_hash)
+    OR provenance.normalized_recipient_hash IS DISTINCT FROM lower(p_normalized_recipient_hash)
+    OR provenance.subject_fingerprint
+      IS DISTINCT FROM private.gate3d1_sha256_text(reply_memory.subject)
+    OR provenance.reply_summary_fingerprint
+      IS DISTINCT FROM resolved_positive_evidence_fingerprint
+    OR provenance.authorized_reply_received_at IS DISTINCT FROM reply_memory.received_at
+    OR provenance.merged_metadata_fingerprint
+      IS DISTINCT FROM private.gate3d1_sha256_text(reply_memory.metadata_json::TEXT)
+    OR provenance.observed_tenant_id IS DISTINCT FROM p_tenant_id
+    OR provenance.observed_mailbox_object_id IS DISTINCT FROM p_mailbox_object_id
+    OR provenance.observed_immutable_message_id IS DISTINCT FROM p_inbound_message_id
+    OR provenance.preference_applied <> 'IdType=ImmutableId'
+    OR provenance.writer_release IS DISTINCT FROM p_writer_release THEN
+    RAISE EXCEPTION 'Authorization requires the exact immutable Graph provenance refresh.'
       USING ERRCODE = '23514';
   END IF;
 
@@ -1730,6 +2676,7 @@ BEGIN
     'clientId', p_client_id,
     'mailboxObjectId', p_mailbox_object_id,
     'mailboxAddress', lower(btrim(p_mailbox_address)),
+    'inboundSourceMessageId', reply_memory.message_id,
     'inboundMessageId', btrim(p_inbound_message_id),
     'inboundConversationId', btrim(p_inbound_conversation_id),
     'inboundInternetMessageId', btrim(p_inbound_internet_message_id),
@@ -1764,7 +2711,7 @@ BEGIN
   INSERT INTO private.inbound_reply_continuation_authorizations(
     id, operating_strategy_version_id, lead_id, reply_memory_id, outreach_message_id,
     exchange_rbac_attestation_id, tenant_id, client_id, mailbox_object_id,
-    mailbox_address, inbound_message_id, inbound_conversation_id,
+    mailbox_address, inbound_source_message_id, inbound_message_id, inbound_conversation_id,
     inbound_internet_message_id, normalized_sender_hash,
     normalized_recipient_hash, property_reference_key, purpose_key,
     approved_content_fingerprint, draft_version_key,
@@ -1776,7 +2723,7 @@ BEGIN
     result_id, p_operating_strategy_version_id, p_lead_id, p_reply_memory_id,
     p_outreach_message_id,
     p_exchange_rbac_attestation_id, p_tenant_id, p_client_id, p_mailbox_object_id,
-    lower(btrim(p_mailbox_address)), btrim(p_inbound_message_id),
+    lower(btrim(p_mailbox_address)), reply_memory.message_id, btrim(p_inbound_message_id),
     btrim(p_inbound_conversation_id), btrim(p_inbound_internet_message_id),
     lower(p_normalized_sender_hash), lower(p_normalized_recipient_hash),
     btrim(p_property_reference_key), 'seller_reply_followup',
@@ -1815,6 +2762,7 @@ SET search_path = ''
 AS $$
 DECLARE
   existing_revocation private.inbound_reply_continuation_revocations;
+  authz private.inbound_reply_continuation_authorizations;
   result_id UUID;
   result_fingerprint TEXT;
 BEGIN
@@ -1824,10 +2772,10 @@ BEGIN
     RAISE EXCEPTION 'A revocation reason and idempotency key are required.'
       USING ERRCODE = '23514';
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM private.inbound_reply_continuation_authorizations candidate
-    WHERE candidate.id = p_authorization_id
-  ) THEN
+  SELECT candidate.* INTO authz
+  FROM private.inbound_reply_continuation_authorizations candidate
+  WHERE candidate.id = p_authorization_id;
+  IF authz.id IS NULL THEN
     RAISE EXCEPTION 'Continuation authorization not found.' USING ERRCODE = '23514';
   END IF;
   SELECT revocation.* INTO existing_revocation
@@ -1844,6 +2792,10 @@ BEGIN
       RAISE EXCEPTION 'Continuation revocation replay conflicts with immutable evidence.'
         USING ERRCODE = '23505';
     END IF;
+    PERFORM private.gate3d1_engage_selected_canary_stops(
+      authz.operating_strategy_version_id, authz.writer_release,
+      'Gate 3D.1 stopped after continuation authorization revocation replay.'
+    );
     RETURN existing_revocation.id;
   END IF;
   result_id := gen_random_uuid();
@@ -1861,6 +2813,10 @@ BEGIN
     result_id, p_authorization_id, p_actor_user_id, btrim(p_reason),
     p_idempotency_key, result_fingerprint
   );
+  PERFORM private.gate3d1_engage_selected_canary_stops(
+    authz.operating_strategy_version_id, authz.writer_release,
+    'Gate 3D.1 stopped after continuation authorization revocation.'
+  );
   RETURN result_id;
 END;
 $$;
@@ -1869,6 +2825,92 @@ REVOKE ALL ON FUNCTION public.revoke_inbound_reply_continuation_authorization(
   UUID, UUID, TEXT, TEXT
 ) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.revoke_inbound_reply_continuation_authorization(
+  UUID, UUID, TEXT, TEXT
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.revoke_exchange_application_rbac_attestation(
+  p_attestation_id UUID,
+  p_actor_user_id UUID,
+  p_reason TEXT,
+  p_idempotency_key TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  proof private.exchange_application_rbac_attestations;
+  runtime_control public.operating_strategy_runtime_controls;
+  existing_revocation private.exchange_application_rbac_attestation_revocations;
+  result_id UUID;
+  result_fingerprint TEXT;
+BEGIN
+  PERFORM private.gate3d1_assert_founder_actor(p_actor_user_id);
+  IF length(btrim(COALESCE(p_reason, ''))) < 12
+    OR NULLIF(btrim(p_idempotency_key), '') IS NULL THEN
+    RAISE EXCEPTION 'An RBAC revocation reason and idempotency key are required.'
+      USING ERRCODE = '23514';
+  END IF;
+  SELECT attestation.* INTO proof
+  FROM private.exchange_application_rbac_attestations attestation
+  WHERE attestation.id = p_attestation_id;
+  SELECT controls.* INTO runtime_control
+  FROM public.operating_strategy_runtime_controls controls
+  WHERE controls.control_key = 'canonical_binding';
+  IF proof.id IS NULL
+    OR runtime_control.canary_operating_strategy_version_id IS NULL
+    OR runtime_control.canary_required_writer_release IS DISTINCT FROM proof.writer_release THEN
+    RAISE EXCEPTION 'RBAC revocation must target the exact selected canary proof.'
+      USING ERRCODE = '23514';
+  END IF;
+  SELECT revocation.* INTO existing_revocation
+  FROM private.exchange_application_rbac_attestation_revocations revocation
+  WHERE revocation.attestation_id = p_attestation_id
+     OR revocation.idempotency_key = p_idempotency_key
+  ORDER BY revocation.attestation_id = p_attestation_id DESC
+  LIMIT 1;
+  IF existing_revocation.id IS NOT NULL THEN
+    IF existing_revocation.attestation_id IS DISTINCT FROM p_attestation_id
+      OR existing_revocation.revoked_by_user_id IS DISTINCT FROM p_actor_user_id
+      OR existing_revocation.reason IS DISTINCT FROM btrim(p_reason)
+      OR existing_revocation.idempotency_key IS DISTINCT FROM p_idempotency_key THEN
+      RAISE EXCEPTION 'RBAC revocation replay conflicts with immutable evidence.'
+        USING ERRCODE = '23505';
+    END IF;
+    PERFORM private.gate3d1_engage_selected_canary_stops(
+      runtime_control.canary_operating_strategy_version_id, proof.writer_release,
+      'Gate 3D.1 stopped after Exchange RBAC revocation replay.'
+    );
+    RETURN existing_revocation.id;
+  END IF;
+  result_id := gen_random_uuid();
+  result_fingerprint := private.gate3c_canonical_fingerprint(jsonb_build_object(
+    'revocationId', result_id,
+    'attestationId', p_attestation_id,
+    'revokedByUserId', p_actor_user_id,
+    'reason', btrim(p_reason),
+    'idempotencyKey', p_idempotency_key
+  ));
+  INSERT INTO private.exchange_application_rbac_attestation_revocations(
+    id, attestation_id, revoked_by_user_id, reason, idempotency_key,
+    revocation_fingerprint
+  ) VALUES (
+    result_id, p_attestation_id, p_actor_user_id, btrim(p_reason),
+    p_idempotency_key, result_fingerprint
+  );
+  PERFORM private.gate3d1_engage_selected_canary_stops(
+    runtime_control.canary_operating_strategy_version_id, proof.writer_release,
+    'Gate 3D.1 stopped after Exchange RBAC attestation revocation.'
+  );
+  RETURN result_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.revoke_exchange_application_rbac_attestation(
+  UUID, UUID, TEXT, TEXT
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.revoke_exchange_application_rbac_attestation(
   UUID, UUID, TEXT, TEXT
 ) TO authenticated;
 
@@ -1940,6 +2982,7 @@ RETURNS TABLE (
   client_id UUID,
   mailbox_object_id UUID,
   mailbox_address TEXT,
+  inbound_source_message_id TEXT,
   inbound_message_id TEXT,
   inbound_conversation_id TEXT,
   inbound_internet_message_id TEXT,
@@ -1997,7 +3040,7 @@ BEGIN
     authz.property_reference_key, authz.local_timezone, authz.allowed_local_start,
     authz.allowed_local_end, authz.allowed_iso_weekdays, authz.tenant_id,
     authz.client_id, authz.mailbox_object_id, authz.mailbox_address,
-    authz.inbound_message_id, authz.inbound_conversation_id,
+    authz.inbound_source_message_id, authz.inbound_message_id, authz.inbound_conversation_id,
     authz.inbound_internet_message_id, outreach_record.subject,
     private.gate3d1_canonical_authored_body(outreach_record.body),
     authz.draft_version_key,
@@ -2144,6 +3187,7 @@ BEGIN
     'clientId', authz.client_id,
     'mailboxObjectId', authz.mailbox_object_id,
     'mailboxAddressHash', private.gate3d1_sha256_text(authz.mailbox_address),
+    'inboundSourceMessageIdHash', private.gate3d1_sha256_text(authz.inbound_source_message_id),
     'inboundMessageIdHash', private.gate3d1_sha256_text(authz.inbound_message_id),
     'inboundConversationIdHash', private.gate3d1_sha256_text(authz.inbound_conversation_id),
     'inboundInternetMessageIdHash', private.gate3d1_sha256_text(authz.inbound_internet_message_id),
@@ -3433,6 +4477,13 @@ BEGIN
       RAISE EXCEPTION 'Founder reconciliation replay conflicts with immutable evidence.'
         USING ERRCODE = '23505';
     END IF;
+    PERFORM private.gate3d1_engage_stops(
+      claim.id,
+      'Gate 3D.1 remains stopped after founder reconciliation replay.'
+    );
+    PERFORM public.assert_gate3d1_canary_stops_engaged(
+      claim.operating_strategy_version_id, claim.writer_release
+    );
     RETURN existing_event.id;
   END IF;
   current_state := private.gate3d1_current_claim_state(p_claim_id);
@@ -3469,6 +4520,9 @@ BEGIN
     claim.id,
     'Gate 3D.1 remains stopped after founder provider-state reconciliation.'
   );
+  PERFORM public.assert_gate3d1_canary_stops_engaged(
+    claim.operating_strategy_version_id, claim.writer_release
+  );
   RETURN result_id;
 END;
 $$;
@@ -3486,6 +4540,10 @@ COMMENT ON TABLE private.gate3d1_canary_dispatch_claims IS
   'Immutable lifetime one-recipient Gate 3D.1 dispatch claims.';
 COMMENT ON TABLE private.gate3d1_canary_dispatch_events IS
   'Append-only one-shot dispatch state, provider evidence, and reconciliation ledger.';
+COMMENT ON TABLE private.gate3d1_reply_provenance_refreshes IS
+  'Append-only exact Graph ImmutableId provenance mapping; the historical source ID is never rewritten.';
+COMMENT ON TABLE private.gate3d1_outbound_release_leases IS
+  'Append-only authorization/message/version/writer release leases with a hard five-minute maximum.';
 COMMENT ON FUNCTION public.assert_operating_strategy_dispatch_authorized(
   UUID, UUID, TEXT, TEXT
 ) IS 'Service-only read-only fail-closed assertion immediately before each Graph provider mutation.';
@@ -3497,7 +4555,9 @@ BEGIN
     OR EXISTS (SELECT 1 FROM private.exchange_application_rbac_attestations)
     OR EXISTS (SELECT 1 FROM private.exchange_application_rbac_attestation_revocations)
     OR EXISTS (SELECT 1 FROM private.gate3d1_canary_dispatch_claims)
-    OR EXISTS (SELECT 1 FROM private.gate3d1_canary_dispatch_events) THEN
+    OR EXISTS (SELECT 1 FROM private.gate3d1_canary_dispatch_events)
+    OR EXISTS (SELECT 1 FROM private.gate3d1_reply_provenance_refreshes)
+    OR EXISTS (SELECT 1 FROM private.gate3d1_outbound_release_leases) THEN
     RAISE EXCEPTION 'Gate 3D.1 one-shot migration must seed no authority or dispatch evidence.';
   END IF;
   IF (SELECT COUNT(*) FROM private.gate3d1_outbound_control_events) <> 18
@@ -3519,7 +4579,9 @@ BEGIN
   END IF;
   IF has_table_privilege('service_role', 'private.gate3d1_canary_dispatch_claims', 'SELECT')
     OR has_table_privilege('authenticated', 'private.inbound_reply_continuation_authorizations', 'SELECT')
-    OR has_table_privilege('anon', 'private.gate3d1_canary_dispatch_events', 'SELECT') THEN
+    OR has_table_privilege('anon', 'private.gate3d1_canary_dispatch_events', 'SELECT')
+    OR has_table_privilege('service_role', 'private.gate3d1_reply_provenance_refreshes', 'SELECT')
+    OR has_table_privilege('authenticated', 'private.gate3d1_outbound_release_leases', 'SELECT') THEN
     RAISE EXCEPTION 'Gate 3D.1 private PII and claim ledgers must not be browser-readable.';
   END IF;
   IF NOT has_function_privilege(
@@ -3535,6 +4597,21 @@ BEGIN
     OR NOT has_function_privilege(
       'service_role',
       'public.begin_gate3d1_canary_send_attempt(uuid,uuid,uuid,text,text)',
+      'EXECUTE'
+    )
+    OR NOT has_function_privilege(
+      'service_role',
+      'public.refresh_gate3d1_reply_provenance(uuid,uuid,uuid,text,text,text,text,text,text,text,timestamp with time zone,jsonb,uuid,uuid,text,text,text,text)',
+      'EXECUTE'
+    )
+    OR NOT has_function_privilege(
+      'authenticated',
+      'public.release_gate3d1_canary_for_authorization(uuid,uuid,uuid,uuid,text,text,text,integer)',
+      'EXECUTE'
+    )
+    OR has_function_privilege(
+      'service_role',
+      'public.release_gate3d1_canary_for_authorization(uuid,uuid,uuid,uuid,text,text,text,integer)',
       'EXECUTE'
     )
     OR has_function_privilege(

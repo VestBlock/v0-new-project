@@ -81,12 +81,17 @@ SELECT set_config('gate3d1.test.lead_id', gen_random_uuid()::TEXT, TRUE);
 SELECT set_config('gate3d1.test.reply_memory_id', gen_random_uuid()::TEXT, TRUE);
 SELECT set_config('gate3d1.test.outreach_message_id', gen_random_uuid()::TEXT, TRUE);
 SELECT set_config('gate3d1.test.enrollment_id', gen_random_uuid()::TEXT, TRUE);
-SELECT set_config('gate3d1.test.inbound_message_id', 'AAMk-GATE3D1-Immutable-CaseSensitive', TRUE);
+SELECT set_config('gate3d1.test.inbound_source_message_id',
+  'AAMk-GATE3D1-Historical-Source-CaseSensitive', TRUE);
+SELECT set_config('gate3d1.test.inbound_message_id',
+  'AAMk-GATE3D1-Immutable-CaseSensitive', TRUE);
 SELECT set_config('gate3d1.test.conversation_id', 'AAQk-GATE3D1-Conversation-CaseSensitive', TRUE);
 SELECT set_config('gate3d1.test.internet_message_id', '<gate3d1-positive-reply@example.test>', TRUE);
 SELECT set_config('gate3d1.test.sender_email', 'warm-seller@example.test', TRUE);
 SELECT set_config('gate3d1.test.recipient_email', 'acquisitions@vestblock.io', TRUE);
-SELECT set_config('gate3d1.test.property', '101 Test Street', TRUE);
+SELECT set_config('gate3d1.test.property',
+  '101 Test Street, Springfield, IL 62704', TRUE);
+SELECT set_config('gate3d1.test.reply_property', '101 Test Street', TRUE);
 SELECT set_config('gate3d1.test.draft_key', 'seller-reply-gate3d1-v1', TRUE);
 SELECT set_config('gate3d1.test.approved_body',
   '  Thank you for replying. We can review your selling options together.  ', TRUE);
@@ -114,6 +119,8 @@ SELECT set_config('gate3d1.test.rbac_expires_at',
   (statement_timestamp() + INTERVAL '6 hours')::TEXT, TRUE);
 SELECT set_config('gate3d1.test.authorization_expires_at',
   (statement_timestamp() + INTERVAL '4 hours')::TEXT, TRUE);
+SELECT set_config('gate3d1.test.reply_received_at',
+  (statement_timestamp() - INTERVAL '7 days 8 minutes 45 seconds')::TEXT, TRUE);
 
 SELECT set_config('gate3d1.test.version_id', version.id::TEXT, TRUE),
        set_config('gate3d1.test.strategy_id', version.operating_strategy_id::TEXT, TRUE)
@@ -380,9 +387,10 @@ SELECT pg_temp.expect_error(
 );
 RESET ROLE;
 
--- Warm, positive, exact-thread fixture. The reply property is deliberately
--- blank: the canonical lead property is authority; a conflicting nonblank
--- reply property will be rejected below.
+-- Warm, positive, exact-thread fixture. The selected reply is seven days and
+-- eight minutes old and carries a complete street prefix of the canonical
+-- comma-delimited property. Historical source ID and Graph ImmutableId remain
+-- separately bound.
 INSERT INTO public.leads(
   id, lead_type, status, contact_info, form_data, name, email,
   property_address, source, outreach_status, delivery_status
@@ -402,19 +410,21 @@ INSERT INTO public.command_center_reply_memory(
   current_setting('gate3d1.test.lead_id')::UUID,
   'seller_options_intake', current_setting('gate3d1.test.mailbox_address'),
   current_setting('gate3d1.test.conversation_id'),
-  current_setting('gate3d1.test.inbound_message_id'),
+  current_setting('gate3d1.test.inbound_source_message_id'),
   current_setting('gate3d1.test.sender_email'),
   current_setting('gate3d1.test.recipient_email'),
-  'Re: selling options', NULL, statement_timestamp() - INTERVAL '1 hour',
+  'Re: selling options', current_setting('gate3d1.test.reply_property'),
+  current_setting('gate3d1.test.reply_received_at')::TIMESTAMPTZ,
   'hot_seller_lead', 'founder_review', current_setting('gate3d1.test.reply_summary'),
   jsonb_build_object(
     'internetMessageId', current_setting('gate3d1.test.internet_message_id'),
-    'observedTenantId', current_setting('gate3d1.test.tenant_id'),
-    'observedMailboxObjectId', current_setting('gate3d1.test.mailbox_object_id'),
     'explicitOptOut', FALSE,
-    'graphIdType', 'ImmutableId'
+    'graphIdTypeRequested', 'ImmutableId'
   )
 );
+SELECT set_config('gate3d1.test.source_metadata', metadata_json::TEXT, TRUE)
+FROM public.command_center_reply_memory
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
 INSERT INTO public.outreach_messages(
   id, lead_id, channel, subject, body, generated_with, status,
   variant_key, approved_at, approved_by_user_id
@@ -434,7 +444,8 @@ CREATE OR REPLACE FUNCTION pg_temp.authorize_gate3d1(
   p_sender_hash TEXT DEFAULT NULL,
   p_property TEXT DEFAULT NULL,
   p_content_hash TEXT DEFAULT NULL,
-  p_outreach_message_id UUID DEFAULT NULL
+  p_outreach_message_id UUID DEFAULT NULL,
+  p_expires_at TIMESTAMPTZ DEFAULT NULL
 )
 RETURNS UUID
 LANGUAGE SQL
@@ -461,7 +472,8 @@ AS $$
     current_setting('gate3d1.test.draft_key'),
     current_setting('gate3d1.test.positive_review_hash'),
     'America/Chicago', p_start, p_end, p_weekdays,
-    current_setting('gate3d1.test.authorization_expires_at')::TIMESTAMPTZ,
+    COALESCE(p_expires_at,
+      current_setting('gate3d1.test.authorization_expires_at')::TIMESTAMPTZ),
     current_setting('gate3d1.test.founder_id')::UUID,
     'Founder reviewed a positive human reply, exact property, thread, and authored response.',
     current_setting('gate3d1.test.writer'), p_idempotency_key
@@ -474,6 +486,154 @@ SELECT pg_temp.expect_error(
   'service role cannot create founder continuation authority', '42501'
 );
 RESET ROLE;
+
+SELECT pg_temp.assert_true(
+  private.gate3d1_reply_property_matches_canonical('', current_setting('gate3d1.test.property'))
+  AND private.gate3d1_reply_property_matches_canonical(
+    current_setting('gate3d1.test.property'), current_setting('gate3d1.test.property'))
+  AND private.gate3d1_reply_property_matches_canonical(
+    current_setting('gate3d1.test.reply_property'), current_setting('gate3d1.test.property'))
+  AND private.gate3d1_reply_property_matches_canonical(
+    '  101   TEST street  ', current_setting('gate3d1.test.property'))
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    '101 Test', current_setting('gate3d1.test.property'))
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    'Test Street', current_setting('gate3d1.test.property'))
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    '999 Other Street', current_setting('gate3d1.test.property'))
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    '101 Test Street', '101 Test Street, Unit 4, Springfield, IL 62704')
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    '101 Test Street', '101 Test Street, Springfield, IL 62704, Apt 4')
+  AND NOT private.gate3d1_reply_property_matches_canonical(
+    '101 Test Street, Unit 4', '101 Test Street, Unit 4, Springfield, IL 62704'),
+  'property compatibility must allow blank/exact/complete street prefix and reject partial, unrelated, or unit reduction'
+);
+
+CREATE OR REPLACE FUNCTION pg_temp.refresh_gate3d1_provenance(
+  p_idempotency_key TEXT,
+  p_expected_received_at TIMESTAMPTZ DEFAULT NULL,
+  p_expected_metadata JSONB DEFAULT NULL,
+  p_preference_applied TEXT DEFAULT 'IdType=ImmutableId',
+  p_observed_immutable_message_id TEXT DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE SQL
+AS $$
+  SELECT refresh_id
+  FROM public.refresh_gate3d1_reply_provenance(
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.reply_memory_id')::UUID,
+    current_setting('gate3d1.test.lead_id')::UUID,
+    current_setting('gate3d1.test.inbound_source_message_id'),
+    current_setting('gate3d1.test.conversation_id'),
+    current_setting('gate3d1.test.internet_message_id'),
+    current_setting('gate3d1.test.sender_hash'),
+    current_setting('gate3d1.test.recipient_hash'),
+    'Re: selling options', current_setting('gate3d1.test.reply_summary'),
+    COALESCE(p_expected_received_at,
+      current_setting('gate3d1.test.reply_received_at')::TIMESTAMPTZ),
+    COALESCE(p_expected_metadata,
+      current_setting('gate3d1.test.source_metadata')::JSONB),
+    current_setting('gate3d1.test.tenant_id')::UUID,
+    current_setting('gate3d1.test.mailbox_object_id')::UUID,
+    COALESCE(p_observed_immutable_message_id,
+      current_setting('gate3d1.test.inbound_message_id')),
+    p_preference_applied, current_setting('gate3d1.test.writer'), p_idempotency_key
+  );
+$$;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.refresh_gate3d1_provenance(''authenticated-cannot-refresh'')',
+  'authenticated callers cannot write service provenance', '42501'
+);
+RESET ROLE;
+
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.refresh_gate3d1_provenance(''wrong-preference'',NULL,NULL,''outlook.body-content-type="text"'')',
+  'ImmutableId provenance requires the exact Preference-Applied value', '23514'
+);
+
+SAVEPOINT concurrent_metadata_refresh;
+UPDATE public.command_center_reply_memory
+SET metadata_json = metadata_json || '{"concurrentEvidence":"preserve-me"}'::JSONB
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.refresh_gate3d1_provenance(''concurrent-metadata-refresh'')',
+  'metadata compare-and-swap must reject concurrent evidence', '23514'
+);
+SELECT pg_temp.assert_true(
+  NOT (SELECT metadata_json ? 'observedTenantId'
+       FROM public.command_center_reply_memory
+       WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID),
+  'failed metadata CAS must write no observed provenance'
+);
+ROLLBACK TO SAVEPOINT concurrent_metadata_refresh;
+
+SAVEPOINT suppressed_provenance_refresh;
+UPDATE public.leads SET delivery_status = 'complained'
+WHERE id = current_setting('gate3d1.test.lead_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.refresh_gate3d1_provenance(''suppressed-provenance-refresh'')',
+  'suppression mutation must block provenance refresh', '23514'
+);
+SELECT pg_temp.assert_true(
+  NOT (SELECT metadata_json ? 'observedTenantId'
+       FROM public.command_center_reply_memory
+       WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID),
+  'suppressed provenance failure must write no metadata'
+);
+ROLLBACK TO SAVEPOINT suppressed_provenance_refresh;
+
+SAVEPOINT ten_day_reply_boundary;
+SELECT set_config('gate3d1.test.stale_reply_received_at',
+  (statement_timestamp() - INTERVAL '10 days')::TEXT, TRUE);
+UPDATE public.command_center_reply_memory
+SET received_at = current_setting('gate3d1.test.stale_reply_received_at')::TIMESTAMPTZ
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.refresh_gate3d1_provenance(
+  'ten-day-boundary-provenance',
+  current_setting('gate3d1.test.stale_reply_received_at')::TIMESTAMPTZ
+);
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''ten-day-boundary-authorization'')',
+  'a reply at the ten-day boundary must not authorize', '23514'
+);
+RESET ROLE;
+ROLLBACK TO SAVEPOINT ten_day_reply_boundary;
+
+SET LOCAL ROLE service_role;
+SELECT set_config('gate3d1.test.provenance_refresh_id',
+  pg_temp.refresh_gate3d1_provenance('gate3d1-provenance-exact')::TEXT, TRUE);
+SELECT pg_temp.assert_true(
+  pg_temp.refresh_gate3d1_provenance('gate3d1-provenance-exact')
+    = current_setting('gate3d1.test.provenance_refresh_id')::UUID,
+  'exact provenance refresh replay must be idempotent'
+);
+RESET ROLE;
+SELECT pg_temp.assert_true(
+  (SELECT message_id = current_setting('gate3d1.test.inbound_source_message_id')
+      AND metadata_json ->> 'observedTenantId' = current_setting('gate3d1.test.tenant_id')
+      AND metadata_json ->> 'observedMailboxObjectId'
+        = current_setting('gate3d1.test.mailbox_object_id')
+      AND metadata_json ->> 'observedImmutableMessageId'
+        = current_setting('gate3d1.test.inbound_message_id')
+      AND metadata_json ->> 'internetMessageId'
+        = current_setting('gate3d1.test.internet_message_id')
+   FROM public.command_center_reply_memory
+   WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID)
+  AND (SELECT preference_applied = 'IdType=ImmutableId'
+         AND length(merged_metadata_fingerprint) = 64
+       FROM private.gate3d1_reply_provenance_refreshes
+       WHERE id = current_setting('gate3d1.test.provenance_refresh_id')::UUID),
+  'provenance CAS must preserve source ID and evidence while adding exact immutable mapping'
+);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
@@ -499,6 +659,18 @@ SELECT pg_temp.expect_error(
   'reply authorization must reject a mismatched observed mailbox object', '23514'
 );
 ROLLBACK TO SAVEPOINT mismatched_observed_mailbox_provenance;
+
+SAVEPOINT mutated_observed_immutable_id;
+UPDATE public.command_center_reply_memory
+SET metadata_json = jsonb_set(
+  metadata_json, '{observedImmutableMessageId}', '"case-changed"'::JSONB, TRUE
+)
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''mutated-observed-immutable-id'')',
+  'authorization must reject a changed case-sensitive immutable ID', '23514'
+);
+ROLLBACK TO SAVEPOINT mutated_observed_immutable_id;
 
 SAVEPOINT arbitrary_positive_reply_evidence;
 SELECT set_config('gate3d1.test.positive_review_hash', repeat('f', 64), TRUE);
@@ -532,6 +704,10 @@ SELECT pg_temp.expect_error(
   'SELECT pg_temp.authorize_gate3d1(''quiet-weekend'',''10:30''::TIME,''16:30''::TIME,ARRAY[1,6]::SMALLINT[])',
   'weekend authorization must be rejected', '23514'
 );
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''authorization-over-24-hours'',''10:30''::TIME,''16:30''::TIME,ARRAY[1,2,3,4,5]::SMALLINT[],NULL,NULL,NULL,NULL,statement_timestamp()+interval ''24 hours 1 second'')',
+  'authorization expiry beyond 24 hours must be rejected', '23514'
+);
 
 SAVEPOINT conflicting_reply_property;
 UPDATE public.command_center_reply_memory
@@ -542,6 +718,16 @@ SELECT pg_temp.expect_error(
   'a conflicting nonblank reply-memory property must be rejected', '23514'
 );
 ROLLBACK TO SAVEPOINT conflicting_reply_property;
+
+SAVEPOINT partial_reply_property;
+UPDATE public.command_center_reply_memory
+SET property_address = '101 Test'
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''partial-reply-property'')',
+  'a partial street fragment must never satisfy canonical property authority', '23514'
+);
+ROLLBACK TO SAVEPOINT partial_reply_property;
 
 SAVEPOINT mismatched_lead_sender;
 UPDATE public.leads SET email = 'wrong-person@example.test'
@@ -577,6 +763,13 @@ RESET ROLE;
 SELECT pg_temp.assert_true(
   (SELECT positive_classification_evidence_fingerprint
       = current_setting('gate3d1.test.positive_review_hash')
+      AND inbound_source_message_id
+        = current_setting('gate3d1.test.inbound_source_message_id')
+      AND inbound_message_id = current_setting('gate3d1.test.inbound_message_id')
+      AND authorized_reply_received_at
+        = current_setting('gate3d1.test.reply_received_at')::TIMESTAMPTZ
+      AND expires_at <= approved_at + INTERVAL '24 hours'
+      AND expires_at <= authorized_reply_received_at + INTERVAL '10 days'
    FROM private.inbound_reply_continuation_authorizations
    WHERE id = current_setting('gate3d1.test.authorization_id')::UUID),
   'exact stored reply-summary bytes must be the persisted positive-classification evidence'
@@ -643,6 +836,50 @@ SELECT pg_temp.expect_error(
   'post-authorization reply-summary mutation must block the execution manifest', '23514'
 );
 ROLLBACK TO SAVEPOINT mutated_reply_summary;
+
+SAVEPOINT blank_reply_property_recheck;
+UPDATE public.command_center_reply_memory SET property_address = NULL
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.assert_true(
+  EXISTS (SELECT 1 FROM public.assert_inbound_reply_continuation_authorized(
+    current_setting('gate3d1.test.authorization_id')::UUID,
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.lead_id')::UUID,
+    current_setting('gate3d1.test.reply_memory_id')::UUID,
+    current_setting('gate3d1.test.content_hash'),
+    current_setting('gate3d1.test.draft_key'), current_setting('gate3d1.test.writer'))),
+  'blank reply property remains compatible with the exact canonical lead property'
+);
+ROLLBACK TO SAVEPOINT blank_reply_property_recheck;
+
+SAVEPOINT exact_reply_property_recheck;
+UPDATE public.command_center_reply_memory
+SET property_address = current_setting('gate3d1.test.property')
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.assert_true(
+  EXISTS (SELECT 1 FROM public.assert_inbound_reply_continuation_authorized(
+    current_setting('gate3d1.test.authorization_id')::UUID,
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.lead_id')::UUID,
+    current_setting('gate3d1.test.reply_memory_id')::UUID,
+    current_setting('gate3d1.test.content_hash'),
+    current_setting('gate3d1.test.draft_key'), current_setting('gate3d1.test.writer'))),
+  'exact reply property remains compatible at every safety recheck'
+);
+ROLLBACK TO SAVEPOINT exact_reply_property_recheck;
+
+SAVEPOINT invalid_unit_reply_property_recheck;
+UPDATE public.command_center_reply_memory SET property_address = '101 Test Street, Unit 4'
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.assert_inbound_reply_continuation_authorized(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.version_id'),
+    current_setting('gate3d1.test.lead_id'), current_setting('gate3d1.test.reply_memory_id'),
+    current_setting('gate3d1.test.content_hash'), current_setting('gate3d1.test.draft_key'),
+    current_setting('gate3d1.test.writer')),
+  'unit-bearing reply mutation must fail the canonical property recheck', '23514'
+);
+ROLLBACK TO SAVEPOINT invalid_unit_reply_property_recheck;
 
 SAVEPOINT outer_whitespace_equivalence;
 UPDATE public.outreach_messages SET body = E'\n\t' || btrim(body) || E'  \n'
@@ -762,6 +999,8 @@ SELECT pg_temp.assert_true(
       AND property_reference_key = current_setting('gate3d1.test.property')
       AND approved_comment = current_setting('gate3d1.test.canonical_body')
       AND approved_content_fingerprint = current_setting('gate3d1.test.content_hash')
+      AND inbound_source_message_id
+        = current_setting('gate3d1.test.inbound_source_message_id')
       AND inbound_message_id = current_setting('gate3d1.test.inbound_message_id')
    FROM public.resolve_gate3d1_canary_execution_manifest(
      current_setting('gate3d1.test.authorization_id')::UUID,
@@ -789,22 +1028,167 @@ SELECT pg_temp.expect_error(
 );
 RESET ROLE;
 
--- Founder releases the selected strategy first and global stop second. Service
--- can only reduce authority; a no-claim failure re-engages both stops.
+-- General controls can only reduce authority. A founder may open the exact
+-- authorization/message/version/writer only through a five-minute lease.
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
-SELECT public.set_operating_strategy_outbound_control(
-  current_setting('gate3d1.test.strategy_id')::UUID, FALSE,
-  current_setting('gate3d1.test.founder_id')::UUID,
-  'Founder releases only the reviewed seller reply canary strategy.',
-  current_setting('gate3d1.test.writer')
+SELECT pg_temp.expect_error(
+  format('SELECT public.set_operating_strategy_outbound_control(%L::UUID,FALSE,%L::UUID,%L,%L)',
+    current_setting('gate3d1.test.strategy_id'), current_setting('gate3d1.test.founder_id'),
+    'Legacy control must not release the selected strategy.', current_setting('gate3d1.test.writer')),
+  'legacy founder controls cannot unpause a strategy', '23514'
 );
-SELECT public.set_operating_strategy_outbound_control(
-  NULL::UUID, FALSE, current_setting('gate3d1.test.founder_id')::UUID,
-  'Founder releases the global stop for one exact canary claim.',
-  current_setting('gate3d1.test.writer')
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.release_gate3d1_canary_for_authorization(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,300)',
+    gen_random_uuid(), current_setting('gate3d1.test.outreach_message_id'),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.founder_id'),
+    current_setting('gate3d1.test.writer'), 'Founder cannot release before exact authorization resolution.',
+    'gate3d1-early-release'),
+  'release without an exact authorization must fail', '23514'
+);
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.release_gate3d1_canary_for_authorization(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,300)',
+    current_setting('gate3d1.test.authorization_id'), gen_random_uuid(),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.founder_id'),
+    current_setting('gate3d1.test.writer'), 'Founder release must reject the wrong outreach message.',
+    'gate3d1-wrong-message-release'),
+  'release must reject a wrong outreach message', '23514'
+);
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.release_gate3d1_canary_for_authorization(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,301)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.outreach_message_id'),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.founder_id'),
+    current_setting('gate3d1.test.writer'), 'Founder release cannot exceed the hard five-minute lease.',
+    'gate3d1-overlong-release'),
+  'release TTL above five minutes must fail', '23514'
 );
 RESET ROLE;
+
+SAVEPOINT manually_open_without_lease;
+UPDATE public.operating_strategy_outbound_controls
+SET paused = FALSE, writer_release = current_setting('gate3d1.test.writer'),
+    pause_reason = 'Unsafe direct-open regression fixture without a release lease.',
+    updated_by_user_id = current_setting('gate3d1.test.founder_id')::UUID,
+    updated_at = statement_timestamp()
+WHERE operating_strategy_id = current_setting('gate3d1.test.strategy_id')::UUID;
+UPDATE public.operating_strategy_runtime_controls
+SET outbound_kill_switch = FALSE,
+    outbound_control_writer_release = current_setting('gate3d1.test.writer'),
+    outbound_control_updated_at = statement_timestamp()
+WHERE control_key = 'canonical_binding';
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.claim_gate3d1_canary_dispatch(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,%L,%L,%L)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.rbac_attestation_id'),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.lead_id'),
+    'outlook_graph', current_setting('gate3d1.test.content_hash'),
+    current_setting('gate3d1.test.draft_key'), 'gate3d1-reservation',
+    current_setting('gate3d1.test.writer'), 'gate3d1-claim'),
+  'manually opened controls without an exact lease must fail closed', '23514'
+);
+RESET ROLE;
+ROLLBACK TO SAVEPOINT manually_open_without_lease;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+SELECT set_config('gate3d1.test.release_lease_id', lease_id::TEXT, TRUE),
+       set_config('gate3d1.test.release_lease_expires_at', expires_at::TEXT, TRUE)
+FROM public.release_gate3d1_canary_for_authorization(
+  current_setting('gate3d1.test.authorization_id')::UUID,
+  current_setting('gate3d1.test.outreach_message_id')::UUID,
+  current_setting('gate3d1.test.version_id')::UUID,
+  current_setting('gate3d1.test.founder_id')::UUID,
+  current_setting('gate3d1.test.writer'),
+  'Founder releases one exact reviewed continuation for immediate execution.',
+  'gate3d1-exact-release', 300
+);
+SELECT pg_temp.assert_true(
+  (SELECT lease_id = current_setting('gate3d1.test.release_lease_id')::UUID
+      AND global_released AND strategy_released
+      AND length(lease_fingerprint) = 64
+      AND expires_at > released_at
+      AND expires_at <= released_at + INTERVAL '5 minutes'
+   FROM public.release_gate3d1_canary_for_authorization(
+    current_setting('gate3d1.test.authorization_id')::UUID,
+    current_setting('gate3d1.test.outreach_message_id')::UUID,
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.founder_id')::UUID,
+    current_setting('gate3d1.test.writer'),
+    'Founder releases one exact reviewed continuation for immediate execution.',
+    'gate3d1-exact-release', 300)),
+  'exact release replay must neither extend nor replace the current lease'
+);
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.release_gate3d1_canary_for_authorization(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,299)',
+    current_setting('gate3d1.test.authorization_id'),
+    current_setting('gate3d1.test.outreach_message_id'),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.founder_id'),
+    current_setting('gate3d1.test.writer'),
+    'Founder releases one exact reviewed continuation for immediate execution.',
+    'gate3d1-exact-release'),
+  'release replay with a different requested TTL must conflict', '23505'
+);
+RESET ROLE;
+
+SAVEPOINT expired_release_lease;
+CREATE OR REPLACE FUNCTION private.gate3d1_authority_evaluation_time()
+RETURNS TIMESTAMPTZ LANGUAGE SQL STABLE SECURITY INVOKER SET search_path = ''
+AS $$ SELECT statement_timestamp() + INTERVAL '6 minutes' $$;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.claim_gate3d1_canary_dispatch(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L,%L,%L,%L)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.rbac_attestation_id'),
+    current_setting('gate3d1.test.version_id'), current_setting('gate3d1.test.lead_id'),
+    'outlook_graph', current_setting('gate3d1.test.content_hash'),
+    current_setting('gate3d1.test.draft_key'), 'gate3d1-reservation',
+    current_setting('gate3d1.test.writer'), 'gate3d1-claim'),
+  'expired release lease must fail before claim creation', '23514'
+);
+RESET ROLE;
+ROLLBACK TO SAVEPOINT expired_release_lease;
+
+SAVEPOINT continuation_revoke_engages_stops;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+SELECT public.revoke_inbound_reply_continuation_authorization(
+  current_setting('gate3d1.test.authorization_id')::UUID,
+  current_setting('gate3d1.test.founder_id')::UUID,
+  'Founder tests that continuation revocation immediately engages both stops.',
+  'gate3d1-revoke-continuation-stop-proof'
+);
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.assert_true(
+  (SELECT global_blocked AND strategy_paused
+      AND length(stop_evidence_fingerprint) = 64
+   FROM public.assert_gate3d1_canary_stops_engaged(
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.writer'))),
+  'continuation revocation must engage and prove both stops'
+);
+RESET ROLE;
+ROLLBACK TO SAVEPOINT continuation_revoke_engages_stops;
+
+SAVEPOINT rbac_revoke_engages_stops;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+SELECT public.revoke_exchange_application_rbac_attestation(
+  current_setting('gate3d1.test.rbac_attestation_id')::UUID,
+  current_setting('gate3d1.test.founder_id')::UUID,
+  'Founder tests that Exchange RBAC revocation immediately engages both stops.',
+  'gate3d1-revoke-rbac-stop-proof'
+);
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.assert_true(
+  (SELECT global_blocked AND strategy_paused
+   FROM public.assert_gate3d1_canary_stops_engaged(
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.writer'))),
+  'Exchange RBAC revocation must engage and prove both stops'
+);
+RESET ROLE;
+ROLLBACK TO SAVEPOINT rbac_revoke_engages_stops;
 
 SET LOCAL ROLE service_role;
 SAVEPOINT no_claim_emergency_stop;
@@ -1258,6 +1642,13 @@ SELECT public.reconcile_gate3d1_canary_dispatch(
   'Founder verified the immutable Graph sent item after an ambiguous response.',
   current_setting('gate3d1.test.writer'), 'gate3d1-founder-reconciled-accepted'
 );
+SELECT public.reconcile_gate3d1_canary_dispatch(
+  current_setting('gate3d1.test.claim_id')::UUID,
+  'reconciled_accepted', repeat('7',64),
+  current_setting('gate3d1.test.founder_id')::UUID,
+  'Founder verified the immutable Graph sent item after an ambiguous response.',
+  current_setting('gate3d1.test.writer'), 'gate3d1-founder-reconciled-accepted'
+);
 RESET ROLE;
 
 SET LOCAL ROLE service_role;
@@ -1271,6 +1662,13 @@ SELECT pg_temp.assert_true(
   AND (SELECT COUNT(*) = 1 FROM public.operating_strategy_dispatch_reservations
        WHERE operating_strategy_version_id = current_setting('gate3d1.test.version_id')::UUID),
   'founder reconciliation must remain terminal with one lifetime claim and reservation'
+);
+SELECT pg_temp.assert_true(
+  (SELECT global_blocked AND strategy_paused
+   FROM public.assert_gate3d1_canary_stops_engaged(
+    current_setting('gate3d1.test.version_id')::UUID,
+    current_setting('gate3d1.test.writer'))),
+  'terminal reconciliation replay must re-prove both stops'
 );
 SELECT pg_temp.expect_error(
   format('SELECT public.revoke_inbound_reply_continuation_authorization(%L::UUID,%L::UUID,%L,%L)',
