@@ -7,10 +7,18 @@ import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { getConfiguredGate3d1InboundMailboxScope } from '@/lib/email/gate3d1InboundMailboxScope'
 import {
+  assertGate3d1BusinessWindow,
+  assertGate3d1CanaryIsolationEnabled,
+  assertExactGate3d1GraphTargetIdentity,
+  assertGate3d1ImmutableIdPreferenceApplied,
+  assertGate3d1ReplyBasisFresh,
   fingerprintGate3d1GraphReplyContent,
   fingerprintGate3d1GraphReplyThread,
+  getGate3d1GraphPermissionReadiness,
   hasExactGate3d1ReplyMemoryProvenance,
-  isConservativePositiveSellerReplyText,
+  isGate3d1FounderReviewableSellerReplyText,
+  isGate3d1ReplyPropertyCompatible,
+  normalizeGate3d1GraphReplyRequest,
   resolveGate3d1GraphApplicationClientId,
   runGate3d1GraphSameThreadReplyCanary,
   type Gate3d1CanaryPreflight,
@@ -260,6 +268,7 @@ function graphThreadMetadata(thread: Gate3d1GraphThreadEvidence) {
     mailboxObjectId: thread.mailboxObjectId,
     mailboxAddress: thread.mailboxAddress,
     recipientEmail: thread.recipientEmail,
+    targetInboundSourceMessageId: thread.targetInboundSourceMessageId,
     targetInboundImmutableMessageId: thread.targetInboundImmutableMessageId,
     targetConversationId: thread.targetConversationId,
     targetInternetMessageId: thread.targetInternetMessageId,
@@ -277,6 +286,7 @@ function graphThreadFromMetadata(metadata: unknown): Gate3d1GraphThreadEvidence 
     mailboxObjectId: String(candidate.mailboxObjectId || ''),
     mailboxAddress: String(candidate.mailboxAddress || '').trim().toLowerCase(),
     recipientEmail: String(candidate.recipientEmail || '').trim().toLowerCase(),
+    targetInboundSourceMessageId: String(candidate.targetInboundSourceMessageId || ''),
     targetInboundImmutableMessageId: String(candidate.targetInboundImmutableMessageId || ''),
     targetConversationId: String(candidate.targetConversationId || ''),
     targetInternetMessageId: String(candidate.targetInternetMessageId || ''),
@@ -344,6 +354,9 @@ async function graphJson(input: {
     const providerCode = typeof data?.error?.code === 'string' ? data.error.code : 'unknown_error'
     throw new Error(`Microsoft Graph request failed with ${response.status} (${providerCode}).`)
   }
+  assertGate3d1ImmutableIdPreferenceApplied(
+    response.headers.get('preference-applied')
+  )
   return data as GraphApiMessage
 }
 
@@ -369,6 +382,7 @@ async function graphAccepted(input: {
 }
 
 function assertExactCanaryActivation(request: Gate3d1GraphReplyRequest) {
+  assertGate3d1CanaryIsolationEnabled(exactEnv('GATE3D1_CANARY_ISOLATION'))
   const callbackScope = getConfiguredGate3d1InboundMailboxScope()
   const checks: Array<[boolean, string]> = [
     [exactEnv('GATE3D1_GRAPH_REPLY_CANARY_ENABLED') === 'true', 'The Gate 3D.1 Graph canary is disabled.'],
@@ -384,6 +398,11 @@ function assertExactCanaryActivation(request: Gate3d1GraphReplyRequest) {
     [
       exactEnv('GATE3D1_GRAPH_MAILBOX_OBJECT_ID') === request.target.mailboxObjectId,
       'The mailbox object ID is not the pinned Graph canary mailbox.',
+    ],
+    [
+      exactEnv('GATE3D1_GRAPH_TENANT_ID') === request.graphTenantId &&
+        exactEnv('GATE3D1_GRAPH_CLIENT_ID') === request.graphClientId,
+      'The tenant or dedicated application ID is not the pinned Graph canary sender.',
     ],
     [
       exactEnv('GATE3D1_GRAPH_MAILBOX_ADDRESS').toLowerCase() === request.target.mailboxAddress,
@@ -416,6 +435,9 @@ async function getGraphSession(
     !config.mailboxAddress
   ) {
     throw new Error('All five dedicated Gate 3D.1 Graph sender settings are required.')
+  }
+  if (config.tenantId !== request.graphTenantId || config.clientId !== request.graphClientId) {
+    throw new Error('The execution manifest does not match the dedicated Graph sender identity.')
   }
   const admin = createAdminClient()
   const { data: attestationData, error: attestationError } = await admin.rpc(
@@ -549,7 +571,6 @@ async function assertNoStopSignal(
       .select('id,lead_id,mailbox,thread_id,message_id,from_email,to_email,subject,reply_summary,property_address,received_at,classification,metadata_json')
       .eq('id', request.replyMemoryId)
       .eq('mailbox', request.target.mailboxAddress)
-      .eq('message_id', request.target.inboundImmutableMessageId)
       .limit(2),
   ])
   for (const result of [leadResult, suppressionResult, enrollmentResult, sendEventResult, targetResult]) {
@@ -569,6 +590,7 @@ async function assertNoStopSignal(
   if (!Number.isFinite(Date.parse(targetReceivedAt))) {
     throw new Error('The immutable Graph reply target is missing a stable received timestamp.')
   }
+  assertGate3d1ReplyBasisFresh(targetReceivedAt, new Date())
 
   const { data: newerReplies, error: newerRepliesError } = await admin
     .from('command_center_reply_memory')
@@ -577,7 +599,7 @@ async function assertNoStopSignal(
     .eq('thread_id', request.target.conversationId)
     .eq('from_email', request.recipientEmail)
     .gt('received_at', targetReceivedAt)
-    .neq('message_id', request.target.inboundImmutableMessageId)
+    .neq('id', request.replyMemoryId)
     .limit(2)
   if (newerRepliesError) throw newerRepliesError
 
@@ -586,10 +608,7 @@ async function assertNoStopSignal(
   if (String(lead.property_address || '').replace(/\s+/g, ' ').trim() !== request.propertyAddress) {
     stopReasons.push('property_identity_conflict')
   }
-  if (
-    target.property_address &&
-    String(target.property_address).replace(/\s+/g, ' ').trim() !== request.propertyAddress
-  ) {
+  if (!isGate3d1ReplyPropertyCompatible(request.propertyAddress, target.property_address)) {
     stopReasons.push('reply_memory_property_conflict')
   }
   if (stoppedStatus(lead.status) || stoppedStatus(lead.outreach_status) || stoppedStatus(lead.delivery_status)) {
@@ -614,7 +633,8 @@ async function assertNoStopSignal(
     target.lead_id !== request.leadId ||
     target.mailbox !== request.target.mailboxAddress ||
     target.thread_id !== request.target.conversationId ||
-    target.message_id !== request.target.inboundImmutableMessageId ||
+    target.message_id !== request.target.inboundSourceMessageId ||
+    targetMetadata.observedImmutableMessageId !== request.target.inboundImmutableMessageId ||
     String(target.from_email || '').trim().toLowerCase() !== request.recipientEmail ||
     String(target.to_email || '').trim().toLowerCase() !== request.target.mailboxAddress ||
     targetMetadata.internetMessageId !== request.target.inboundInternetMessageId
@@ -625,13 +645,14 @@ async function assertNoStopSignal(
   if (!hasExactGate3d1ReplyMemoryProvenance(targetMetadata, {
     tenantId: graphConfig.tenantId,
     mailboxObjectId: graphConfig.mailboxObjectId,
+    immutableMessageId: request.target.inboundImmutableMessageId,
   })) {
     stopReasons.push('inbound_reader_provenance_conflict')
   }
   if (String(target.classification || '') !== 'hot_seller_lead') {
     stopReasons.push('target_not_positive_seller_reply')
   }
-  if (!isConservativePositiveSellerReplyText({
+  if (!isGate3d1FounderReviewableSellerReplyText({
     subject: target.subject,
     bodyPreview: target.reply_summary,
   })) {
@@ -844,6 +865,7 @@ const dependencies: Gate3d1GraphReplyDependencies = {
           mailboxObjectId: request.target.mailboxObjectId,
           mailboxAddress: request.target.mailboxAddress,
           recipientEmail: request.recipientEmail,
+          targetInboundSourceMessageId: request.target.inboundSourceMessageId,
           targetInboundImmutableMessageId: request.target.inboundImmutableMessageId,
           targetConversationId: request.target.conversationId,
           targetInternetMessageId: request.target.inboundInternetMessageId,
@@ -1250,6 +1272,7 @@ export async function resolveGate3d1GraphReplyExecutionRequest(input: {
     client_id: string
     mailbox_object_id: string
     mailbox_address: string
+    inbound_source_message_id: string
     inbound_message_id: string
     inbound_conversation_id: string
     inbound_internet_message_id: string
@@ -1287,6 +1310,8 @@ export async function resolveGate3d1GraphReplyExecutionRequest(input: {
     throw new Error('Gate 3D.1 execution manifest returned stale or conflicting immutable evidence.')
   }
   const requestBase = {
+    graphTenantId: manifest.tenant_id,
+    graphClientId: manifest.client_id,
     leadId: exactUuid(manifest.lead_id, 'Manifest lead ID'),
     replyMemoryId: exactUuid(manifest.reply_memory_id, 'Manifest reply-memory ID'),
     outreachMessageId,
@@ -1315,6 +1340,7 @@ export async function resolveGate3d1GraphReplyExecutionRequest(input: {
     target: {
       mailboxObjectId: manifest.mailbox_object_id,
       mailboxAddress: manifest.mailbox_address,
+      inboundSourceMessageId: manifest.inbound_source_message_id,
       inboundImmutableMessageId: manifest.inbound_message_id,
       conversationId: manifest.inbound_conversation_id,
       inboundInternetMessageId: manifest.inbound_internet_message_id,
@@ -1388,6 +1414,7 @@ export async function getGate3d1GraphReplyCanaryReadiness() {
     clientSecretConfigured: Boolean(config.clientSecret),
     mailboxObjectIdConfigured: Boolean(config.mailboxObjectId),
     enabled: exactEnv('GATE3D1_GRAPH_REPLY_CANARY_ENABLED') === 'true',
+    isolationEnabled: exactEnv('GATE3D1_CANARY_ISOLATION') === 'true',
     oneRecipientPinned: /^[0-9a-f]{64}$/.test(exactEnv('GATE3D1_GRAPH_REPLY_CANARY_RECIPIENT_SHA256')),
     capIsOne: exactEnv('GATE3D1_GRAPH_REPLY_CANARY_MAX_SENDS') === '1',
     founderManifestPinned:
@@ -1411,6 +1438,32 @@ export async function executeGate3d1GraphSameThreadReplyCanary(
   request: Gate3d1GraphReplyRequest
 ) {
   return runGate3d1GraphSameThreadReplyCanary(request, dependencies)
+}
+
+export async function preflightGate3d1GraphReplyExecution(
+  rawRequest: Gate3d1GraphReplyRequest
+) {
+  const request = normalizeGate3d1GraphReplyRequest(rawRequest)
+  assertExactCanaryActivation(request)
+  assertGate3d1BusinessWindow(new Date(), request.recipientTimeZone)
+  const session = await getGraphSession(request)
+  const readiness = getGate3d1GraphPermissionReadiness({
+    ...session,
+    requiredMailboxObjectId: request.target.mailboxObjectId,
+    requiredMailboxAddress: request.target.mailboxAddress,
+  })
+  if (!readiness.ready) {
+    throw new Error(
+      `Gate 3D.1 pre-release Graph readiness is blocked; missing ${readiness.missingPermissions.join(' and ')}.`
+    )
+  }
+  const target = await dependencies.getTargetMessage(session, request.target)
+  assertExactGate3d1GraphTargetIdentity(request, target)
+  return {
+    providerRead: true as const,
+    providerMutation: false as const,
+    immutableTargetVerified: true as const,
+  }
 }
 
 export type {

@@ -4,6 +4,7 @@ import type { OperatingStrategyBinding } from '@/lib/strategy/runtime-governance
 
 const IDENTIFIER_LIMIT = 1024
 const BODY_LIMIT = 10_000
+export const GATE3D1_REPLY_BASIS_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1_000
 const GATE3D1_BUSINESS_WINDOW = Object.freeze({
   startMinute: 10 * 60 + 30,
   endMinute: 16 * 60 + 30,
@@ -14,12 +15,15 @@ type GraphAuthMode = 'application_credentials'
 export type Gate3d1GraphReplyTarget = Readonly<{
   mailboxObjectId: string
   mailboxAddress: string
+  inboundSourceMessageId: string
   inboundImmutableMessageId: string
   conversationId: string
   inboundInternetMessageId: string
 }>
 
 export type Gate3d1GraphReplyRequest = Readonly<{
+  graphTenantId: string
+  graphClientId: string
   leadId: string
   replyMemoryId: string
   outreachMessageId: string
@@ -47,6 +51,7 @@ export type Gate3d1GraphThreadEvidence = Readonly<{
   mailboxObjectId: string
   mailboxAddress: string
   recipientEmail: string
+  targetInboundSourceMessageId: string
   targetInboundImmutableMessageId: string
   targetConversationId: string
   targetInternetMessageId: string
@@ -360,6 +365,22 @@ function sha256Canonical(value: Record<string, unknown>) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
+function sha256Text(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+export function assertGate3d1ImmutableIdPreferenceApplied(value: string | null | undefined) {
+  if (value !== 'IdType=ImmutableId') {
+    throw new Error('Microsoft Graph did not confirm exact ImmutableId response semantics.')
+  }
+}
+
+export function assertGate3d1CanaryIsolationEnabled(value: string | null | undefined) {
+  if (value !== 'true') {
+    throw new Error('Gate 3D.1 central cron isolation is not enabled.')
+  }
+}
+
 export function resolveGate3d1GraphApplicationClientId(input: {
   tokenVersion: string | null | undefined
   authorizedPartyClientId: string | null | undefined
@@ -392,6 +413,8 @@ export function resolveGate3d1GraphApplicationClientId(input: {
 }
 
 export function fingerprintGate3d1GraphReplyThread(input: {
+  graphTenantId: string
+  graphClientId: string
   leadId: string
   replyMemoryId: string
   recipientEmail: string
@@ -400,6 +423,8 @@ export function fingerprintGate3d1GraphReplyThread(input: {
   target: Gate3d1GraphReplyTarget
 }) {
   return sha256Canonical({
+    graphTenantId: input.graphTenantId,
+    graphClientId: input.graphClientId,
     leadId: input.leadId,
     replyMemoryId: input.replyMemoryId,
     recipientEmail: input.recipientEmail.trim().toLowerCase(),
@@ -407,6 +432,7 @@ export function fingerprintGate3d1GraphReplyThread(input: {
     propertyAddress: input.propertyAddress.trim(),
     mailboxObjectId: input.target.mailboxObjectId,
     mailboxAddress: input.target.mailboxAddress.trim().toLowerCase(),
+    inboundSourceMessageId: input.target.inboundSourceMessageId,
     inboundImmutableMessageId: input.target.inboundImmutableMessageId,
     conversationId: input.target.conversationId,
     inboundInternetMessageId: input.target.inboundInternetMessageId,
@@ -421,6 +447,58 @@ export function fingerprintGate3d1GraphReplyContent(input: {
   comment: string
 }) {
   return createHash('sha256').update(input.comment.trim()).digest('hex')
+}
+
+export function assertExactGate3d1ConsentBasisSnapshot(
+  request: Gate3d1GraphReplyRequest,
+  claim: Gate3d1DispatchClaim
+) {
+  const snapshot = claim.consentBasisSnapshot
+  const provenance = Array.isArray(snapshot.provenance) ? snapshot.provenance : []
+  const provenanceEntry = provenance.length === 1 && provenance[0] &&
+    typeof provenance[0] === 'object' && !Array.isArray(provenance[0])
+    ? provenance[0] as Record<string, unknown>
+    : null
+  const expectedEvidenceKey =
+    `gate3d1-continuation:${request.authorizationId}:claim:${claim.claimId}`
+  const valid =
+    snapshot.dispatchAuthorized === true &&
+    snapshot.basis === 'positive_inbound_reply_continuation' &&
+    snapshot.permissionSemantics === 'reply_continuation_not_marketing_consent' &&
+    snapshot.evidenceKey === expectedEvidenceKey &&
+    snapshot.authorizationId === request.authorizationId &&
+    snapshot.claimId === claim.claimId &&
+    snapshot.leadId === request.leadId &&
+    snapshot.replyMemoryId === request.replyMemoryId &&
+    snapshot.outreachMessageId === request.outreachMessageId &&
+    snapshot.exchangeRbacAttestationId === request.exchangeRbacAttestationId &&
+    snapshot.inboundProvider === 'outlook_graph' &&
+    snapshot.graphIdentifierSemantics === 'case_sensitive_immutable' &&
+    snapshot.tenantId === request.graphTenantId &&
+    snapshot.clientId === request.graphClientId &&
+    snapshot.mailboxObjectId === request.target.mailboxObjectId &&
+    snapshot.mailboxAddressHash === sha256Text(request.target.mailboxAddress) &&
+    snapshot.normalizedSenderHash === sha256Text(request.recipientEmail) &&
+    snapshot.normalizedRecipientHash === sha256Text(request.target.mailboxAddress) &&
+    snapshot.propertyReferenceHash === sha256Text(request.propertyAddress) &&
+    snapshot.inboundSourceMessageIdHash === sha256Text(request.target.inboundSourceMessageId) &&
+    snapshot.inboundMessageIdHash === sha256Text(request.target.inboundImmutableMessageId) &&
+    snapshot.inboundConversationIdHash === sha256Text(request.target.conversationId) &&
+    snapshot.inboundInternetMessageIdHash === sha256Text(request.target.inboundInternetMessageId) &&
+    snapshot.purposeKey === request.outreachPurpose &&
+    snapshot.approvedContentFingerprint === request.contentFingerprint &&
+    snapshot.draftVersionKey === request.messageVersionKey &&
+    /^[0-9a-f]{32}$/.test(String(snapshot.authorizationFingerprint || '')) &&
+    /^[0-9a-f]{64}$/.test(String(snapshot.positiveClassificationEvidenceFingerprint || '')) &&
+    /^[0-9a-f]{32}$/.test(String(snapshot.exchangeRbacAttestationFingerprint || '')) &&
+    /^[0-9a-f]{64}$/.test(String(snapshot.quietHoursEvidenceFingerprint || '')) &&
+    provenanceEntry?.source === 'founder_reviewed_positive_inbound_reply_continuation' &&
+    provenanceEntry.authorizationId === request.authorizationId &&
+    provenanceEntry.claimId === claim.claimId &&
+    provenanceEntry.exchangeRbacAttestationId === request.exchangeRbacAttestationId
+  if (!valid) {
+    throw new Error('The one-shot claim consent snapshot conflicts with the exact reviewed continuation manifest.')
+  }
 }
 
 function newReplyText(bodyPreview: string | null | undefined) {
@@ -463,13 +541,56 @@ export function isConservativePositiveSellerReplyText(input: {
   bodyPreview?: string | null
 }) {
   const replyText = newReplyText(input.bodyPreview).toLowerCase()
-  if (!replyText || isExplicitEmailOptOutText(input)) return false
-  if (
-    /\b(?:no thanks?|not interested|wrong (?:person|number)|do not|don't|never contact|already sold|not selling|won't sell|will not sell|leave me alone)\b/.test(replyText)
-  ) {
-    return false
-  }
+  if (!isGate3d1FounderReviewableSellerReplyText(input)) return false
   return /\b(?:yes|interested|tell me more|let(?:'s| us) talk|call me|text me|open to|consider(?:ing)?|willing|selling|sell|offer|asking price|property|house|address|timeline|close|closing)\b/.test(replyText)
+}
+
+export function isGate3d1FounderReviewableSellerReplyText(input: {
+  subject?: string | null
+  bodyPreview?: string | null
+}) {
+  return getGate3d1FounderReplyReviewVerdicts(input).reviewable
+}
+
+export function getGate3d1FounderReplyReviewVerdicts(input: {
+  subject?: string | null
+  bodyPreview?: string | null
+}) {
+  const subject = String(input.subject || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const replyText = newReplyText(input.bodyPreview).toLowerCase()
+  const combined = `${subject} ${replyText}`
+  const blankOrPlaceholder = !replyText || replyText === 'no message preview was returned by outlook.'
+  const explicitOptOut = isExplicitEmailOptOutText(input)
+  const automatic = /\b(?:automatic reply|auto.?reply|out of office|currently out of (?:the )?office|away from (?:the )?office|delivery failure|undeliverable)\b/.test(combined)
+  const clearlyNegative = /\b(?:no thanks?|not interested|wrong (?:person|number)|never contact|already sold|not selling|won't sell|will not sell|(?:do not|don't) (?:want to sell|own (?:it|this|that|the property))|not (?:my property|the owner)|no longer own|leave me alone)\b/.test(replyText)
+  return {
+    blankOrPlaceholder,
+    explicitOptOut,
+    automatic,
+    clearlyNegative,
+    reviewable: !blankOrPlaceholder && !explicitOptOut && !automatic && !clearlyNegative,
+  }
+}
+
+export function isGate3d1ReplyPropertyCompatible(
+  canonicalPropertyAddress: string | null | undefined,
+  observedReplyPropertyAddress: string | null | undefined
+) {
+  const canonical = String(canonicalPropertyAddress || '').replace(/\s+/g, ' ').trim()
+  const observed = String(observedReplyPropertyAddress || '').replace(/\s+/g, ' ').trim()
+  if (!canonical) return false
+  if (!observed) return true
+  const canonicalFolded = canonical.toLowerCase()
+  const observedFolded = observed.toLowerCase()
+  if (canonicalFolded === observedFolded) return true
+  const prefix = `${observedFolded},`
+  if (!canonicalFolded.startsWith(prefix)) return false
+  const unitMarker = /(?:^|[\s,])(?:apt|apartment|unit|suite|ste)(?:[\s#.-]|$)|(?:^|[\s,])#\s*[a-z0-9]+/i
+  if (unitMarker.test(observed)) return false
+  const completeStreet = /^\d+[a-z0-9-]*\s+.+\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|circle|cir|parkway|pkwy|way|place|pl|terrace|ter|trail|trl|highway|hwy)(?:\s+(?:north|south|east|west|n|s|e|w|ne|nw|se|sw))?$/i
+  if (!completeStreet.test(observed)) return false
+  const remainder = canonicalFolded.slice(prefix.length).trim()
+  return Boolean(remainder) && !unitMarker.test(remainder)
 }
 
 export function selectExactGate3d1LocalDraft<Row extends {
@@ -502,18 +623,24 @@ export function hasExactGate3d1ReplyMemoryProvenance(
   expected: {
     tenantId: string
     mailboxObjectId: string
+    immutableMessageId?: string
   }
 ) {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
   const row = metadata as Record<string, unknown>
   const observedTenantId = String(row.observedTenantId || '')
   const observedMailboxObjectId = String(row.observedMailboxObjectId || '')
+  const observedImmutableMessageId = String(row.observedImmutableMessageId || '')
   const canonicalUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
   return (
     canonicalUuid.test(observedTenantId) &&
     canonicalUuid.test(observedMailboxObjectId) &&
     observedTenantId === expected.tenantId &&
-    observedMailboxObjectId === expected.mailboxObjectId
+    observedMailboxObjectId === expected.mailboxObjectId &&
+    Boolean(observedImmutableMessageId) &&
+    !/\s/.test(observedImmutableMessageId) &&
+    (expected.immutableMessageId === undefined ||
+      observedImmutableMessageId === expected.immutableMessageId)
   )
 }
 
@@ -533,6 +660,234 @@ export async function resolveGate3d1ExecutionOrStop<T>(input: {
       )
     }
     throw resolutionError
+  }
+}
+
+export function gate3d1ReplyBasisExpiresAt(receivedAt: string) {
+  const receivedAtMs = Date.parse(String(receivedAt || ''))
+  if (!Number.isFinite(receivedAtMs)) {
+    throw new Error('Gate 3D.1 reply evidence is missing a stable received timestamp.')
+  }
+  return new Date(receivedAtMs + GATE3D1_REPLY_BASIS_MAX_AGE_MS)
+}
+
+export function assertGate3d1ReplyBasisFresh(receivedAt: string, now: Date) {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    throw new Error('Gate 3D.1 reply freshness requires a valid current timestamp.')
+  }
+  const expiresAt = gate3d1ReplyBasisExpiresAt(receivedAt)
+  if (now.getTime() >= expiresAt.getTime()) {
+    throw new Error('Gate 3D.1 positive inbound reply evidence has reached its 10-day hard expiry.')
+  }
+  return expiresAt
+}
+
+export type Gate3d1InboundProvenanceReply = {
+  id: string
+  leadId: string
+  leadEmail: string
+  leadPropertyAddress: string
+  mailbox: string
+  threadId: string
+  messageId: string
+  fromEmail: string
+  toEmail: string
+  subject: string
+  replySummary: string
+  propertyAddress: string | null
+  receivedAt: string
+  classification: string
+  metadata: Record<string, unknown>
+}
+
+export type Gate3d1InboundProvenanceProviderMessage = {
+  id: string
+  conversationId: string
+  internetMessageId: string
+  fromAddress: string
+  toAddresses: string[]
+  subject: string
+  bodyPreview: string
+  receivedDateTime: string
+  preferenceApplied: string
+}
+
+export type Gate3d1InboundProvenanceReader = {
+  tenantId: string
+  mailboxObjectId: string
+  mailboxAddress: string
+}
+
+export function normalizeGate3d1GraphReplySummary(bodyPreview: string | null | undefined) {
+  const preview = String(bodyPreview || '').replace(/\s+/g, ' ').trim().slice(0, 600)
+  return preview || 'No message preview was returned by Outlook.'
+}
+
+export function assertExactGate3d1InboundProvenanceRefreshEvidence(input: {
+  reply: Gate3d1InboundProvenanceReply
+  providerMessage: Gate3d1InboundProvenanceProviderMessage
+  reader: Gate3d1InboundProvenanceReader
+  expectedTenantId: string
+  expectedMailboxObjectId: string
+  expectedMailboxAddress: string
+  now: Date
+}) {
+  const expectedTenantId = requireUuid(input.expectedTenantId, 'Expected inbound tenant ID')
+  const expectedMailboxObjectId = requireUuid(
+    input.expectedMailboxObjectId,
+    'Expected inbound mailbox object ID'
+  )
+  const expectedMailboxAddress = requireEmail(
+    input.expectedMailboxAddress,
+    'Expected inbound mailbox address'
+  )
+  const reply = input.reply
+  const provider = input.providerMessage
+  const readerAddress = input.reader.mailboxAddress.trim().toLowerCase()
+  const leadEmail = reply.leadEmail.trim().toLowerCase()
+  const fromEmail = reply.fromEmail.trim().toLowerCase()
+  const toEmail = reply.toEmail.trim().toLowerCase()
+  const providerFrom = provider.fromAddress.trim().toLowerCase()
+  const providerTo = provider.toAddresses.map((address) => address.trim().toLowerCase())
+  const leadProperty = reply.leadPropertyAddress.replace(/\s+/g, ' ').trim()
+  const replyProperty = String(reply.propertyAddress || '').replace(/\s+/g, ' ').trim()
+  const storedReceivedAtMs = Date.parse(reply.receivedAt)
+  const providerReceivedAtMs = Date.parse(provider.receivedDateTime)
+  const storedInternetMessageId = String(reply.metadata.internetMessageId || '')
+  const normalizedProviderSubject = String(provider.subject || '').replace(/\s+/g, ' ').trim().slice(0, 240) || '(no subject)'
+  const normalizedProviderSummary = normalizeGate3d1GraphReplySummary(provider.bodyPreview)
+
+  assertGate3d1ReplyBasisFresh(reply.receivedAt, input.now)
+  if (
+    input.reader.tenantId !== expectedTenantId ||
+    input.reader.mailboxObjectId !== expectedMailboxObjectId ||
+    readerAddress !== expectedMailboxAddress ||
+    reply.mailbox.trim().toLowerCase() !== expectedMailboxAddress ||
+    toEmail !== expectedMailboxAddress
+  ) {
+    throw new Error('Gate 3D.1 inbound reader or stored mailbox identity does not match the pinned scope.')
+  }
+  if (
+    !reply.leadId ||
+    !leadEmail ||
+    leadEmail !== fromEmail ||
+    !leadProperty ||
+    !isGate3d1ReplyPropertyCompatible(leadProperty, replyProperty) ||
+    reply.classification !== 'hot_seller_lead' ||
+    reply.metadata.explicitOptOut === true ||
+    !isGate3d1FounderReviewableSellerReplyText({
+      subject: reply.subject,
+      bodyPreview: reply.replySummary,
+    })
+  ) {
+    throw new Error('Gate 3D.1 stored reply evidence is not an exact positive lead/property continuation.')
+  }
+  if (
+    !provider.id ||
+    /\s/.test(provider.id) ||
+    provider.preferenceApplied.trim() !== 'IdType=ImmutableId' ||
+    provider.conversationId !== reply.threadId ||
+    provider.internetMessageId !== storedInternetMessageId ||
+    providerFrom !== fromEmail ||
+    providerTo.length !== 1 ||
+    providerTo[0] !== toEmail ||
+    normalizedProviderSubject !== reply.subject ||
+    normalizedProviderSummary !== reply.replySummary ||
+    normalizedProviderSummary === 'No message preview was returned by Outlook.' ||
+    !Number.isFinite(storedReceivedAtMs) ||
+    !Number.isFinite(providerReceivedAtMs) ||
+    providerReceivedAtMs !== storedReceivedAtMs ||
+    !isGate3d1FounderReviewableSellerReplyText({
+      subject: provider.subject,
+      bodyPreview: provider.bodyPreview,
+    })
+  ) {
+    throw new Error('Microsoft Graph did not return the exact stored immutable positive inbound reply evidence.')
+  }
+  return {
+    observedTenantId: input.reader.tenantId,
+    observedMailboxObjectId: input.reader.mailboxObjectId,
+    observedImmutableMessageId: provider.id,
+    preferenceApplied: 'IdType=ImmutableId' as const,
+  }
+}
+
+export async function runGate3d1InboundProvenanceRefresh(input: {
+  replyMemoryId: string
+  leadId: string
+  expectedTenantId: string
+  expectedMailboxObjectId: string
+  expectedMailboxAddress: string
+  now: Date
+}, dependencies: {
+  loadExactReply: (input: { replyMemoryId: string; leadId: string }) => Promise<Gate3d1InboundProvenanceReply | null>
+  getVerifiedReader: () => Promise<Gate3d1InboundProvenanceReader>
+  getExactMessage: (input: {
+    reader: Gate3d1InboundProvenanceReader
+    sourceMessageId: string
+  }) => Promise<Gate3d1InboundProvenanceProviderMessage | null>
+  persistProvenance: (input: {
+    reply: Gate3d1InboundProvenanceReply
+    observedTenantId: string
+    observedMailboxObjectId: string
+    observedImmutableMessageId: string
+    preferenceApplied: 'IdType=ImmutableId'
+  }) => Promise<{
+    refreshId: string
+    mergedMetadataFingerprint: string
+    provenanceRefreshFingerprint: string
+  }>
+}) {
+  const replyMemoryId = requireUuid(input.replyMemoryId, 'Reply-memory ID')
+  const leadId = requireUuid(input.leadId, 'Lead ID')
+  const reply = await dependencies.loadExactReply({ replyMemoryId, leadId })
+  if (!reply || reply.id !== replyMemoryId || reply.leadId !== leadId) {
+    throw new Error('The exact Gate 3D.1 reply-memory row was not found.')
+  }
+  if (
+    !reply.messageId ||
+    /\s/.test(reply.messageId) ||
+    !reply.threadId ||
+    !/^<[^<>\s]+>$/.test(String(reply.metadata.internetMessageId || ''))
+  ) {
+    throw new Error('The stored Gate 3D.1 reply lacks exact source-message identity evidence.')
+  }
+  const reader = await dependencies.getVerifiedReader()
+  const providerMessage = await dependencies.getExactMessage({
+    reader,
+    sourceMessageId: reply.messageId,
+  })
+  if (!providerMessage) {
+    throw new Error('Microsoft Graph did not return the exact immutable inbound reply.')
+  }
+  const observed = assertExactGate3d1InboundProvenanceRefreshEvidence({
+    reply,
+    providerMessage,
+    reader,
+    expectedTenantId: input.expectedTenantId,
+    expectedMailboxObjectId: input.expectedMailboxObjectId,
+    expectedMailboxAddress: input.expectedMailboxAddress,
+    now: input.now,
+  })
+  const persisted = await dependencies.persistProvenance({ reply, ...observed })
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(persisted.refreshId) ||
+    !/^[0-9a-f]{64}$/.test(persisted.mergedMetadataFingerprint) ||
+    !/^[0-9a-f]{64}$/.test(persisted.provenanceRefreshFingerprint)
+  ) {
+    throw new Error('The exact reply-memory provenance update returned incomplete mapping proof.')
+  }
+  return {
+    replyMemoryId,
+    leadId,
+    providerRead: true as const,
+    providerMutation: false as const,
+    observedTenantId: observed.observedTenantId,
+    observedMailboxObjectId: observed.observedMailboxObjectId,
+    observedImmutableMessageId: observed.observedImmutableMessageId,
+    refreshId: persisted.refreshId,
+    mergedMetadataFingerprint: persisted.mergedMetadataFingerprint,
+    provenanceRefreshFingerprint: persisted.provenanceRefreshFingerprint,
   }
 }
 
@@ -557,6 +912,10 @@ export function normalizeGate3d1GraphReplyRequest(
   const target = Object.freeze({
     mailboxObjectId: requireUuid(input.target.mailboxObjectId, 'Graph mailbox object ID'),
     mailboxAddress: requireEmail(input.target.mailboxAddress, 'Graph mailbox address'),
+    inboundSourceMessageId: requireCompactIdentifier(
+      input.target.inboundSourceMessageId,
+      'Inbound source Graph message ID'
+    ),
     inboundImmutableMessageId: requireCompactIdentifier(
       input.target.inboundImmutableMessageId,
       'Inbound immutable Graph message ID'
@@ -569,6 +928,8 @@ export function normalizeGate3d1GraphReplyRequest(
   })
 
   const normalized = Object.freeze({
+    graphTenantId: requireUuid(input.graphTenantId, 'Graph tenant ID'),
+    graphClientId: requireUuid(input.graphClientId, 'Graph application client ID'),
     leadId: requireUuid(input.leadId, 'Lead ID'),
     replyMemoryId: requireUuid(input.replyMemoryId, 'Reply-memory ID'),
     outreachMessageId: requireUuid(input.outreachMessageId, 'Outreach message ID'),
@@ -707,7 +1068,7 @@ export function getGate3d1GraphPermissionReadiness(input: {
   })
 }
 
-function assertExactTargetIdentity(
+export function assertExactGate3d1GraphTargetIdentity(
   expected: Gate3d1GraphReplyRequest,
   actual: GraphMessageIdentity
 ) {
@@ -749,6 +1110,7 @@ function buildExactThreadEvidence(
     mailboxObjectId: request.target.mailboxObjectId,
     mailboxAddress: request.target.mailboxAddress,
     recipientEmail: request.recipientEmail,
+    targetInboundSourceMessageId: request.target.inboundSourceMessageId,
     targetInboundImmutableMessageId: request.target.inboundImmutableMessageId,
     targetConversationId: request.target.conversationId,
     targetInternetMessageId: request.target.inboundInternetMessageId,
@@ -767,6 +1129,7 @@ function assertExactOutboundIdentity(
     thread.mailboxObjectId !== request.target.mailboxObjectId ||
     thread.mailboxAddress !== request.target.mailboxAddress ||
     thread.recipientEmail !== request.recipientEmail ||
+    thread.targetInboundSourceMessageId !== request.target.inboundSourceMessageId ||
     thread.targetInboundImmutableMessageId !== request.target.inboundImmutableMessageId ||
     thread.targetConversationId !== request.target.conversationId ||
     thread.targetInternetMessageId !== request.target.inboundInternetMessageId ||
@@ -926,6 +1289,7 @@ export async function runGate3d1GraphSameThreadReplyCanary(
   ) {
     throw new Error('The one-shot claim returned incomplete or conflicting immutable authorization evidence.')
   }
+  assertExactGate3d1ConsentBasisSnapshot(request, claim)
   failurePhase = 'dispatch_reservation'
   reservation = await dependencies.reserve(request, binding, claim)
   requireUuid(reservation.reservationId, 'Gate 3D.1 dispatch reservation ID')
@@ -1095,7 +1459,7 @@ export async function runGate3d1GraphSameThreadReplyCanary(
   } else {
     failurePhase = 'target_identity_recheck'
     const targetMessage = await dependencies.getTargetMessage(session, request.target)
-    assertExactTargetIdentity(request, targetMessage)
+    assertExactGate3d1GraphTargetIdentity(request, targetMessage)
     await dependencies.assertActivation(request)
     assertGate3d1BusinessWindow(dependencies.now(), request.recipientTimeZone)
     await dependencies.assertNoStopSignal(request, 'before_create_reply')

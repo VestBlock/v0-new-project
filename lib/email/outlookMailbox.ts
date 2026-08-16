@@ -7,10 +7,11 @@ import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { updateBuyerRecord, upsertBuyer } from '@/lib/buyers/repository'
 import { getConfiguredGate3d1InboundMailboxScope } from '@/lib/email/gate3d1InboundMailboxScope'
 import {
-  isConservativePositiveSellerReplyText,
+  isGate3d1FounderReviewableSellerReplyText,
   isExplicitEmailOptOutText,
   isExactGate3d1GraphReplyCallback,
   resolveMicrosoftGraphAccessTokenTenantId,
+  runGate3d1InboundProvenanceRefresh,
   type Gate3d1GraphThreadEvidence,
 } from '@/lib/email/graphSameThreadReplyCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
@@ -143,6 +144,242 @@ async function getMicrosoftAccessToken() {
   return { accessToken, tokenTenantId }
 }
 
+export async function refreshGate3d1InboundReplyProvenance(input: {
+  replyMemoryId: string
+  leadId: string
+  operatingStrategyVersionId: string
+  idempotencyKey: string
+}) {
+  const expectedTenantId = String(process.env.GATE3D1_GRAPH_TENANT_ID || '').trim()
+  const expectedMailboxObjectId = String(process.env.GATE3D1_GRAPH_MAILBOX_OBJECT_ID || '').trim()
+  const expectedMailboxAddress = String(process.env.GATE3D1_GRAPH_MAILBOX_ADDRESS || '')
+    .trim()
+    .toLowerCase()
+  const admin = createAdminClient()
+  let verifiedAccessToken = ''
+
+  return runGate3d1InboundProvenanceRefresh({
+    replyMemoryId: input.replyMemoryId,
+    leadId: input.leadId,
+    expectedTenantId,
+    expectedMailboxObjectId,
+    expectedMailboxAddress,
+    now: new Date(),
+  }, {
+    loadExactReply: async ({ replyMemoryId, leadId }) => {
+      const [replyResult, leadResult] = await Promise.all([
+        admin
+          .from('command_center_reply_memory')
+          .select('id,lead_id,mailbox,thread_id,message_id,from_email,to_email,subject,reply_summary,property_address,received_at,classification,metadata_json')
+          .eq('id', replyMemoryId)
+          .eq('lead_id', leadId)
+          .limit(2),
+        admin
+          .from('leads')
+          .select('id,email,property_address')
+          .eq('id', leadId)
+          .limit(2),
+      ])
+      if (replyResult.error || leadResult.error) {
+        throw new Error('The exact inbound reply provenance source could not be loaded safely.')
+      }
+      if ((replyResult.data || []).length !== 1 || (leadResult.data || []).length !== 1) {
+        return null
+      }
+      const reply = replyResult.data![0]
+      const lead = leadResult.data![0]
+      const metadata = reply.metadata_json && typeof reply.metadata_json === 'object' && !Array.isArray(reply.metadata_json)
+        ? reply.metadata_json as Record<string, unknown>
+        : {}
+      return {
+        id: String(reply.id || ''),
+        leadId: String(reply.lead_id || ''),
+        leadEmail: String(lead.email || ''),
+        leadPropertyAddress: String(lead.property_address || ''),
+        mailbox: String(reply.mailbox || ''),
+        threadId: String(reply.thread_id || ''),
+        messageId: String(reply.message_id || ''),
+        fromEmail: String(reply.from_email || ''),
+        toEmail: String(reply.to_email || ''),
+        subject: String(reply.subject || ''),
+        replySummary: String(reply.reply_summary || ''),
+        propertyAddress: reply.property_address ? String(reply.property_address) : null,
+        receivedAt: String(reply.received_at || ''),
+        classification: String(reply.classification || ''),
+        metadata,
+      }
+    },
+    getVerifiedReader: async () => {
+      const graphSession = await getMicrosoftAccessToken()
+      const scope = getConfiguredGate3d1InboundMailboxScope(graphSession.tokenTenantId)
+      if (
+        !scope.ready ||
+        !scope.observedTenantId ||
+        !scope.observedMailboxObjectId ||
+        !scope.observedMailboxAddress
+      ) {
+        throw new Error(scope.blocker || 'The actual inbound Microsoft reader scope is not exact.')
+      }
+      verifiedAccessToken = graphSession.accessToken
+      return {
+        tenantId: scope.observedTenantId,
+        mailboxObjectId: scope.observedMailboxObjectId,
+        mailboxAddress: scope.observedMailboxAddress,
+      }
+    },
+    getExactMessage: async ({ reader, sourceMessageId }) => {
+      if (!verifiedAccessToken) {
+        throw new Error('The verified inbound Microsoft reader session is unavailable.')
+      }
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(reader.mailboxObjectId)}/messages/${encodeURIComponent(sourceMessageId)}?$select=id,conversationId,internetMessageId,subject,bodyPreview,receivedDateTime,from,toRecipients`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${verifiedAccessToken}`,
+            Prefer: 'IdType="ImmutableId"',
+          },
+          signal: AbortSignal.timeout(20_000),
+        }
+      )
+      if (response.status === 404) return null
+      const message = await response.json().catch(() => ({})) as GraphMessage & {
+        error?: { message?: string }
+      }
+      if (!response.ok) {
+        throw new Error(
+          typeof message.error?.message === 'string'
+            ? message.error.message
+            : `Microsoft Graph exact-message read failed with ${response.status}.`
+        )
+      }
+      return {
+        id: String(message.id || ''),
+        conversationId: String(message.conversationId || ''),
+        internetMessageId: String(message.internetMessageId || ''),
+        fromAddress: String(message.from?.emailAddress?.address || ''),
+        toAddresses: (message.toRecipients || [])
+          .map((recipient) => String(recipient.emailAddress?.address || '')),
+        subject: String(message.subject || ''),
+        bodyPreview: String(message.bodyPreview || ''),
+        receivedDateTime: String(message.receivedDateTime || ''),
+        preferenceApplied: String(response.headers.get('preference-applied') || ''),
+      }
+    },
+    persistProvenance: async ({
+      reply,
+      observedTenantId,
+      observedMailboxObjectId,
+      observedImmutableMessageId,
+      preferenceApplied,
+    }) => {
+      const { data, error } = await admin
+        .rpc('refresh_gate3d1_reply_provenance', {
+          p_operating_strategy_version_id: input.operatingStrategyVersionId,
+          p_reply_memory_id: reply.id,
+          p_lead_id: reply.leadId,
+          p_expected_stored_message_id: reply.messageId,
+          p_expected_conversation_id: reply.threadId,
+          p_expected_internet_message_id: String(reply.metadata.internetMessageId || ''),
+          p_expected_sender_hash: createHash('sha256')
+            .update(reply.fromEmail.trim().toLowerCase())
+            .digest('hex'),
+          p_expected_recipient_hash: createHash('sha256')
+            .update(reply.toEmail.trim().toLowerCase())
+            .digest('hex'),
+          p_expected_subject: reply.subject,
+          p_expected_reply_summary: reply.replySummary,
+          p_expected_received_at: reply.receivedAt,
+          p_expected_metadata_json: reply.metadata,
+          p_observed_tenant_id: observedTenantId,
+          p_observed_mailbox_object_id: observedMailboxObjectId,
+          p_observed_immutable_message_id: observedImmutableMessageId,
+          p_preference_applied: preferenceApplied,
+          p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+          p_idempotency_key: input.idempotencyKey,
+        })
+      const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<Record<string, unknown>>
+      if (error || rows.length !== 1) {
+        throw new Error('The exact reply-memory provenance update conflicted and was not applied.')
+      }
+      const saved = rows[0]
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(saved.refresh_id || '')) ||
+        saved.reply_memory_id !== reply.id ||
+        saved.lead_id !== reply.leadId ||
+        saved.observed_tenant_id !== observedTenantId ||
+        saved.observed_mailbox_object_id !== observedMailboxObjectId ||
+        saved.observed_immutable_message_id !== observedImmutableMessageId ||
+        saved.preference_applied !== preferenceApplied ||
+        !/^[0-9a-f]{64}$/.test(String(saved.merged_metadata_fingerprint || '')) ||
+        !/^[0-9a-f]{64}$/.test(String(saved.provenance_refresh_fingerprint || ''))
+      ) {
+        throw new Error('The exact reply-memory provenance update returned conflicting evidence.')
+      }
+      return {
+        refreshId: String(saved.refresh_id),
+        mergedMetadataFingerprint: String(saved.merged_metadata_fingerprint),
+        provenanceRefreshFingerprint: String(saved.provenance_refresh_fingerprint),
+      }
+    },
+  })
+}
+
+async function readExactGate3d1ImmutableCallback(input: {
+  accessToken: string
+  mailboxObjectId: string
+  sourceMessage: GraphMessage
+}) {
+  const sourceMessageId = String(input.sourceMessage.id || '')
+  if (!sourceMessageId || /\s/.test(sourceMessageId)) return null
+  const params = new URLSearchParams({
+    '$select': 'id,conversationId,internetMessageId,internetMessageHeaders,subject,bodyPreview,receivedDateTime,from,toRecipients',
+  })
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(input.mailboxObjectId)}/messages/${encodeURIComponent(sourceMessageId)}?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        Prefer: 'IdType="ImmutableId"',
+      },
+      signal: AbortSignal.timeout(20_000),
+    }
+  )
+  if (response.status === 404) return null
+  const candidate = await response.json().catch(() => ({})) as GraphMessage & {
+    error?: { message?: string }
+  }
+  if (!response.ok) {
+    throw new Error(
+      typeof candidate.error?.message === 'string'
+        ? candidate.error.message
+        : `Microsoft Graph exact callback read failed with ${response.status}.`
+    )
+  }
+  const sourceFrom = cleanText(input.sourceMessage.from?.emailAddress?.address).toLowerCase()
+  const candidateFrom = cleanText(candidate.from?.emailAddress?.address).toLowerCase()
+  const sourceTo = (input.sourceMessage.toRecipients || [])
+    .map((recipient) => cleanText(recipient.emailAddress?.address).toLowerCase())
+  const candidateTo = (candidate.toRecipients || [])
+    .map((recipient) => cleanText(recipient.emailAddress?.address).toLowerCase())
+  if (
+    response.headers.get('preference-applied') !== 'IdType=ImmutableId' ||
+    !candidate.id ||
+    /\s/.test(candidate.id) ||
+    candidate.conversationId !== input.sourceMessage.conversationId ||
+    candidate.internetMessageId !== input.sourceMessage.internetMessageId ||
+    candidate.receivedDateTime !== input.sourceMessage.receivedDateTime ||
+    cleanText(candidate.subject) !== cleanText(input.sourceMessage.subject) ||
+    cleanText(candidate.bodyPreview) !== cleanText(input.sourceMessage.bodyPreview) ||
+    candidateFrom !== sourceFrom ||
+    candidateTo.length !== sourceTo.length ||
+    candidateTo.some((address, index) => address !== sourceTo[index])
+  ) {
+    return null
+  }
+  return candidate
+}
+
 async function moveMessageToJunk(input: {
   accessToken: string
   mailbox: string
@@ -186,6 +423,7 @@ function exactGraphThreadFromEnrollment(
     mailboxObjectId: String(thread.mailboxObjectId || ''),
     mailboxAddress: String(thread.mailboxAddress || '').trim().toLowerCase(),
     recipientEmail: String(thread.recipientEmail || '').trim().toLowerCase(),
+    targetInboundSourceMessageId: String(thread.targetInboundSourceMessageId || ''),
     targetInboundImmutableMessageId: String(thread.targetInboundImmutableMessageId || ''),
     targetConversationId: String(thread.targetConversationId || ''),
     targetInternetMessageId: String(thread.targetInternetMessageId || ''),
@@ -322,8 +560,12 @@ export async function syncOutlookMailbox(options: {
   dryRun?: boolean
   sinceHours?: number
   limit?: number
+  allowProviderMutation?: boolean
 } = {}) {
   const config = mailboxConfig()
+  const providerMutationAllowed =
+    options.allowProviderMutation !== false &&
+    !envBool('GATE3D1_CANARY_ISOLATION', false)
   const status = getOutlookMailboxStatus()
   if (!config.configured) {
     if (!options.dryRun) {
@@ -365,7 +607,6 @@ export async function syncOutlookMailbox(options: {
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          Prefer: 'IdType="ImmutableId"',
         },
         signal: AbortSignal.timeout(20_000),
       }
@@ -440,7 +681,7 @@ export async function syncOutlookMailbox(options: {
       if (!explicitOptOut && !['spam_noise', 'operational_alert'].includes(classification)) {
         if (buyer || lender || investor) classification = 'partner_reply'
         else if (lead) {
-          classification = isConservativePositiveSellerReplyText({
+          classification = isGate3d1FounderReviewableSellerReplyText({
             subject: message.subject,
             bodyPreview: message.bodyPreview,
           })
@@ -513,8 +754,6 @@ export async function syncOutlookMailbox(options: {
           categories: message.categories || [],
           webLink: message.webLink || null,
           syncSource: 'microsoft_graph',
-          observedTenantId: graphSession.tokenTenantId,
-          observedMailboxObjectId: config.mailboxObjectId || null,
           buyerId: buyer?.id || null,
           lenderId: lender?.id || null,
           investorId: investor?.id || null,
@@ -586,22 +825,50 @@ export async function syncOutlookMailbox(options: {
         if (!candidates.length) continue
         const originalMessage = messages.find((message) => message.id === row.message_id)
         const occurredAt = row.received_at || new Date().toISOString()
+        const hasGate3d1Candidate = candidates.some((candidate) => {
+          const metadata = candidate.metadata_json
+          return metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
+            (metadata as Record<string, unknown>).deliveryMode === 'gate3d1_exact_same_thread_canary'
+        })
+        let immutableCallbackMessage: GraphMessage | null = null
+        if (
+          hasGate3d1Candidate &&
+          gate3d1CallbackScope.ready &&
+          gate3d1CallbackScope.observedMailboxObjectId &&
+          originalMessage
+        ) {
+          try {
+            immutableCallbackMessage = await readExactGate3d1ImmutableCallback({
+              accessToken,
+              mailboxObjectId: gate3d1CallbackScope.observedMailboxObjectId,
+              sourceMessage: originalMessage,
+            })
+          } catch (error) {
+            console.warn(
+              '[outlook-mailbox] exact Gate 3D.1 callback identity read failed closed:',
+              error instanceof Error ? error.message : String(error)
+            )
+          }
+        }
+        const callbackMessage = hasGate3d1Candidate
+          ? immutableCallbackMessage
+          : originalMessage || null
         const exactCandidates = gate3d1CallbackScope.ready &&
           gate3d1CallbackScope.observedMailboxObjectId &&
           gate3d1CallbackScope.observedMailboxAddress &&
-          originalMessage
+          callbackMessage
           ? candidates.filter((candidate) => {
               const thread = exactGraphThreadFromEnrollment(candidate as Record<string, unknown>)
               return Boolean(thread && isExactGate3d1GraphReplyCallback({
                 mailboxObjectId: gate3d1CallbackScope.observedMailboxObjectId!,
                 mailboxAddress: gate3d1CallbackScope.observedMailboxAddress!,
-                immutableMessageId: originalMessage.id,
-                conversationId: String(originalMessage.conversationId || ''),
-                internetMessageId: String(originalMessage.internetMessageId || ''),
-                fromAddress: String(originalMessage.from?.emailAddress?.address || ''),
-                toAddresses: (originalMessage.toRecipients || [])
+                immutableMessageId: callbackMessage.id,
+                conversationId: String(callbackMessage.conversationId || ''),
+                internetMessageId: String(callbackMessage.internetMessageId || ''),
+                fromAddress: String(callbackMessage.from?.emailAddress?.address || ''),
+                toAddresses: (callbackMessage.toRecipients || [])
                   .map((recipient) => String(recipient.emailAddress?.address || '')),
-                internetMessageHeaders: (originalMessage.internetMessageHeaders || [])
+                internetMessageHeaders: (callbackMessage.internetMessageHeaders || [])
                   .map((header) => ({
                     name: String(header.name || ''),
                     value: String(header.value || ''),
@@ -619,7 +886,7 @@ export async function syncOutlookMailbox(options: {
             operatingStrategyVersionId: exactEnrollment.operating_strategy_version_id,
             provider: 'outlook_graph',
             providerMessageId: thread.outboundImmutableMessageId,
-            providerEventId: row.message_id,
+            providerEventId: callbackMessage!.id,
             status: row.metadata_json.explicitOptOut === true ? 'suppressed' : 'replied',
             occurredAt,
           })
@@ -643,11 +910,6 @@ export async function syncOutlookMailbox(options: {
           occurred_at: occurredAt,
         }
         const payloadHash = createHash('sha256').update(JSON.stringify(evidence)).digest('hex')
-        const hasGate3d1Candidate = candidates.some((candidate) => {
-          const metadata = candidate.metadata_json
-          return metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
-            (metadata as Record<string, unknown>).deliveryMode === 'gate3d1_exact_same_thread_canary'
-        })
         const quarantineId = await recordOperatingStrategyAttributionQuarantine({
           sourceDomain: 'outlook_mailbox',
           sourceEventKey: `${evidence.mailbox_hash}:${row.message_id}`,
@@ -691,10 +953,16 @@ export async function syncOutlookMailbox(options: {
         }
       }
 
-      const { data: saved, error } = await admin
+      const rowsToInsert = rows.filter((row) => newMessageIds.has(row.message_id))
+      const { data: saved, error } = rowsToInsert.length
+        ? await admin
         .from('command_center_reply_memory')
-        .upsert(rows, { onConflict: 'mailbox,message_id' })
+        .upsert(rowsToInsert, {
+          onConflict: 'mailbox,message_id',
+          ignoreDuplicates: true,
+        })
         .select('id')
+        : { data: [], error: null }
       if (error) throw error
       stored = saved?.length || 0
 
@@ -840,7 +1108,7 @@ export async function syncOutlookMailbox(options: {
         if (enrollmentError) throw enrollmentError
       }
 
-      if (config.autoCleanSpam) {
+      if (config.autoCleanSpam && providerMutationAllowed) {
         for (const messageId of confirmedSpamMessageIds) {
           try {
             await moveMessageToJunk({ accessToken, mailbox: config.mailbox, messageId })
@@ -862,7 +1130,7 @@ export async function syncOutlookMailbox(options: {
           stored,
           newMessages,
           classifications,
-          autoCleanSpam: config.autoCleanSpam,
+          autoCleanSpam: config.autoCleanSpam && providerMutationAllowed,
           movedSpam,
           spamMoveFailures,
         },
@@ -877,7 +1145,7 @@ export async function syncOutlookMailbox(options: {
           stored,
           newMessages,
           classifications,
-          autoCleanSpam: config.autoCleanSpam,
+          autoCleanSpam: config.autoCleanSpam && providerMutationAllowed,
           movedSpam,
           spamMoveFailures,
         },

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 
 import {
+  assertExactGate3d1ConsentBasisSnapshot,
+  assertGate3d1CanaryIsolationEnabled,
+  assertGate3d1ImmutableIdPreferenceApplied,
   assertGate3d1DetroitBusinessWindow,
+  assertGate3d1ReplyBasisFresh,
   fingerprintGate3d1GraphReplyContent,
   fingerprintGate3d1GraphReplyThread,
   getGate3d1InboundMailboxScopeReadiness,
@@ -10,9 +15,12 @@ import {
   isConservativePositiveSellerReplyText,
   isExplicitEmailOptOutText,
   isExactGate3d1GraphReplyCallback,
+  isGate3d1FounderReviewableSellerReplyText,
+  isGate3d1ReplyPropertyCompatible,
   resolveMicrosoftGraphAccessTokenTenantId,
   resolveGate3d1ExecutionOrStop,
   resolveGate3d1GraphApplicationClientId,
+  runGate3d1InboundProvenanceRefresh,
   runGate3d1GraphSameThreadReplyCanary,
   selectExactGate3d1LocalDraft,
   type Gate3d1GraphReplyDependencies,
@@ -22,6 +30,8 @@ import {
 import type { OperatingStrategyBinding } from '@/lib/strategy/runtime-governance'
 
 const requestBase = {
+  graphTenantId: '99999999-9999-4999-8999-999999999999',
+  graphClientId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   leadId: '889146bd-8f16-4de0-bce1-01528d7f7882',
   replyMemoryId: '99999999-9999-4999-8999-999999999999',
   outreachMessageId: '11111111-1111-4111-8111-111111111111',
@@ -40,6 +50,7 @@ const requestBase = {
   target: {
     mailboxObjectId: '22222222-2222-4222-8222-222222222222',
     mailboxAddress: 'acquisitions@vestblock.io',
+    inboundSourceMessageId: 'AAkALgAAAA-source-inbound',
     inboundImmutableMessageId: 'AAkALgAAAA-immutable-inbound',
     conversationId: 'AAQkAG-conversation-exact',
     inboundInternetMessageId: '<inbound@example.com>',
@@ -53,6 +64,48 @@ const request: Gate3d1GraphReplyRequest = {
   contractFingerprint: 'a'.repeat(32),
   reservationIdempotencyKey: 'gate3d1-canary-reservation-exact-once-v1',
   idempotencyKey: 'gate3d1-canary-exact-once-v1',
+}
+const claimId = '77777777-7777-4777-8777-777777777777'
+const sha256Text = (value: string) => createHash('sha256').update(value).digest('hex')
+function validConsentBasisSnapshot() {
+  return {
+    dispatchAuthorized: true,
+    basis: 'positive_inbound_reply_continuation',
+    permissionSemantics: 'reply_continuation_not_marketing_consent',
+    evidenceKey: `gate3d1-continuation:${request.authorizationId}:claim:${claimId}`,
+    provenance: [{
+      source: 'founder_reviewed_positive_inbound_reply_continuation',
+      authorizationId: request.authorizationId,
+      claimId,
+      exchangeRbacAttestationId: request.exchangeRbacAttestationId,
+    }],
+    authorizationId: request.authorizationId,
+    claimId,
+    leadId: request.leadId,
+    replyMemoryId: request.replyMemoryId,
+    outreachMessageId: request.outreachMessageId,
+    authorizationFingerprint: '1'.repeat(32),
+    inboundProvider: 'outlook_graph',
+    graphIdentifierSemantics: 'case_sensitive_immutable',
+    tenantId: request.graphTenantId,
+    clientId: request.graphClientId,
+    mailboxObjectId: request.target.mailboxObjectId,
+    mailboxAddressHash: sha256Text(request.target.mailboxAddress),
+    inboundSourceMessageIdHash: sha256Text(request.target.inboundSourceMessageId),
+    inboundMessageIdHash: sha256Text(request.target.inboundImmutableMessageId),
+    inboundConversationIdHash: sha256Text(request.target.conversationId),
+    inboundInternetMessageIdHash: sha256Text(request.target.inboundInternetMessageId),
+    normalizedSenderHash: sha256Text(request.recipientEmail),
+    normalizedRecipientHash: sha256Text(request.target.mailboxAddress),
+    propertyReferenceHash: sha256Text(request.propertyAddress),
+    purposeKey: request.outreachPurpose,
+    approvedContentFingerprint: request.contentFingerprint,
+    draftVersionKey: request.messageVersionKey,
+    positiveClassificationEvidenceFingerprint: '2'.repeat(64),
+    exchangeRbacAttestationId: request.exchangeRbacAttestationId,
+    exchangeRbacAttestationFingerprint: '3'.repeat(32),
+    quietHoursEvidenceFingerprint: '4'.repeat(64),
+  }
 }
 
 const binding: OperatingStrategyBinding = {
@@ -78,6 +131,7 @@ const recoveryThread: Gate3d1GraphThreadEvidence = {
   mailboxObjectId: request.target.mailboxObjectId,
   mailboxAddress: request.target.mailboxAddress,
   recipientEmail: request.recipientEmail,
+  targetInboundSourceMessageId: request.target.inboundSourceMessageId,
   targetInboundImmutableMessageId: request.target.inboundImmutableMessageId,
   targetConversationId: request.target.conversationId,
   targetInternetMessageId: request.target.inboundInternetMessageId,
@@ -140,16 +194,12 @@ function makeDependencies(
     claimAuthorization: async () => {
       events.push('claim')
       return {
-        claimId: '77777777-7777-4777-8777-777777777777',
+        claimId,
         authorizationId: request.authorizationId,
         exchangeRbacAttestationId: request.exchangeRbacAttestationId,
         expiresAt: '2026-08-17T15:00:00.000Z',
         claimFingerprint: 'b'.repeat(32),
-        consentBasisSnapshot: {
-          basis: 'positive_inbound_reply_continuation',
-          authorizationId: request.authorizationId,
-          claimId: '77777777-7777-4777-8777-777777777777',
-        },
+        consentBasisSnapshot: validConsentBasisSnapshot(),
       }
     },
     reserve: async () => {
@@ -179,7 +229,7 @@ function makeDependencies(
       }
       return {
         ...intent,
-        claimId: '77777777-7777-4777-8777-777777777777',
+        claimId,
         state: recovery.state || 'intent_confirmed',
       }
     },
@@ -250,6 +300,50 @@ function hasGraphResourceCall(events: string[]) {
   ].includes(event))
 }
 
+const exactConsentClaim = {
+  claimId,
+  authorizationId: request.authorizationId,
+  exchangeRbacAttestationId: request.exchangeRbacAttestationId,
+  expiresAt: '2026-08-17T15:00:00.000Z',
+  claimFingerprint: 'b'.repeat(32),
+  consentBasisSnapshot: validConsentBasisSnapshot(),
+}
+assert.doesNotThrow(() => assertExactGate3d1ConsentBasisSnapshot(request, exactConsentClaim))
+for (const tamperedSnapshot of [
+  { ...validConsentBasisSnapshot(), leadId: '88888888-8888-4888-8888-888888888888' },
+  { ...validConsentBasisSnapshot(), exchangeRbacAttestationId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+  { ...validConsentBasisSnapshot(), normalizedSenderHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), propertyReferenceHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), inboundSourceMessageIdHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), inboundMessageIdHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), inboundConversationIdHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), inboundInternetMessageIdHash: 'f'.repeat(64) },
+  { ...validConsentBasisSnapshot(), permissionSemantics: 'marketing_consent' },
+  { ...validConsentBasisSnapshot(), approvedContentFingerprint: 'f'.repeat(64) },
+]) {
+  assert.throws(
+    () => assertExactGate3d1ConsentBasisSnapshot(request, {
+      ...exactConsentClaim,
+      consentBasisSnapshot: tamperedSnapshot,
+    }),
+    /consent snapshot conflicts/
+  )
+}
+assert.doesNotThrow(() => assertGate3d1ImmutableIdPreferenceApplied('IdType=ImmutableId'))
+for (const preference of [null, '', 'outlook.body-content-type="text"', 'IdType="ImmutableId"']) {
+  assert.throws(
+    () => assertGate3d1ImmutableIdPreferenceApplied(preference),
+    /did not confirm exact ImmutableId/
+  )
+}
+assert.doesNotThrow(() => assertGate3d1CanaryIsolationEnabled('true'))
+for (const isolation of [undefined, null, '', 'false', 'TRUE']) {
+  assert.throws(
+    () => assertGate3d1CanaryIsolationEnabled(isolation),
+    /central cron isolation is not enabled/
+  )
+}
+
 async function main() {
 {
   const events: string[] = []
@@ -297,6 +391,21 @@ async function main() {
     /32-character contract fingerprint/
   )
   assert.deepEqual(events, [])
+}
+
+{
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1GraphSameThreadReplyCanary({
+      ...request,
+      target: {
+        ...request.target,
+        inboundSourceMessageId: 'AAkALgAAAA-different-source-inbound',
+      },
+    }, makeDependencies(events)),
+    /thread fingerprint/
+  )
+  assert.deepEqual(events, [], 'Source-to-immutable lineage mutation must fail before any durable or Graph call.')
 }
 
 {
@@ -991,10 +1100,117 @@ for (const negativeReply of [
     `Negative or ambiguous reply must not become positive evidence: ${negativeReply}`
   )
 }
+assert.equal(
+  isGate3d1FounderReviewableSellerReplyText({
+    subject: 'Re: following up',
+    bodyPreview: 'That could work for me. What information would you need next?',
+  }),
+  true,
+  'Founder exact-hash review may approve human-positive language that is outside a guessed keyword list.'
+)
+assert.equal(
+  isGate3d1FounderReviewableSellerReplyText({
+    subject: 'Re: following up',
+    bodyPreview: 'I do not know the timing yet, but I would consider the options.',
+  }),
+  true,
+  'A generic phrase containing “do not” must not be treated as an explicit seller rejection.'
+)
+for (const disqualifiedReply of [
+  { subject: 'Automatic Reply', bodyPreview: 'I am currently out of the office.' },
+  { subject: 'Re: following up', bodyPreview: 'No thanks, I am not interested.' },
+  { subject: 'Re: following up', bodyPreview: 'STOP' },
+  { subject: 'Re: following up', bodyPreview: 'I do not want to sell the property.' },
+]) {
+  assert.equal(isGate3d1FounderReviewableSellerReplyText(disqualifiedReply), false)
+}
+
+assert.equal(
+  isGate3d1ReplyPropertyCompatible(
+    '123 Test Street, Detroit, MI 48201',
+    '123 Test Street, Detroit, MI 48201'
+  ),
+  true
+)
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 Test Street, Detroit, MI 48201', ''),
+  true
+)
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 Test Street, Detroit, MI 48201', '123 Test Street'),
+  true
+)
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 TEST STREET, Detroit, MI 48201', '123 test street'),
+  true,
+  'Address casing must not create app/database property-parity drift.'
+)
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 Test Trail NE, Detroit, MI 48201', '123 Test Trl NE'),
+  false,
+  'Street-prefix comparison remains exact apart from case and whitespace; suffix aliases are not inferred.'
+)
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 Test Trail NE, Detroit, MI 48201', '123 Test Trail NE'),
+  true,
+  'Complete directional Trail suffixes accepted by the database must also pass the app predicate.'
+)
+for (const incompatibleProperty of [
+  'Test Street',
+  '12 Test',
+  '999 Other Road',
+  '123 Test Street, Apt 2',
+]) {
+  assert.equal(
+    isGate3d1ReplyPropertyCompatible('123 Test Street, Detroit, MI 48201', incompatibleProperty),
+    false,
+    `Inexact reply-memory property must fail closed: ${incompatibleProperty}`
+  )
+}
+assert.equal(
+  isGate3d1ReplyPropertyCompatible('123 Test Street, Apt 2, Detroit, MI 48201', '123 Test Street'),
+  false,
+  'A street-only observation must not erase canonical unit identity.'
+)
+for (const unitMarker of ['Apartment 2', 'Unit 2', 'Suite 2', 'Ste 2', '#2']) {
+  assert.equal(
+    isGate3d1ReplyPropertyCompatible(
+      `123 Test Street, ${unitMarker}, Detroit, MI 48201`,
+      '123 Test Street'
+    ),
+    false,
+    `A street-only observation must not erase canonical ${unitMarker} identity.`
+  )
+}
+assert.equal(
+  isGate3d1ReplyPropertyCompatible(
+    '123 Test Street, Detroit, MI 48201, Apt 4',
+    '123 Test Street'
+  ),
+  false,
+  'A unit marker anywhere in the canonical remainder must block a street-only match.'
+)
+
+assert.doesNotThrow(() => assertGate3d1ReplyBasisFresh(
+  '2026-08-10T14:21:15.000Z',
+  new Date('2026-08-17T14:30:00.000Z')
+))
+assert.doesNotThrow(() => assertGate3d1ReplyBasisFresh(
+  '2026-08-10T14:21:15.000Z',
+  new Date('2026-08-20T14:21:14.999Z')
+))
+assert.throws(
+  () => assertGate3d1ReplyBasisFresh(
+    '2026-08-10T14:21:15.000Z',
+    new Date('2026-08-20T14:21:15.000Z')
+  ),
+  /10-day hard expiry/
+)
 
 const exactReplyMemoryProvenance = {
   observedTenantId: tenantId,
   observedMailboxObjectId: request.target.mailboxObjectId,
+  observedImmutableMessageId: request.target.inboundImmutableMessageId,
 }
 assert.equal(
   hasExactGate3d1ReplyMemoryProvenance(exactReplyMemoryProvenance, {
@@ -1030,6 +1246,236 @@ assert.equal(
     mailboxObjectId: request.target.mailboxObjectId,
   }),
   false
+)
+
+const refreshReply = {
+  id: request.replyMemoryId,
+  leadId: request.leadId,
+  leadEmail: request.recipientEmail,
+  leadPropertyAddress: request.propertyAddress,
+  mailbox: request.target.mailboxAddress,
+  threadId: request.target.conversationId,
+  messageId: 'historical-pre-immutable-rest-message-id',
+  fromEmail: request.recipientEmail,
+  toEmail: request.target.mailboxAddress,
+  subject: 'Re: following up',
+  replySummary: 'That could work for me. What information would you need next?',
+  propertyAddress: '123 Test Street',
+  receivedAt: '2026-08-10T14:21:15.000Z',
+  classification: 'hot_seller_lead',
+  metadata: {
+    internetMessageId: request.target.inboundInternetMessageId,
+    explicitOptOut: false,
+  },
+}
+const refreshReader = {
+  tenantId,
+  mailboxObjectId: request.target.mailboxObjectId,
+  mailboxAddress: request.target.mailboxAddress,
+}
+const refreshProviderMessage = {
+  id: request.target.inboundImmutableMessageId,
+  conversationId: request.target.conversationId,
+  internetMessageId: request.target.inboundInternetMessageId,
+  fromAddress: request.recipientEmail,
+  toAddresses: [request.target.mailboxAddress],
+  subject: refreshReply.subject,
+  bodyPreview: refreshReply.replySummary,
+  receivedDateTime: refreshReply.receivedAt,
+  preferenceApplied: 'IdType=ImmutableId',
+}
+type RefreshDependencies = Parameters<typeof runGate3d1InboundProvenanceRefresh>[1]
+function makeRefreshDependencies(
+  events: string[],
+  overrides: Partial<RefreshDependencies> = {}
+): RefreshDependencies {
+  return {
+    loadExactReply: async () => {
+      events.push('load_exact_reply')
+      return refreshReply
+    },
+    getVerifiedReader: async () => {
+      events.push('verify_reader')
+      return refreshReader
+    },
+    getExactMessage: async () => {
+      events.push('graph_get_exact_message')
+      return refreshProviderMessage
+    },
+    persistProvenance: async () => {
+      events.push('persist_provenance')
+      return {
+        refreshId: '77777777-7777-4777-8777-777777777777',
+        mergedMetadataFingerprint: 'a'.repeat(64),
+        provenanceRefreshFingerprint: 'b'.repeat(64),
+      }
+    },
+    ...overrides,
+  }
+}
+const refreshInput = {
+  replyMemoryId: request.replyMemoryId,
+  leadId: request.leadId,
+  expectedTenantId: tenantId,
+  expectedMailboxObjectId: request.target.mailboxObjectId,
+  expectedMailboxAddress: request.target.mailboxAddress,
+  now: new Date('2026-08-17T14:30:00.000Z'),
+}
+{
+  const events: string[] = []
+  let persistedImmutableMessageId = ''
+  const result = await runGate3d1InboundProvenanceRefresh(
+    refreshInput,
+    makeRefreshDependencies(events, {
+      persistProvenance: async ({ observedImmutableMessageId }) => {
+        events.push('persist_provenance')
+        persistedImmutableMessageId = observedImmutableMessageId
+        return {
+          refreshId: '77777777-7777-4777-8777-777777777777',
+          mergedMetadataFingerprint: 'a'.repeat(64),
+          provenanceRefreshFingerprint: 'b'.repeat(64),
+        }
+      },
+    })
+  )
+  assert.equal(result.providerRead, true)
+  assert.equal(result.providerMutation, false)
+  assert.equal(result.provenanceRefreshFingerprint, 'b'.repeat(64))
+  assert.deepEqual(events, [
+    'load_exact_reply',
+    'verify_reader',
+    'graph_get_exact_message',
+    'persist_provenance',
+  ])
+  assert.equal(
+    persistedImmutableMessageId,
+    request.target.inboundImmutableMessageId,
+    'A historical stored REST ID must be preserved while the separately observed immutable ID is bound.'
+  )
+}
+{
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      persistProvenance: async () => {
+        events.push('persist_provenance')
+        throw new Error('The exact reply-memory provenance update conflicted and was not applied.')
+      },
+    })),
+    /provenance update conflicted/
+  )
+  assert.deepEqual(events, [
+    'load_exact_reply',
+    'verify_reader',
+    'graph_get_exact_message',
+    'persist_provenance',
+  ])
+}
+{
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      persistProvenance: async () => {
+        events.push('persist_provenance')
+        return {
+          refreshId: '77777777-7777-4777-8777-777777777777',
+          mergedMetadataFingerprint: 'a'.repeat(64),
+          provenanceRefreshFingerprint: '',
+        }
+      },
+    })),
+    /incomplete mapping proof/
+  )
+  assert.deepEqual(events, [
+    'load_exact_reply',
+    'verify_reader',
+    'graph_get_exact_message',
+    'persist_provenance',
+  ])
+}
+{
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      loadExactReply: async () => {
+        events.push('load_exact_reply')
+        return null
+      },
+    })),
+    /reply-memory row was not found/
+  )
+  assert.deepEqual(events, ['load_exact_reply'])
+}
+{
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      loadExactReply: async () => {
+        events.push('load_exact_reply')
+        return { ...refreshReply, messageId: '' }
+      },
+    })),
+    /lacks exact source-message identity evidence/
+  )
+  assert.deepEqual(events, ['load_exact_reply'])
+}
+for (const providerOverride of [
+  null,
+  { ...refreshProviderMessage, conversationId: 'different-conversation' },
+  { ...refreshProviderMessage, receivedDateTime: '2026-08-10T14:21:16.000Z' },
+  { ...refreshProviderMessage, preferenceApplied: '' },
+  { ...refreshProviderMessage, preferenceApplied: 'outlook.body-content-type="text"' },
+  { ...refreshProviderMessage, id: 'invalid immutable id' },
+]) {
+  const events: string[] = []
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      getExactMessage: async () => {
+        events.push('graph_get_exact_message')
+        return providerOverride
+      },
+    })),
+    /exact immutable inbound reply|exact stored immutable positive inbound reply evidence/
+  )
+  assert.equal(events.includes('persist_provenance'), false)
+}
+for (const disqualifiedText of [
+  'No thanks, I am not interested.',
+  'I am currently out of the office.',
+  'STOP',
+]) {
+  const events: string[] = []
+  const disqualifiedReply = {
+    ...refreshReply,
+    subject: disqualifiedText.includes('out of the office') ? 'Automatic Reply' : refreshReply.subject,
+    replySummary: disqualifiedText,
+  }
+  await assert.rejects(
+    runGate3d1InboundProvenanceRefresh(refreshInput, makeRefreshDependencies(events, {
+      loadExactReply: async () => disqualifiedReply,
+      getExactMessage: async () => ({
+        ...refreshProviderMessage,
+        subject: disqualifiedReply.subject,
+        bodyPreview: disqualifiedText,
+      }),
+    })),
+    /not an exact positive lead\/property continuation|exact stored immutable positive inbound reply evidence/
+  )
+  assert.equal(events.includes('persist_provenance'), false)
+}
+await assert.rejects(
+  runGate3d1InboundProvenanceRefresh({
+    ...refreshInput,
+    now: new Date('2026-08-20T14:21:15.000Z'),
+  }, makeRefreshDependencies([])),
+  /10-day hard expiry/
+)
+await assert.rejects(
+  runGate3d1InboundProvenanceRefresh({
+    ...refreshInput,
+    expectedTenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  }, makeRefreshDependencies([])),
+  /reader or stored mailbox identity/
 )
 
 const historicalOutreach = [

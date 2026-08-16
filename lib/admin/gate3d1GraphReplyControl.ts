@@ -7,15 +7,21 @@ import {
   executeGate3d1GraphSameThreadReplyCanary,
   getGate3d1GraphReplyCanaryReadiness,
   hasExactGate3d1ComplianceFooter,
+  preflightGate3d1GraphReplyExecution,
   resolveGate3d1GraphReplyExecutionRequest,
 } from '@/lib/email/graphSameThreadReplyCanary'
 import {
+  assertGate3d1ReplyBasisFresh,
   fingerprintGate3d1GraphReplyContent,
+  gate3d1ReplyBasisExpiresAt,
+  getGate3d1FounderReplyReviewVerdicts,
   hasExactGate3d1ReplyMemoryProvenance,
-  isConservativePositiveSellerReplyText,
+  isGate3d1FounderReviewableSellerReplyText,
+  isGate3d1ReplyPropertyCompatible,
   resolveGate3d1ExecutionOrStop,
   selectExactGate3d1LocalDraft,
 } from '@/lib/email/graphSameThreadReplyCore'
+import { refreshGate3d1InboundReplyProvenance } from '@/lib/email/outlookMailbox'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import {
@@ -103,6 +109,97 @@ async function founderRpc(
   const { data, error } = await userScopedRpcClient().rpc(functionName, args)
   if (error) throw new Error(`${label} failed closed: ${error.message}`)
   return data
+}
+
+function oneRpcRow(data: unknown, label: string) {
+  const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<Record<string, unknown>>
+  if (rows.length !== 1) throw new Error(`${label} must return exactly one record.`)
+  return rows[0]
+}
+
+async function resolveSelectedGate3d1CanaryBinding() {
+  const admin = createAdminClient()
+  const { data: controls, error: controlsError } = await admin
+    .from('operating_strategy_runtime_controls')
+    .select('canary_enforcement_status,canary_operating_strategy_version_id,canary_required_writer_release')
+    .eq('control_key', 'canonical_binding')
+    .limit(2)
+  if (
+    controlsError ||
+    (controls || []).length !== 1 ||
+    controls![0].canary_enforcement_status !== 'reviewed_cap_one' ||
+    controls![0].canary_required_writer_release !==
+      GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE
+  ) {
+    throw new Error('The exact selective canary runtime control could not be resolved.')
+  }
+  const operatingStrategyVersionId = exactUuid(
+    controls![0].canary_operating_strategy_version_id,
+    'Selected Gate 3D.1 operating strategy version ID'
+  )
+  const { data: version, error: versionError } = await admin
+    .from('operating_strategy_versions')
+    .select('id,operating_strategy_id')
+    .eq('id', operatingStrategyVersionId)
+    .single()
+  if (versionError || !version || version.id !== operatingStrategyVersionId) {
+    throw new Error('The selected Gate 3D.1 operating version could not be resolved exactly.')
+  }
+  return {
+    operatingStrategyVersionId,
+    operatingStrategyId: exactUuid(version.operating_strategy_id, 'Selected operating strategy ID'),
+  }
+}
+
+async function assertGate3d1StopsEngaged(operatingStrategyVersionId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('assert_gate3d1_canary_stops_engaged', {
+    p_operating_strategy_version_id: operatingStrategyVersionId,
+    p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+  })
+  if (error) throw new Error(`Gate 3D.1 stop verification failed closed: ${error.message}`)
+  const row = oneRpcRow(data, 'Gate 3D.1 stop verification')
+  if (
+    row.global_blocked !== true ||
+    row.strategy_paused !== true ||
+    !/^[0-9a-f]{64}$/.test(String(row.stop_evidence_fingerprint || ''))
+  ) {
+    throw new Error('Gate 3D.1 stop verification returned conflicting evidence.')
+  }
+  return {
+    globalBlocked: true as const,
+    strategyPaused: true as const,
+    stopEvidenceFingerprint: String(row.stop_evidence_fingerprint),
+  }
+}
+
+async function engageGate3d1StopsAsService(input: {
+  operatingStrategyVersionId: string
+  reason: string
+  evidenceFingerprint: string
+  idempotencyKey: string
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('engage_gate3d1_canary_stop', {
+    p_operating_strategy_version_id: input.operatingStrategyVersionId,
+    p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+    p_reason: input.reason,
+    p_evidence_fingerprint: input.evidenceFingerprint,
+    p_idempotency_key: input.idempotencyKey,
+  })
+  const stopRecord = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null
+  if (
+    error ||
+    !stopRecord ||
+    stopRecord.operatingStrategyVersionId !== input.operatingStrategyVersionId ||
+    stopRecord.blocked !== true ||
+    stopRecord.evidenceFingerprint !== input.evidenceFingerprint
+  ) {
+    throw new Error(error?.message || 'The Gate 3D.1 stop RPC returned conflicting evidence.')
+  }
+  return assertGate3d1StopsEngaged(input.operatingStrategyVersionId)
 }
 
 export function isExactGate3d1FounderIdentity(input: {
@@ -228,6 +325,8 @@ async function loadExactReplyEvidence(input: {
   const replyProperty = String(reply.property_address || '').replace(/\s+/g, ' ').trim()
   const messageBody = String(message.body || '')
   const messageVersionKey = exactGateKey(message.variant_key, 'Authored message version')
+  const observedImmutableMessageId = String(metadata.observedImmutableMessageId || '')
+  assertGate3d1ReplyBasisFresh(String(reply.received_at || ''), new Date())
   if (
     !config.tenantId ||
     !config.clientId ||
@@ -255,7 +354,7 @@ async function loadExactReplyEvidence(input: {
     messageBody !== messageBody.trim() ||
     !hasExactGate3d1ComplianceFooter(messageBody) ||
     String(reply.classification || '') !== 'hot_seller_lead' ||
-    !isConservativePositiveSellerReplyText({
+    !isGate3d1FounderReviewableSellerReplyText({
       subject: String(reply.subject || ''),
       bodyPreview: String(reply.reply_summary || ''),
     }) ||
@@ -269,8 +368,10 @@ async function loadExactReplyEvidence(input: {
     String(lead.email || '').trim().toLowerCase() !== recipient ||
     !recipient ||
     !property ||
-    (replyProperty && replyProperty !== property) ||
+    !isGate3d1ReplyPropertyCompatible(property, replyProperty) ||
     !String(reply.message_id || '').trim() ||
+    !observedImmutableMessageId ||
+    /\s/.test(observedImmutableMessageId) ||
     !String(reply.thread_id || '').trim() ||
     !/^<[^<>\s]+>$/.test(String(metadata.internetMessageId || '')) ||
     !Number.isFinite(Date.parse(String(reply.received_at || '')))
@@ -302,7 +403,7 @@ export async function saveGate3d1LocalReplyDraft(input: {
     admin.from('leads').select('id,email,property_address').eq('id', leadId).limit(2),
     admin
       .from('command_center_reply_memory')
-      .select('id,lead_id,mailbox,from_email,to_email,subject,reply_summary,property_address,classification,metadata_json')
+      .select('id,lead_id,mailbox,from_email,to_email,subject,reply_summary,property_address,received_at,classification,metadata_json')
       .eq('id', replyMemoryId)
       .limit(2),
     admin
@@ -326,10 +427,11 @@ export async function saveGate3d1LocalReplyDraft(input: {
     ? reply.metadata_json as Record<string, unknown>
     : {}
   const config = dedicatedGraphConfig()
+  assertGate3d1ReplyBasisFresh(String(reply.received_at || ''), new Date())
   if (
     String(reply.lead_id || '') !== leadId ||
     String(reply.classification || '') !== 'hot_seller_lead' ||
-    !isConservativePositiveSellerReplyText({
+    !isGate3d1FounderReviewableSellerReplyText({
       subject: String(reply.subject || ''),
       bodyPreview: String(reply.reply_summary || ''),
     }) ||
@@ -341,7 +443,10 @@ export async function saveGate3d1LocalReplyDraft(input: {
     String(reply.mailbox || '').trim().toLowerCase() !== config.mailboxAddress ||
     String(reply.to_email || '').trim().toLowerCase() !== config.mailboxAddress ||
     String(reply.from_email || '').trim().toLowerCase() !== String(lead.email || '').trim().toLowerCase() ||
-    !String(lead.property_address || '').trim()
+    !isGate3d1ReplyPropertyCompatible(
+      String(lead.property_address || ''),
+      String(reply.property_address || '')
+    )
   ) {
     throw new Error('The local draft is not tied to the exact positive inbound seller reply and property.')
   }
@@ -426,6 +531,133 @@ export async function saveGate3d1LocalReplyDraft(input: {
   }
 }
 
+export async function refreshGate3d1InboundProvenance(input: {
+  actorUserId: string
+  leadId: string
+  replyMemoryId: string
+  idempotencyKey: string
+}) {
+  await assertGate3d1FounderActor(input.actorUserId)
+  const leadId = exactUuid(input.leadId, 'Lead ID')
+  const replyMemoryId = exactUuid(input.replyMemoryId, 'Reply-memory ID')
+  const idempotencyKey = exactGateKey(
+    input.idempotencyKey,
+    'Inbound provenance refresh idempotency key'
+  )
+  const selected = await resolveSelectedGate3d1CanaryBinding()
+  const operatingStrategyVersionId = selected.operatingStrategyVersionId
+  await assertGate3d1StopsEngaged(operatingStrategyVersionId)
+  const refreshed = await refreshGate3d1InboundReplyProvenance({
+    leadId,
+    replyMemoryId,
+    operatingStrategyVersionId,
+    idempotencyKey,
+  })
+  const stopVerification = await assertGate3d1StopsEngaged(
+    operatingStrategyVersionId
+  )
+  return {
+    replyMemoryId: refreshed.replyMemoryId,
+    leadId: refreshed.leadId,
+    idempotencyKey,
+    operatingStrategyVersionId,
+    provenanceBound: true as const,
+    refreshId: refreshed.refreshId,
+    observedImmutableMessageId: refreshed.observedImmutableMessageId,
+    provenanceRefreshFingerprint: refreshed.provenanceRefreshFingerprint,
+    controlsRemainBlocked: true as const,
+    stopVerification,
+    providerRead: true as const,
+    providerMutation: false as const,
+  }
+}
+
+export async function inspectGate3d1InboundReplyEvidence(input: {
+  actorUserId: string
+  leadId: string
+  replyMemoryId: string
+}) {
+  await assertGate3d1FounderActor(input.actorUserId)
+  const leadId = exactUuid(input.leadId, 'Lead ID')
+  const replyMemoryId = exactUuid(input.replyMemoryId, 'Reply-memory ID')
+  const admin = createAdminClient()
+  const [replyResult, leadResult] = await Promise.all([
+    admin
+      .from('command_center_reply_memory')
+      .select('id,lead_id,mailbox,thread_id,message_id,from_email,to_email,subject,reply_summary,property_address,received_at,classification,metadata_json')
+      .eq('id', replyMemoryId)
+      .eq('lead_id', leadId)
+      .limit(2),
+    admin
+      .from('leads')
+      .select('id,email,property_address')
+      .eq('id', leadId)
+      .limit(2),
+  ])
+  if (replyResult.error || leadResult.error) {
+    throw new Error('Founder reply evidence inspection is temporarily unavailable.')
+  }
+  if ((replyResult.data || []).length !== 1 || (leadResult.data || []).length !== 1) {
+    throw new Error('Founder reply evidence inspection requires one exact lead-bound reply.')
+  }
+  const reply = replyResult.data![0]
+  const lead = leadResult.data![0]
+  const config = dedicatedGraphConfig()
+  const metadata = reply.metadata_json && typeof reply.metadata_json === 'object' && !Array.isArray(reply.metadata_json)
+    ? reply.metadata_json as Record<string, unknown>
+    : {}
+  const canonicalPropertyAddress = String(lead.property_address || '').replace(/\s+/g, ' ').trim()
+  const replyPropertyAddress = String(reply.property_address || '').replace(/\s+/g, ' ').trim()
+  const subject = String(reply.subject || '')
+  const replySummary = String(reply.reply_summary || '')
+  const receivedAt = String(reply.received_at || '')
+  if (
+    String(reply.id || '') !== replyMemoryId ||
+    String(reply.lead_id || '') !== leadId ||
+    String(lead.id || '') !== leadId ||
+    String(reply.mailbox || '').trim().toLowerCase() !== config.mailboxAddress ||
+    String(reply.to_email || '').trim().toLowerCase() !== config.mailboxAddress ||
+    String(reply.from_email || '').trim().toLowerCase() !== String(lead.email || '').trim().toLowerCase() ||
+    String(reply.classification || '') !== 'hot_seller_lead' ||
+    !String(reply.message_id || '').trim() ||
+    !String(reply.thread_id || '').trim() ||
+    !/^<[^<>\s]+>$/.test(String(metadata.internetMessageId || '')) ||
+    !canonicalPropertyAddress
+  ) {
+    throw new Error('The requested reply is outside the exact Gate 3D.1 founder-review scope.')
+  }
+  const verdicts = getGate3d1FounderReplyReviewVerdicts({ subject, bodyPreview: replySummary })
+  const replyBasisExpiresAt = gate3d1ReplyBasisExpiresAt(receivedAt)
+  const replyBasisFresh = Date.now() < replyBasisExpiresAt.getTime()
+  return {
+    leadId,
+    replyMemoryId,
+    subject,
+    replySummary,
+    replySummarySha256: sha256(replySummary),
+    receivedAt,
+    replyBasisExpiresAt: replyBasisExpiresAt.toISOString(),
+    canonicalPropertyAddress,
+    replyPropertyAddress: replyPropertyAddress || null,
+    classification: String(reply.classification),
+    reviewVerdicts: {
+      ...verdicts,
+      replyBasisFresh,
+      propertyCompatible: isGate3d1ReplyPropertyCompatible(
+        canonicalPropertyAddress,
+        replyPropertyAddress
+      ),
+      inboundReaderProvenanceCurrent: hasExactGate3d1ReplyMemoryProvenance(metadata, {
+        tenantId: config.tenantId,
+        mailboxObjectId: config.mailboxObjectId,
+      }),
+    },
+    returnedEmailAddress: false as const,
+    providerRead: false as const,
+    providerMutation: false as const,
+  }
+}
+
 export async function recordGate3d1ExchangeRbacAttestation(input: {
   actorUserId: string
   outOfScopeMailboxObjectId: string
@@ -492,6 +724,41 @@ export async function recordGate3d1ExchangeRbacAttestation(input: {
   }
 }
 
+export async function revokeGate3d1ExchangeRbacAttestation(input: {
+  actorUserId: string
+  attestationId: string
+  reason: string
+  idempotencyKey: string
+}) {
+  const actorUserId = await assertGate3d1FounderActor(input.actorUserId)
+  const attestationId = exactUuid(input.attestationId, 'Exchange RBAC attestation ID')
+  const idempotencyKey = exactGateKey(
+    input.idempotencyKey,
+    'Exchange RBAC revocation idempotency key'
+  )
+  const revocationId = exactUuid(await founderRpc(
+    'revoke_exchange_application_rbac_attestation',
+    {
+      p_attestation_id: attestationId,
+      p_actor_user_id: actorUserId,
+      p_reason: input.reason.trim(),
+      p_idempotency_key: idempotencyKey,
+    },
+    'Founder Exchange Application RBAC attestation revocation'
+  ), 'Exchange Application RBAC attestation revocation ID')
+  const selected = await resolveSelectedGate3d1CanaryBinding()
+  const stopVerification = await assertGate3d1StopsEngaged(
+    selected.operatingStrategyVersionId
+  )
+  return {
+    attestationId,
+    revocationId,
+    controlsBlocked: true as const,
+    stopVerification,
+    providerMutation: false as const,
+  }
+}
+
 export async function authorizeGate3d1ReplyContinuation(input: {
   actorUserId: string
   operatingStrategyVersionId: string
@@ -535,7 +802,17 @@ export async function authorizeGate3d1ReplyContinuation(input: {
     outreachMessageId,
   })
   const config = dedicatedGraphConfig()
+  const replyBasisExpiresAt = assertGate3d1ReplyBasisFresh(
+    String(evidence.reply.received_at || ''),
+    new Date(now)
+  )
+  if (expiresAtMs > replyBasisExpiresAt.getTime()) {
+    throw new Error('Founder authorization cannot outlive the exact inbound reply 10-day basis window.')
+  }
   const replyMetadata = evidence.reply.metadata_json as Record<string, unknown>
+  const observedImmutableMessageId = String(
+    replyMetadata.observedImmutableMessageId || ''
+  )
   const recipientEmail = String(evidence.reply.from_email || '').trim().toLowerCase()
   const propertyAddress = String(evidence.lead.property_address || '').replace(/\s+/g, ' ').trim()
   const body = String(evidence.message.body || '')
@@ -566,7 +843,7 @@ export async function authorizeGate3d1ReplyContinuation(input: {
       p_client_id: config.clientId,
       p_mailbox_object_id: config.mailboxObjectId,
       p_mailbox_address: config.mailboxAddress,
-      p_inbound_message_id: evidence.reply.message_id,
+      p_inbound_message_id: observedImmutableMessageId,
       p_inbound_conversation_id: evidence.reply.thread_id,
       p_inbound_internet_message_id: replyMetadata.internetMessageId,
       p_normalized_sender_hash: sha256(recipientEmail),
@@ -639,7 +916,17 @@ export async function revokeGate3d1ReplyContinuation(input: {
     },
     'Founder continuation revocation'
   ), 'Continuation revocation ID')
-  return { authorizationId, revocationId, providerMutation: false as const }
+  const selected = await resolveSelectedGate3d1CanaryBinding()
+  const stopVerification = await assertGate3d1StopsEngaged(
+    selected.operatingStrategyVersionId
+  )
+  return {
+    authorizationId,
+    revocationId,
+    controlsBlocked: true as const,
+    stopVerification,
+    providerMutation: false as const,
+  }
 }
 
 export async function reconcileGate3d1ReplyDispatch(input: {
@@ -669,7 +956,18 @@ export async function reconcileGate3d1ReplyDispatch(input: {
     },
     'Founder Gate 3D.1 provider reconciliation'
   ), 'Gate 3D.1 reconciliation event ID')
-  return { claimId, reconciliationEventId, resolution: input.resolution, providerMutation: false as const }
+  const selected = await resolveSelectedGate3d1CanaryBinding()
+  const stopVerification = await assertGate3d1StopsEngaged(
+    selected.operatingStrategyVersionId
+  )
+  return {
+    claimId,
+    reconciliationEventId,
+    resolution: input.resolution,
+    controlsBlocked: true as const,
+    stopVerification,
+    providerMutation: false as const,
+  }
 }
 
 export async function stageGate3d1ActivationReview(input: {
@@ -923,75 +1221,6 @@ export async function activateGate3d1Canary(input: {
   }
 }
 
-export async function releaseGate3d1CanaryControls(input: {
-  actorUserId: string
-  operatingStrategyVersionId: string
-  reason: string
-  idempotencyKey: string
-}) {
-  const actorUserId = await assertGate3d1FounderActor(input.actorUserId)
-  const operatingStrategyVersionId = exactUuid(
-    input.operatingStrategyVersionId,
-    'Operating strategy version ID'
-  )
-  const idempotencyKey = exactGateKey(input.idempotencyKey, 'Control-release idempotency key')
-  const admin = createAdminClient()
-  const { data: version, error } = await admin
-    .from('operating_strategy_versions')
-    .select('id,operating_strategy_id,status,execution_mode,external_send_cap,approved_by_user_id')
-    .eq('id', operatingStrategyVersionId)
-    .single()
-  if (
-    error ||
-    !version ||
-    version.status !== 'active' ||
-    version.execution_mode !== 'approved_live' ||
-    Number(version.external_send_cap) !== 1 ||
-    version.approved_by_user_id !== actorUserId
-  ) {
-    throw new Error('Only the exact founder-activated cap-one version may release Gate 3D.1 controls.')
-  }
-  const operatingStrategyId = exactUuid(version.operating_strategy_id, 'Operating strategy ID')
-  const reason = `${input.reason.trim()} [${idempotencyKey}]`
-  const strategyResult = await founderRpc(
-    'set_operating_strategy_outbound_control',
-    {
-      p_operating_strategy_id: operatingStrategyId,
-      p_blocked: false,
-      p_actor_user_id: actorUserId,
-      p_reason: reason,
-      p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
-    },
-    'Founder Gate 3D.1 strategy-control release'
-  )
-  const globalResult = await founderRpc(
-    'set_operating_strategy_outbound_control',
-    {
-      p_operating_strategy_id: null,
-      p_blocked: false,
-      p_actor_user_id: actorUserId,
-      p_reason: reason,
-      p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
-    },
-    'Founder Gate 3D.1 global-control release'
-  )
-  for (const [scope, result] of [['strategy', strategyResult], ['global', globalResult]] as const) {
-    const record = result && typeof result === 'object' && !Array.isArray(result)
-      ? result as Record<string, unknown>
-      : null
-    if (!record || record.scope !== scope || record.blocked !== false || record.actorUserId !== actorUserId) {
-      throw new Error(`Gate 3D.1 ${scope} control release returned conflicting evidence.`)
-    }
-  }
-  return {
-    operatingStrategyVersionId,
-    operatingStrategyId,
-    releaseOrder: ['strategy', 'global'] as const,
-    blocked: false as const,
-    providerMutation: false as const,
-  }
-}
-
 export async function stopGate3d1CanaryControls(input: {
   actorUserId: string
   operatingStrategyId: string
@@ -1000,6 +1229,10 @@ export async function stopGate3d1CanaryControls(input: {
 }) {
   const actorUserId = await assertGate3d1FounderActor(input.actorUserId)
   const operatingStrategyId = exactUuid(input.operatingStrategyId, 'Operating strategy ID')
+  const selected = await resolveSelectedGate3d1CanaryBinding()
+  if (selected.operatingStrategyId !== operatingStrategyId) {
+    throw new Error('The requested stop does not match the selected Gate 3D.1 operating strategy.')
+  }
   const idempotencyKey = exactGateKey(input.idempotencyKey, 'Control-stop idempotency key')
   const reason = `${input.reason.trim()} [${idempotencyKey}]`
   const globalResult = await founderRpc(
@@ -1013,7 +1246,7 @@ export async function stopGate3d1CanaryControls(input: {
     },
     'Founder Gate 3D.1 global stop'
   )
-  await founderRpc(
+  const strategyResult = await founderRpc(
     'set_operating_strategy_outbound_control',
     {
       p_operating_strategy_id: operatingStrategyId,
@@ -1027,10 +1260,30 @@ export async function stopGate3d1CanaryControls(input: {
   const globalRecord = globalResult && typeof globalResult === 'object' && !Array.isArray(globalResult)
     ? globalResult as Record<string, unknown>
     : null
-  if (!globalRecord || globalRecord.scope !== 'global' || globalRecord.blocked !== true) {
-    throw new Error('Gate 3D.1 global stop returned conflicting evidence.')
+  const strategyRecord = strategyResult && typeof strategyResult === 'object' && !Array.isArray(strategyResult)
+    ? strategyResult as Record<string, unknown>
+    : null
+  if (
+    !globalRecord ||
+    globalRecord.scope !== 'global' ||
+    globalRecord.blocked !== true ||
+    !strategyRecord ||
+    strategyRecord.scope !== 'strategy' ||
+    strategyRecord.operatingStrategyId !== operatingStrategyId ||
+    strategyRecord.blocked !== true
+  ) {
+    throw new Error('Gate 3D.1 global or strategy stop returned conflicting evidence.')
   }
-  return { operatingStrategyId, stopOrder: ['global', 'strategy'] as const, blocked: true as const }
+  const stopVerification = await assertGate3d1StopsEngaged(
+    selected.operatingStrategyVersionId
+  )
+  return {
+    operatingStrategyId,
+    operatingStrategyVersionId: selected.operatingStrategyVersionId,
+    stopOrder: ['global', 'strategy'] as const,
+    blocked: true as const,
+    stopVerification,
+  }
 }
 
 export async function executeAuthorizedGate3d1Reply(input: {
@@ -1043,9 +1296,9 @@ export async function executeAuthorizedGate3d1Reply(input: {
     input.idempotencyKey,
     'Execution idempotency key'
   )
+  const actorUserId = await assertGate3d1FounderActor(input.actorUserId)
   const request = await resolveGate3d1ExecutionOrStop({
     resolve: async () => {
-      await assertGate3d1FounderActor(input.actorUserId)
       return resolveGate3d1GraphReplyExecutionRequest({
         authorizationId: input.authorizationId,
         outreachMessageId: input.outreachMessageId,
@@ -1053,58 +1306,89 @@ export async function executeAuthorizedGate3d1Reply(input: {
       })
     },
     engageStops: async (resolutionError) => {
-      const admin = createAdminClient()
-      const { data: controls, error: controlsError } = await admin
-        .from('operating_strategy_runtime_controls')
-        .select('canary_enforcement_status,canary_operating_strategy_version_id,canary_required_writer_release')
-        .eq('control_key', 'canonical_binding')
-        .limit(2)
-      if (
-        controlsError ||
-        (controls || []).length !== 1 ||
-        controls![0].canary_enforcement_status !== 'reviewed_cap_one' ||
-        controls![0].canary_required_writer_release !==
-          GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE
-      ) {
-        throw new Error('The exact selective canary runtime control could not be resolved.')
-      }
-      const operatingStrategyVersionId = exactUuid(
-        controls![0].canary_operating_strategy_version_id,
-        'Pre-core stop operating strategy version ID'
-      )
+      const selected = await resolveSelectedGate3d1CanaryBinding()
       const evidenceFingerprint = sha256(JSON.stringify({
         schema: 'gate3d1.pre-core-manifest-failure.v1',
-        operatingStrategyVersionId,
+        operatingStrategyVersionId: selected.operatingStrategyVersionId,
         authorizationId: input.authorizationId,
         outreachMessageId: input.outreachMessageId,
         failureType: resolutionError instanceof Error ? resolutionError.name : 'unknown_error',
       }))
-      const { data: stopData, error: stopError } = await admin.rpc(
-        'engage_gate3d1_canary_stop',
-        {
-          p_operating_strategy_version_id: operatingStrategyVersionId,
-          p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
-          p_reason: 'Gate 3D.1 stopped before execution manifest resolution completed.',
-          p_evidence_fingerprint: evidenceFingerprint,
-          p_idempotency_key:
-            `gate3d1-pre-core-stop:${sha256(executionIdempotencyKey).slice(0, 32)}`,
-        }
-      )
-      const stopRecord = stopData && typeof stopData === 'object' && !Array.isArray(stopData)
-        ? stopData as Record<string, unknown>
-        : null
-      if (
-        stopError ||
-        !stopRecord ||
-        stopRecord.operatingStrategyVersionId !== operatingStrategyVersionId ||
-        stopRecord.blocked !== true ||
-        stopRecord.evidenceFingerprint !== evidenceFingerprint
-      ) {
-        throw new Error(stopError?.message || 'The stop RPC returned conflicting evidence.')
-      }
+      await engageGate3d1StopsAsService({
+        operatingStrategyVersionId: selected.operatingStrategyVersionId,
+        reason: 'Gate 3D.1 stopped before execution manifest resolution completed.',
+        evidenceFingerprint,
+        idempotencyKey:
+          `gate3d1-pre-core-stop:${sha256(executionIdempotencyKey).slice(0, 32)}`,
+      })
     },
   })
-  return executeGate3d1GraphSameThreadReplyCanary(request)
+  const releaseIdempotencyKey =
+    `gate3d1-release:${sha256(executionIdempotencyKey).slice(0, 32)}`
+  try {
+    const selected = await resolveSelectedGate3d1CanaryBinding()
+    if (selected.operatingStrategyVersionId !== request.operatingStrategyVersionId) {
+      throw new Error('The selected Gate 3D.1 version changed after manifest resolution.')
+    }
+    await assertGate3d1StopsEngaged(request.operatingStrategyVersionId)
+    await preflightGate3d1GraphReplyExecution(request)
+    const release = oneRpcRow(await founderRpc(
+      'release_gate3d1_canary_for_authorization',
+      {
+        p_authorization_id: request.authorizationId,
+        p_outreach_message_id: request.outreachMessageId,
+        p_operating_strategy_version_id: request.operatingStrategyVersionId,
+        p_actor_user_id: actorUserId,
+        p_writer_release: GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE,
+        p_reason: 'Founder confirmed immediate execution of the exact one-shot Gate 3D.1 continuation.',
+        p_idempotency_key: releaseIdempotencyKey,
+        p_ttl_seconds: 300,
+      },
+      'Founder Gate 3D.1 exact authorization release lease'
+    ), 'Gate 3D.1 exact authorization release lease')
+    const releasedAt = Date.parse(String(release.released_at || ''))
+    const expiresAt = Date.parse(String(release.expires_at || ''))
+    if (
+      release.authorization_id !== request.authorizationId ||
+      release.outreach_message_id !== request.outreachMessageId ||
+      release.operating_strategy_version_id !== request.operatingStrategyVersionId ||
+      release.writer_release !== GATE3D1_SELLER_REPLY_CANARY_WRITER_RELEASE ||
+      release.global_released !== true ||
+      release.strategy_released !== true ||
+      !/^[0-9a-f]{64}$/.test(String(release.lease_fingerprint || '')) ||
+      !Number.isFinite(releasedAt) ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now() ||
+      expiresAt <= releasedAt ||
+      expiresAt - releasedAt > 300_000
+    ) {
+      throw new Error('Gate 3D.1 release lease returned stale or conflicting evidence.')
+    }
+    return await executeGate3d1GraphSameThreadReplyCanary(request)
+  } catch (executionError) {
+    const evidenceFingerprint = sha256(JSON.stringify({
+      schema: 'gate3d1.post-manifest-execution-failure.v1',
+      authorizationId: request.authorizationId,
+      outreachMessageId: request.outreachMessageId,
+      operatingStrategyVersionId: request.operatingStrategyVersionId,
+      failureType: executionError instanceof Error ? executionError.name : 'unknown_error',
+    }))
+    try {
+      await engageGate3d1StopsAsService({
+        operatingStrategyVersionId: request.operatingStrategyVersionId,
+        reason: 'Gate 3D.1 stopped after its exact execution lease did not complete cleanly.',
+        evidenceFingerprint,
+        idempotencyKey:
+          `gate3d1-post-release-stop:${sha256(executionIdempotencyKey).slice(0, 32)}`,
+      })
+    } catch (stopError) {
+      throw new Error(
+        `Gate 3D.1 execution failed and both stops could not be confirmed: ${stopError instanceof Error ? stopError.message : 'unknown stop error'}.`,
+        { cause: executionError }
+      )
+    }
+    throw executionError
+  }
 }
 
 export async function getGate3d1FounderControlReadiness(actorUserId: string) {
@@ -1221,8 +1505,8 @@ export async function getGate3d1FounderControlReadiness(actorUserId: string) {
   const databaseExecutionReady = Boolean(
     databaseControls.available &&
     databaseControls.operatingStrategyVersionStatus === 'active' &&
-    databaseControls.globalStopEngaged === false &&
-    databaseControls.strategyStopEngaged === false &&
+    databaseControls.globalStopEngaged === true &&
+    databaseControls.strategyStopEngaged === true &&
     databaseControls.canaryEnforcementStatus === 'reviewed_cap_one' &&
     databaseControls.stagedVersionMatches &&
     databaseControls.writerReleaseMatches
@@ -1239,6 +1523,7 @@ export async function getGate3d1FounderControlReadiness(actorUserId: string) {
       databaseExecutionReady &&
       graphReadiness.configured &&
       graphReadiness.enabled &&
+      graphReadiness.isolationEnabled &&
       graphReadiness.oneRecipientPinned &&
       graphReadiness.capIsOne &&
       graphReadiness.founderManifestPinned &&
@@ -1260,10 +1545,11 @@ export async function getGate3d1FounderControlReadiness(actorUserId: string) {
       stageActivationReview: 'POST',
       approveActivation: 'POST',
       activateVersion: 'POST',
-      releaseControls: 'POST',
       stopControls: 'POST',
+      refreshInboundProvenance: 'POST',
       draft: 'POST',
       recordRbacAttestation: 'POST',
+      revokeRbacAttestation: 'POST',
       authorize: 'POST',
       revoke: 'POST',
       execute: 'POST',
@@ -1276,11 +1562,14 @@ export async function getGate3d1FounderControlReadiness(actorUserId: string) {
       'record_separate_founder_approval',
       'activate_exact_version_while_stopped',
       'record_scoped_rbac_attestation',
+      'refresh_exact_inbound_reader_provenance_while_stopped',
+      'save_local_draft_and_founder_review',
       'record_exact_positive_reply_continuation_authority',
-      'release_strategy_then_global',
-      'execute_one_exact_fingerprinted_reply',
+      'execute_one_exact_fingerprinted_reply_with_bound_300_second_release_lease',
       'send_permit_reengages_both_stops',
     ],
+    standaloneControlReleaseAllowed: false,
+    executionReleaseLeaseMaximumSeconds: 300,
     providerMutationOnReadiness: false,
   }
 }

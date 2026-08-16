@@ -2,7 +2,7 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "crons": [
     {
-      "path": "/api/cron/boss-daily-loop?dryRun=true&dispatch=false&send=false",
+      "path": "/api/cron/boss-daily-loop?dryRun=true&dispatch=false&send=false&syncMailbox=false",
       "schedule": "0 14,17,20,23 * * *"
     },
     {

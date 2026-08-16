@@ -26,9 +26,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const dispatch = paramFlag(url, 'dispatch') ?? envFlag('BOSS_DAILY_LOOP_CRON_DISPATCH')
     const send = paramFlag(url, 'send') ?? envFlag('BOSS_DAILY_LOOP_CRON_SEND')
+    const syncMailbox = paramFlag(url, 'syncMailbox') ?? true
     const dryRunParam = paramFlag(url, 'dryRun')
     const dryRun = dryRunParam ?? !(dispatch || send)
-    const result = await runDailyOperatingLoop({ dryRun, dispatch, send })
+    const result = await runDailyOperatingLoop({ dryRun, dispatch, send, syncMailbox })
     return NextResponse.json({ success: true, ...result })
   } catch (error) {
     return NextResponse.json(

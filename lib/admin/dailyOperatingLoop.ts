@@ -5,7 +5,7 @@ import { getCommandCenterData } from '@/lib/admin/commandCenter'
 import { runDailyBuyerPipeline } from '@/lib/buyers/automation'
 import { runDailyInvestorPipeline } from '@/lib/investors/automation'
 import { runDailyLenderPipeline } from '@/lib/lenders/automation'
-import { syncOutlookMailbox } from '@/lib/email/outlookMailbox'
+import { getOutlookMailboxStatus, syncOutlookMailbox } from '@/lib/email/outlookMailbox'
 import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { captureKpiSnapshot, runBossRetrospective } from '@/lib/admin/selfImprovement'
@@ -163,17 +163,29 @@ export async function runDailyOperatingLoop(options: {
   dryRun?: boolean
   dispatch?: boolean
   send?: boolean
+  syncMailbox?: boolean
   createdByUserId?: string | null
 } = {}): Promise<DailyOperatingLoopResult> {
   const dryRun = options.dryRun !== false
   const dispatch = Boolean(options.dispatch && !dryRun)
   const send = Boolean(options.send && !dryRun && process.env.BOSS_DAILY_LOOP_ENABLE_SEND === 'true')
+  const syncMailbox = options.syncMailbox !== false
   await recordRevenueLoopJob({
     status: 'running',
     lastStatus: dryRun ? 'dry_run_started' : 'live_run_started',
-    metrics: { dryRun, dispatch, send },
+    metrics: { dryRun, dispatch, send, syncMailbox },
   }).catch((error) => console.warn('[daily-operating-loop] job start was not recorded:', error))
-  const mailbox = await syncOutlookMailbox({ dryRun, sinceHours: 72, limit: 50 })
+  const mailbox = syncMailbox
+    ? await syncOutlookMailbox({ dryRun, sinceHours: 72, limit: 50 })
+    : {
+        ok: true,
+        connected: false,
+        ...getOutlookMailboxStatus(),
+        fetched: 0,
+        stored: 0,
+        classifications: {},
+        skipped: true,
+      }
   const data = await getCommandCenterData()
   const retrospective = dryRun
     ? {

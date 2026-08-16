@@ -1,5 +1,6 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -10,11 +11,13 @@ import {
   bootstrapGate3d1FounderReviewer,
   executeAuthorizedGate3d1Reply,
   getGate3d1FounderControlReadiness,
+  inspectGate3d1InboundReplyEvidence,
   isExactGate3d1FounderIdentity,
   reconcileGate3d1ReplyDispatch,
   recordGate3d1ActivationApproval,
   recordGate3d1ExchangeRbacAttestation,
-  releaseGate3d1CanaryControls,
+  refreshGate3d1InboundProvenance,
+  revokeGate3d1ExchangeRbacAttestation,
   revokeGate3d1ReplyContinuation,
   saveGate3d1LocalReplyDraft,
   stageGate3d1ActivationReview,
@@ -59,13 +62,6 @@ const requestSchema = z.discriminatedUnion('action', [
     explicitConfirmation: z.literal('ACTIVATE_EXACT_FOUNDER_APPROVED_VERSION'),
   }).strict(),
   z.object({
-    action: z.literal('release_controls'),
-    operatingStrategyVersionId: z.string().uuid(),
-    reason,
-    idempotencyKey,
-    explicitConfirmation: z.literal('RELEASE_STRATEGY_THEN_GLOBAL_FOR_ONE_CANARY'),
-  }).strict(),
-  z.object({
     action: z.literal('stop_controls'),
     operatingStrategyId: z.string().uuid(),
     reason,
@@ -83,6 +79,13 @@ const requestSchema = z.discriminatedUnion('action', [
     explicitConfirmation: z.literal('SAVE_LOCAL_DRAFT_ONLY'),
   }).strict(),
   z.object({
+    action: z.literal('refresh_inbound_provenance'),
+    leadId: z.string().uuid(),
+    replyMemoryId: z.string().uuid(),
+    idempotencyKey,
+    explicitConfirmation: z.literal('REFRESH_ONE_EXACT_INBOUND_GRAPH_MESSAGE'),
+  }).strict(),
+  z.object({
     action: z.literal('record_rbac_attestation'),
     outOfScopeMailboxObjectId: z.string().uuid(),
     inScopeProofFingerprint: sha256,
@@ -91,6 +94,13 @@ const requestSchema = z.discriminatedUnion('action', [
     rationale: reason,
     idempotencyKey,
     explicitConfirmation: z.literal('RECORD_EXACT_SCOPED_EXCHANGE_RBAC_PROOF'),
+  }).strict(),
+  z.object({
+    action: z.literal('revoke_rbac_attestation'),
+    attestationId: z.string().uuid(),
+    reason: z.string().trim().min(12).max(2_000),
+    idempotencyKey,
+    explicitConfirmation: z.literal('REVOKE_EXACT_SCOPED_EXCHANGE_RBAC_PROOF'),
   }).strict(),
   z.object({
     action: z.literal('authorize'),
@@ -136,7 +146,7 @@ function response(body: unknown, init?: ResponseInit) {
   return result
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const access = await checkAdminAccess()
   if (
     !access.isAdmin ||
@@ -149,6 +159,26 @@ export async function GET() {
     )
   }
   try {
+    const url = new URL(request.url)
+    const leadId = url.searchParams.get('leadId')
+    const replyMemoryId = url.searchParams.get('replyMemoryId')
+    if (leadId !== null || replyMemoryId !== null) {
+      const parsedLeadId = z.string().uuid().safeParse(leadId)
+      const parsedReplyMemoryId = z.string().uuid().safeParse(replyMemoryId)
+      if (!parsedLeadId.success || !parsedReplyMemoryId.success) {
+        return response(
+          { error: 'Founder evidence inspection requires exact leadId and replyMemoryId query values.' },
+          { status: 400 }
+        )
+      }
+      return response({
+        evidence: await inspectGate3d1InboundReplyEvidence({
+          actorUserId: access.user.id,
+          leadId: parsedLeadId.data,
+          replyMemoryId: parsedReplyMemoryId.data,
+        }),
+      })
+    }
     return response({
       readiness: await getGate3d1FounderControlReadiness(access.user.id),
     })
@@ -226,15 +256,6 @@ export async function POST(request: Request) {
             idempotencyKey: parsed.data.idempotencyKey,
           }),
         })
-      case 'release_controls':
-        return response({
-          controls: await releaseGate3d1CanaryControls({
-            actorUserId: access.user.id,
-            operatingStrategyVersionId: parsed.data.operatingStrategyVersionId,
-            reason: parsed.data.reason,
-            idempotencyKey: parsed.data.idempotencyKey,
-          }),
-        })
       case 'stop_controls':
         return response({
           controls: await stopGate3d1CanaryControls({
@@ -256,6 +277,15 @@ export async function POST(request: Request) {
             idempotencyKey: parsed.data.idempotencyKey,
           }),
         }, { status: 201 })
+      case 'refresh_inbound_provenance':
+        return response({
+          provenanceRefresh: await refreshGate3d1InboundProvenance({
+            actorUserId: access.user.id,
+            leadId: parsed.data.leadId,
+            replyMemoryId: parsed.data.replyMemoryId,
+            idempotencyKey: parsed.data.idempotencyKey,
+          }),
+        })
       case 'record_rbac_attestation':
         return response({
           rbacAttestation: await recordGate3d1ExchangeRbacAttestation({
@@ -268,6 +298,15 @@ export async function POST(request: Request) {
             idempotencyKey: parsed.data.idempotencyKey,
           }),
         }, { status: 201 })
+      case 'revoke_rbac_attestation':
+        return response({
+          rbacRevocation: await revokeGate3d1ExchangeRbacAttestation({
+            actorUserId: access.user.id,
+            attestationId: parsed.data.attestationId,
+            reason: parsed.data.reason,
+            idempotencyKey: parsed.data.idempotencyKey,
+          }),
+        })
       case 'authorize':
         return response({
           authorization: await authorizeGate3d1ReplyContinuation({
