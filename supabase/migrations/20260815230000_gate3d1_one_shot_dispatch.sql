@@ -727,6 +727,21 @@ BEGIN
     OR reply_memory.thread_id IS DISTINCT FROM authz.inbound_conversation_id
     OR reply_memory.metadata_json ->> 'internetMessageId'
       IS DISTINCT FROM authz.inbound_internet_message_id
+    OR lower(btrim(COALESCE(
+      reply_memory.metadata_json ->> 'observedTenantId', ''
+    ))) IS DISTINCT FROM authz.tenant_id::TEXT
+    OR lower(btrim(COALESCE(
+      reply_memory.metadata_json ->> 'observedMailboxObjectId', ''
+    ))) IS DISTINCT FROM authz.mailbox_object_id::TEXT
+    OR NULLIF(btrim(reply_memory.reply_summary), '') IS NULL
+    OR lower(btrim(reply_memory.reply_summary)) = ANY(ARRAY[
+      '-', '--', '.', 'n/a', 'na', 'none', 'null', 'unknown', 'pending',
+      'placeholder', '[placeholder]', 'test', 'sample', 'todo', 'tbd',
+      'not provided', 'not available', 'no summary', 'no reply summary',
+      'no response', 'no message preview was returned by outlook.', 'lorem ipsum'
+    ]::TEXT[])
+    OR private.gate3d1_sha256_text(reply_memory.reply_summary)
+      IS DISTINCT FROM authz.positive_classification_evidence_fingerprint
     OR (
       NULLIF(btrim(reply_memory.property_address), '') IS NOT NULL
       AND btrim(reply_memory.property_address) IS DISTINCT FROM authz.property_reference_key
@@ -1497,6 +1512,7 @@ DECLARE
   normalized_weekdays SMALLINT[];
   result_id UUID;
   result_fingerprint TEXT;
+  resolved_positive_evidence_fingerprint TEXT;
 BEGIN
   PERFORM private.gate3d1_assert_founder_actor(p_actor_user_id);
   IF p_purpose_key IS DISTINCT FROM 'seller_reply_followup'
@@ -1570,6 +1586,8 @@ BEGIN
   SELECT memory.* INTO reply_memory
   FROM public.command_center_reply_memory memory
   WHERE memory.id = p_reply_memory_id;
+  resolved_positive_evidence_fingerprint :=
+    private.gate3d1_sha256_text(reply_memory.reply_summary);
   IF reply_memory.id IS NULL
     OR reply_memory.lead_id IS DISTINCT FROM p_lead_id
     OR reply_memory.classification <> 'hot_seller_lead'
@@ -1578,6 +1596,21 @@ BEGIN
     OR reply_memory.thread_id IS DISTINCT FROM btrim(p_inbound_conversation_id)
     OR reply_memory.metadata_json ->> 'internetMessageId'
       IS DISTINCT FROM btrim(p_inbound_internet_message_id)
+    OR lower(btrim(COALESCE(
+      reply_memory.metadata_json ->> 'observedTenantId', ''
+    ))) IS DISTINCT FROM p_tenant_id::TEXT
+    OR lower(btrim(COALESCE(
+      reply_memory.metadata_json ->> 'observedMailboxObjectId', ''
+    ))) IS DISTINCT FROM p_mailbox_object_id::TEXT
+    OR NULLIF(btrim(reply_memory.reply_summary), '') IS NULL
+    OR lower(btrim(reply_memory.reply_summary)) = ANY(ARRAY[
+      '-', '--', '.', 'n/a', 'na', 'none', 'null', 'unknown', 'pending',
+      'placeholder', '[placeholder]', 'test', 'sample', 'todo', 'tbd',
+      'not provided', 'not available', 'no summary', 'no reply summary',
+      'no response', 'no message preview was returned by outlook.', 'lorem ipsum'
+    ]::TEXT[])
+    OR resolved_positive_evidence_fingerprint
+      IS DISTINCT FROM lower(p_positive_classification_evidence_fingerprint)
     OR (
       NULLIF(btrim(reply_memory.property_address), '') IS NOT NULL
       AND btrim(reply_memory.property_address)
@@ -1707,7 +1740,7 @@ BEGIN
     'approvedContentFingerprint', lower(p_approved_content_fingerprint),
     'draftVersionKey', p_draft_version_key,
     'positiveClassification', 'hot_seller_lead',
-    'positiveClassificationEvidenceFingerprint', lower(p_positive_classification_evidence_fingerprint),
+    'positiveClassificationEvidenceFingerprint', resolved_positive_evidence_fingerprint,
     'authorizedReplyReceivedAt', reply_memory.received_at,
     'localTimezone', p_local_timezone,
     'allowedLocalStart', p_allowed_local_start,
@@ -1748,7 +1781,7 @@ BEGIN
     lower(p_normalized_sender_hash), lower(p_normalized_recipient_hash),
     btrim(p_property_reference_key), 'seller_reply_followup',
     lower(p_approved_content_fingerprint), p_draft_version_key,
-    lower(p_positive_classification_evidence_fingerprint), reply_memory.received_at,
+    resolved_positive_evidence_fingerprint, reply_memory.received_at,
     p_local_timezone, p_allowed_local_start, p_allowed_local_end, normalized_weekdays,
     p_actor_user_id, p_expires_at, btrim(p_rationale), p_writer_release,
     p_idempotency_key, result_fingerprint

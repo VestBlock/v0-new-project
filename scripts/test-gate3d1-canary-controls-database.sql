@@ -90,6 +90,8 @@ SELECT set_config('gate3d1.test.property', '101 Test Street', TRUE);
 SELECT set_config('gate3d1.test.draft_key', 'seller-reply-gate3d1-v1', TRUE);
 SELECT set_config('gate3d1.test.approved_body',
   '  Thank you for replying. We can review your selling options together.  ', TRUE);
+SELECT set_config('gate3d1.test.reply_summary',
+  'Positive human reply requesting next steps.', TRUE);
 SELECT set_config('gate3d1.test.canonical_body',
   private.gate3d1_canonical_authored_body(
     current_setting('gate3d1.test.approved_body')
@@ -103,7 +105,11 @@ SELECT set_config('gate3d1.test.content_hash',
     current_setting('gate3d1.test.canonical_body')
   ), TRUE);
 SELECT set_config('gate3d1.test.positive_review_hash',
-  private.gate3d1_sha256_text('founder-human-positive-review-gate3d1'), TRUE);
+  private.gate3d1_sha256_text(
+    current_setting('gate3d1.test.reply_summary')
+  ), TRUE);
+SELECT set_config('gate3d1.test.placeholder_review_hash',
+  private.gate3d1_sha256_text('No message preview was returned by Outlook.'), TRUE);
 SELECT set_config('gate3d1.test.rbac_expires_at',
   (statement_timestamp() + INTERVAL '6 hours')::TEXT, TRUE);
 SELECT set_config('gate3d1.test.authorization_expires_at',
@@ -400,9 +406,11 @@ INSERT INTO public.command_center_reply_memory(
   current_setting('gate3d1.test.sender_email'),
   current_setting('gate3d1.test.recipient_email'),
   'Re: selling options', NULL, statement_timestamp() - INTERVAL '1 hour',
-  'hot_seller_lead', 'founder_review', 'Positive human reply requesting next steps.',
+  'hot_seller_lead', 'founder_review', current_setting('gate3d1.test.reply_summary'),
   jsonb_build_object(
     'internetMessageId', current_setting('gate3d1.test.internet_message_id'),
+    'observedTenantId', current_setting('gate3d1.test.tenant_id'),
+    'observedMailboxObjectId', current_setting('gate3d1.test.mailbox_object_id'),
     'explicitOptOut', FALSE,
     'graphIdType', 'ImmutableId'
   )
@@ -469,6 +477,49 @@ RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
+
+SAVEPOINT missing_observed_tenant_provenance;
+UPDATE public.command_center_reply_memory
+SET metadata_json = metadata_json - 'observedTenantId'
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''missing-observed-tenant-provenance'')',
+  'reply authorization must reject missing observed tenant provenance', '23514'
+);
+ROLLBACK TO SAVEPOINT missing_observed_tenant_provenance;
+
+SAVEPOINT mismatched_observed_mailbox_provenance;
+UPDATE public.command_center_reply_memory
+SET metadata_json = jsonb_set(
+  metadata_json, '{observedMailboxObjectId}', to_jsonb(gen_random_uuid()::TEXT), TRUE
+)
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''mismatched-observed-mailbox-provenance'')',
+  'reply authorization must reject a mismatched observed mailbox object', '23514'
+);
+ROLLBACK TO SAVEPOINT mismatched_observed_mailbox_provenance;
+
+SAVEPOINT arbitrary_positive_reply_evidence;
+SELECT set_config('gate3d1.test.positive_review_hash', repeat('f', 64), TRUE);
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''arbitrary-positive-reply-evidence'')',
+  'an arbitrary positive-classification hash must not authorize a reply', '23514'
+);
+ROLLBACK TO SAVEPOINT arbitrary_positive_reply_evidence;
+
+SAVEPOINT placeholder_positive_reply_summary;
+UPDATE public.command_center_reply_memory
+SET reply_summary = 'No message preview was returned by Outlook.'
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT set_config('gate3d1.test.positive_review_hash',
+  current_setting('gate3d1.test.placeholder_review_hash'), TRUE);
+SELECT pg_temp.expect_error(
+  'SELECT pg_temp.authorize_gate3d1(''placeholder-positive-reply-summary'')',
+  'a placeholder reply summary must not authorize a reply even when its hash matches', '23514'
+);
+ROLLBACK TO SAVEPOINT placeholder_positive_reply_summary;
+
 SELECT pg_temp.expect_error(
   'SELECT pg_temp.authorize_gate3d1(''quiet-start-too-early'',''09:00''::TIME,''16:30''::TIME)',
   '09:00 local authorization must be rejected', '23514'
@@ -522,6 +573,16 @@ SELECT pg_temp.assert_true(
    WHERE id = current_setting('gate3d1.test.outreach_message_id')::UUID),
   'founder authorization must atomically approve only its exact needs-review draft'
 );
+RESET ROLE;
+SELECT pg_temp.assert_true(
+  (SELECT positive_classification_evidence_fingerprint
+      = current_setting('gate3d1.test.positive_review_hash')
+   FROM private.inbound_reply_continuation_authorizations
+   WHERE id = current_setting('gate3d1.test.authorization_id')::UUID),
+  'exact stored reply-summary bytes must be the persisted positive-classification evidence'
+);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', current_setting('gate3d1.test.founder_id'), TRUE);
 SELECT pg_temp.assert_true(
   pg_temp.authorize_gate3d1('gate3d1-continuation-exact')
     = current_setting('gate3d1.test.authorization_id')::UUID,
@@ -546,6 +607,42 @@ SELECT pg_temp.assert_true(
    )),
   'exact current continuation authority must assert'
 );
+
+SAVEPOINT mutated_observed_tenant_provenance;
+UPDATE public.command_center_reply_memory
+SET metadata_json = jsonb_set(
+  metadata_json, '{observedTenantId}', to_jsonb(gen_random_uuid()::TEXT), TRUE
+)
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.assert_inbound_reply_continuation_authorized(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.version_id'),
+    current_setting('gate3d1.test.lead_id'), current_setting('gate3d1.test.reply_memory_id'),
+    current_setting('gate3d1.test.content_hash'), current_setting('gate3d1.test.draft_key'),
+    current_setting('gate3d1.test.writer')),
+  'post-authorization observed tenant mutation must invalidate continuation authority', '23514'
+);
+ROLLBACK TO SAVEPOINT mutated_observed_tenant_provenance;
+
+SAVEPOINT mutated_reply_summary;
+UPDATE public.command_center_reply_memory
+SET reply_summary = reply_summary || ' Materially changed after founder review.'
+WHERE id = current_setting('gate3d1.test.reply_memory_id')::UUID;
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.assert_inbound_reply_continuation_authorized(%L::UUID,%L::UUID,%L::UUID,%L::UUID,%L,%L,%L)',
+    current_setting('gate3d1.test.authorization_id'), current_setting('gate3d1.test.version_id'),
+    current_setting('gate3d1.test.lead_id'), current_setting('gate3d1.test.reply_memory_id'),
+    current_setting('gate3d1.test.content_hash'), current_setting('gate3d1.test.draft_key'),
+    current_setting('gate3d1.test.writer')),
+  'post-authorization reply-summary mutation must invalidate continuation authority', '23514'
+);
+SELECT pg_temp.expect_error(
+  format('SELECT * FROM public.resolve_gate3d1_canary_execution_manifest(%L::UUID,%L::UUID,%L)',
+    current_setting('gate3d1.test.authorization_id'),
+    current_setting('gate3d1.test.outreach_message_id'), current_setting('gate3d1.test.writer')),
+  'post-authorization reply-summary mutation must block the execution manifest', '23514'
+);
+ROLLBACK TO SAVEPOINT mutated_reply_summary;
 
 SAVEPOINT outer_whitespace_equivalence;
 UPDATE public.outreach_messages SET body = E'\n\t' || btrim(body) || E'  \n'
