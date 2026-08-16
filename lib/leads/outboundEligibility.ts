@@ -48,6 +48,14 @@ export function isLegacySmallBusinessOutboundPaused() {
 export function getLeadOutboundPauseReason(lead: LeadOutboundShape | null | undefined) {
   if (!lead) return 'missing_lead'
 
+  // DealMachine is a discovery source only. Provider observations and legacy
+  // imports must pass through canonical attribution, operator review, consent,
+  // and suppression controls before a receiving customer strategy can create
+  // its own outreach enrollment. A source flag must never bypass that boundary.
+  if (normalized(lead.source).includes('dealmachine')) {
+    return 'dealmachine_discovery_outbound_prohibited'
+  }
+
   if (!envBool('LEADS_ALLOW_LEGACY_GOOGLE_PLACES', false) && isSourceInFamily(lead.source, 'google_places_businesses')) {
     return 'legacy_google_places_paused'
   }

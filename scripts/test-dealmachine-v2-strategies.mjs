@@ -9,6 +9,7 @@ import {
   hydrateStrategyPlan,
   selectDailyStrategyMarket,
 } from '../lib/dealmachine/v2-strategy-catalog.mjs'
+import { validatePropertyOnlySearchBody } from '../lib/dealmachine/v2-policy.mjs'
 
 const expectedKeys = [
   'preforeclosure-equity',
@@ -32,13 +33,28 @@ const expectedKeys = [
 
 assert.deepEqual(DEALMACHINE_STRATEGIES.map((strategy) => strategy.key), expectedKeys)
 assert.equal(new Set(DEALMACHINE_STRATEGY_FIELDS).size, DEALMACHINE_STRATEGY_FIELDS.length)
+assert.equal(
+  DEALMACHINE_STRATEGY_FIELDS.some((field) => /(?:contact|email|phone|people|person|owner.*name|lender.*name)/i.test(field)),
+  false,
+  'Phase-one fields must not request people, contact, or name data'
+)
 
 const defaultPlans = buildDailyStrategyPlans({ date: '2026-08-01' })
 assert.equal(defaultPlans.length, 16)
 assert.equal(defaultPlans.some((plan) => plan.lowball), false, 'Lowball must be disabled by default')
 const allPlans = buildDailyStrategyPlans({ date: '2026-08-01', includeDisabled: true, includeLowball: true })
-assert.equal(allPlans.length, 17)
-assert.equal(allPlans.filter((plan) => plan.lowball).length, 1)
+assert.equal(allPlans.length, 16)
+assert.equal(allPlans.filter((plan) => plan.lowball).length, 0)
+assert.deepEqual(
+  buildDailyStrategyPlans({
+    date: '2026-08-01',
+    strategyKeys: ['active-stale-lowball'],
+    includeDisabled: true,
+    includeLowball: true,
+  }),
+  [],
+  'Lowball cannot be re-enabled through plan-building options'
+)
 
 const lowball = DEALMACHINE_STRATEGIES.find((strategy) => strategy.key === 'active-stale-lowball')
 assert.equal(lowball.enabled, false)
@@ -49,6 +65,7 @@ assert.equal(taxCode.candidateOnly, true)
 assert.equal(taxCode.variants[0].signals.includes('code_violation'), false, 'DealMachine cannot prove code violations')
 
 for (const strategy of DEALMACHINE_STRATEGIES) {
+  assert.notEqual(strategy.anchor, 'people', `${strategy.key} must be property-anchored`)
   assert.notEqual(
     selectDailyStrategyMarket(strategy, '2026-08-01'),
     selectDailyStrategyMarket(strategy, '2026-08-02'),
@@ -65,6 +82,14 @@ for (const strategy of DEALMACHINE_STRATEGIES) {
     assert.equal(compiled.filters.length, variant.filters.length)
   }
 }
+
+assert.throws(
+  () => compileStrategyFilters(
+    [{ filterId: 'person_income', operator: 'greater_than', value: 100_000 }],
+    [{ filter_id: 'person_income', type: 'NUMBER', allowed_operators: ['greater_than'] }]
+  ),
+  /not approved for property-only discovery/
+)
 
 const activeSources = [
   fs.readFileSync(new URL('../lib/dealmachine/v2-client.mjs', import.meta.url), 'utf8'),
@@ -93,6 +118,11 @@ const hydrated = await hydrateStrategyPlan(
 )
 assert.equal('exportBody' in hydrated, false)
 assert.equal('exclude_previously_exported' in hydrated.searchBody, false)
-assert.equal(hydrated.searchBody.contact_audience, 'owners')
+assert.equal(hydrated.searchBody.anchor, 'properties')
+assert.equal(hydrated.searchBody.contact_audience, 'none')
+assert.deepEqual(validatePropertyOnlySearchBody(hydrated.searchBody, { requireFields: true }), {
+  ok: true,
+  violations: [],
+})
 
 console.log('DealMachine v2 strategy tests passed.')

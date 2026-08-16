@@ -1,3 +1,19 @@
+export {
+  DealMachinePolicyError,
+  assertDealMachineDiscoveryEnabled,
+  assertDealMachinePaidSearchEnabled,
+  assertPaidPropertySearchResponsePayload,
+  assertPropertyCountResponsePayload,
+  assertPropertyEstimateResponsePayload,
+  assertPropertyOnlyResponsePayload,
+  assertPropertyOnlySearchBody,
+  findProhibitedPropertyPayloadPaths,
+  isDealMachineDiscoveryEnabled,
+  isDealMachinePaidSearchEnabled,
+  isDealMachineSourceEnabled,
+  validatePropertyOnlySearchBody,
+} from './v2-policy.mjs'
+
 export const DEALMACHINE_V2_BASE_URL: string
 
 export class DealMachineApiError extends Error {
@@ -11,7 +27,6 @@ export class DealMachineApiError extends Error {
 export function dealMachineApiKey(env?: Record<string, string | undefined>): string
 export function isDealMachineCredentialFormat(value: unknown): boolean
 export function hasDealMachineCredentials(env?: Record<string, string | undefined>): boolean
-export function isDealMachineSourceEnabled(env?: Record<string, string | undefined>): boolean
 
 export type DealMachineConnectionState =
   | 'not_configured'
@@ -30,9 +45,18 @@ export type DealMachineRateLimit = {
   retryAfterSeconds: number | null
 }
 
+export type DealMachineResponseMetadata = {
+  status: number
+  requestId: string | null
+  rateLimit: DealMachineRateLimit
+  receivedAt: string
+}
+
 export type DealMachineConnectionHealth = {
   configured: boolean
   enabled: boolean
+  discoveryEnabled: boolean
+  paidSearchEnabled: boolean
   checkedAt: string
   state: DealMachineConnectionState
   message: string
@@ -40,31 +64,51 @@ export type DealMachineConnectionHealth = {
   rateLimit: DealMachineRateLimit | null
 }
 
-export type DealMachineV2Client = {
-  request(path: string, options?: Record<string, unknown>): Promise<any>
-  account(): Promise<any>
-  usage(): Promise<any>
-  listFilters(sourceType: 'properties' | 'people'): Promise<any[]>
-  listFields(sourceType: 'properties' | 'people'): Promise<any[]>
-  searchLocations(query: Record<string, unknown>): Promise<any>
-  resolveCity(city: string, state: string): Promise<any>
-  countProperties(body: Record<string, unknown>): Promise<any>
-  searchProperties(body: Record<string, unknown>): Promise<any>
-  estimatePropertySearch(body: Record<string, unknown>): Promise<any>
-  listLists(query?: Record<string, unknown>): Promise<any>
-  createList(body: Record<string, unknown>): Promise<any>
-  getList(listId: string): Promise<any>
-  getRateLimit(): DealMachineRateLimit | null
+export type DealMachinePropertySearchBody = {
+  locations: Array<{ type: string; code: string }>
+  filters: Array<{ filter_id: string; operator?: string; value: unknown }>
+  fields?: string[]
+  anchor: 'properties'
+  contact_audience: 'none'
+  page?: number
+  per_page?: number
+  sort?: unknown
+  estimate_cost?: true
 }
 
-export function createDealMachineV2Client(options?: {
+export type DealMachineV2Client = {
+  account(): Promise<any>
+  subscription(): Promise<any>
+  usage(): Promise<any>
+  listFilters(sourceType?: 'properties'): Promise<any[]>
+  listFields(sourceType?: 'properties'): Promise<any[]>
+  searchLocations(query: Record<string, unknown>): Promise<any>
+  resolveCity(city: string, state: string): Promise<any>
+  countProperties(body: DealMachinePropertySearchBody): Promise<any>
+  estimatePropertySearch(body: DealMachinePropertySearchBody): Promise<any>
+  getRateLimit(): DealMachineRateLimit | null
+  getLastResponseMetadata(): DealMachineResponseMetadata | null
+}
+
+export type DealMachinePaidSearchClient = {
+  searchProperties(body: DealMachinePropertySearchBody): Promise<any>
+  getRateLimit(): DealMachineRateLimit | null
+  getLastResponseMetadata(): DealMachineResponseMetadata | null
+}
+
+export type DealMachineClientOptions = {
   apiKey?: string
+  env?: Record<string, string | undefined>
   baseUrl?: string
   fetchImpl?: typeof fetch
   maxRetries?: number
   minRequestIntervalMs?: number
   userAgent?: string
-}): DealMachineV2Client
+}
+
+export function createDealMachineV2Client(options?: DealMachineClientOptions): DealMachineV2Client
+export const createDealMachineV2DiscoveryClient: typeof createDealMachineV2Client
+export function createDealMachineV2PaidSearchClient(options?: DealMachineClientOptions): DealMachinePaidSearchClient
 
 export function getDealMachineConnectionHealth(options?: {
   apiKey?: string

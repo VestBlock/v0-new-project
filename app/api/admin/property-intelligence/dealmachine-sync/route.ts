@@ -5,29 +5,26 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { requireLeadAdmin } from '@/lib/leads/admin-auth'
-import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
-import { getDealMachineConnectionHealth, isDealMachineSourceEnabled } from '@/lib/dealmachine/v2-client.mjs'
+import { runDealMachinePropertyDiscovery } from '@/lib/dealmachine/api'
+import {
+  getDealMachineConnectionHealth,
+  isDealMachineDiscoveryEnabled,
+} from '@/lib/dealmachine/v2-client.mjs'
 
 const SyncRequestSchema = z.object({
-  apply: z.boolean().default(false),
-  maxStrategies: z.number().int().min(1).max(17).default(3),
-  pageSize: z.number().int().min(1).max(100).default(25),
-  startAfter: z.number().int().min(0).max(10_000).default(0),
-  page: z.number().int().min(1).max(10_000).default(1),
+  mode: z.enum(['count_only', 'property_sample']).default('count_only'),
+  strategyKeys: z.array(z.string().trim().min(1).max(100)).min(1).max(16).optional(),
+  maxStrategies: z.number().int().min(1).max(16).default(3),
+  sampleSize: z.number().int().min(1).max(10).default(5),
+  startAfter: z.number().int().min(0).max(15).default(0),
+  approvalReference: z.string().trim().min(8).max(128).regex(/^[a-z0-9][a-z0-9_.:/-]+$/i).optional(),
 }).strict()
-
-function statusForHealth(state: string) {
-  if (state === 'unauthorized') return 401
-  if (state === 'rate_limited') return 429
-  if (state === 'provider_unavailable') return 503
-  return 409
-}
 
 export async function GET(request: NextRequest) {
   const { response } = await requireLeadAdmin(request)
   if (response) return response
 
-  const verify = request.nextUrl.searchParams.get('verify') === 'true'
+  const verify = request.nextUrl.searchParams.get('verify') === 'true' && isDealMachineDiscoveryEnabled()
   const health = await getDealMachineConnectionHealth({ verify })
   return NextResponse.json({ success: health.state === 'working', health })
 }
@@ -36,11 +33,11 @@ export async function POST(request: NextRequest) {
   const { response } = await requireLeadAdmin(request)
   if (response) return response
 
-  if (!isDealMachineSourceEnabled()) {
+  if (!isDealMachineDiscoveryEnabled()) {
     return NextResponse.json({
       success: false,
       health: await getDealMachineConnectionHealth(),
-      error: 'DEALMACHINE_SOURCE_ENABLED is disabled. Native API synchronization is intentionally blocked.',
+      error: 'DEALMACHINE_DISCOVERY_ENABLED is disabled. No provider request was made.',
     }, { status: 403 })
   }
 
@@ -53,28 +50,25 @@ export async function POST(request: NextRequest) {
     }, { status: 400 })
   }
 
-  const health = await getDealMachineConnectionHealth({ verify: true })
-  if (health.state !== 'working') {
+  const body = parsed.data
+  if (body.mode === 'property_sample' && !body.approvalReference) {
     return NextResponse.json({
       success: false,
-      health,
-      error: health.message,
-    }, { status: statusForHealth(health.state) })
+      error: 'A reviewed opaque approvalReference is required for a billable property sample.',
+    }, { status: 400 })
   }
-
-  const body = parsed.data
-  const result = await syncDealMachineLeadSource({
-    dryRun: !body.apply,
-    maxPages: body.maxStrategies,
-    pageSize: body.pageSize,
+  const result = await runDealMachinePropertyDiscovery({
+    mode: body.mode,
+    strategyKeys: body.strategyKeys,
+    maxStrategies: body.maxStrategies,
+    sampleSize: body.sampleSize,
     startAfter: body.startAfter,
-    page: body.page,
+    approvalReference: body.approvalReference,
   })
+  const health = await getDealMachineConnectionHealth()
   return NextResponse.json({
     success: result.configured && result.ok,
     health,
-    mode: body.apply ? 'native_api_apply' : 'native_api_cost_estimate',
     ...result,
-    leads: undefined,
   })
 }

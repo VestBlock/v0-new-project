@@ -36,16 +36,16 @@
 
 - `DEALMACHINE_API_KEY`
   Full official v2 secret (`dm_sk_live_*`) or OAuth access token (`dm_at_live_*`). Prefix-only values are rejected before any API request.
-- `DEALMACHINE_DAILY_CREDIT_BUDGET`
-  Maximum credits reserved by the daily acquisition run. Defaults to `250`.
-- `DEALMACHINE_DAILY_ROWS_PER_STRATEGY`
-  Requested rows per standard strategy. Defaults to `10`; the conditional-cash lane is separately capped below 5% of total acquisition.
+- `DEALMACHINE_DISCOVERY_ENABLED`
+  Enables property-only account/schema/location/count/estimate discovery. Defaults off and is independent from legacy acquisition.
+- `DEALMACHINE_PAID_SEARCH_ENABLED`
+  Separately enables a DB-authorized, one-shot, property-only sample. Defaults off. A nonzero database credit budget and opaque reviewed approval reference are also required.
+- `DEALMACHINE_COUNT_STRATEGIES_PER_RUN`
+  Optional bound for the unscheduled, count-only cron surface. Clamped to 1–16 and defaults to 3.
 - `DEALMACHINE_SOURCE_ENABLED`
-  Enables DealMachine acquisition inside the broader strategy engine. The dedicated daily v2 cron only requires a valid key.
-- `DEALMACHINE_SYNC_ENABLED`
-  Enables the authenticated manual DealMachine sync action in Property Intelligence.
+  Retired legacy acquisition flag. Keep false; it does not enable the new property-observation pipeline.
 - `DEALMACHINE_WEBHOOK_SECRET`
-  HMAC secret for signed DealMachine export webhook ingestion.
+  Historical signed-source configuration. It does not enable v2 property discovery or outreach.
 
 ## Property intelligence
 

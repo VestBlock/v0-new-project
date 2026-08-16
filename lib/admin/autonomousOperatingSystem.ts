@@ -268,7 +268,7 @@ export async function runCommandCenterAutopilot(
   const requestedSend = Boolean(options.send && !dryRun)
   const snapshot = buildCommandCenterAutopilotSnapshot(data)
   const execution = dispatch || dryRun
-    ? await runStrategyExecutionEngine({ dryRun: !dispatch, syncDealMachine: true })
+    ? await runStrategyExecutionEngine({ dryRun: !dispatch, syncDealMachine: false })
     : null
   const persist = dispatch || dryRun ? await persistAutopilotRun(data, snapshot, {
     dryRun,

@@ -7,6 +7,7 @@ import {
   createDealMachineV2Client,
   dealMachineApiKey,
   getDealMachineConnectionHealth,
+  isDealMachineDiscoveryEnabled,
 } from '../lib/dealmachine/v2-client.mjs'
 
 const OUT_DIR = path.join(process.cwd(), 'data', 'operating-loops')
@@ -38,16 +39,15 @@ async function check(label, task) {
 
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
-  const health = await getDealMachineConnectionHealth({ verify: true })
+  const discoveryEnabled = isDealMachineDiscoveryEnabled()
+  const health = await getDealMachineConnectionHealth({ verify: discoveryEnabled })
   const probes = []
 
   if (health.state === 'working') {
     const client = createDealMachineV2Client({ apiKey: dealMachineApiKey() })
     probes.push(await check('usage', () => client.usage()))
     probes.push(await check('property_filters', () => client.listFilters('properties')))
-    probes.push(await check('people_filters', () => client.listFilters('people')))
     probes.push(await check('property_fields', () => client.listFields('properties')))
-    probes.push(await check('people_fields', () => client.listFields('people')))
     probes.push(await check('locations', () => client.resolveCity('Kansas City', 'MO')))
   }
 
@@ -61,10 +61,12 @@ async function main() {
     capabilities: {
       authenticated: health.state === 'working',
       usageVisible: probes.find((probe) => probe.label === 'usage')?.ok || false,
-      dynamicFilters: filterProbes.length === 2 && filterProbes.every((probe) => probe.ok),
-      dynamicFields: fieldProbes.length === 2 && fieldProbes.every((probe) => probe.ok),
+      dynamicFilters: filterProbes.length === 1 && filterProbes.every((probe) => probe.ok),
+      dynamicFields: fieldProbes.length === 1 && fieldProbes.every((probe) => probe.ok),
       locationResolution: probes.find((probe) => probe.label === 'locations')?.ok || false,
-      nativeSyncEnabled: health.enabled,
+      propertyDiscoveryEnabled: discoveryEnabled,
+      legacyNativeSyncEnabled: health.enabled,
+      peopleOrContactDiscoveryEnabled: false,
     },
     probes,
   }

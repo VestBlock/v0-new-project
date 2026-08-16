@@ -18,7 +18,7 @@ export type DealMachineStrategy = {
   enabled: boolean
   lowball: boolean
   budgetWeight: number
-  anchor?: 'properties' | 'people'
+  anchor?: 'properties'
   variants: Array<{
     key: string
     signals: string[]
@@ -26,7 +26,7 @@ export type DealMachineStrategy = {
   }>
 }
 
-export const DEALMACHINE_STRATEGY_FIELDS: string[]
+export const DEALMACHINE_STRATEGY_FIELDS: readonly string[]
 export const DEALMACHINE_STRATEGIES: DealMachineStrategy[]
 export const DEALMACHINE_STRATEGY_BY_KEY: Map<string, DealMachineStrategy>
 export function splitMarket(market: string): { city: string; state: string }
@@ -40,7 +40,6 @@ export function buildDailyStrategyPlans(options?: {
   date?: string
   strategyKeys?: string[]
   includeDisabled?: boolean
-  includeLowball?: boolean
 }): Array<DealMachineStrategy & { date: string; market: string; variant: DealMachineStrategy['variants'][number] }>
 export function hydrateStrategyPlan(
   client: DealMachineV2Client,

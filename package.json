@@ -52,6 +52,8 @@
     "attom:enrich:dry-run": "node --env-file=.env.local scripts/attom-enrichment-run.mjs --dry-run",
     "attom:enrich": "node --env-file=.env.local scripts/attom-enrichment-run.mjs",
     "test:dealmachine-v2": "node scripts/test-dealmachine-v2-client.mjs && node scripts/test-dealmachine-v2-strategies.mjs",
+    "test:dealmachine-v2-readiness": "node scripts/test-dealmachine-v2-readiness.mjs",
+    "rehearse:dealmachine-v2-observation-authority-database": "node --env-file=.env.local scripts/rehearse-dealmachine-v2-observation-authority-database.mjs",
     "test:strategy-execution": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-execution.ts",
     "test:strategy-source-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-source-contracts.ts",
     "test:strategy-registry-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-registry-contracts.ts",

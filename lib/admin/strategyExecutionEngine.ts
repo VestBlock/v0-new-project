@@ -1,7 +1,5 @@
 import 'server-only'
 
-import { createHash } from 'node:crypto'
-
 import { runStrategySourceOrchestrator, type StrategySourceOrchestrationResult } from '@/lib/admin/strategySourceOrchestrator'
 import {
   STRATEGY_EXECUTION_LANES,
@@ -17,6 +15,7 @@ import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { saveOutreachMessages, updateLeadRecord } from '@/lib/leads/repository'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { getLeadOutboundPauseReason } from '@/lib/leads/outboundEligibility'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
 import { verifyEmailWithHunter, type HunterEmailVerification } from '@/lib/outreach/hunterEmailVerification'
@@ -239,10 +238,6 @@ function runKey(
   ].join(':')
 }
 
-function hashPayload(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
-}
-
 function emptySourceAcquisition(dryRun: boolean, blocker?: string): StrategySourceOrchestrationResult {
   return {
     dryRun,
@@ -307,6 +302,7 @@ async function loadSellerCandidates(limit: number) {
     (lead) =>
       lead.email &&
       lead.email_valid !== false &&
+      !getLeadOutboundPauseReason(lead) &&
       !['sent', 'do_not_contact'].includes(String(lead.outreach_status || '')) &&
       !['accepted', 'sent', 'delivered', 'replied', 'bounced', 'complained', 'suppressed', 'failed'].includes(
         String(lead.delivery_status || '')
@@ -372,6 +368,7 @@ function buildCandidatePools(leads: LeadRecord[], assigned: AssignedContacts, pr
   let provenanceEligibleLeads = 0
 
   for (const lead of leads) {
+    if (getLeadOutboundPauseReason(lead)) continue
     const recipientKey = String(lead.email || '').trim().toLowerCase()
     if (
       previouslyContactedLeadIds.has(lead.id) ||
@@ -1177,85 +1174,6 @@ async function executeLane(input: {
   }
 }
 
-async function recordDealMachineSourceSync(
-  date: string,
-  sourceSync: Awaited<ReturnType<typeof syncDealMachineLeadSource>>,
-  dryRun: boolean
-) {
-  const admin = createAdminClient()
-  const externalEventId = `scheduled-sync:${date}:${Date.now()}`
-  const payload = {
-    configured: sourceSync.configured,
-    ok: sourceSync.ok,
-    blocker: sourceSync.blockedReason,
-    fetched: sourceSync.fetched,
-    contactable: sourceSync.contactable,
-    contactless: sourceSync.contactless,
-    mailReady: sourceSync.mailReady,
-    ingested: sourceSync.ingested,
-    startAfter: sourceSync.startAfter,
-    nextAfter: sourceSync.nextAfter,
-    wrapped: sourceSync.wrapped,
-    dryRun,
-  }
-  const { error } = await admin.from('strategy_source_events').upsert(
-    {
-      provider: 'dealmachine',
-      external_event_id: externalEventId,
-      event_type: 'scheduled_lead_sync',
-      status: sourceSync.ok ? 'completed' : 'blocked',
-      payload_hash: hashPayload(payload),
-      payload_json: payload,
-      rows_received: sourceSync.fetched,
-      rows_ingested: sourceSync.ingested,
-      error_message: sourceSync.blockedReason,
-      occurred_at: new Date().toISOString(),
-      processed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'provider,external_event_id' }
-  )
-  if (error) throw error
-
-  if (!dryRun && sourceSync.ok) {
-    const checkpoint = {
-      nextAfter: sourceSync.nextAfter,
-      previousAfter: sourceSync.startAfter,
-      wrapped: sourceSync.wrapped,
-      committedAt: new Date().toISOString(),
-    }
-    const { error: checkpointError } = await admin.from('strategy_source_events').upsert(
-      {
-        provider: 'dealmachine',
-        external_event_id: 'lead-sync-cursor',
-        event_type: 'cursor_checkpoint',
-        status: 'completed',
-        payload_hash: hashPayload(checkpoint),
-        payload_json: checkpoint,
-        rows_received: sourceSync.fetched,
-        rows_ingested: sourceSync.ingested,
-        processed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'provider,external_event_id' }
-    )
-    if (checkpointError) throw checkpointError
-  }
-}
-
-async function loadDealMachineCursor() {
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('strategy_source_events')
-    .select('payload_json')
-    .eq('provider', 'dealmachine')
-    .eq('external_event_id', 'lead-sync-cursor')
-    .maybeSingle()
-  if (error) throw error
-  const value = Number((data?.payload_json as Record<string, unknown> | null)?.nextAfter || 0)
-  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
-}
-
 async function loadOutcomeTotals() {
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -1415,7 +1333,7 @@ export async function runStrategyExecutionEngine(options: {
   const requestedSourceProviders = Array.from(new Set(
     options.sourceProviders?.length
       ? options.sourceProviders
-      : (['dealmachine', 'homeharvest', 'public_records', 'property_intelligence'] as StrategySourceProvider[])
+      : (['homeharvest', 'public_records', 'property_intelligence'] as StrategySourceProvider[])
   ))
   const sourceProviderSet = new Set(requestedSourceProviders)
   const recoveredRuns = await recoverStaleStrategyRuns()
@@ -1433,35 +1351,34 @@ export async function runStrategyExecutionEngine(options: {
   }
   blockers.push(...sourceAcquisition.blockers)
 
-  const dealMachineEnabled =
-    options.syncDealMachine ?? /^(1|true|yes|on)$/i.test(String(process.env.DEALMACHINE_SOURCE_ENABLED || ''))
-  const sourceSyncSkipped = !dealMachineEnabled || !sourceProviderSet.has('dealmachine')
-  const dealMachineCursor = sourceSyncSkipped ? 0 : await loadDealMachineCursor()
-  const sourceSync = sourceSyncSkipped
-    ? {
-        configured: Boolean(process.env.DEALMACHINE_API_KEY),
-        ok: true,
-        blockedReason: null,
-        fetched: 0,
-        contactable: 0,
-        contactless: 0,
-        mailReady: 0,
-        ingested: 0,
-        startAfter: dealMachineCursor,
-        nextAfter: dealMachineCursor,
-        wrapped: false,
-        creditsReserved: 0,
-        strategyRuns: [],
-        leads: [],
-      }
-    : await syncDealMachineLeadSource({
-        dryRun,
-        maxPages: envInt('STRATEGY_ENGINE_DEALMACHINE_PAGES', 3),
-        startAfter: dealMachineCursor,
-      })
-
-  if (!sourceSync.ok && sourceSync.blockedReason) blockers.push(sourceSync.blockedReason)
-  if (!sourceSyncSkipped) await recordDealMachineSourceSync(date, sourceSync, dryRun)
+  const dealMachineRequested = Boolean(
+    sourceProviderSet.has('dealmachine') &&
+      (options.syncDealMachine ?? /^(1|true|yes|on)$/i.test(String(process.env.DEALMACHINE_SOURCE_ENABLED || '')))
+  )
+  // Provider discovery is deliberately detached from strategy execution. The
+  // DealMachine pipeline may append raw observations and operator-review tasks,
+  // but this engine cannot spend credits, create provider data, or turn a raw
+  // observation into a customer-facing strategy run.
+  const sourceSyncSkipped = true
+  const sourceSync: Awaited<ReturnType<typeof syncDealMachineLeadSource>> = {
+    configured: Boolean(process.env.DEALMACHINE_API_KEY),
+    ok: !dealMachineRequested,
+    blockedReason: dealMachineRequested
+      ? 'DealMachine acquisition is isolated from strategy execution. Use the governed discovery surface and operator review queue.'
+      : null,
+    fetched: 0,
+    contactable: 0,
+    contactless: 0,
+    mailReady: 0,
+    ingested: 0,
+    startAfter: 0,
+    nextAfter: 0,
+    wrapped: false,
+    creditsReserved: 0,
+    strategyRuns: [],
+    leads: [],
+  }
+  if (sourceSync.blockedReason) blockers.push(sourceSync.blockedReason)
 
   const leads = (await loadSellerCandidates(envInt('STRATEGY_ENGINE_CANDIDATE_LIMIT', 5000)))
     .filter((lead) => {
