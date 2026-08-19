@@ -18,6 +18,7 @@ import {
 import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/leads/sourceCostGovernor'
 import { getOutlookMailboxStatus } from '@/lib/email/outlookMailbox'
 import { buildDatabaseDealMachineFreshness } from '@/lib/admin/dealMachineFreshness'
+import { loadResearchSourceHealth, type ResearchSourceHealthSnapshot } from '@/lib/research/sourceHealth'
 import { buildRevenueFunnelSnapshot, type CommandCenterRevenueFunnel } from '@/lib/admin/revenueFunnel'
 import {
   SOURCE_DOCTRINE,
@@ -740,6 +741,7 @@ export type CommandCenterData = {
   buyBoxGraph: CommandCenterBuyBoxGraph
   dealPipeline: CommandCenterDealPipeline
   revenueFunnel: CommandCenterRevenueFunnel
+  researchSourceHealth: ResearchSourceHealthSnapshot
   foreclosureCommand: CommandCenterForeclosureCommand
   autopilot: AutopilotSnapshot
   inbox: {
@@ -2769,9 +2771,10 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
 export async function getCommandCenterData(): Promise<CommandCenterData> {
   const admin = createAdminClient()
   const issues: DataSourceIssue[] = []
-  const [t, deliveryEvidence] = await Promise.all([
+  const [t, deliveryEvidence, researchSourceHealth] = await Promise.all([
     loadTables(admin, issues),
     getDeliveryCircuitBreaker(),
+    loadResearchSourceHealth(),
   ])
   const local = loadLocalSignals()
   const databaseDealMachineFreshness = buildDatabaseDealMachineFreshness(t.strategySourceEvents)
@@ -4766,6 +4769,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     buyBoxGraph,
     dealPipeline,
     revenueFunnel,
+    researchSourceHealth,
     foreclosureCommand,
     autopilot,
     inbox: {

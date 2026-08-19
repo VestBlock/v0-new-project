@@ -404,6 +404,72 @@ function AutomationHealthPanel({
   )
 }
 
+function ResearchSourceHealthPanel({ health }: { health: CommandCenterData["researchSourceHealth"] }) {
+  const badgeClass =
+    health.status === "ready"
+      ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-100"
+      : health.status === "schema_pending"
+        ? "border-slate-400/20 bg-slate-400/[0.08] text-slate-200"
+        : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+
+  return (
+    <PanelShell id="research-source-health" className={cn(health.status === "attention" && "border-amber-300/20")}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <PanelTitle icon={Activity} title="Research & source health" hint="evidence only" />
+          <p className="mt-2 text-sm leading-6 text-slate-300">{health.headline}</p>
+        </div>
+        <span className={cn("vb-mono inline-flex w-fit rounded-full border px-3 py-1 text-[0.6rem] uppercase tracking-[0.15em]", badgeClass)}>
+          {health.status === "schema_pending" ? "Migration pending" : health.status === "ready" ? "Policy-bound" : "Needs attention"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-4">
+        {[
+          { label: "Approved sources", value: health.activeSourceCount },
+          { label: "Evidence", value: health.evidenceCount },
+          { label: "Review queue", value: health.pendingReviewCount },
+          { label: "Latest evidence", value: health.lastEvidenceAt ? timeAgo(health.lastEvidenceAt) : "—" },
+        ].map((metric) => (
+          <div key={metric.label} className="min-w-0 bg-[#0d1119] px-3 py-3">
+            <p className="vb-mono text-[0.56rem] uppercase tracking-[0.13em] text-slate-500">{metric.label}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-white">{metric.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {health.sources.length ? (
+        <div className="mt-4 divide-y divide-white/[0.06] rounded-lg border border-white/[0.07] bg-white/[0.015]">
+          {health.sources.slice(0, 6).map((source) => {
+            const tone =
+              source.status === "ready"
+                ? "text-emerald-200"
+                : source.status === "blocked" || source.status === "disabled"
+                  ? "text-rose-200"
+                  : "text-amber-100"
+            return (
+              <div key={source.domain} className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-white">{source.domain}</p>
+                  <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">{source.detail}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3 text-[0.62rem] text-slate-500">
+                  <span>{source.jobs7d} jobs / 7d</span>
+                  <span className={cn("capitalize", tone)}>{source.status.replaceAll("_", " ")}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 border-l border-slate-400/25 pl-3 text-xs leading-5 text-slate-400">
+          No domains are active until an admin reviews the source policy and applies the evidence migration. Research cannot enroll leads or send outreach from this panel.
+        </p>
+      )}
+    </PanelShell>
+  )
+}
+
 function RevenueFunnelPanel({ funnel }: { funnel: CommandCenterData["revenueFunnel"] }) {
   const badgeClass =
     funnel.status === "green"
@@ -1375,6 +1441,7 @@ export function CommandCenterClient({
       </div>
 
       <AutomationHealthPanel health={data.automationHealth} strategyExecution={data.strategyExecution} dataIntegrityHold={dataIntegrityHold} />
+      <ResearchSourceHealthPanel health={data.researchSourceHealth} />
       <RevenueFunnelPanel funnel={data.revenueFunnel} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[0.95fr_1.05fr]">
