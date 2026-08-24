@@ -30,6 +30,18 @@
       "schedule": "15 15 * * *"
     },
     {
+      "path": "/api/cron/buffer-publisher?send=true",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/command-center-autopilot?dispatch=true",
+      "schedule": "45 12 * * *"
+    },
+    {
+      "path": "/api/cron/content-publisher?limit=1",
+      "schedule": "30 17 * * *"
+    },
+    {
       "path": "/api/cron/linkedin-task-queue?limit=40",
       "schedule": "45 15 * * *"
     },

@@ -6,6 +6,7 @@ import {
   generateMarketingContent,
   type ContentAssetStatus,
 } from '@/lib/content/contentGenerator';
+import { isVideoPublishReady } from '@/lib/content/video/contentSystem';
 import {
   vestblockMarketingServices,
   type VestBlockServiceKey,
@@ -179,6 +180,27 @@ export async function PATCH(request: Request) {
 
   try {
     const supabase = createAdminClient();
+    if (nextStatus === 'published') {
+      const { data: currentAsset, error: currentAssetError } = await supabase
+        .from('content_assets')
+        .select('id,title,slug,content_type,status,approval_status,metadata_json')
+        .eq('id', parsed.data.id)
+        .single();
+
+      if (currentAssetError) throw new Error(currentAssetError.message);
+      if (
+        String(currentAsset.content_type || '').startsWith('video_') &&
+        !isVideoPublishReady(currentAsset)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Video publishing is blocked until the private render, compliance, rights, disclosure, and human approval gates are complete.',
+          },
+          { status: 409 }
+        );
+      }
+    }
     const { data, error } = await supabase
       .from('content_assets')
       .update(updates)
