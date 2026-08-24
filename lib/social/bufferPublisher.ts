@@ -1,6 +1,10 @@
 import { logEvent } from '@/lib/system/logEvent'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { absoluteUrl } from '@/lib/seo/site'
+import {
+  buildVestBlockSocialVisualUrl,
+  type VestBlockSocialVisualKey,
+} from '@/lib/social/visualCards'
 
 type BufferService = 'facebook' | 'linkedin' | 'twitter' | 'x'
 
@@ -18,7 +22,7 @@ type BufferOrganization = {
 }
 
 type ContentPillar = {
-  key: string
+  key: VestBlockSocialVisualKey
   title: string
   serviceKey: string
   audience: string
@@ -37,7 +41,24 @@ export type BufferPostDraft = {
   audience: string
   path: string
   platform: BufferService
-  pillarKey: string
+  pillarKey: VestBlockSocialVisualKey
+  visualUrl: string
+}
+
+type BufferRemotePost = {
+  id: string
+  status: 'scheduled' | 'sent' | 'error' | string
+  dueAt?: string | null
+  sentAt?: string | null
+  externalLink?: string | null
+  channelId?: string | null
+  createdAt?: string | null
+}
+
+type ConnectedBufferChannel = {
+  channel: BufferChannel
+  service: BufferService
+  organizationId: string
 }
 
 export type BufferPublisherResult = {
@@ -51,6 +72,14 @@ export type BufferPublisherResult = {
     reason?: string
     bufferPostId?: string
   }>
+  errors: string[]
+}
+
+export type BufferDeliveryReconciliationResult = {
+  ok: boolean
+  checked: number
+  matched: number
+  updated: number
   errors: string[]
 }
 
@@ -233,6 +262,7 @@ export function buildBufferPostDraft(input: {
     path,
     platform: input.service,
     pillarKey: pillar.key,
+    visualUrl: buildVestBlockSocialVisualUrl(pillar.key),
   }
 }
 
@@ -296,27 +326,43 @@ async function resolveVestBlockChannels(apiKey: string) {
     'query { account { organizations { id name } } }'
   )
   const organizations = account.account?.organizations || []
-  const channels: BufferChannel[] = []
+  const channels: Array<{ channel: BufferChannel; organizationId: string }> = []
 
   for (const organization of organizations) {
     const data = await bufferGraphql<{ channels?: BufferChannel[] }>(
       apiKey,
       `query { channels(input: { organizationId: ${JSON.stringify(organization.id)} }) { id name displayName service isQueuePaused } }`
     )
-    channels.push(...(data.channels || []))
+    channels.push(
+      ...(data.channels || []).map((channel) => ({ channel, organizationId: organization.id }))
+    )
   }
 
   return channels
-    .map((channel) => ({ channel, service: normalizeService(channel.service) }))
-    .filter((item): item is { channel: BufferChannel; service: BufferService } => Boolean(item.service))
+    .map(({ channel, organizationId }) => ({
+      channel,
+      organizationId,
+      service: normalizeService(channel.service),
+    }))
+    .filter((item): item is ConnectedBufferChannel => Boolean(item.service))
     .filter(({ channel }) => !channel.isQueuePaused && isVestBlockChannel(channel))
 }
 
-async function createBufferPost(input: { apiKey: string; channelId: string; service: BufferService; text: string; dueAt: string }) {
+async function createBufferPost(input: {
+  apiKey: string
+  channelId: string
+  service: BufferService
+  text: string
+  dueAt: string
+  imageUrl?: string
+}) {
   // Buffer requires an explicit type for Facebook. Other supported channels
   // accept the common text/link payload without platform-specific metadata.
   const platformMetadata = input.service === 'facebook'
     ? 'metadata: { facebook: { type: post } }'
+    : ''
+  const assets = input.imageUrl
+    ? `assets: [{ image: { url: ${JSON.stringify(input.imageUrl)} } }]`
     : ''
   const data = await bufferGraphql<{
     createPost?: { post?: { id?: string; dueAt?: string }; message?: string }
@@ -329,6 +375,7 @@ async function createBufferPost(input: { apiKey: string; channelId: string; serv
         schedulingType: automatic
         mode: customScheduled
         dueAt: ${JSON.stringify(input.dueAt)}
+        ${assets}
         ${platformMetadata}
       }) {
         ... on PostActionSuccess { post { id dueAt } }
@@ -355,7 +402,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
     return { ok: false, dryRun, sendEnabled, scheduledFor, channels: [], errors: ['BUFFER_API_KEY is not configured.'] }
   }
 
-  let connected: Array<{ channel: BufferChannel; service: BufferService }>
+  let connected: ConnectedBufferChannel[]
   try {
     connected = await resolveVestBlockChannels(apiKey)
   } catch (error) {
@@ -435,6 +482,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
             bufferChannelName: channel.displayName || channel.name || null,
             bufferService: service,
             bufferStatus: 'pending',
+            visualUrl: draft.visualUrl,
             scheduledDateCentral: dateKeyInCentral(now),
           },
         })
@@ -459,6 +507,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
       bufferChannelName: channel.displayName || channel.name || null,
       bufferService: service,
       bufferStatus: 'sending',
+      visualUrl: draft.visualUrl,
       lastAttemptAt: new Date().toISOString(),
       scheduledDateCentral: dateKeyInCentral(now),
     })
@@ -484,7 +533,14 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
       .eq('id', assetId)
 
     try {
-      const post = await createBufferPost({ apiKey, channelId: channel.id, service, text: draft.text, dueAt: scheduledFor })
+      const post = await createBufferPost({
+        apiKey,
+        channelId: channel.id,
+        service,
+        text: draft.text,
+        dueAt: scheduledFor,
+        imageUrl: draft.visualUrl,
+      })
       const scheduledAt = new Date().toISOString()
       await admin
         .from('content_assets')
@@ -499,6 +555,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
             bufferStatus: 'scheduled',
             bufferPostId: post.id,
             bufferDueAt: post.dueAt || scheduledFor,
+            visualUrl: draft.visualUrl,
           }),
         })
         .eq('id', assetId)
@@ -532,4 +589,154 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
   }
 
   return { ok: errors.length === 0, dryRun, sendEnabled, scheduledFor, channels: results, errors }
+}
+
+async function listBufferPosts(input: {
+  apiKey: string
+  organizationId: string
+  channelIds: string[]
+}) {
+  const data = await bufferGraphql<{
+    posts?: { edges?: Array<{ node?: BufferRemotePost | null }> }
+  }>(
+    input.apiKey,
+    `query {
+      posts(
+        first: 100
+        input: {
+          organizationId: ${JSON.stringify(input.organizationId)}
+          filter: {
+            status: [scheduled, sent, error]
+            channelIds: ${JSON.stringify(input.channelIds)}
+          }
+          sort: [{ field: createdAt, direction: desc }]
+        }
+      ) {
+        edges { node { id status dueAt sentAt externalLink channelId createdAt } }
+      }
+    }`
+  )
+  return (data.posts?.edges || [])
+    .map((edge) => edge.node)
+    .filter((post): post is BufferRemotePost => Boolean(post?.id))
+}
+
+// Buffer accepting a scheduled post is not delivery evidence. This reconciler
+// records the provider's later state so Command Center reporting does not call
+// a queued post published before the social network has accepted it.
+export async function reconcileBufferDelivery(
+  options: { now?: Date } = {}
+): Promise<BufferDeliveryReconciliationResult> {
+  const apiKey = String(process.env.BUFFER_API_KEY || '').trim()
+  if (!apiKey) {
+    return { ok: false, checked: 0, matched: 0, updated: 0, errors: ['BUFFER_API_KEY is not configured.'] }
+  }
+
+  let connected: ConnectedBufferChannel[]
+  try {
+    connected = await resolveVestBlockChannels(apiKey)
+  } catch (error) {
+    return {
+      ok: false,
+      checked: 0,
+      matched: 0,
+      updated: 0,
+      errors: [error instanceof Error ? error.message : String(error)],
+    }
+  }
+  if (!connected.length) {
+    return {
+      ok: false,
+      checked: 0,
+      matched: 0,
+      updated: 0,
+      errors: ['No unpaused Buffer channels named VestBlock were found for Facebook, LinkedIn, or X.'],
+    }
+  }
+
+  const errors: string[] = []
+  const remoteById = new Map<string, BufferRemotePost>()
+  const byOrganization = new Map<string, string[]>()
+  for (const item of connected) {
+    byOrganization.set(item.organizationId, [...(byOrganization.get(item.organizationId) || []), item.channel.id])
+  }
+  for (const [organizationId, channelIds] of byOrganization) {
+    try {
+      for (const post of await listBufferPosts({ apiKey, organizationId, channelIds })) {
+        remoteById.set(post.id, post)
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const admin = createAdminClient()
+  const { data: assets, error: assetError } = await admin
+    .from('content_assets')
+    .select('id,status,published_at,scheduled_at,metadata_json')
+    .eq('content_type', 'social_post')
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (assetError) {
+    return { ok: false, checked: 0, matched: 0, updated: 0, errors: [...errors, assetError.message] }
+  }
+
+  let checked = 0
+  let matched = 0
+  let updated = 0
+  const now = options.now || new Date()
+  for (const asset of assets || []) {
+    const metadata = (asset.metadata_json || {}) as Record<string, unknown>
+    const bufferPostId = String(metadata.bufferPostId || '')
+    if (!bufferPostId) continue
+    checked += 1
+    const remote = remoteById.get(bufferPostId)
+    if (!remote) continue
+    matched += 1
+
+    const providerStatus = String(remote.status || '').toLowerCase()
+    const nextMetadata = metadataWith(metadata, {
+      bufferStatus: providerStatus,
+      bufferDueAt: remote.dueAt || metadata.bufferDueAt || null,
+      bufferSentAt: remote.sentAt || metadata.bufferSentAt || null,
+      bufferExternalLink: remote.externalLink || metadata.bufferExternalLink || null,
+      reconciledAt: now.toISOString(),
+    })
+    const nextStatus = providerStatus === 'sent' ? 'published' : 'ready'
+    const nextPublishedAt = providerStatus === 'sent' ? remote.sentAt || now.toISOString() : null
+    const previousStatus = String(metadata.bufferStatus || '')
+    const unchanged =
+      previousStatus === providerStatus &&
+      String(metadata.bufferDueAt || '') === String(remote.dueAt || '') &&
+      String(metadata.bufferSentAt || '') === String(remote.sentAt || '') &&
+      String(metadata.bufferExternalLink || '') === String(remote.externalLink || '') &&
+      asset.status === nextStatus
+    if (unchanged) continue
+
+    const { error: updateError } = await admin
+      .from('content_assets')
+      .update({
+        status: nextStatus,
+        published_at: nextPublishedAt,
+        scheduled_at: remote.dueAt || asset.scheduled_at || null,
+        metadata_json: nextMetadata,
+        updated_at: now.toISOString(),
+      })
+      .eq('id', asset.id)
+    if (updateError) {
+      errors.push(`asset ${asset.id}: ${updateError.message}`)
+      continue
+    }
+    updated += 1
+    if (providerStatus === 'sent') {
+      await logEvent({
+        eventType: 'content_published',
+        entityType: 'content_asset',
+        entityId: asset.id,
+        metadata: { source: 'buffer-reconciliation', bufferPostId, externalLink: remote.externalLink || null },
+      })
+    }
+  }
+
+  return { ok: errors.length === 0, checked, matched, updated, errors }
 }

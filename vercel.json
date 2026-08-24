@@ -34,6 +34,14 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/cron/video-content-pilot",
+      "schedule": "20 14 * * *"
+    },
+    {
+      "path": "/api/cron/buffer-reconcile",
+      "schedule": "30 18 * * *"
+    },
+    {
       "path": "/api/cron/command-center-autopilot?dispatch=true",
       "schedule": "45 12 * * *"
     },

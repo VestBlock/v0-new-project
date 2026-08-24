@@ -4,10 +4,8 @@ import { z } from 'zod'
 import { checkAdminAccess } from '@/lib/auth/admin'
 import {
   VIDEO_CONTENT_TYPES,
-  VESTBLOCK_VIDEO_PILOTS,
   assertVideoApprovalTransition,
   buildHeyGenRendererPrompt,
-  buildPilotAssetPayloads,
   buildVideoContentSnapshot,
   evaluateVideoLearning,
   videoMetadataSchema,
@@ -16,6 +14,7 @@ import {
   type VideoContentAssetRow,
   type VideoPerformanceSnapshot,
 } from '@/lib/content/video/contentSystem'
+import { seedVestBlockVideoPilots } from '@/lib/content/video/pilotSeed'
 import { logEvent } from '@/lib/system/logEvent'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -66,76 +65,6 @@ async function loadVideoRows() {
 
   if (error) throw error
   return (data || []) as VideoContentAssetRow[]
-}
-
-async function seedPilotBatch(actorUserId: string | null) {
-  const admin = createAdminClient()
-  const definitions = VESTBLOCK_VIDEO_PILOTS.map((pilot) => ({
-    pilot,
-    payloads: buildPilotAssetPayloads(pilot),
-  }))
-  const slugs = definitions.flatMap(({ payloads }) => [payloads.brief.slug, payloads.script.slug])
-  const { data: existing, error: existingError } = await admin
-    .from('content_assets')
-    .select('id,slug')
-    .in('slug', slugs)
-
-  if (existingError) throw existingError
-
-  const bySlug = new Map((existing || []).map((row) => [String(row.slug), String(row.id)]))
-  let created = 0
-  let skipped = 0
-
-  for (const { pilot, payloads } of definitions) {
-    let briefId = bySlug.get(payloads.brief.slug)
-    if (!briefId) {
-      const { data, error } = await admin
-        .from('content_assets')
-        .insert({
-          ...payloads.brief,
-          created_by: actorUserId,
-        })
-        .select('id')
-        .single()
-      if (error) throw error
-      briefId = String(data.id)
-      bySlug.set(payloads.brief.slug, briefId)
-      created += 1
-    } else {
-      skipped += 1
-    }
-
-    if (!bySlug.has(payloads.script.slug)) {
-      const { data, error } = await admin
-        .from('content_assets')
-        .insert({
-          ...payloads.script,
-          parent_content_id: briefId,
-          created_by: actorUserId,
-        })
-        .select('id')
-        .single()
-      if (error) throw error
-      bySlug.set(payloads.script.slug, String(data.id))
-      created += 1
-    } else {
-      skipped += 1
-    }
-
-    await logEvent({
-      eventType: 'content_generated',
-      actorUserId,
-      entityType: 'video_pilot',
-      entityId: bySlug.get(payloads.script.slug) || null,
-      metadata: {
-        source: 'vestblock-video-pilot-001',
-        pilotKey: pilot.key,
-        publicPublishing: false,
-      },
-    })
-  }
-
-  return { created, skipped, pilotCount: definitions.length }
 }
 
 async function registerPrivateRender(input: {
@@ -428,7 +357,10 @@ export async function POST(request: Request) {
 
   try {
     if (parsed.data.action === 'seed_pilots') {
-      const result = await seedPilotBatch(adminCheck.user?.id || null)
+      const result = await seedVestBlockVideoPilots({
+        supabase: createAdminClient(),
+        actorUserId: adminCheck.user?.id || null,
+      })
       const rows = await loadVideoRows()
       return NextResponse.json({ result, videoContent: buildVideoContentSnapshot(rows) })
     }
