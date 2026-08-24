@@ -16,18 +16,17 @@ import {
   upsertDailyOperatorReport,
   upsertExperimentResults,
   upsertOutreachVariants,
-  upsertPromptVersions,
   upsertScoreAdjustments,
 } from '@/lib/improvement/repository'
 import { buildResearchBriefsFromSources } from '@/lib/improvement/research'
 import type {
   ContinuousImprovementSummary,
   ImprovementRunRecord,
-  ImprovementRunType,
   StrategyUpdateRecord,
 } from '@/lib/improvement/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import { runStrategyOutcomeLearning, type StrategyOutcomeLearningResult } from '@/lib/improvement/strategyOutcomeLearning'
 
 type DailyWindow = {
   startedAt: string
@@ -39,6 +38,7 @@ type DailyReviewResult = {
   summary: ContinuousImprovementSummary
   autoAppliedCount: number
   queuedCount: number
+  outcomeLearning: StrategyOutcomeLearningResult
 }
 
 type OptimizationResult = {
@@ -653,15 +653,16 @@ export async function runDailyImprovementReview(options: { dryRun?: boolean } = 
 
   try {
     const insights = deriveInsights(run.id, snapshot.summary)
+    const outcomeLearning = await runStrategyOutcomeLearning({ window: makeWindow(14), dryRun: options.dryRun })
 
     if (options.dryRun) {
       const finishedRun = await finishImprovementRun(run.id, {
         status: 'completed',
-        summary: { ...snapshot.summary, dryRun: true },
+        summary: { ...snapshot.summary, dryRun: true, outcomeLearning },
         autoAppliedCount: 0,
         queuedCount: 0,
       })
-      return { run: finishedRun, summary: snapshot.summary, autoAppliedCount: 0, queuedCount: 0 }
+      return { run: finishedRun, summary: snapshot.summary, autoAppliedCount: 0, queuedCount: 0, outcomeLearning }
     }
 
     await insertImprovementInsights(insights)
@@ -738,7 +739,7 @@ export async function runDailyImprovementReview(options: { dryRun?: boolean } = 
 
     const finishedRun = await finishImprovementRun(run.id, {
       status: 'completed',
-      summary: snapshot.summary,
+      summary: { ...snapshot.summary, outcomeLearning },
       autoAppliedCount,
       queuedCount,
     })
@@ -748,10 +749,20 @@ export async function runDailyImprovementReview(options: { dryRun?: boolean } = 
       eventType: 'admin_action',
       entityType: 'improvement_run',
       entityId: run.id,
-      metadata: { action: 'daily_improvement_review_completed', autoAppliedCount, queuedCount },
+      metadata: {
+        action: 'daily_improvement_review_completed',
+        autoAppliedCount,
+        queuedCount,
+        outcomeLearning: {
+          reviewedLanes: outcomeLearning.reviewedLanes,
+          learnedLanes: outcomeLearning.learnedLanes,
+          promoted: outcomeLearning.promoted,
+          cooled: outcomeLearning.cooled,
+        },
+      },
     })
 
-    return { run: finishedRun, summary: snapshot.summary, autoAppliedCount, queuedCount }
+    return { run: finishedRun, summary: snapshot.summary, autoAppliedCount, queuedCount, outcomeLearning }
   } catch (error) {
     await finishImprovementRun(run.id, {
       status: 'failed',

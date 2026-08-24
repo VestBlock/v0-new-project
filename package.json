@@ -56,6 +56,7 @@
     "test:dealmachine-webhook": "node scripts/test-dealmachine-webhook.cjs",
     "test:dealmachine-v2": "node scripts/test-dealmachine-v2-client.mjs && node scripts/test-dealmachine-v2-strategies.mjs",
     "test:strategy-execution": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-execution.ts",
+    "test:strategy-outcome-learning": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-outcome-learning.ts",
     "test:strategy-source-contracts": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-strategy-source-contracts.ts",
     "test:research-callback": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-research-callback-security.ts",
     "strategy:sources": "node scripts/run-strategy-source-orchestrator.mjs",
