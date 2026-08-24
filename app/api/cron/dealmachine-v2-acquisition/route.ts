@@ -8,9 +8,9 @@ import { runN8nDealMachineSourceAcquisition } from '@/lib/n8n/dealMachineSourceA
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
 /**
- * Daily production fallback for the same idempotent source-acquisition core
- * that n8n calls more frequently. It never delivers email; it only keeps the
- * DealMachine cursor moving when n8n is unavailable.
+ * Production scheduler for the idempotent source-acquisition core. It runs in
+ * bounded four-hour slots and never drafts or delivers outreach; it only keeps
+ * the DealMachine cursor moving without requiring an operator in n8n.
  */
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 })

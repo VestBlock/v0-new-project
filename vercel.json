@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/cron/dealmachine-v2-acquisition",
-      "schedule": "15 12 * * *"
+      "schedule": "15 */4 * * *"
     },
     {
       "path": "/api/cron/strategy-source-orchestrator",
