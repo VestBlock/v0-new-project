@@ -191,7 +191,16 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     envInt('DEALMACHINE_DAILY_CREDIT_BUDGET', 250, 5_000),
     5_000
   )
-  const defaultRunCap = Math.max(1, Math.floor(dailyCap / Math.max(1, Math.floor(24 / slotHours))))
+  // DealMachine estimates the smallest useful property-search page at roughly
+  // 60 credits. Splitting a 250-credit daily allowance into six equal pieces
+  // yields 41, which would block every eligible search before it is sent. Use
+  // the established 75-credit search ceiling as a floor; the remaining daily
+  // allowance is still enforced below, so a 250-credit day can never exceed it.
+  const minimumViableRunCap = envInt('DEALMACHINE_AUTOMATION_MIN_RUN_CREDITS', 75, dailyCap)
+  const defaultRunCap = Math.min(
+    dailyCap,
+    Math.max(minimumViableRunCap, Math.floor(dailyCap / Math.max(1, Math.floor(24 / slotHours))))
+  )
   const configuredRunCap = envInt('N8N_DEALMACHINE_SOURCE_CREDIT_CAP_PER_RUN', defaultRunCap, dailyCap)
 
   if (!hasDealMachineCredentials()) {
