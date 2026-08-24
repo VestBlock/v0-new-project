@@ -594,7 +594,6 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
 async function listBufferPosts(input: {
   apiKey: string
   organizationId: string
-  channelIds: string[]
 }) {
   const data = await bufferGraphql<{
     posts?: { edges?: Array<{ node?: BufferRemotePost | null }> }
@@ -607,7 +606,6 @@ async function listBufferPosts(input: {
           organizationId: ${JSON.stringify(input.organizationId)}
           filter: {
             status: [scheduled, sent, error]
-            channelIds: ${JSON.stringify(input.channelIds)}
           }
           sort: [{ field: createdAt, direction: desc }]
         }
@@ -656,13 +654,16 @@ export async function reconcileBufferDelivery(
 
   const errors: string[] = []
   const remoteById = new Map<string, BufferRemotePost>()
-  const byOrganization = new Map<string, string[]>()
+  const organizations = new Set<string>()
   for (const item of connected) {
-    byOrganization.set(item.organizationId, [...(byOrganization.get(item.organizationId) || []), item.channel.id])
+    organizations.add(item.organizationId)
   }
-  for (const [organizationId, channelIds] of byOrganization) {
+  for (const organizationId of organizations) {
     try {
-      for (const post of await listBufferPosts({ apiKey, organizationId, channelIds })) {
+      // Filtering the posts query by a channel ID can fail when Buffer's actor
+      // permission is inherited at the organization level. Retrieve the
+      // organization feed and match only the ledger's exact post IDs below.
+      for (const post of await listBufferPosts({ apiKey, organizationId })) {
         remoteById.set(post.id, post)
       }
     } catch (error) {
