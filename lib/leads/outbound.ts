@@ -3,6 +3,7 @@ import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { getPreferredOutboundProvider, shouldPreferResend } from '@/lib/outreach/provider-preference'
 
 type SendLeadEmailInput = {
   lead: LeadRecord
@@ -89,10 +90,10 @@ function hasResendConfig() {
 }
 
 export function getOutboundProviderReadiness() {
+  const availability = { gmail: hasGmailConfig(), resend: hasResendConfig() }
   return {
-    gmail: hasGmailConfig(),
-    resend: hasResendConfig(),
-    defaultProvider: hasGmailConfig() ? 'gmail' : hasResendConfig() ? 'resend' : 'none',
+    ...availability,
+    defaultProvider: getPreferredOutboundProvider(availability),
     sender: getPreferredOutboundSender(),
     mailingAddressConfigured: Boolean(getOutreachMailingAddress()),
   }
@@ -234,22 +235,39 @@ export async function sendLeadOutreachEmail(
     }
   }
 
-  if (hasGmailConfig()) {
+  const availability = { gmail: hasGmailConfig(), resend: hasResendConfig() }
+  const preferResend = shouldPreferResend(availability)
+  let resendError: string | null = null
+
+  if (availability.resend && preferResend) {
+    const resendResult = await sendWithResend(input)
+    if (resendResult.ok || !availability.gmail) return resendResult
+    resendError = resendResult.error || 'Resend send failed.'
+  }
+
+  if (availability.gmail) {
     try {
       const gmailResult = await sendWithGmail(input)
-      if (gmailResult.ok || !hasResendConfig()) return gmailResult
+      if (gmailResult.ok || !availability.resend) return gmailResult
+      if (resendError) {
+        return { ...gmailResult, error: `Resend: ${resendError}; Gmail: ${gmailResult.error || 'send failed.'}` }
+      }
     } catch (error) {
-      if (!hasResendConfig()) {
+      const gmailError = error instanceof Error ? error.message : 'Google Workspace sender failed.'
+      if (resendError) {
+        return { ok: false, provider: 'gmail', error: `Resend: ${resendError}; Gmail: ${gmailError}` }
+      }
+      if (!availability.resend) {
         return {
           ok: false,
           provider: 'gmail',
-          error: error instanceof Error ? error.message : 'Google Workspace sender failed.',
+          error: gmailError,
         }
       }
     }
   }
 
-  if (hasResendConfig()) {
+  if (availability.resend && !preferResend) {
     return sendWithResend(input)
   }
 

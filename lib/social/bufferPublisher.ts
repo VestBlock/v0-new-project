@@ -1,4 +1,5 @@
 import { logEvent } from '@/lib/system/logEvent'
+import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { absoluteUrl } from '@/lib/seo/site'
 import {
@@ -392,6 +393,21 @@ function metadataWith(input: Record<string, unknown>, patch: Record<string, unkn
   return { ...input, ...patch }
 }
 
+async function recordBufferChannelFailure(service: BufferService, message: string) {
+  if (service !== 'linkedin' || !/not allowed to perform this action/i.test(message)) return
+  await createAdminTask({
+    title: 'Reconnect the VestBlock LinkedIn account in Buffer',
+    description:
+      'Buffer can post successfully to VestBlock Facebook and X, but LinkedIn rejected the publishing permission. Reconnect or re-authorize the VestBlock LinkedIn account in Buffer, then the next scheduled content run will resume automatically. No content will be sent to a non-VestBlock account.',
+    taskType: 'buffer_linkedin_permission',
+    priority: 'high',
+    entityType: 'buffer_channel',
+    entityId: 'vestblock-linkedin',
+    dueAt: adminTaskDueDates.now(),
+    metadata: { service, providerMessage: message.slice(0, 500) },
+  }).catch(() => null)
+}
+
 export async function runBufferPublisher(options: { dryRun?: boolean; send?: boolean; now?: Date } = {}): Promise<BufferPublisherResult> {
   const dryRun = Boolean(options.dryRun)
   const sendEnabled = Boolean(options.send && !dryRun && process.env.BUFFER_AUTOPILOT_ENABLE_SEND === 'true')
@@ -575,6 +591,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
       results.push({ service, status: 'scheduled', bufferPostId: post.id })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      await recordBufferChannelFailure(service, message)
       await admin
         .from('content_assets')
         .update({

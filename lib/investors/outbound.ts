@@ -2,6 +2,7 @@ import { sendEmail } from '@/lib/email/sendEmail'
 import type { InvestorProfileRecord } from '@/lib/investors/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { shouldPreferResend } from '@/lib/outreach/provider-preference'
 
 type InvestorOutreachMessage = {
   id: string
@@ -56,6 +57,10 @@ export async function sendInvestorOutreachEmail(input: {
     subject: input.message.subject || 'Strategic investor partnership with VestBlock',
     html: renderInvestorEmail(input.message),
     eventType: 'admin_lead_followup',
+    providerPreference: shouldPreferResend({
+      gmail: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN),
+      resend: Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL),
+    }) ? 'resend' : 'google',
   })
 
   return {

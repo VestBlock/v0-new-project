@@ -22,7 +22,7 @@
       "schedule": "0 11,18 * * *"
     },
     {
-      "path": "/api/cron/seller-followup?excludeDealMachine=true",
+      "path": "/api/cron/seller-followup?limit=30&excludeDealMachine=false",
       "schedule": "30 21 * * *"
     },
     {

@@ -124,7 +124,7 @@ export async function runDailyBuyerDiscovery(options: { dryRun?: boolean } = {})
 export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean } = {}) {
   const autoSendRequested = envBool('BUYER_AUTO_SEND_ENABLED', false)
   const deliveryCircuitBreaker = autoSendRequested
-    ? await getDeliveryCircuitBreaker({ provider: 'gmail', allowControlledTrial: true })
+    ? await getDeliveryCircuitBreaker({ allowControlledTrial: true })
     : null
   const replyCapture = getReplyCaptureReadiness()
   const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready

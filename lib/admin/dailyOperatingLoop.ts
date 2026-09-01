@@ -2,11 +2,7 @@ import 'server-only'
 
 import { buildBossBriefing } from '@/lib/admin/bossAgent'
 import { getCommandCenterData } from '@/lib/admin/commandCenter'
-import { runDailyBuyerPipeline } from '@/lib/buyers/automation'
-import { runDailyInvestorPipeline } from '@/lib/investors/automation'
-import { runDailyLenderPipeline } from '@/lib/lenders/automation'
 import { syncOutlookMailbox } from '@/lib/email/outlookMailbox'
-import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { captureKpiSnapshot, runBossRetrospective } from '@/lib/admin/selfImprovement'
 import { loadOperatingLoopTelemetryFromDatabase, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
@@ -54,11 +50,6 @@ const AGENT_LABELS: Record<string, string> = {
   operator: 'Operator Intelligence',
 }
 
-function envInt(name: string, fallback: number) {
-  const value = Number.parseInt(process.env[name] || '', 10)
-  return Number.isFinite(value) && value > 0 ? value : fallback
-}
-
 async function recordRevenueLoopJob(input: {
   status: 'active' | 'running' | 'failed'
   lastStatus: string
@@ -70,8 +61,8 @@ async function recordRevenueLoopJob(input: {
   const { error } = await admin.from('command_center_jobs').upsert(
     {
       job_key: 'seller-outreach-batch',
-      job_type: 'seller_outreach_batch',
-      title: 'Run guarded seller and partner revenue lanes',
+      job_type: 'revenue_operations_control',
+      title: 'Reconcile guarded revenue operations',
       status: input.status,
       cadence: '4 times daily',
       priority: 95,
@@ -81,11 +72,11 @@ async function recordRevenueLoopJob(input: {
       last_error: input.error || null,
       metrics_json: input.metrics || {},
       config_json: {
-        sellerLimit: envInt('BOSS_SELLER_SEND_LIMIT_PER_RUN', 35),
-        buyerLimit: envInt('BUYERS_SEND_LIMIT_PER_RUN', 10),
-        lenderLimit: envInt('LENDERS_DAILY_SEND_LIMIT', 15),
-        investorLimit: envInt('INVESTORS_DAILY_SEND_LIMIT', 20),
-        guardedSend: true,
+        controlPlaneOnly: true,
+        sellerLane: '/api/cron/seller-followup',
+        partnerLane: '/api/cron/partner-network-pipeline',
+        mailboxLane: '/api/cron/mailbox-sync',
+        guardedSend: 'delegated_to_dedicated_lanes',
       },
       updated_at: now.toISOString(),
     },
@@ -167,146 +158,119 @@ export async function runDailyOperatingLoop(options: {
 } = {}): Promise<DailyOperatingLoopResult> {
   const dryRun = options.dryRun !== false
   const dispatch = Boolean(options.dispatch && !dryRun)
-  const send = Boolean(options.send && !dryRun && process.env.BOSS_DAILY_LOOP_ENABLE_SEND === 'true')
+  const sendRequested = Boolean(options.send && !dryRun && process.env.BOSS_DAILY_LOOP_ENABLE_SEND === 'true')
   await recordRevenueLoopJob({
     status: 'running',
     lastStatus: dryRun ? 'dry_run_started' : 'live_run_started',
-    metrics: { dryRun, dispatch, send },
+    metrics: { dryRun, dispatch, sendRequested, mode: 'control_plane_only' },
   }).catch((error) => console.warn('[daily-operating-loop] job start was not recorded:', error))
-  const mailbox = await syncOutlookMailbox({ dryRun, sinceHours: 72, limit: 50 })
-  const data = await getCommandCenterData()
-  const retrospective = dryRun
-    ? {
-        reviewed: 0,
-        lessons: [],
-        message: 'Dry run only; retrospective learning was not written.',
-      }
-    : await runBossRetrospective(data)
-  const briefing = buildBossBriefing(data)
-  const focus = briefing.plays.find((play) => play.key === briefing.focusKey) || briefing.plays[0] || null
-  const challenger = briefing.plays.find((play) => play.key !== focus?.key) || null
-  const telemetry = await loadOperatingLoopTelemetryFromDatabase({
-    sentToday: data.strategyLab.sentToday,
-    remainingToday: data.strategyLab.remainingToday,
-    replySignals7d: data.strategyLab.replySignals7d,
-    emailReady: data.strategyLab.emailReady,
-    needsReview: data.strategyLab.needsReview,
-    focusStrategyKey: focus?.key || null,
-    challengerStrategyKey: challenger?.key || null,
-    followupsDue: data.outboundControl.followupsDue,
-    activeSuppressionCount: data.suppressionCenter.activeCount,
-    missingSuppressionDb: data.suppressionCenter.missingDb,
-    buyerDemandSignals: data.summary.activePartners + data.summary.builderPartners,
-    pendingMatches: data.routingQueue.reduce((sum, item) => sum + item.count, 0),
-    partnerBuyBoxesConfirmed: data.summary.partnerBuyBoxesConfirmed,
-    partnerResearchReady: data.summary.partnerResearchReady,
-    partnerOutreachReady: data.summary.partnerOutreachReady,
-    partnerDiscoveryRuns7d: data.summary.partnerDiscoveryRuns7d,
-    failedPartnerRuns7d: data.summary.failedPartnerRuns7d,
-    sourceFreshCount: data.dealMachineFreshness.freshCount,
-    sourceStaleCount: data.dealMachineFreshness.staleCount,
-    staleExportCount: data.dealMachineFreshness.staleCount,
-    staleExportTotal: data.localSignals.dmExports.length,
-    activeDirectiveCount: data.strategyLab.activeDirectiveCount,
-    overdueTaskCount: data.overdueTasks.length,
-    urgentTaskCount: data.summary.urgentTasks,
-    openTaskCount: data.summary.openTasks,
-    legacyDraftCount: data.summary.hiddenLegacyDrafts,
-    archivedLegacyRuntimeRows: data.summary.archivedLegacyRuntimeRows,
-    analyzerOutcomeCount: data.dealMemory.totalAnalyses,
-  })
-
-  const dispatchResult =
-    dispatch && focus
-      ? await dispatchBossPlay(focus.key, options.createdByUserId || null)
-      : {
-          attempted: false,
-          dispatched: 0,
-          skipped: focus ? focus.directives.length : 0,
-          message: dryRun
-            ? 'Dry run only; no Boss directives dispatched.'
-            : 'Dispatch disabled for this run.',
+  try {
+    const mailbox = await syncOutlookMailbox({ dryRun, sinceHours: 72, limit: 50 })
+    const data = await getCommandCenterData()
+    const retrospective = dryRun
+      ? {
+          reviewed: 0,
+          lessons: [],
+          message: 'Dry run only; retrospective learning was not written.',
         }
+      : await runBossRetrospective(data)
+    const briefing = buildBossBriefing(data)
+    const focus = briefing.plays.find((play) => play.key === briefing.focusKey) || briefing.plays[0] || null
+    const challenger = briefing.plays.find((play) => play.key !== focus?.key) || null
+    const telemetry = await loadOperatingLoopTelemetryFromDatabase({
+      sentToday: data.strategyLab.sentToday,
+      remainingToday: data.strategyLab.remainingToday,
+      replySignals7d: data.strategyLab.replySignals7d,
+      emailReady: data.strategyLab.emailReady,
+      needsReview: data.strategyLab.needsReview,
+      focusStrategyKey: focus?.key || null,
+      challengerStrategyKey: challenger?.key || null,
+      followupsDue: data.outboundControl.followupsDue,
+      activeSuppressionCount: data.suppressionCenter.activeCount,
+      missingSuppressionDb: data.suppressionCenter.missingDb,
+      buyerDemandSignals: data.summary.activePartners + data.summary.builderPartners,
+      pendingMatches: data.routingQueue.reduce((sum, item) => sum + item.count, 0),
+      partnerBuyBoxesConfirmed: data.summary.partnerBuyBoxesConfirmed,
+      partnerResearchReady: data.summary.partnerResearchReady,
+      partnerOutreachReady: data.summary.partnerOutreachReady,
+      partnerDiscoveryRuns7d: data.summary.partnerDiscoveryRuns7d,
+      failedPartnerRuns7d: data.summary.failedPartnerRuns7d,
+      sourceFreshCount: data.dealMachineFreshness.freshCount,
+      sourceStaleCount: data.dealMachineFreshness.staleCount,
+      staleExportCount: data.dealMachineFreshness.staleCount,
+      staleExportTotal: data.localSignals.dmExports.length,
+      activeDirectiveCount: data.strategyLab.activeDirectiveCount,
+      overdueTaskCount: data.overdueTasks.length,
+      urgentTaskCount: data.summary.urgentTasks,
+      openTaskCount: data.summary.openTasks,
+      legacyDraftCount: data.summary.hiddenLegacyDrafts,
+      archivedLegacyRuntimeRows: data.summary.archivedLegacyRuntimeRows,
+      analyzerOutcomeCount: data.dealMemory.totalAnalyses,
+    })
 
-  let sendAttempt: DailyOperatingLoopResult['sendAttempt'] = {
-    attempted: false,
-    ok: true,
-    message: send
-      ? 'Send gate open, but no send lane was attempted.'
-      : dryRun
-        ? 'Dry run only; no email sends attempted.'
-        : 'Live send disabled. Set BOSS_DAILY_LOOP_ENABLE_SEND=true and pass send=true to allow configured cap sends.',
-  }
+    const dispatchResult =
+      dispatch && focus
+        ? await dispatchBossPlay(focus.key, options.createdByUserId || null)
+        : {
+            attempted: false,
+            dispatched: 0,
+            skipped: focus ? focus.directives.length : 0,
+            message: dryRun
+              ? 'Dry run only; no Boss directives dispatched.'
+              : 'Dispatch disabled for this run.',
+          }
 
-  if (send) {
-    const [seller, buyer, lender, investor] = await Promise.allSettled([
-      runLeadThroughputSprint({
-        dryRun: false,
-        sendLimit: envInt('BOSS_SELLER_SEND_LIMIT_PER_RUN', 35),
-        budgetMs: envInt('BOSS_SELLER_BUDGET_MS', 75_000),
-      }),
-      runDailyBuyerPipeline({ dryRun: false }),
-      runDailyLenderPipeline({ dryRun: false }),
-      runDailyInvestorPipeline({ dryRun: false }),
-    ])
-    const sellerOk = seller.status === 'fulfilled' && seller.value.ok
-    const buyerOk = buyer.status === 'fulfilled' && buyer.value.ok
-    const lenderOk = lender.status === 'fulfilled' && lender.value.ok
-    const investorOk = investor.status === 'fulfilled' && investor.value.ok
-    const sellerDetail = seller.status === 'fulfilled'
-      ? seller.value
-      : { ok: false, error: seller.reason instanceof Error ? seller.reason.message : String(seller.reason) }
-    const buyerDetail = buyer.status === 'fulfilled'
-      ? buyer.value
-      : { ok: false, error: buyer.reason instanceof Error ? buyer.reason.message : String(buyer.reason) }
-    const lenderDetail = lender.status === 'fulfilled'
-      ? lender.value
-      : { ok: false, error: lender.reason instanceof Error ? lender.reason.message : String(lender.reason) }
-    const investorDetail = investor.status === 'fulfilled'
-      ? investor.value
-      : { ok: false, error: investor.reason instanceof Error ? investor.reason.message : String(investor.reason) }
-    sendAttempt = {
-      attempted: true,
-      ok: sellerOk && buyerOk && lenderOk && investorOk,
-      message: sellerOk && buyerOk && lenderOk && investorOk
-        ? 'Seller, buyer, lender, and investor revenue lanes completed with their configured caps.'
-        : 'The revenue loop completed partially. Review the returned seller and partner stage results.',
-      details: { seller: sellerDetail, buyer: buyerDetail, lender: lenderDetail, investor: investorDetail },
+    const sendAttempt: DailyOperatingLoopResult['sendAttempt'] = {
+      attempted: false,
+      ok: true,
+      message: sendRequested
+        ? 'Outbound execution is delegated to the dedicated seller and partner cron lanes so this control loop cannot time out or duplicate sends.'
+        : dryRun
+          ? 'Dry run only; no email sends attempted.'
+          : 'Outbound execution is delegated to the dedicated seller and partner cron lanes.',
     }
-  }
 
-  await recordRevenueLoopJob({
-    status: sendAttempt.ok ? 'active' : 'failed',
-    lastStatus: dryRun ? 'dry_run_completed' : sendAttempt.ok ? 'completed' : 'partial',
-    error: sendAttempt.ok ? null : sendAttempt.message,
-    metrics: {
+    await recordRevenueLoopJob({
+      status: 'active',
+      lastStatus: dryRun ? 'dry_run_completed' : 'completed',
+      metrics: {
+        dryRun,
+        dispatch,
+        sendRequested,
+        mailboxConnected: mailbox.connected,
+        directivesDispatched: dispatchResult.dispatched,
+        sendAttempted: false,
+        sendDelegated: true,
+        focusKey: focus?.key || null,
+        challengerKey: challenger?.key || null,
+      },
+    }).catch((error) => console.warn('[daily-operating-loop] job completion was not recorded:', error))
+
+    return {
       dryRun,
       dispatch,
-      send,
-      mailboxConnected: mailbox.connected,
-      directivesDispatched: dispatchResult.dispatched,
-      sendAttempted: sendAttempt.attempted,
-      sendOk: sendAttempt.ok,
-      focusKey: focus?.key || null,
-      challengerKey: challenger?.key || null,
-    },
-  }).catch((error) => console.warn('[daily-operating-loop] job completion was not recorded:', error))
-
-  return {
-    dryRun,
-    dispatch,
-    send,
-    generatedAt: new Date().toISOString(),
-    retrospective,
-    telemetry,
-    mailbox,
-    boss: {
-      focusKey: focus?.key || null,
-      focusName: focus?.name || null,
-      challengerKey: challenger?.key || null,
-      challengerName: challenger?.name || null,
-    },
-    dispatchResult,
-    sendAttempt,
+      send: false,
+      generatedAt: new Date().toISOString(),
+      retrospective,
+      telemetry,
+      mailbox,
+      boss: {
+        focusKey: focus?.key || null,
+        focusName: focus?.name || null,
+        challengerKey: challenger?.key || null,
+        challengerName: challenger?.name || null,
+      },
+      dispatchResult,
+      sendAttempt,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await recordRevenueLoopJob({
+      status: 'failed',
+      lastStatus: 'failed',
+      error: message.slice(0, 500),
+      metrics: { dryRun, dispatch, sendRequested, mode: 'control_plane_only' },
+    }).catch((recordError) => console.warn('[daily-operating-loop] failure was not recorded:', recordError))
+    throw error
   }
 }

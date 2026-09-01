@@ -2231,7 +2231,13 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 }
 
 export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) {
-  const limit = options.followupLimit || envInt('LEADS_DAILY_FOLLOWUP_SEND_LIMIT', 20)
+  const configuredLimit = options.followupLimit || envInt('LEADS_DAILY_FOLLOWUP_SEND_LIMIT', 30)
+  const outboundReadiness = getOutboundProviderReadiness()
+  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
+    provider: outboundReadiness.defaultProvider,
+    allowControlledTrial: true,
+  })
+  const limit = Math.min(configuredLimit, deliveryCircuitBreaker.maxBatchSize || Number.POSITIVE_INFINITY)
   const replyCaptureReadiness = getReplyCaptureReadiness()
   if (!options.dryRun && !replyCaptureReadiness.ready) {
     return {
@@ -2242,8 +2248,37 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       followupItems: [],
       acceptedCount: 0,
       results: [],
+      configuredLimit,
+      effectiveLimit: 0,
+      deliveryCircuitBreaker,
     }
   }
+
+  if (!options.dryRun && !deliveryCircuitBreaker.allowed) {
+    await createAdminTask({
+      title: 'Seller follow-up paused by delivery-quality circuit breaker',
+      description: `Seller follow-up is paused because ${deliveryCircuitBreaker.reason || 'provider delivery evidence is outside the configured safety range.'}\n\nProvider: ${deliveryCircuitBreaker.provider}\nEvidence window: ${deliveryCircuitBreaker.windowDays} days\nDelivered: ${deliveryCircuitBreaker.delivered}\nBounced, complained, suppressed, or failed: ${deliveryCircuitBreaker.bounced + deliveryCircuitBreaker.complained + deliveryCircuitBreaker.suppressed + deliveryCircuitBreaker.failed}\n\nRepair the delivery path before resuming autonomous sends.`,
+      taskType: 'seller_followup_delivery_blocker',
+      priority: 'urgent',
+      entityType: 'lead_send_queue',
+      entityId: `seller-followup-delivery-${deliveryCircuitBreaker.provider}`,
+      dueAt: adminTaskDueDates.now(),
+      metadata: deliveryCircuitBreaker,
+    })
+    return {
+      ok: false,
+      blocked: true,
+      blocker: deliveryCircuitBreaker.reason || 'Delivery-quality circuit breaker blocked follow-up.',
+      followupCount: 0,
+      followupItems: [],
+      acceptedCount: 0,
+      results: [],
+      configuredLimit,
+      effectiveLimit: 0,
+      deliveryCircuitBreaker,
+    }
+  }
+
   const dueFollowups = await listLeadEmailFollowupsDue(limit, {
     excludeSourcePatterns: options.excludeSourcePatterns,
   })
@@ -2388,6 +2423,9 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
     followupItems,
     acceptedCount: results.filter((item) => item.status === 'accepted').length,
     results,
+    configuredLimit,
+    effectiveLimit: limit,
+    deliveryCircuitBreaker,
   }
 }
 
