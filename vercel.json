@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/daily-ops-report",
-      "schedule": "30 4 * * *"
+      "schedule": "30 22 * * *"
     },
     {
       "path": "/api/cron/strategy-engine",

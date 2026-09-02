@@ -49,6 +49,17 @@ function isReportableNiche(value?: string | null) {
   return Boolean(value && !nonReportableNiches.has(value.toLowerCase()))
 }
 
+function jobIsBlocked(job: { status?: string | null; last_status?: string | null }) {
+  return ['blocked', 'failed', 'disconnected'].includes(String(job.status || '').toLowerCase()) ||
+    ['blocked', 'failed', 'disconnected'].includes(String(job.last_status || '').toLowerCase())
+}
+
+function jobIsDelayed(job: { status?: string | null; next_run_at?: string | null }, now = Date.now()) {
+  if (['paused', 'blocked', 'failed', 'disconnected'].includes(String(job.status || '').toLowerCase())) return false
+  const nextRunAt = Date.parse(String(job.next_run_at || ''))
+  return Number.isFinite(nextRunAt) && nextRunAt < now - 90 * 60 * 1000
+}
+
 function buildDigestHtml(summary: DailyIntelligenceSummary) {
   const actions = summary.recommendedActions.map((item) => `<li style="margin-bottom:8px;">${item}</li>`).join('')
   const leadSends = summaryMetric(summary.leads, 'sends')
@@ -60,6 +71,11 @@ function buildDigestHtml(summary: DailyIntelligenceSummary) {
   const propertyCandidates = summaryMetric(summary.leads, 'propertyCandidates')
   const contactableLeads = summaryMetric(summary.leads, 'contactableLeads')
   const contactEnrichmentRequired = summaryMetric(summary.leads, 'contactEnrichmentRequired')
+  const automationStatus = String(summary.automation.status || 'unavailable')
+  const activeJobs = summaryMetric(summary.automation, 'activeJobs')
+  const blockedJobs = summaryMetric(summary.automation, 'blockedJobs')
+  const delayedJobs = summaryMetric(summary.automation, 'delayedJobs')
+  const latestStrategyStatus = String(summary.automation.latestStrategyStatus || 'not yet recorded')
   return `
     <div style="font-family:Arial,sans-serif;background:#081019;color:#eef6f8;padding:24px;">
       <h2 style="color:#fff;margin:0 0 12px;">VestBlock daily intelligence report</h2>
@@ -73,6 +89,7 @@ function buildDigestHtml(summary: DailyIntelligenceSummary) {
         <tr><td style="padding:8px;border:1px solid #29404a;">Seller inventory</td><td style="padding:8px;border:1px solid #29404a;">${propertyCandidates} properties · ${contactableLeads} contactable · ${contactEnrichmentRequired} need enrichment</td></tr>
         <tr><td style="padding:8px;border:1px solid #29404a;">Buyer outreach</td><td style="padding:8px;border:1px solid #29404a;">${buyerSends} sent · ${buyerApproved} approved/queued</td></tr>
         <tr><td style="padding:8px;border:1px solid #29404a;">Lender outreach</td><td style="padding:8px;border:1px solid #29404a;">${lenderSends} sent · ${lenderReplies} replies</td></tr>
+        <tr><td style="padding:8px;border:1px solid #29404a;">Automation health</td><td style="padding:8px;border:1px solid #29404a;">${automationStatus} · ${activeJobs} active · ${blockedJobs} blocked · ${delayedJobs} delayed · strategy ${latestStrategyStatus}</td></tr>
       </table>
       <h3 style="color:#fff;margin:18px 0 8px;">Recommended actions</h3>
       <ul>${actions}</ul>
@@ -101,6 +118,8 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     serviceDeliverablesResult,
     contentAssetsResult,
     seoOpportunitiesResult,
+    automationJobsResult,
+    strategyReportsResult,
   ] = await Promise.all([
     admin
       .from('leads')
@@ -162,6 +181,15 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
       .from('entity_seo_opportunities')
       .select('id,suggested_title,city,state,entity_type,cluster_type,opportunity_score,approval_status,publish_status,created_at')
       .gte('created_at', startedAt),
+    admin
+      .from('command_center_jobs')
+      .select('job_key,title,status,last_status,last_error,last_run_at,next_run_at,updated_at')
+      .limit(200),
+    admin
+      .from('strategy_daily_reports')
+      .select('report_date,status,cities_attempted,sources_attempted,leads_discovered,leads_qualified,drafts_created,accepted_count,delivered_count,reply_count,updated_at')
+      .order('report_date', { ascending: false })
+      .limit(1),
   ])
 
   if (leadsResult.error) throw leadsResult.error
@@ -195,6 +223,8 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
   const serviceDeliverables = serviceDeliverablesResult.data || []
   const contentAssets = contentAssetsResult.data || []
   const seoOpportunities = seoOpportunitiesResult.data || []
+  const automationJobs = automationJobsResult.error ? [] : automationJobsResult.data || []
+  const latestStrategyReport = strategyReportsResult.error ? null : strategyReportsResult.data?.[0] || null
 
   const leadCities = new Map<string, number>()
   const leadNiches = new Map<string, number>()
@@ -326,7 +356,42 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     entityDerivedOpportunitiesCreated: seoOpportunities.length,
   }
 
+  const activeAutomationJobs = automationJobs.filter((job) => String(job.status || '').toLowerCase() === 'active')
+  const blockedAutomationJobs = automationJobs.filter(jobIsBlocked)
+  const delayedAutomationJobs = automationJobs.filter((job) => jobIsDelayed(job))
+  const automationUnavailable = Boolean(automationJobsResult.error || strategyReportsResult.error)
+  const automationSummary = {
+    status: automationUnavailable
+      ? 'unavailable'
+      : blockedAutomationJobs.length
+        ? 'needs_attention'
+        : delayedAutomationJobs.length
+          ? 'delayed'
+          : 'healthy',
+    activeJobs: activeAutomationJobs.length,
+    blockedJobs: blockedAutomationJobs.length,
+    delayedJobs: delayedAutomationJobs.length,
+    blockedJobNames: blockedAutomationJobs.slice(0, 5).map((job) => job.title || job.job_key),
+    latestStrategyStatus: latestStrategyReport?.status || 'not_yet_recorded',
+    latestStrategyReportDate: latestStrategyReport?.report_date || null,
+    latestStrategyUpdatedAt: latestStrategyReport?.updated_at || null,
+    latestStrategyDrafts: asNumber(latestStrategyReport?.drafts_created),
+    latestStrategyAccepted: asNumber(latestStrategyReport?.accepted_count),
+    latestStrategyDelivered: asNumber(latestStrategyReport?.delivered_count),
+    latestStrategyReplies: asNumber(latestStrategyReport?.reply_count),
+    dataWarning: automationJobsResult.error?.message || strategyReportsResult.error?.message || null,
+  }
+
   const recommendedActions = compact<string>([
+    automationSummary.status === 'unavailable'
+      ? 'Automation health could not be read. Check the command-center data connection before acting on volume.'
+      : null,
+    automationSummary.blockedJobs > 0
+      ? `${automationSummary.blockedJobs} automation job${automationSummary.blockedJobs === 1 ? '' : 's'} need repair: ${automationSummary.blockedJobNames.join(', ')}.`
+      : null,
+    automationSummary.delayedJobs > 0
+      ? `${automationSummary.delayedJobs} scheduled job${automationSummary.delayedJobs === 1 ? ' is' : 's are'} overdue by more than 90 minutes; review the command-center execution history.`
+      : null,
     leadsSummary.contactEnrichmentRequired > 0
       ? `${leadsSummary.contactEnrichmentRequired} property candidates need verified phone or email enrichment before outreach.`
       : null,
@@ -344,6 +409,7 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     buyers: buyersSummary,
     users: usersSummary,
     seo: seoSummary,
+    automation: automationSummary,
     topCities,
     topNiches,
     topOffers,
@@ -378,6 +444,9 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
       bestLenderSegment: summary.bestLenderSegment,
       bestBuyerSegment: summary.bestBuyerSegment,
       bestSeoOpportunity: summary.bestSeoOpportunity,
+      automationStatus: automationSummary.status,
+      blockedAutomationJobs: automationSummary.blockedJobs,
+      delayedAutomationJobs: automationSummary.delayedJobs,
     },
   })
 
@@ -387,6 +456,7 @@ export async function generateDailyIntelligenceReport(options: { dryRun?: boolea
     { sectionKey: 'buyers', sectionTitle: 'Buyers', summary: buyersSummary },
     { sectionKey: 'users', sectionTitle: 'Users', summary: usersSummary },
     { sectionKey: 'seo', sectionTitle: 'SEO', summary: seoSummary },
+    { sectionKey: 'automation', sectionTitle: 'Automation health', summary: automationSummary },
   ])
 
   await logEvent({

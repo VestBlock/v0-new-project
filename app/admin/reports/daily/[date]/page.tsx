@@ -38,11 +38,12 @@ export default async function DailyReportDetailPage({ params }: { params: Promis
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="border-slate-800 bg-slate-950/70"><CardHeader><CardTitle className="text-sm text-slate-300">Best city</CardTitle></CardHeader><CardContent className="text-white">{String((report.summary_json as any)?.bestCity || 'n/a')}</CardContent></Card>
         <Card className="border-slate-800 bg-slate-950/70"><CardHeader><CardTitle className="text-sm text-slate-300">Best niche</CardTitle></CardHeader><CardContent className="text-white">{String((report.summary_json as any)?.bestNiche || 'n/a')}</CardContent></Card>
         <Card className="border-slate-800 bg-slate-950/70"><CardHeader><CardTitle className="text-sm text-slate-300">Best lead category</CardTitle></CardHeader><CardContent className="text-white">{String((report.summary_json as any)?.bestLeadCategory || 'n/a')}</CardContent></Card>
         <Card className="border-slate-800 bg-slate-950/70"><CardHeader><CardTitle className="text-sm text-slate-300">Best SEO opportunity</CardTitle></CardHeader><CardContent className="text-white">{String((report.summary_json as any)?.bestSeoOpportunity || 'n/a')}</CardContent></Card>
+        <Card className="border-slate-800 bg-slate-950/70"><CardHeader><CardTitle className="text-sm text-slate-300">Automation</CardTitle></CardHeader><CardContent className="text-white">{String((report.summary_json as any)?.automationStatus || 'n/a')}</CardContent></Card>
       </div>
 
       <Card className="border-slate-800 bg-slate-950/70">

@@ -79,6 +79,7 @@ export type DailyIntelligenceSummary = {
   buyers: Record<string, unknown>
   users: Record<string, unknown>
   seo: Record<string, unknown>
+  automation: Record<string, unknown>
   topCities: Array<Record<string, unknown>>
   topNiches: Array<Record<string, unknown>>
   topOffers: Array<Record<string, unknown>>
