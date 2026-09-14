@@ -265,7 +265,7 @@
     "input-otp": "latest",
     "lenis": "^1.3.23",
     "lucide-react": "^0.454.0",
-    "next": "15.5.21",
+    "next": "15.5.24",
     "next-themes": "latest",
     "openai": "latest",
     "pdf-lib": "^1.17.1",
@@ -285,7 +285,7 @@
     "remark-gfm": "latest",
     "resend": "^6.17.2",
     "server-only": "latest",
-    "sharp": "^0.35.0",
+    "sharp": "^0.35.4",
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
@@ -310,7 +310,7 @@
     "@types/three": "^0.184.1",
     "chai": "^6.2.0",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^15.5.21",
+    "eslint-config-next": "^15.5.24",
     "eslint-plugin-react-hooks": "^7.1.1",
     "hardhat": "^2.26.3",
     "postcss": "^8.5.12",
@@ -326,12 +326,15 @@
       "brace-expansion@>=2.0.0 <3.0.0": "^2.1.2",
       "dompurify": "^3.4.12",
       "form-data": "^4.0.6",
+      "browserslist": "^4.28.7",
+      "baseline-browser-mapping": "^2.11.0",
+      "postcss-selector-parser": "^6.1.3",
       "postcss": "^8.5.23",
       "protobufjs@<8": "^7.6.1",
       "protobufjs@>=8": "^8.7.1",
       "nanoid": "^3.3.17",
       "brace-expansion": "^2.1.4",
-      "sharp": "^0.35.3"
+      "sharp": "^0.35.4"
     }
   },
   "overrides": {
