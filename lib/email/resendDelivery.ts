@@ -2,7 +2,9 @@ import 'server-only'
 
 import type { WebhookEventPayload } from 'resend'
 
+import { buildResendDeliveryIdentityMetadata } from '@/lib/email/resendDeliveryCore'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { suppressAndCancelPendingOutreach } from '@/lib/outreach/suppression'
 
 export type ProviderDeliveryStatus =
   | 'queued'
@@ -87,7 +89,7 @@ async function findOutreachEvent(providerMessageId: string) {
   for (const metadata of candidates) {
     const { data, error } = await admin
       .from('outreach_send_events')
-      .select('id,lead_id,outreach_message_id,recipient,subject')
+      .select('id,lead_id,outreach_message_id,recipient,subject,metadata_json')
       .eq('provider', 'resend')
       .contains('metadata_json', metadata)
       .order('created_at', { ascending: false })
@@ -98,6 +100,52 @@ async function findOutreachEvent(providerMessageId: string) {
     if (data) return data
   }
 
+  return null
+}
+
+async function findPartnerOutreachRecord(providerMessageId: string) {
+  const admin = createAdminClient()
+  const sources = [
+    {
+      table: 'buyer_outreach_messages',
+      recordType: 'buyer_outreach',
+      entityTable: 'buyers',
+      entityIdColumn: 'buyer_id',
+    },
+    {
+      table: 'lender_outreach_messages',
+      recordType: 'lender_outreach',
+      entityTable: 'lenders',
+      entityIdColumn: 'lender_id',
+    },
+    {
+      table: 'investor_outreach_messages',
+      recordType: 'investor_outreach',
+      entityTable: 'investor_profiles',
+      entityIdColumn: 'investor_profile_id',
+    },
+  ]
+  for (const source of sources) {
+    const { data, error } = await admin
+      .from(source.table)
+      .select(`id,${source.entityIdColumn},metadata_json`)
+      .contains('metadata_json', { providerMessageId })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    if (data) {
+      const row = data as unknown as Record<string, unknown>
+      return {
+        id: String(row.id || ''),
+        recordType: source.recordType,
+        messageTable: source.table,
+        entityTable: source.entityTable,
+        entityId: String(row[source.entityIdColumn] || ''),
+        metadata_json: (row.metadata_json || {}) as Record<string, unknown>,
+      }
+    }
+  }
   return null
 }
 
@@ -213,27 +261,45 @@ async function recordBuyerPacketDelivery(input: {
   }
 }
 
-async function suppressLeadEmail(email: string | null, reason: string) {
-  if (!email) return
+async function recordPartnerOutreachDelivery(input: {
+  match: NonNullable<Awaited<ReturnType<typeof findPartnerOutreachRecord>>>
+  status: ProviderDeliveryStatus
+  reason: string | null
+  occurredAt: string
+  providerEventId: string
+}) {
   const admin = createAdminClient()
-  const normalized = email.trim().toLowerCase()
-  if (!normalized) return
-
-  const { data: existing } = await admin
-    .from('lead_suppressions')
-    .select('id')
-    .eq('email', normalized)
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle()
-
-  if (!existing?.id) {
-    const { error } = await admin.from('lead_suppressions').insert({
-      email: normalized,
-      reason,
+  const failureStatus = ['bounced', 'complained', 'suppressed', 'failed'].includes(input.status)
+  const { error: messageError } = await admin
+    .from(input.match.messageTable)
+    .update({
+      ...(failureStatus ? { status: 'failed' } : {}),
+      send_error: failureStatus ? input.reason || `Resend reported ${input.status}.` : null,
+      metadata_json: {
+        ...(input.match.metadata_json || {}),
+        deliveryStatus: input.status,
+        lastProviderEventId: input.providerEventId,
+        lastProviderEventAt: input.occurredAt,
+      },
+      updated_at: new Date().toISOString(),
     })
-    if (error) throw error
+    .eq('id', input.match.id)
+  if (messageError) throw messageError
+
+  if (failureStatus && input.match.entityId) {
+    const doNotContact = ['complained', 'suppressed'].includes(input.status)
+    const { error: entityError } = await admin
+      .from(input.match.entityTable)
+      .update({
+        outreach_status: doNotContact ? 'do_not_contact' : 'failed',
+        next_follow_up_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.match.entityId)
+    if (entityError) throw entityError
   }
+
+  return { recordType: input.match.recordType, recordId: input.match.id, status: input.status }
 }
 
 export async function recordResendDeliveryEvent(input: {
@@ -263,6 +329,17 @@ export async function recordResendDeliveryEvent(input: {
     suppressed: event.type === 'email.suppressed' ? event.data.suppressed : null,
   }
 
+  const [outreachEvent, buyerPacketSend, partnerOutreach] = await Promise.all([
+    findOutreachEvent(providerMessageId),
+    findBuyerPacketSend(providerMessageId),
+    findPartnerOutreachRecord(providerMessageId),
+  ])
+  const outboundIdentity = buildResendDeliveryIdentityMetadata({
+    leadOutreach: outreachEvent,
+    partnerOutreach,
+    buyerPacketSend,
+  })
+
   const { data: inserted, error: insertError } = await admin
     .from('provider_delivery_events')
     .upsert(
@@ -275,7 +352,7 @@ export async function recordResendDeliveryEvent(input: {
         recipient,
         subject,
         reason,
-        metadata_json: metadata,
+        metadata_json: { ...metadata, ...outboundIdentity },
         occurred_at: event.created_at,
       },
       { onConflict: 'provider,provider_event_id', ignoreDuplicates: true }
@@ -286,10 +363,14 @@ export async function recordResendDeliveryEvent(input: {
   if (insertError) throw insertError
   if (!inserted?.id) return { recorded: false, reason: 'duplicate' as const }
 
-  const [outreachEvent, buyerPacketSend] = await Promise.all([
-    findOutreachEvent(providerMessageId),
-    findBuyerPacketSend(providerMessageId),
-  ])
+  const effectiveRecipient = recipient || outreachEvent?.recipient || buyerPacketSend?.buyer_email || null
+  if (['bounced', 'complained', 'suppressed', 'failed'].includes(status)) {
+    await suppressAndCancelPendingOutreach({
+      email: effectiveRecipient,
+      reason: reason || `Resend reported ${status}.`,
+    })
+  }
+
   await admin
     .from('email_events')
     .update({
@@ -309,13 +390,24 @@ export async function recordResendDeliveryEvent(input: {
       })
     : null
 
+  const partnerDelivery = partnerOutreach
+    ? await recordPartnerOutreachDelivery({
+        match: partnerOutreach,
+        status,
+        reason,
+        occurredAt: event.created_at,
+        providerEventId,
+      })
+    : null
+
   if (!outreachEvent?.lead_id) {
     return {
       recorded: true,
-      matched: Boolean(buyerPacket),
+      matched: Boolean(buyerPacket || partnerDelivery),
       status,
       providerMessageId,
       buyerPacket,
+      partnerDelivery,
     }
   }
 
@@ -329,6 +421,7 @@ export async function recordResendDeliveryEvent(input: {
     subject: subject || outreachEvent.subject || null,
     error_message: reason,
     metadata_json: {
+      ...outboundIdentity,
       providerEventId,
       providerMessageId,
       eventType: event.type,
@@ -345,7 +438,6 @@ export async function recordResendDeliveryEvent(input: {
     leadUpdates.email_valid = false
     leadUpdates.suppression_reason = reason || `Resend reported ${status}.`
     leadUpdates.outreach_status = status === 'complained' ? 'do_not_contact' : 'failed'
-    await suppressLeadEmail(recipient || outreachEvent.recipient || null, String(leadUpdates.suppression_reason))
   }
 
   const { error: leadError } = await admin
@@ -415,5 +507,6 @@ export async function recordResendDeliveryEvent(input: {
     providerMessageId,
     leadId: outreachEvent.lead_id,
     buyerPacket,
+    partnerDelivery,
   }
 }

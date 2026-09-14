@@ -11,6 +11,8 @@ export class DealMachineApiError extends Error {
 export function dealMachineApiKey(env?: Record<string, string | undefined>): string
 export function isDealMachineCredentialFormat(value: unknown): boolean
 export function hasDealMachineCredentials(env?: Record<string, string | undefined>): boolean
+export function formatDealMachineErrorDetail(payload: any, text?: string, maxLength?: number): string
+export function formatDealMachineThrownError(error: unknown, maxLength?: number): string
 
 export type DealMachineDownload = { filename: string; url: string; size: number | null }
 export type DealMachineV2Client = {
@@ -21,10 +23,18 @@ export type DealMachineV2Client = {
   listFields(sourceType: 'properties' | 'people'): Promise<any[]>
   searchLocations(query: Record<string, unknown>): Promise<any>
   resolveCity(city: string, state: string): Promise<any>
+  countRecords(sourceType: 'properties' | 'people', body: Record<string, unknown>): Promise<any>
+  searchRecords(sourceType: 'properties' | 'people', body: Record<string, unknown>): Promise<any>
+  estimateRecordSearch(sourceType: 'properties' | 'people', body: Record<string, unknown>): Promise<any>
+  exportRecords(sourceType: 'properties' | 'people', body: Record<string, unknown>): Promise<any>
   countProperties(body: Record<string, unknown>): Promise<any>
   searchProperties(body: Record<string, unknown>): Promise<any>
   estimatePropertySearch(body: Record<string, unknown>): Promise<any>
   exportProperties(body: Record<string, unknown>): Promise<any>
+  countPeople(body: Record<string, unknown>): Promise<any>
+  searchPeople(body: Record<string, unknown>): Promise<any>
+  estimatePeopleSearch(body: Record<string, unknown>): Promise<any>
+  exportPeople(body: Record<string, unknown>): Promise<any>
   listLists(query?: Record<string, unknown>): Promise<any>
   createList(body: Record<string, unknown>): Promise<any>
   getList(listId: string): Promise<any>

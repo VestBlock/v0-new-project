@@ -30,7 +30,12 @@ export async function POST(request: NextRequest) {
           await generateAndStoreLenderOutreach(lender as any)
           break
         case 'approve_outreach': {
-          const { data: messages } = await admin.from('lender_outreach_messages').select('*').eq('lender_id', lender.id)
+          const { data: messages, error: messagesError } = await admin
+            .from('lender_outreach_messages')
+            .select('*')
+            .eq('lender_id', lender.id)
+            .in('status', ['draft', 'needs_review'])
+          if (messagesError) throw messagesError
           for (const message of messages || []) {
             await updateLenderOutreachMessage(message.id, {
               status: 'approved',
@@ -38,7 +43,9 @@ export async function POST(request: NextRequest) {
               approved_by_user_id: user?.id || null,
             })
           }
-          await updateLenderRecord(lender.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+          if (messages?.length) {
+            await updateLenderRecord(lender.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+          }
           break
         }
         case 'archive_outreach': {

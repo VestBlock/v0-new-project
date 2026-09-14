@@ -1,67 +1,86 @@
 import Link from "next/link"
-import { ArrowRight, FileCheck2, GitBranch, ReceiptText } from "lucide-react"
-import { MarketingReveal } from "@/components/marketing/reveal"
+import { ArrowRight, Check, FileCheck2, LockKeyhole, Scale, ShieldCheck } from "lucide-react"
 
-const records = [
+const recordRows = [
+  ["Agreement", "Version and permissions retained"],
+  ["Milestones", "Submissions and decisions in sequence"],
+  ["Payout reference", "Terms connected to supporting records"],
+]
+
+const trustPoints = [
   {
-    title: "Agreement record",
-    body: "Retain the version, terms, timestamps, and permissions associated with a partner commitment without exposing private documents publicly.",
-    icon: FileCheck2,
+    icon: Scale,
+    title: "Scope is stated upfront",
+    body: "Each pathway shows what VestBlock organizes, what a participant reviews, and which decision remains independent.",
   },
   {
-    title: "Milestone history",
-    body: "Keep submissions, review checkpoints, introductions, and project milestones connected to the work they belong to.",
-    icon: GitBranch,
+    icon: LockKeyhole,
+    title: "Limited public intake",
+    body: "The free questionnaire does not request a Social Security number, full account number, password, or complete credit report.",
   },
   {
-    title: "Payout reference",
-    body: "Document the terms and supporting record for referral, joint-venture, disposition, or operator splits before a disagreement has to be reconstructed.",
-    icon: ReceiptText,
+    icon: ShieldCheck,
+    title: "Consent stays separate",
+    body: "Roadmap delivery and optional marketing consent are separate choices. Marketing is not preselected.",
   },
 ]
 
 export function DealVaultProofSection() {
   return (
-    <section className="vb-dealvault" aria-labelledby="dealvault-title">
-      <div className="vb-section-shell vb-dealvault__layout">
-        <MarketingReveal initial={false} className="vb-dealvault__intro">
-          <p className="vb-dealvault__label">DealVault</p>
-          <h2 id="dealvault-title">Keep the record that supports the work.</h2>
-          <p>
-            DealVault keeps agreements, milestones, and payout references connected to the active work while sensitive
-            material remains private.
-          </p>
-          <div className="vb-dealvault__actions">
-            <Link href="/dealvault/demo" className="vb-button vb-button--primary">
-              See the DealVault demo
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="/dealvault" className="vb-button vb-button--quiet">
-              How it works
-            </Link>
+    <section className="vb-home-continuity" aria-labelledby="continuity-title">
+      <div className="vb-home-shell">
+        <div className="vb-home-continuity__layout">
+          <div className="vb-home-continuity__intro">
+            <p className="vb-home-kicker">DealVault</p>
+            <h2 id="continuity-title">The record layer behind active work.</h2>
+            <p>
+              DealVault is not a fifth outcome. It preserves the agreements, milestones, permissions, and payout
+              references behind work activated through any VestBlock path.
+            </p>
+            <div>
+              <Link href="/dealvault/demo" className="vb-home-button vb-home-button--primary">
+                View the working demo <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link href="/dealvault" className="vb-home-link">Learn how DealVault works</Link>
+            </div>
           </div>
-        </MarketingReveal>
 
-        <MarketingReveal initial={false} delay={0.1} className="vb-dealvault__records">
-          <div className="vb-dealvault__seal" aria-hidden="true">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/vestblock-mark-transparent.png" alt="" />
-            <span>record continuity</span>
+          <div className="vb-deal-record" aria-label="Illustrative DealVault record">
+            <header>
+              <span><FileCheck2 aria-hidden="true" /> Active work record</span>
+              <span><i /> In progress</span>
+            </header>
+            <div className="vb-deal-record__identity">
+              <small>Reference</small><strong>VB–0426–A17</strong><span>Controlled access</span>
+            </div>
+            <ol>
+              {recordRows.map(([title, body], index) => (
+                <li key={title}>
+                  <span>0{index + 1}</span>
+                  <div><strong>{title}</strong><p>{body}</p></div>
+                  <Check aria-hidden="true" />
+                </li>
+              ))}
+            </ol>
+            <footer>Illustrative record · Private supporting material remains access-controlled</footer>
           </div>
-          {records.map((record, index) => {
-            const Icon = record.icon
-            return (
-              <article key={record.title}>
-                <span>0{index + 1}</span>
+        </div>
+
+        <div className="vb-home-trust" aria-labelledby="trust-title">
+          <div className="vb-home-trust__heading">
+            <p className="vb-home-kicker">Clear before you continue</p>
+            <h2 id="trust-title">Know the scope before you share information.</h2>
+          </div>
+          <div className="vb-home-trust__grid">
+            {trustPoints.map(({ icon: Icon, title, body }) => (
+              <article key={title}>
                 <Icon aria-hidden="true" />
-                <div>
-                  <h3>{record.title}</h3>
-                  <p>{record.body}</p>
-                </div>
+                <h3>{title}</h3>
+                <p>{body}</p>
               </article>
-            )
-          })}
-        </MarketingReveal>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )

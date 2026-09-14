@@ -1,98 +1,149 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, BriefcaseBusiness, Building2, CircleDollarSign, Landmark, ShieldCheck, TrendingUp } from "lucide-react"
-import { useMemo, useState } from "react"
-import { platformLanes, platformScenarios, type ScenarioId } from "@/lib/platform/lanes"
+import { ArrowRight, Bot, Building2, Landmark, ShieldCheck, TrendingUp } from "lucide-react"
 
-const scenarioIcons = {
-  business: BriefcaseBusiness,
-  property: Building2,
-  sell: Landmark,
-  readiness: TrendingUp,
-  participate: CircleDollarSign,
+export type HomepageOutcomeId = "capital" | "real-estate" | "business-growth" | "personal-roadmap"
+
+export const homepageOutcomes = [
+  {
+    id: "capital",
+    label: "Capital",
+    title: "Prepare a business or real estate funding request",
+    href: "/capital",
+    action: "Review capital pathways",
+    access: "Free to explore · Provider review may be required",
+    summary: "Organize the purpose, amount, timing, and evidence behind a request before it reaches an independent provider.",
+    prepare: "Use of funds, requested amount, timing, business or property context, and supporting records.",
+    boundary: "VestBlock is not a lender and does not guarantee approval. Independent providers set eligibility, pricing, limits, and terms.",
+    shortcuts: [
+      ["Business funding", "/capital?path=business-funding#capital-intake"],
+      ["Real estate funding", "/real-estate-funding"],
+    ],
+    icon: Landmark,
+  },
+  {
+    id: "real-estate",
+    label: "Real Estate",
+    title: "Move through a buyer, seller, lender, or partner path",
+    href: "/real-estate",
+    action: "Choose a real estate role",
+    access: "Free profiles and submissions · Routing requires review",
+    summary: "Start with your role and criteria so a relevant property, participant, or intake workflow can be connected.",
+    prepare: "Market, role, asset type, price range, timing, property details, capacity, and clear no-go criteria.",
+    boundary: "VestBlock is not a broker or guarantor. Licensed and independent parties control regulated services, offers, underwriting, and closings.",
+    shortcuts: [
+      ["Buyer profile", "/buyers"],
+      ["Sell a property", "/sell"],
+      ["Lender profile", "/lenders"],
+    ],
+    icon: Building2,
+  },
+  {
+    id: "business-growth",
+    label: "Business Growth + AI",
+    title: "Improve discovery, lead response, or operations",
+    href: "/services",
+    action: "Explore growth workflows",
+    access: "Free reviews · Paid implementation is identified before purchase",
+    summary: "Define the operating constraint, organize the current process, and connect the next practical growth or automation review.",
+    prepare: "Primary offer, lead sources, response process, service area, operating capacity, and the result to improve.",
+    boundary: "Growth and AI support do not guarantee rankings, leads, appointments, revenue, or profitability.",
+    shortcuts: [
+      ["AI receptionist", "/ai-assistant"],
+      ["Search visibility", "/visibility-expansion"],
+    ],
+    icon: Bot,
+  },
+  {
+    id: "personal-roadmap",
+    label: "Personal Roadmap",
+    title: "Build a starting plan for financial readiness",
+    href: "/next-move",
+    action: "Build my starting plan",
+    access: "Free to view · No account or SSN required",
+    summary: "Turn your goal, current position, time, and main obstacle into an ordered educational roadmap.",
+    prepare: "Your goal, timeline, current position, available time, and main obstacle. The questionnaire does not request an SSN.",
+    boundary: "The roadmap is educational. Creditors, issuers, programs, employers, and partners make their own decisions.",
+    shortcuts: [
+      ["Free questionnaire", "/next-move"],
+      ["Credit review", "/credit-upload"],
+    ],
+    icon: TrendingUp,
+  },
+] as const
+
+type HomepageDirectoryProps = {
+  selectedId: HomepageOutcomeId
+  onSelect: (id: HomepageOutcomeId) => void
 }
 
-export function HomepageDirectory() {
-  const [selectedId, setSelectedId] = useState<ScenarioId>("business")
-  const selected = useMemo(() => platformScenarios.find((scenario) => scenario.id === selectedId) || platformScenarios[0], [selectedId])
-  const lane = platformLanes[selected.lane]
+export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryProps) {
+  const selected = homepageOutcomes.find((goal) => goal.id === selectedId) || homepageOutcomes[0]
 
   const rememberChoice = () => {
     try {
-      window.localStorage.setItem("vestblock:selected-scenario", selected.id)
-      window.localStorage.setItem("vestblock:active-lane", selected.lane)
+      window.localStorage.setItem("vestblock:selected-homepage-goal", selected.id)
+      window.localStorage.setItem("vestblock:active-lane", selected.id)
     } catch {
-      // Exploration continues when storage is unavailable.
+      // The route still works when storage is unavailable.
     }
   }
 
   return (
-    <>
-      <section id="choose-your-path" className="vb-scenario" aria-labelledby="scenario-title">
-        <div className="vb-section-shell">
-          <div className="vb-section-intro vb-section-intro--split">
-            <div><p className="vb-kicker">Start with the outcome</p><h2 id="scenario-title">What are you trying to do next?</h2></div>
-            <p>Choose the closest situation. VestBlock will show the right lane, what we organize, what another party decides, and what you need to continue.</p>
+    <section id="choose-your-path" className="vb-home-paths" aria-labelledby="path-selector-title">
+      <div className="vb-home-shell">
+        <div className="vb-home-heading vb-home-heading--split">
+          <div>
+            <p className="vb-home-kicker">Four outcomes · one starting point</p>
+            <h2 id="path-selector-title">What are you working toward?</h2>
+          </div>
+          <p>Choose the closest outcome. VestBlock will show the information to organize, the next workflow, and where an independent decision applies.</p>
+        </div>
+
+        <div className="vb-home-paths__workspace">
+          <div className="vb-home-paths__choices" aria-label="Choose your outcome">
+            {homepageOutcomes.map((goal, index) => {
+              const Icon = goal.icon
+              const active = selected.id === goal.id
+              return (
+                <button
+                  key={goal.id}
+                  type="button"
+                  aria-pressed={active}
+                  aria-controls="selected-path"
+                  data-active={active || undefined}
+                  onClick={() => onSelect(goal.id)}
+                >
+                  <span>0{index + 1}</span>
+                  <Icon aria-hidden="true" />
+                  <strong>{goal.label}</strong>
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              )
+            })}
           </div>
 
-          <div className="vb-scenario__workspace">
-            <div className="vb-scenario__choices" aria-label="Choose your situation">
-              {platformScenarios.map((scenario, index) => {
-                const Icon = scenarioIcons[scenario.id]
-                const active = scenario.id === selected.id
-                return (
-                  <button key={scenario.id} type="button" aria-pressed={active} data-active={active || undefined} onClick={() => setSelectedId(scenario.id)}>
-                    <span>0{index + 1}</span><Icon aria-hidden="true" /><span><small>{scenario.short}</small><strong>{scenario.title}</strong></span><ArrowRight aria-hidden="true" />
-                  </button>
-                )
-              })}
+          <article id="selected-path" className="vb-home-paths__preview">
+            <header><span>Selected outcome</span><strong>{selected.label}</strong></header>
+            <h3>{selected.title}</h3>
+            <p className="vb-home-paths__summary">{selected.summary}</p>
+            <div className="vb-home-paths__shortcuts" aria-label={`${selected.label} options`}>
+              {selected.shortcuts.map(([label, href]) => <Link key={href} href={href} onClick={rememberChoice}>{label}<ArrowRight aria-hidden="true" /></Link>)}
             </div>
-
-            <article className="vb-scenario__preview" key={selected.id} aria-live="polite">
-              <div className="vb-scenario__preview-head"><span>Recommended lane</span><strong>{lane.label}</strong></div>
-              <h3>{selected.title}</h3>
-              <dl>
-                <div><dt>VestBlock organizes</dt><dd>{selected.vestblock}</dd></div>
-                <div><dt>Who decides</dt><dd>{selected.decision}</dd></div>
-                <div><dt>What to prepare</dt><dd>{selected.needed}</dd></div>
-              </dl>
-              <p><ShieldCheck aria-hidden="true" />{selected.access}</p>
-              <div>
-                <Link href={selected.href} onClick={rememberChoice} className="vb-button vb-button--primary">{selected.action}<ArrowRight aria-hidden="true" /></Link>
-                <Link href="/next-move" onClick={rememberChoice} className="vb-button vb-button--quiet">Build a free roadmap</Link>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="vb-how" aria-labelledby="how-title">
-        <div className="vb-section-shell">
-          <div className="vb-section-intro vb-section-intro--split"><div><p className="vb-kicker">How VestBlock helps</p><h2 id="how-title">From a goal to coordinated next actions.</h2></div><p>VestBlock is the operating layer between an objective and the workflows, people, information, and records needed to move it forward responsibly.</p></div>
-          <ol className="vb-how__steps">
-            {[
-              ["01", "Capture the context", "Start with the goal, role, timing, criteria, and current position."],
-              ["02", "Organize readiness", "See the facts, preparation gaps, and decision boundaries in plain language."],
-              ["03", "Route the next action", "Continue into the appropriate tool, intake, human review, or participant path."],
-              ["04", "Keep work connected", "Save progress in your workspace and use DealVault when active work needs continuity."],
-            ].map(([number, title, body]) => <li key={number}><span>{number}</span><h3>{title}</h3><p>{body}</p></li>)}
-          </ol>
-        </div>
-      </section>
-
-      <section className="vb-lane-index" aria-labelledby="lane-index-title">
-        <div className="vb-section-shell">
-          <div className="vb-section-intro vb-section-intro--split"><div><p className="vb-kicker">The platform</p><h2 id="lane-index-title">Four lanes. One connected account.</h2></div><p>Each hub explains its complete path without forcing every detail onto the homepage.</p></div>
-          <div className="vb-lane-index__grid">
-            {(Object.values(platformLanes)).map((item, index) => (
-              <Link key={item.id} href={item.href} className="vb-lane-index__item">
-                <span>0{index + 1}</span><div><p>{item.eyebrow}</p><h3>{item.label}</h3><small>{item.introduction}</small></div><ArrowRight aria-hidden="true" />
+            <dl>
+              <div><dt>Organize</dt><dd>{selected.prepare}</dd></div>
+              <div><dt>Decision boundary</dt><dd>{selected.boundary}</dd></div>
+            </dl>
+            <p className="vb-home-paths__access"><ShieldCheck aria-hidden="true" /> {selected.access}</p>
+            <div className="vb-home-paths__actions">
+              <Link href={selected.href} onClick={rememberChoice} className="vb-home-button vb-home-button--ink">
+                {selected.action} <ArrowRight aria-hidden="true" />
               </Link>
-            ))}
-          </div>
+            </div>
+          </article>
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   )
 }

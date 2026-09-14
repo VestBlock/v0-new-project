@@ -1,6 +1,6 @@
 import { adminTaskDueDates, createAdminTask, createLeadFollowupTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
-import { recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
+import { getStrategyDeliveryAttribution, recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
 import { isStrategyEngineAutoApprovalAllowed } from '@/lib/admin/strategyLeadProvenance'
 import { sendEmail, sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision, isLegacyGooglePlacesPhaseOutEnabled } from '@/lib/leads/autopilot'
@@ -22,6 +22,8 @@ import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
 import { discoverMarkets, markMarketRunResult, pickDiscoveryTermsForMarket, updateMarketPerformance } from '@/lib/leads/marketExpansion'
 import {
   insertOutreachSendEvent,
+  claimLeadFollowup,
+  claimOutreachMessageForSend,
   listEmailOutreachForSendQueue,
   listLeadEmailFollowupsDue,
   listLeadsForEmailEnrichment,
@@ -37,6 +39,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 type MarketConfig = {
   id?: string
@@ -59,7 +63,6 @@ type LeadAutomationOptions = {
   budgetMs?: number
   startedAtMs?: number
   emailReadyRefillOnly?: boolean
-  allowImmediateAutoSendDuringOutreachGeneration?: boolean
   refillMarketCount?: number
   refillMarketOffset?: number
   refillNicheCount?: number
@@ -1382,11 +1385,7 @@ export async function runDailyLeadOutreach(options: LeadAutomationOptions = {}) 
           }
         }
 
-        const messages = options.dryRun
-          ? []
-          : await generateAndStoreOutreachForLead(currentLead, {
-              allowImmediateAutoSend: options.allowImmediateAutoSendDuringOutreachGeneration ?? true,
-            })
+        const messages = options.dryRun ? [] : await generateAndStoreOutreachForLead(currentLead)
         return {
           leadId: currentLead.id,
           generated: messages.length || 5,
@@ -1438,7 +1437,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     deliveryCircuitBreaker.maxBatchSize || Number.POSITIVE_INFINITY
   )
   const queue = await listEmailOutreachForSendQueue(sendLimit * queueMultiplier)
-  const suppressions = await listSuppressions().catch(() => [])
+  const suppressions = await listSuppressions()
   const autoSendEnabled = autoSendApproved && deliveryCircuitBreaker.allowed && replyCaptureReadiness.ready
   const sendResults: Array<{ leadId: string; status: string; provider?: string; detail?: string }> = []
   const skipReasonCounts = new Map<string, number>()
@@ -1773,8 +1772,47 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       continue
     }
 
-    await updateOutreachMessage(currentRow.id, { status: 'queued', send_provider: null, send_error: null })
+    const finalRecipientGuard = await getOutreachRecipientGuard({
+      scope: 'lead',
+      entityId: currentLead.id,
+      email: currentLead.email,
+    })
+    if (!finalRecipientGuard.allowed) {
+      incrementCount(skipReasonCounts, finalRecipientGuard.reason || 'recipient_safety_blocked')
+      await persistSkippedSendEvent({
+        dryRun: options.dryRun,
+        lead: currentLead,
+        outreachMessageId: currentRow.id,
+        subject: currentRow.subject,
+        reason: finalRecipientGuard.reason || 'recipient_safety_blocked',
+      })
+      sendResults.push({
+        leadId: currentLead.id,
+        status: 'suppression_blocked',
+        detail: finalRecipientGuard.reason || 'recipient_safety_blocked',
+      })
+      continue
+    }
+
+    const claimedMessage = await claimOutreachMessageForSend(currentRow.id)
+    if (!claimedMessage) {
+      sendResults.push({
+        leadId: currentLead.id,
+        status: 'duplicate_claim_blocked',
+        detail: 'Another worker already claimed or completed this message.',
+      })
+      continue
+    }
+    currentRow = { ...currentRow, ...claimedMessage }
     const revenueCampaign = classifyLeadRevenueCampaign(currentLead, currentRow.subject || '')
+    const attribution = await getStrategyDeliveryAttribution(currentLead.id).catch(() => null)
+    const strategyKey = attribution?.strategy_key || revenueCampaign.key
+    const sendIdentity = buildOutboundSendIdentity({
+      scope: 'lead',
+      entityId: currentLead.id,
+      messageId: currentRow.id,
+      sequenceStep: 1,
+    })
     await insertOutreachSendEvent({
       leadId: currentLead.id,
       outreachMessageId: currentRow.id,
@@ -1782,15 +1820,24 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       status: 'queued',
       recipient: currentLead.email,
       subject: currentRow.subject,
+      idempotencyKey: `${sendIdentity.idempotencyKey}:queued`,
+      correlationId: sendIdentity.correlationId,
       metadata: allowVerifiedPublicEmail
         ? {
             allowedReason: 'verified_public_email_candidate',
             originalGuardrail: decision.reason,
+            ...outboundIdentityMetadata(sendIdentity),
+            campaignRunId: attribution?.campaign_run_id || null,
+            strategyKey,
           }
-        : undefined,
+        : {
+            ...outboundIdentityMetadata(sendIdentity),
+            campaignRunId: attribution?.campaign_run_id || null,
+            strategyKey,
+          },
     })
 
-    const sendResult = await sendLeadOutreachEmail({ lead: currentLead, message: currentRow })
+    const sendResult = await sendLeadOutreachEmail({ lead: currentLead, message: currentRow, sequenceStep: 1 })
     if (sendResult.ok) {
       await Promise.all([
         updateOutreachMessage(currentRow.id, {
@@ -1814,7 +1861,14 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           status: 'accepted',
           recipient: currentLead.email,
           subject: currentRow.subject,
-          metadata: { providerMessageId: sendResult.providerMessageId || null },
+          idempotencyKey: `${sendIdentity.idempotencyKey}:accepted`,
+          correlationId: sendIdentity.correlationId,
+          metadata: {
+            ...outboundIdentityMetadata(sendIdentity),
+            providerMessageId: sendResult.providerMessageId || null,
+            campaignRunId: attribution?.campaign_run_id || null,
+            strategyKey,
+          },
         }),
         logEvent({
           eventType: 'email_sent',
@@ -1833,7 +1887,8 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           deliveryMode: 'queue',
         }),
         recordOutboundEnrollment({
-          strategyKey: revenueCampaign.key,
+          campaignRunId: attribution?.campaign_run_id || null,
+          strategyKey,
           channel: 'email',
           status: 'accepted',
           messageId: currentRow.id,
@@ -1846,6 +1901,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
             provider: sendResult.provider,
             providerMessageId: sendResult.providerMessageId || null,
             campaignLabel: revenueCampaign.label,
+            ...outboundIdentityMetadata(sendIdentity),
           },
         }).catch(() => null),
         recordStrategyDeliveryOutcome({
@@ -1881,10 +1937,18 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         recipient: currentLead.email,
         subject: currentRow.subject,
         errorMessage: sendResult.error,
-        metadata: { reason: sendResult.error || 'send_failed' },
+        idempotencyKey: `${sendIdentity.idempotencyKey}:failed`,
+        correlationId: sendIdentity.correlationId,
+        metadata: {
+          ...outboundIdentityMetadata(sendIdentity),
+          reason: sendResult.error || 'send_failed',
+          campaignRunId: attribution?.campaign_run_id || null,
+          strategyKey,
+        },
       })
       await recordOutboundEnrollment({
-        strategyKey: revenueCampaign.key,
+        campaignRunId: attribution?.campaign_run_id || null,
+        strategyKey,
         channel: 'email',
         status: 'failed',
         messageId: currentRow.id,
@@ -1892,7 +1956,11 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         leadId: currentLead.id,
         market: getLeadMarketKey(currentLead),
         propertyAddress: currentLead.property_address,
-        metadata: { provider: sendResult.provider, error: sendResult.error || 'send_failed' },
+        metadata: {
+          provider: sendResult.provider,
+          error: sendResult.error || 'send_failed',
+          ...outboundIdentityMetadata(sendIdentity),
+        },
       }).catch(() => null)
       await recordStrategyDeliveryOutcome({
         leadId: currentLead.id,
@@ -2329,7 +2397,34 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       continue
     }
 
-    const sendResult = await sendLeadOutreachEmail({ lead, message })
+    const finalRecipientGuard = await getOutreachRecipientGuard({
+      scope: 'lead',
+      entityId: lead.id,
+      email: lead.email,
+    })
+    if (!finalRecipientGuard.allowed) {
+      results.push({
+        leadId: lead.id,
+        label: leadLabel(lead),
+        status: 'suppression_blocked',
+        error: finalRecipientGuard.reason,
+      })
+      continue
+    }
+
+    const followupClaimed = await claimLeadFollowup(lead.id, lead.next_follow_up_at)
+    if (!followupClaimed) {
+      results.push({ leadId: lead.id, label: leadLabel(lead), status: 'duplicate_claim_blocked' })
+      continue
+    }
+    const attribution = await getStrategyDeliveryAttribution(lead.id).catch(() => null)
+    const identity = buildOutboundSendIdentity({
+      scope: 'lead',
+      entityId: lead.id,
+      messageId: initialMessage.id,
+      sequenceStep: 2,
+    })
+    const sendResult = await sendLeadOutreachEmail({ lead, message, sequenceStep: 2 })
     const now = new Date().toISOString()
     if (!sendResult.ok) {
       await insertOutreachSendEvent({
@@ -2341,7 +2436,14 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         recipient: lead.email,
         subject: message.subject,
         errorMessage: sendResult.error || 'Follow-up send failed.',
-        metadata: { sequenceStep: 2, initialMessageId: initialMessage.id, strategyKey: strategy },
+        idempotencyKey: `${identity.idempotencyKey}:failed`,
+        correlationId: identity.correlationId,
+        metadata: {
+          ...outboundIdentityMetadata(identity),
+          initialMessageId: initialMessage.id,
+          strategyKey: attribution?.strategy_key || strategy,
+          campaignRunId: attribution?.campaign_run_id || null,
+        },
       })
       await updateLeadRecord(lead.id, { next_follow_up_at: null })
       await createAdminTask({
@@ -2367,10 +2469,13 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         status: 'accepted',
         recipient: lead.email,
         subject: message.subject,
+        idempotencyKey: `${identity.idempotencyKey}:accepted`,
+        correlationId: identity.correlationId,
         metadata: {
-          sequenceStep: 2,
+          ...outboundIdentityMetadata(identity),
           initialMessageId: initialMessage.id,
-          strategyKey: strategy,
+          strategyKey: attribution?.strategy_key || strategy,
+          campaignRunId: attribution?.campaign_run_id || null,
           providerMessageId: sendResult.providerMessageId || null,
         },
       }),
@@ -2381,7 +2486,8 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         next_follow_up_at: null,
       }),
       recordOutboundEnrollment({
-        strategyKey: strategy,
+        campaignRunId: attribution?.campaign_run_id || null,
+        strategyKey: attribution?.strategy_key || strategy,
         channel: 'email',
         status: 'accepted',
         messageId: `${initialMessage.id}:followup:2`,
@@ -2391,7 +2497,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
         propertyAddress: lead.property_address,
         nextActionAt: null,
         metadata: {
-          sequenceStep: 2,
+          ...outboundIdentityMetadata(identity),
           initialMessageId: initialMessage.id,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,

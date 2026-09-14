@@ -30,7 +30,12 @@ export async function POST(request: NextRequest) {
           await generateAndStoreBuyerOutreach(buyer as any)
           break
         case 'approve_outreach': {
-          const { data: messages } = await admin.from('buyer_outreach_messages').select('*').eq('buyer_id', buyer.id)
+          const { data: messages, error: messagesError } = await admin
+            .from('buyer_outreach_messages')
+            .select('*')
+            .eq('buyer_id', buyer.id)
+            .in('status', ['draft', 'needs_review'])
+          if (messagesError) throw messagesError
           for (const message of messages || []) {
             await updateBuyerOutreachMessage(message.id, {
               status: 'approved',
@@ -38,7 +43,9 @@ export async function POST(request: NextRequest) {
               approved_by_user_id: user?.id || null,
             })
           }
-          await updateBuyerRecord(buyer.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+          if (messages?.length) {
+            await updateBuyerRecord(buyer.id, { outreach_status: 'approved', relationship_stage: 'outreach_ready' })
+          }
           break
         }
         case 'archive_outreach': {

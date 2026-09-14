@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
-import { LenisProvider } from '@/components/cinematic/lenis-provider';
 import { CinematicHero } from '@/components/cinematic/cinematic-hero';
-import { HomepageDirectory } from '@/components/home/homepage-directory';
+import { HomepageDecisionFlow } from '@/components/home/homepage-decision-flow';
 import { DealVaultProofSection } from '@/components/home/dealvault-proof-section';
-import { TrustSection } from '@/components/home/trust-section';
 import { CinematicCta } from '@/components/cinematic/cinematic-cta';
 import { absoluteUrl } from '@/lib/seo/site';
 import {
@@ -13,9 +11,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
+  title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
   description:
-    'VestBlock coordinates practical next moves across capital, real estate, financial readiness, business growth, and DealVault records.',
+    'Organize readiness and connect the next workflow across capital, real estate, business growth and AI, or a personal roadmap—with active work preserved in DealVault.',
   keywords: [
     'business capital preparation',
     'capital readiness',
@@ -36,24 +34,24 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
+    title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
     description:
-      'Capital preparation, real estate pathways, practical opportunity roadmaps, and DealVault continuity—organized around a clear next move.',
+      'Four clear outcomes, qualified workflow routing, and DealVault continuity organized around your next move.',
     url: absoluteUrl('/'),
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Capital, Real Estate, Opportunity, and DealVault social preview',
+        alt: 'VestBlock decision pathways for capital, real estate, business growth and AI, and personal roadmaps',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Capital, Real Estate, Opportunity, and DealVault | VestBlock',
+    title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
     description:
-      'Capital preparation, real estate pathways, practical opportunity roadmaps, and DealVault continuity—organized around a clear next move.',
+      'Four clear outcomes, qualified workflow routing, and DealVault continuity organized around your next move.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
@@ -71,11 +69,9 @@ export default function HomePage() {
           ]),
         }}
       />
-      <LenisProvider />
       <CinematicHero />
-      <HomepageDirectory />
+      <HomepageDecisionFlow />
       <DealVaultProofSection />
-      <TrustSection />
       <CinematicCta />
     </div>
   );

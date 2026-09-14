@@ -4,6 +4,7 @@ export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
 
+import { formatDealMachineThrownError } from '@/lib/dealmachine/v2-client.mjs'
 import { runN8nDealMachineSourceAcquisition } from '@/lib/n8n/dealMachineSourceAcquisition'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -19,7 +20,6 @@ export async function GET(request: Request) {
     const result = await runN8nDealMachineSourceAcquisition()
     return NextResponse.json({ trigger: 'vercel_cron_fallback', ...result })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error || 'DealMachine source acquisition failed.')
-    return NextResponse.json({ ok: false, error: message.slice(0, 500) }, { status: 500 })
+    return NextResponse.json({ ok: false, error: formatDealMachineThrownError(error) }, { status: 500 })
   }
 }

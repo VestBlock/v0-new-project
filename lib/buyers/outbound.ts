@@ -2,7 +2,15 @@ import { Resend } from 'resend'
 import type { BuyerOutreachMessageRecord, BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
-import { shouldPreferResend } from '@/lib/outreach/provider-preference'
+import {
+  getOutboundProviderAvailability,
+  getPreferredOutboundProvider,
+  shouldPreferResend,
+} from '@/lib/outreach/provider-preference'
+import { buildOutboundSendIdentity, type OutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
+import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 type SendBuyerEmailInput = {
   buyer: BuyerRecord
@@ -12,6 +20,7 @@ type SendBuyerEmailInput = {
 
 type SendBuyerPacketEmailInput = {
   buyer: BuyerRecord
+  messageId: string
   subject: string
   body: string
   attachments: BuyerEmailAttachment[]
@@ -27,6 +36,8 @@ type SendBuyerEmailResult = {
   ok: boolean
   provider: 'gmail' | 'resend' | 'none'
   providerMessageId?: string | null
+  idempotencyKey?: string
+  correlationId?: string
   error?: string
 }
 
@@ -35,9 +46,12 @@ type BuyerEmailEnvelope = {
   subject: string
   body: string
   attachments?: BuyerEmailAttachment[]
+  identity?: OutboundSendIdentity
 }
 
 const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
+const BUYER_PACKET_COMPLIANCE_NOTE =
+  'If you do not want property opportunities from VestBlock, reply opt out and we will stop.'
 
 function getSender() {
   return (
@@ -58,23 +72,11 @@ function getReplyToEmail() {
 }
 
 function buildOutreachBody(message: BuyerOutreachMessageRecord) {
-  const body = String(message.body || '').trim()
-  const compliance = String(
-    message.compliance_note || 'If this is not relevant, reply and we will not contact you again.'
-  ).trim()
-  return body.toLowerCase().includes(compliance.toLowerCase()) ? body : `${body}\n\n${compliance}`
-}
-
-function hasGmailConfig() {
-  return Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN
-  )
-}
-
-function hasResendConfig() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL)
+  return buildCommercialOutreachBody({
+    body: message.body,
+    complianceNote: message.compliance_note,
+    mailingAddress: getCommercialOutreachMailingAddress(),
+  })
 }
 
 async function getGoogleAccessToken() {
@@ -111,6 +113,9 @@ function buildGmailMime(input: BuyerEmailEnvelope) {
     `Reply-To: ${getReplyToEmail()}`,
     `To: ${recipient}`,
     `Subject: ${input.subject}`,
+    ...(input.identity
+      ? [`Message-ID: <${input.identity.correlationId}@vestblock.io>`, `X-VestBlock-Correlation-ID: ${input.identity.correlationId}`]
+      : []),
     'MIME-Version: 1.0',
   ]
 
@@ -149,7 +154,13 @@ async function sendWithGmail(input: BuyerEmailEnvelope): Promise<SendBuyerEmailR
   const accessToken = await getGoogleAccessToken()
   const recipient = input.buyer.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
-    return { ok: false, provider: 'gmail', error: 'Buyer does not have a usable contact email.' }
+    return {
+      ok: false,
+      provider: 'gmail',
+      error: 'Buyer does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
 
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
@@ -167,75 +178,107 @@ async function sendWithGmail(input: BuyerEmailEnvelope): Promise<SendBuyerEmailR
       ok: false,
       provider: 'gmail',
       error: typeof data?.error?.message === 'string' ? data.error.message : `Gmail send failed with ${response.status}.`,
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
     }
   }
 
-  return { ok: true, provider: 'gmail', providerMessageId: data.id || null }
+  return {
+    ok: true,
+    provider: 'gmail',
+    providerMessageId: data.id || null,
+    idempotencyKey: input.identity?.idempotencyKey,
+    correlationId: input.identity?.correlationId,
+  }
 }
 
 async function sendWithResend(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
   const recipient = input.buyer.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
-    return { ok: false, provider: 'resend', error: 'Buyer does not have a usable contact email.' }
+    return {
+      ok: false,
+      provider: 'resend',
+      error: 'Buyer does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY)
-  const { data, error } = await resend.emails.send({
-    from: getResendSender(),
-    to: recipient,
-    subject: input.subject,
-    text: input.body,
-    replyTo: getReplyToEmail(),
-    attachments: input.attachments?.map((attachment) => ({
-      filename: attachment.filename,
-      content: attachment.content,
-      contentType: attachment.contentType,
-    })),
-  })
+  const { data, error } = await resend.emails.send(
+    {
+      from: getResendSender(),
+      to: recipient,
+      subject: input.subject,
+      text: input.body,
+      replyTo: getReplyToEmail(),
+      headers: input.identity ? { 'X-VestBlock-Correlation-ID': input.identity.correlationId } : undefined,
+      attachments: input.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType,
+      })),
+    },
+    input.identity ? { idempotencyKey: input.identity.idempotencyKey } : undefined
+  )
 
   if (error) {
-    return { ok: false, provider: 'resend', error: error.message || 'Resend send failed.' }
+    return {
+      ok: false,
+      provider: 'resend',
+      error: error.message || 'Resend send failed.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
 
-  return { ok: true, provider: 'resend', providerMessageId: data?.id || null }
+  return {
+    ok: true,
+    provider: 'resend',
+    providerMessageId: data?.id || null,
+    idempotencyKey: input.identity?.idempotencyKey,
+    correlationId: input.identity?.correlationId,
+  }
 }
 
 async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
   const replyCapture = getReplyCaptureReadiness()
   if (!replyCapture.ready) {
-    return { ok: false, provider: 'none', error: replyCapture.reason || 'Reply capture is disconnected.' }
+    return {
+      ok: false,
+      provider: 'none',
+      error: replyCapture.reason || 'Reply capture is disconnected.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
   if (!isUsableContactEmail(input.buyer.contact_email)) {
-    return { ok: false, provider: 'none', error: 'Buyer does not have a usable contact email.' }
+    return {
+      ok: false,
+      provider: 'none',
+      error: 'Buyer does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
-  const availability = { gmail: hasGmailConfig(), resend: hasResendConfig() }
+  const availability = getOutboundProviderAvailability()
   const preferResend = shouldPreferResend(availability)
-  let resendError: string | null = null
 
   if (availability.resend && preferResend) {
-    const resendResult = await sendWithResend(input)
-    if (resendResult.ok || !availability.gmail) return resendResult
-    resendError = resendResult.error || 'Resend send failed.'
+    return sendWithResend(input)
   }
 
   if (availability.gmail) {
     try {
-      const gmailResult = await sendWithGmail(input)
-      if (gmailResult.ok || !availability.resend) return gmailResult
-      if (resendError) {
-        return { ...gmailResult, error: `Resend: ${resendError}; Gmail: ${gmailResult.error || 'send failed.'}` }
-      }
+      return await sendWithGmail(input)
     } catch (error) {
       const gmailError = error instanceof Error ? error.message : 'Google Workspace sender failed.'
-      if (resendError) {
-        return { ok: false, provider: 'gmail', error: `Resend: ${resendError}; Gmail: ${gmailError}` }
-      }
-      if (!availability.resend) {
-        return {
-          ok: false,
-          provider: 'gmail',
-          error: gmailError,
-        }
+      return {
+        ok: false,
+        provider: 'gmail',
+        error: gmailError,
+        idempotencyKey: input.identity?.idempotencyKey,
+        correlationId: input.identity?.correlationId,
       }
     }
   }
@@ -248,23 +291,181 @@ async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEm
     ok: false,
     provider: 'none',
     error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
+    idempotencyKey: input.identity?.idempotencyKey,
+    correlationId: input.identity?.correlationId,
   }
 }
 
 export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
-  return sendBuyerEnvelope({
-    buyer: input.buyer,
-    subject: input.message.subject || 'VestBlock partnership note',
-    body: buildOutreachBody(input.message),
-    attachments: input.attachments,
+  const identity = buildOutboundSendIdentity({
+    scope: 'buyer',
+    entityId: input.buyer.id,
+    messageId: input.message.id,
+    sequenceStep: input.message.channel === 'email_followup' ? 2 : 1,
   })
+  if (!getCommercialOutreachMailingAddress()) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: 'Buyer outreach is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
+    }
+  }
+  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
+  if (provider === 'none') {
+    return {
+      ok: false,
+      provider,
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
+    }
+  }
+  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
+  try {
+    const recipientGuard = await getOutreachRecipientGuard({
+      scope: 'buyer',
+      entityId: input.buyer.id,
+      email: input.buyer.contact_email,
+    })
+    if (!recipientGuard.allowed) {
+      return {
+        ok: false,
+        provider: 'none',
+        idempotencyKey: identity.idempotencyKey,
+        correlationId: identity.correlationId,
+        error: `Buyer outreach blocked before send: ${recipientGuard.reason}.`,
+      }
+    }
+    deliveryAttempt = await acquireGuardedDeliveryAttempt({
+      provider,
+      scope: 'buyer',
+      messageId: input.message.id,
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: `Buyer outreach safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+  if (!deliveryAttempt.allowed) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: `Buyer outreach blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
+    }
+  }
+
+  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
+  try {
+    const result = await sendBuyerEnvelope({
+      buyer: input.buyer,
+      subject: input.message.subject || 'VestBlock partnership note',
+      body: buildOutreachBody(input.message),
+      attachments: input.attachments,
+      identity,
+    })
+    outcome = result.ok ? 'accepted' : 'failed'
+    return result
+  } finally {
+    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome).catch((error) => {
+      console.error('[outreach] failed to release global buyer delivery permit', error)
+    })
+  }
 }
 
 export async function sendBuyerPacketEmail(input: SendBuyerPacketEmailInput): Promise<SendBuyerEmailResult> {
-  return sendBuyerEnvelope({
-    buyer: input.buyer,
-    subject: input.subject,
-    body: input.body,
-    attachments: input.attachments,
+  const identity = buildOutboundSendIdentity({
+    scope: 'buyer-packet',
+    entityId: input.buyer.id,
+    messageId: input.messageId,
+    sequenceStep: 1,
   })
+  const mailingAddress = getCommercialOutreachMailingAddress()
+  if (!mailingAddress) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: 'Buyer packet delivery is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
+    }
+  }
+  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
+  if (provider === 'none') {
+    return {
+      ok: false,
+      provider,
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
+    }
+  }
+
+  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
+  try {
+    const recipientGuard = await getOutreachRecipientGuard({
+      scope: 'buyer',
+      entityId: input.buyer.id,
+      email: input.buyer.contact_email,
+    })
+    if (!recipientGuard.allowed) {
+      return {
+        ok: false,
+        provider: 'none',
+        idempotencyKey: identity.idempotencyKey,
+        correlationId: identity.correlationId,
+        error: `Buyer packet delivery blocked before send: ${recipientGuard.reason}.`,
+      }
+    }
+    deliveryAttempt = await acquireGuardedDeliveryAttempt({
+      provider,
+      scope: 'buyer-packet',
+      messageId: input.messageId,
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: `Buyer packet safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+  if (!deliveryAttempt.allowed) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      error: `Buyer packet delivery blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
+    }
+  }
+
+  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
+  try {
+    const result = await sendBuyerEnvelope({
+      buyer: input.buyer,
+      subject: input.subject,
+      body: buildCommercialOutreachBody({
+        body: input.body,
+        complianceNote: BUYER_PACKET_COMPLIANCE_NOTE,
+        mailingAddress,
+      }),
+      attachments: input.attachments,
+      identity,
+    })
+    outcome = result.ok ? 'accepted' : 'failed'
+    return result
+  } finally {
+    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome).catch((error) => {
+      console.error('[outreach] failed to release global buyer-packet delivery permit', error)
+    })
+  }
 }

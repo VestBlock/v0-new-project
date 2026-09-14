@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   DEALMACHINE_V2_BASE_URL,
   createDealMachineV2Client,
+  formatDealMachineErrorDetail,
+  formatDealMachineThrownError,
   hasDealMachineCredentials,
   isDealMachineCredentialFormat,
 } from '../lib/dealmachine/v2-client.mjs'
@@ -55,6 +57,78 @@ assert.deepEqual(client.getRateLimit(), { limit: 60, remaining: 59, reset: null 
 const location = await client.resolveCity('Tulsa', 'OK')
 assert.equal(location.code, '123')
 assert.match(calls.at(-1).url, /\/locations\?q=Tulsa&type=city&state=OK/)
+
+await client.countRecords('people', {
+  locations: [{ type: 'city', code: '123' }],
+  filters: [{ filter_id: 'people_only_filter', value: true }],
+})
+assert.equal(calls.at(-1).url, `${DEALMACHINE_V2_BASE_URL}/people/search/count`)
+
+await client.estimateRecordSearch('people', {
+  locations: [{ type: 'city', code: '123' }],
+  filters: [{ filter_id: 'people_only_filter', value: true }],
+})
+assert.equal(calls.at(-1).url, `${DEALMACHINE_V2_BASE_URL}/people/search`)
+assert.equal(JSON.parse(calls.at(-1).options.body).estimate_cost, true)
+
+await client.searchRecords('properties', {
+  locations: [{ type: 'city', code: '123' }],
+  filters: [{ filter_id: 'property_filter', value: true }],
+})
+assert.equal(calls.at(-1).url, `${DEALMACHINE_V2_BASE_URL}/properties/search`)
+
+assert.throws(
+  () => client.searchRecords('contacts', {}),
+  /Unsupported DealMachine search source type: contacts/
+)
+
+const objectError = {
+  error: {
+    code: 'invalid_filter',
+    message: 'Filter is not valid for this catalog.',
+    details: { filter_id: 'people_only_filter', allowed_source: 'people' },
+  },
+}
+const objectErrorText = formatDealMachineErrorDetail(objectError)
+assert.match(objectErrorText, /code=invalid_filter/)
+assert.match(objectErrorText, /people_only_filter/)
+assert.match(objectErrorText, /allowed_source/)
+assert.doesNotMatch(objectErrorText, /\[object Object\]/)
+assert.ok(objectErrorText.length <= 500)
+
+const thrownObjectText = formatDealMachineThrownError(objectError)
+assert.match(thrownObjectText, /code=invalid_filter/)
+assert.doesNotMatch(thrownObjectText, /\[object Object\]/)
+assert.ok(thrownObjectText.length <= 500)
+
+const failingClient = createDealMachineV2Client({
+  apiKey: 'dm_sk_live_test_only',
+  maxRetries: 0,
+  minRequestIntervalMs: 0,
+  fetchImpl: async () => new Response(JSON.stringify(objectError), {
+    status: 400,
+    headers: { 'content-type': 'application/json' },
+  }),
+})
+await assert.rejects(
+  failingClient.searchRecords('people', {
+    filters: [{ filter_id: 'people_only_filter', value: true }],
+  }),
+  (error) => {
+    assert.match(error.message, /DealMachine v2 HTTP 400/)
+    assert.match(error.message, /code=invalid_filter/)
+    assert.match(error.message, /people_only_filter/)
+    assert.doesNotMatch(error.message, /\[object Object\]/)
+    assert.ok(error.message.length <= 500)
+    return true
+  }
+)
+
+const longErrorText = formatDealMachineErrorDetail({
+  error: { code: 'validation_error', details: { reason: 'x'.repeat(2_000) } },
+})
+assert.ok(longErrorText.length <= 500)
+assert.doesNotMatch(longErrorText, /\[object Object\]/)
 
 assert.deepEqual(client.downloadUrls({
   download_urls: [{ filename: 'owners.csv.gz', url: 'https://example.test/owners.csv.gz', size: 42 }],

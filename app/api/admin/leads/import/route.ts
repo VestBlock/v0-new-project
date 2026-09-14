@@ -71,6 +71,13 @@ export async function POST(request: NextRequest) {
       admin.from('lead_suppressions').select('*').eq('status', 'active'),
     ])
 
+    if (suppressions.error) {
+      return NextResponse.json(
+        { error: `Lead import blocked because suppression data is unavailable: ${suppressions.error.message}` },
+        { status: 503 }
+      )
+    }
+
     const emailSet = new Set((existingByEmail.data || []).map((lead) => String(lead.email).toLowerCase()))
     const phoneSet = new Set((existingByPhone.data || []).map((lead) => String(lead.phone)))
     const businessCitySet = new Set(

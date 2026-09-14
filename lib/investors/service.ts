@@ -4,6 +4,7 @@ import { discoverInvestorsForMarket } from '@/lib/investors/discovery'
 import { sendInvestorOutreachEmail } from '@/lib/investors/outbound'
 import { scoreExistingInvestor } from '@/lib/investors/scoring'
 import {
+  claimInvestorOutreachMessageForSend,
   finishInvestorAutomationRun,
   generateInvestorFollowup,
   generateInvestorOutreach,
@@ -27,6 +28,8 @@ import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { evaluateInvestorAutoApproval } from '@/lib/investors/automationCore'
 import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
+import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -172,9 +175,12 @@ export async function runDailyInvestorOutreach(limit = 50) {
 
 export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boolean } = {}) {
   const autoSendRequested = ['1', 'true', 'yes', 'on'].includes(String(process.env.INVESTOR_AUTO_SEND_ENABLED || '').toLowerCase())
-  const deliveryCircuitBreaker = autoSendRequested ? await getDeliveryCircuitBreaker() : null
+  const deliveryCircuitBreaker = autoSendRequested
+    ? await getDeliveryCircuitBreaker({ provider: getConfiguredOutboundProvider(), allowControlledTrial: true })
+    : null
   const replyCapture = getReplyCaptureReadiness()
   const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
+  const effectiveLimit = Math.min(limit, deliveryCircuitBreaker?.maxBatchSize || Number.POSITIVE_INFINITY)
   const run = await startInvestorAutomationRun({
     runType: 'outreach_send',
     sourceKey: 'investor_outreach_messages',
@@ -182,7 +188,7 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
   })
 
   try {
-    const approved = await listApprovedInvestorEmailOutreach(limit)
+    const approved = await listApprovedInvestorEmailOutreach(effectiveLimit)
     const results: Array<{ investorId: string; name: string; status: string }> = []
 
     for (const row of approved) {
@@ -217,12 +223,33 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         continue
       }
 
-      const sent = await sendInvestorOutreachEmail({ investor, message: row })
+      const finalRecipientGuard = await getOutreachRecipientGuard({
+        scope: 'investor',
+        entityId: investor.id,
+        email: investor.contact_email,
+      })
+      if (!finalRecipientGuard.allowed) {
+        results.push({ investorId: investor.id, name: investor.display_name, status: 'suppression_blocked' })
+        continue
+      }
+
+      const claimed = await claimInvestorOutreachMessageForSend(row.id)
+      if (!claimed) {
+        results.push({ investorId: investor.id, name: investor.display_name, status: 'duplicate_claim_blocked' })
+        continue
+      }
+
+      const sent = await sendInvestorOutreachEmail({ investor, message: claimed })
       if (!sent.ok) {
         await updateInvestorOutreachMessage(row.id, {
           status: 'failed',
           send_provider: sent.provider,
           send_error: sent.error || 'Send failed.',
+          metadata_json: {
+            ...(claimed.metadata_json || {}),
+            idempotencyKey: sent.idempotencyKey || null,
+            correlationId: sent.correlationId || null,
+          },
         })
         await updateInvestorRecord(investor.id, { outreach_status: 'failed' })
         await createAdminTask({
@@ -246,9 +273,11 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         send_provider: sent.provider,
         send_error: null,
         metadata_json: {
-          ...(row.metadata_json || {}),
+          ...(claimed.metadata_json || {}),
           providerMessageId: sent.providerMessageId || null,
           providerAcceptedAt: now,
+          idempotencyKey: sent.idempotencyKey || null,
+          correlationId: sent.correlationId || null,
         },
       })
       await updateInvestorRecord(investor.id, {
@@ -283,13 +312,24 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
           investorType: investor.primary_investor_type,
           provider: sent.provider,
           providerMessageId: sent.providerMessageId || null,
+          idempotencyKey: sent.idempotencyKey || null,
+          correlationId: sent.correlationId || null,
         },
       }).catch(() => null)
       results.push({ investorId: investor.id, name: investor.display_name, status: 'accepted' })
     }
 
     await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: results.length })
-    return { ok: true, count: results.length, results, autoSendEnabled: autoSend, autoSendRequested, deliveryCircuitBreaker, replyCapture }
+    return {
+      ok: true,
+      count: results.length,
+      results,
+      autoSendEnabled: autoSend,
+      autoSendRequested,
+      deliveryCircuitBreaker,
+      replyCapture,
+      effectiveLimit,
+    }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',

@@ -83,8 +83,7 @@ export async function POST(request: NextRequest) {
       generated: 0,
       skippedReasons: {} as Record<string, number>,
     }
-    const suppressions =
-      parsed.data.action === 'approve_outreach' ? await listSuppressions().catch(() => []) : []
+    const suppressions = parsed.data.action === 'approve_outreach' ? await listSuppressions() : []
     const { data: leads, error } = await admin
       .from('leads')
       .select('*')
@@ -134,7 +133,7 @@ export async function POST(request: NextRequest) {
             .select('*')
             .eq('lead_id', lead.id)
             .eq('channel', 'email')
-            .in('status', ['needs_review', 'queued'])
+            .eq('status', 'needs_review')
 
           if (messagesError) throw messagesError
 

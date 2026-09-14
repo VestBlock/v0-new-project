@@ -6,10 +6,12 @@ import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { updateBuyerOutreachMessageSchema } from '@/lib/buyers/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getBuyerById, insertBuyerRelationshipEvent, updateBuyerOutreachMessage, updateBuyerPerformance, updateBuyerRecord } from '@/lib/buyers/repository'
+import { claimBuyerOutreachMessageForSend, getBuyerById, insertBuyerRelationshipEvent, updateBuyerOutreachMessage, updateBuyerPerformance, updateBuyerRecord } from '@/lib/buyers/repository'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { logEvent } from '@/lib/system/logEvent'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import { canApproveOutreachMessage } from '@/lib/outreach/messageState'
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await requireLeadAdmin(request)
@@ -37,8 +39,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (error || !message) {
       return NextResponse.json({ error: 'Buyer outreach message not found.' }, { status: 404 })
     }
+    if (parsed.data.sendNow && parsed.data.status && parsed.data.status !== 'approved') {
+      return NextResponse.json({ error: 'sendNow can only be combined with approved status.' }, { status: 400 })
+    }
+    if (parsed.data.sendNow && (message.sent_at || ['queued', 'sent'].includes(String(message.status || '')))) {
+      return NextResponse.json({ error: 'This buyer outreach message has already been claimed or sent.' }, { status: 409 })
+    }
 
     const nextStatus = parsed.data.status || (parsed.data.sendNow ? 'approved' : null)
+    if (nextStatus === 'approved' && !canApproveOutreachMessage(message)) {
+      return NextResponse.json(
+        { error: 'Queued or sent outreach cannot be moved back to approved.' },
+        { status: 409 }
+      )
+    }
     if (nextStatus) {
       await updateBuyerOutreachMessage(message.id, {
         status: nextStatus,
@@ -75,9 +89,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: 'This buyer does not have a usable contact email yet.' }, { status: 400 })
       }
 
+      const finalRecipientGuard = await getOutreachRecipientGuard({
+        scope: 'buyer',
+        entityId: id,
+        email: buyer.contact_email,
+      })
+      if (!finalRecipientGuard.allowed) {
+        return NextResponse.json(
+          { error: `Recipient safety check blocked this send: ${finalRecipientGuard.reason}.` },
+          { status: 409 }
+        )
+      }
+
+      const claimed = await claimBuyerOutreachMessageForSend(message.id)
+      if (!claimed) {
+        return NextResponse.json({ error: 'Another worker already claimed or completed this message.' }, { status: 409 })
+      }
       const sendResult = await sendBuyerOutreachEmail({
         buyer,
-        message: updatedMessage as any,
+        message: claimed,
       })
 
       if (!sendResult.ok) {
@@ -85,6 +115,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           status: 'failed',
           send_provider: sendResult.provider,
           send_error: sendResult.error || 'Send failed.',
+          metadata_json: {
+            ...(claimed.metadata_json || {}),
+            idempotencyKey: sendResult.idempotencyKey || null,
+            correlationId: sendResult.correlationId || null,
+          },
         })
         await updateBuyerRecord(id, { outreach_status: 'failed' })
         return NextResponse.json({ error: sendResult.error || 'Send failed.' }, { status: 500 })
@@ -95,6 +130,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         sent_at: new Date().toISOString(),
         send_provider: sendResult.provider,
         send_error: null,
+        metadata_json: {
+          ...(claimed.metadata_json || {}),
+          providerMessageId: sendResult.providerMessageId || null,
+          idempotencyKey: sendResult.idempotencyKey || null,
+          correlationId: sendResult.correlationId || null,
+        },
       })
       await updateBuyerRecord(id, {
         relationship_stage: 'contacted',
@@ -110,7 +151,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         buyerId: id,
         eventType: 'outreach_sent',
         actorUserId: user?.id || null,
-        metadata: { channel: message.channel, provider: sendResult.provider, providerMessageId: sendResult.providerMessageId || null },
+        metadata: {
+          channel: message.channel,
+          provider: sendResult.provider,
+          providerMessageId: sendResult.providerMessageId || null,
+          idempotencyKey: sendResult.idempotencyKey || null,
+          correlationId: sendResult.correlationId || null,
+        },
       })
       await logEvent({
         eventType: 'buyer_outreach_sent',

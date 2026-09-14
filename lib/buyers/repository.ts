@@ -1,5 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import {
+  FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
+  isMessageGenerationProtected,
+} from '@/lib/outreach/messageState'
 import type {
   BuyerBuyBoxRecord,
   BuyerContactRecord,
@@ -267,7 +271,15 @@ export async function saveBuyerOutreachMessages(
   }>
 ) {
   const admin = createAdminClient()
-  const payload = rows.map((row) => ({
+  const channels = Array.from(new Set(rows.map((row) => row.channel).filter(Boolean)))
+  const { data: existingMessages, error: existingError } = channels.length
+    ? await admin.from('buyer_outreach_messages').select('*').eq('buyer_id', buyerId).in('channel', channels)
+    : { data: [], error: null }
+  if (existingError) throw existingError
+
+  const protectedMessages = ((existingMessages || []) as BuyerOutreachMessageRecord[]).filter(isMessageGenerationProtected)
+  const protectedChannels = new Set<string>(protectedMessages.map((message) => message.channel))
+  const payload = rows.filter((row) => !protectedChannels.has(row.channel)).map((row) => ({
     buyer_id: buyerId,
     channel: row.channel,
     subject: row.subject || null,
@@ -283,9 +295,13 @@ export async function saveBuyerOutreachMessages(
     metadata_json: row.metadata || {},
   }))
 
+  if (!payload.length) return protectedMessages
+
   const [{ data, error }, { error: buyerError }] = await Promise.all([
     admin.from('buyer_outreach_messages').upsert(payload, { onConflict: 'buyer_id,channel' }).select('*'),
-    admin
+    protectedMessages.some((message) => ['email_intro', 'email_followup', 'spanish_email'].includes(message.channel))
+      ? Promise.resolve({ error: null })
+      : admin
       .from('buyers')
       .update({
         relationship_stage: 'outreach_ready',
@@ -297,7 +313,7 @@ export async function saveBuyerOutreachMessages(
 
   if (error) throw error
   if (buyerError) throw buyerError
-  return (data || []) as BuyerOutreachMessageRecord[]
+  return [...protectedMessages, ...((data || []) as BuyerOutreachMessageRecord[])]
 }
 
 export async function updateBuyerOutreachMessage(messageId: string, updates: Record<string, unknown>) {
@@ -313,13 +329,49 @@ export async function updateBuyerOutreachMessage(messageId: string, updates: Rec
   return data as BuyerOutreachMessageRecord
 }
 
-export async function getBuyerOutreachMessageByChannel(buyerId: string, channel: string) {
+export async function claimBuyerOutreachMessageForSend(messageId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
+}
+
+export async function getReviewableBuyerOutreachMessageByChannel(buyerId: string, channel: string) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('buyer_outreach_messages')
     .select('*')
     .eq('buyer_id', buyerId)
     .eq('channel', channel)
+    .in('status', [...FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES])
+    .is('sent_at', null)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
+}
+
+export async function approveBuyerFollowupMessageIfReviewable(messageId: string, approvedAt: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .update({
+      status: 'approved',
+      approved_at: approvedAt,
+      send_error: null,
+      updated_at: approvedAt,
+    })
+    .eq('id', messageId)
+    .in('status', [...FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES])
+    .is('sent_at', null)
+    .select('*')
     .maybeSingle()
 
   if (error) throw error

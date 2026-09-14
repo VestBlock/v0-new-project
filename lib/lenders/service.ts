@@ -7,9 +7,10 @@ import { generateLenderOutreach, LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/
 import { evaluateLenderAutoApproval } from '@/lib/lenders/automationCore'
 import {
   addLenderNote,
+  approveLenderFollowupMessageIfReviewable,
   finishLenderOutreachRun,
   insertLenderRelationshipEvent,
-  getLenderOutreachMessageByChannel,
+  getReviewableLenderOutreachMessageByChannel,
   listApprovedLenderEmailOutreach,
   listLendersForScoring,
   listLendersNeedingFollowup,
@@ -18,7 +19,6 @@ import {
   saveLenderScore,
   startLenderOutreachRun,
   updateLenderPerformance,
-  updateLenderOutreachMessage,
   updateLenderRecord,
   upsertLender,
   upsertLenderMatch,
@@ -379,7 +379,7 @@ export async function runDailyLenderFollowup(limit = 30, options: { dryRun?: boo
       continue
     }
 
-    const message = await getLenderOutreachMessageByChannel(lender.id, 'email_followup')
+    const message = await getReviewableLenderOutreachMessageByChannel(lender.id, 'email_followup')
     if (!message) {
       if (!options.dryRun) await updateLenderRecord(lender.id, { next_follow_up_at: null })
       results.push({ lenderId: lender.id, name: lender.name, action: 'blocked', reason: 'missing_followup_message' })
@@ -412,11 +412,17 @@ export async function runDailyLenderFollowup(limit = 30, options: { dryRun?: boo
     }
 
     if (!options.dryRun) {
-      await updateLenderOutreachMessage(message.id, {
-        status: 'approved',
-        approved_at: new Date().toISOString(),
-        send_error: null,
-      })
+      const approvedAt = new Date().toISOString()
+      const approvedMessage = await approveLenderFollowupMessageIfReviewable(message.id, approvedAt)
+      if (!approvedMessage) {
+        results.push({
+          lenderId: lender.id,
+          name: lender.name,
+          action: 'skipped',
+          reason: 'message_state_changed',
+        })
+        continue
+      }
       await updateLenderRecord(lender.id, {
         relationship_stage: 'contacted',
         outreach_status: 'approved',

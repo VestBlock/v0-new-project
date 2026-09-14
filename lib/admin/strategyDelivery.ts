@@ -24,6 +24,17 @@ function shouldAdvanceMembership(currentStatus: string | null | undefined, nextS
   return current !== nextStatus
 }
 
+export async function getStrategyDeliveryAttribution(leadId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('strategy_lead_memberships')
+    .select('id,campaign_run_id,status,strategy_key,market,source_provider')
+    .eq('lead_id', leadId)
+    .maybeSingle()
+  if (error) throw error
+  return data || null
+}
+
 export async function recordStrategyDeliveryOutcome(input: {
   leadId: string
   messageId: string
@@ -32,12 +43,7 @@ export async function recordStrategyDeliveryOutcome(input: {
 }) {
   const admin = createAdminClient()
   const occurredAt = input.occurredAt || new Date().toISOString()
-  const { data: membership, error: lookupError } = await admin
-    .from('strategy_lead_memberships')
-    .select('id,campaign_run_id,status,strategy_key,market,source_provider')
-    .eq('lead_id', input.leadId)
-    .maybeSingle()
-  if (lookupError) throw lookupError
+  const membership = await getStrategyDeliveryAttribution(input.leadId)
   if (!membership) return { updated: false, reason: 'no_strategy_membership' }
 
   if (shouldAdvanceMembership(membership.status, input.status)) {

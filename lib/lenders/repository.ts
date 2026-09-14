@@ -1,4 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
+  isMessageGenerationProtected,
+} from '@/lib/outreach/messageState'
+import { isVerifiedLenderCanaryCandidate } from '@/lib/lenders/canary'
 import type {
   BorrowerMatchInput,
   LenderContactRecord,
@@ -292,7 +297,15 @@ export async function saveLenderOutreachMessages(
   }>
 ) {
   const admin = createAdminClient()
-  const payload = rows.map((row) => ({
+  const channels = Array.from(new Set(rows.map((row) => row.channel).filter(Boolean)))
+  const { data: existingMessages, error: existingError } = channels.length
+    ? await admin.from('lender_outreach_messages').select('*').eq('lender_id', lenderId).in('channel', channels)
+    : { data: [], error: null }
+  if (existingError) throw existingError
+
+  const protectedMessages = ((existingMessages || []) as LenderOutreachMessageRecord[]).filter(isMessageGenerationProtected)
+  const protectedChannels = new Set<string>(protectedMessages.map((message) => message.channel))
+  const payload = rows.filter((row) => !protectedChannels.has(row.channel)).map((row) => ({
     lender_id: lenderId,
     channel: row.channel,
     subject: row.subject || null,
@@ -308,13 +321,16 @@ export async function saveLenderOutreachMessages(
     metadata_json: row.metadata || {},
   }))
 
+  if (!payload.length) return protectedMessages
+
   const [{ data, error }, { error: lenderError }] = await Promise.all([
     admin
       .from('lender_outreach_messages')
       .upsert(payload, { onConflict: 'lender_id,channel' })
       .select('*'),
-    admin
-      .from('lenders')
+    protectedMessages.some((message) => ['email_intro', 'email_followup', 'spanish_email'].includes(message.channel))
+      ? Promise.resolve({ error: null })
+      : admin.from('lenders')
       .update({
         relationship_stage: 'outreach_ready',
         outreach_status: 'needs_review',
@@ -325,7 +341,7 @@ export async function saveLenderOutreachMessages(
 
   if (error) throw error
   if (lenderError) throw lenderError
-  return (data || []) as LenderOutreachMessageRecord[]
+  return [...protectedMessages, ...((data || []) as LenderOutreachMessageRecord[])]
 }
 
 export async function updateLenderOutreachMessage(messageId: string, updates: Record<string, unknown>) {
@@ -342,6 +358,20 @@ export async function updateLenderOutreachMessage(messageId: string, updates: Re
 
   if (error) throw error
   return data as LenderOutreachMessageRecord
+}
+
+export async function claimLenderOutreachMessageForSend(messageId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
 }
 
 export async function insertLenderRelationshipEvent(input: {
@@ -510,6 +540,48 @@ export async function listApprovedLenderEmailOutreach(limit = 30) {
   return (data || []) as Array<LenderOutreachMessageRecord & { lenders: LenderRecord | null }>
 }
 
+export async function listVerifiedLenderCanaryOutreach(limit = 5) {
+  const cappedLimit = Math.min(5, Math.max(1, limit))
+  const candidates = await listApprovedLenderEmailOutreach(Math.max(cappedLimit * 20, 100))
+  const lenderIds = Array.from(new Set(candidates.map((row) => row.lenders?.id).filter(Boolean))) as string[]
+  const emails = Array.from(
+    new Set(candidates.map((row) => String(row.lenders?.contact_email || '').trim().toLowerCase()).filter(Boolean))
+  )
+  if (!lenderIds.length || !emails.length) return []
+
+  const admin = createAdminClient()
+  const [{ data: initialSends, error: initialSendError }, { data: suppressions, error: suppressionError }] = await Promise.all([
+    admin
+      .from('lender_outreach_messages')
+      .select('lender_id')
+      .in('lender_id', lenderIds)
+      .eq('channel', 'email_intro')
+      .eq('status', 'sent')
+      .not('sent_at', 'is', null),
+    admin.from('lead_suppressions').select('email').in('email', emails).eq('status', 'active'),
+  ])
+  if (initialSendError) throw initialSendError
+  if (suppressionError) throw suppressionError
+
+  const priorInitialSendIds = new Set((initialSends || []).map((row) => String(row.lender_id)))
+  const suppressedEmails = new Set((suppressions || []).map((row) => String(row.email || '').trim().toLowerCase()))
+  const seenRecipients = new Set<string>()
+
+  return candidates.filter((row) => {
+    const lender = row.lenders
+    const recipient = String(lender?.contact_email || '').trim().toLowerCase()
+    if (!lender || !recipient || seenRecipients.has(recipient)) return false
+    const eligible = isVerifiedLenderCanaryCandidate({
+      lender,
+      channel: row.channel,
+      hasPriorInitialSend: priorInitialSendIds.has(lender.id),
+      suppressed: suppressedEmails.has(recipient),
+    })
+    if (eligible) seenRecipients.add(recipient)
+    return eligible
+  }).slice(0, cappedLimit)
+}
+
 export async function listLenderOutreachForAutoApproval(limit = 30) {
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -523,14 +595,36 @@ export async function listLenderOutreachForAutoApproval(limit = 30) {
   return (data || []) as Array<LenderOutreachMessageRecord & { lenders: LenderRecord | null }>
 }
 
-export async function getLenderOutreachMessageByChannel(lenderId: string, channel: string) {
+export async function getReviewableLenderOutreachMessageByChannel(lenderId: string, channel: string) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('lender_outreach_messages')
     .select('*')
     .eq('lender_id', lenderId)
     .eq('channel', channel)
+    .in('status', [...FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES])
+    .is('sent_at', null)
     .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
+}
+
+export async function approveLenderFollowupMessageIfReviewable(messageId: string, approvedAt: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .update({
+      status: 'approved',
+      approved_at: approvedAt,
+      send_error: null,
+      updated_at: approvedAt,
+    })
+    .eq('id', messageId)
+    .in('status', [...FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES])
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+
   if (error) throw error
   return (data || null) as LenderOutreachMessageRecord | null
 }

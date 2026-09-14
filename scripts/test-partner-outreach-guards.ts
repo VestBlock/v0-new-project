@@ -23,6 +23,15 @@ const lender = {
   metadata_json: {},
 } as unknown as LenderRecord
 const lenderBundle = generateLenderOutreach(lender)
+assert.equal(LENDER_OUTREACH_TEMPLATE_VERSION, 'vestblock-lender-network-2026-09-14')
+assert.equal(lenderBundle.emailIntro.subject, 'Fit criteria for VestBlock referrals')
+assert.match(lenderBundle.emailIntro.body, /^Hi there,/)
+assert.match(lenderBundle.emailIntro.body, /product guide, criteria sheet, or intake link/i)
+assert.match(lenderBundle.emailIntro.complianceNote, /reply opt out/i)
+assert.doesNotMatch(lenderBundle.emailIntro.body, /AEO\/SEO|booster|team,/i)
+assert.doesNotMatch(lenderBundle.emailFollowup.body, /wanted to circle back|trying to build this the right way/i)
+assert.ok(lenderBundle.emailIntro.body.length < 1200)
+assert.ok(lenderBundle.emailFollowup.body.length < 1200)
 const lenderMessage = {
   id: '20000000-0000-4000-8000-000000000001',
   lender_id: lender.id,

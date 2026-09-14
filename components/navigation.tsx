@@ -49,6 +49,7 @@ export function Navigation() {
     if (!isMobileMenuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    const trigger = mobileMenuTriggerRef.current;
     document.body.style.overflow = 'hidden';
     mobileMenuCloseRef.current?.focus();
 
@@ -81,7 +82,7 @@ export function Navigation() {
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
-      mobileMenuTriggerRef.current?.focus();
+      trigger?.focus();
     };
   }, [isMobileMenuOpen]);
 
@@ -98,8 +99,8 @@ export function Navigation() {
   const mainNavLinks = [
     { href: '/capital', label: 'Capital' },
     { href: '/real-estate', label: 'Real Estate' },
-    { href: '/opportunity', label: 'Opportunity' },
-    { href: '/dealvault', label: 'DealVault' },
+    { href: '/services', label: 'Business Growth + AI' },
+    { href: '/next-move', label: 'Personal Roadmap' },
   ];
 
   const isActiveLink = (href: string) => {
@@ -132,14 +133,14 @@ export function Navigation() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/92 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/78">
+    <header className="vb-site-header sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/95 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/88">
       <div className="container flex h-16 items-center">
         <div className="mr-4 flex min-w-0 items-center">
           <Link href="/" className="group mr-7 flex items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
-          <nav className="hidden items-center space-x-1 text-sm font-medium lg:flex">
+          <nav className="hidden items-center space-x-1 text-sm font-medium xl:flex">
             {mainNavLinks.map((link) => (
               <Link
                 key={link.href}
@@ -159,7 +160,7 @@ export function Navigation() {
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           {/* Mobile Menu */}
-          <div className="lg:hidden">
+          <div className="xl:hidden">
             <Button
               ref={mobileMenuTriggerRef}
               variant="ghost"
@@ -211,15 +212,16 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
+                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className={cn('rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]', isLoading && 'invisible')} aria-hidden={isLoading || undefined}>
                         Sign In
                       </Link>
                       <Link
-                        href="/join"
+                        href="/next-move"
+                        data-home-primary-cta
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Join VestBlock
+                        Start free questionnaire
                       </Link>
                     </>
                   ) : (
@@ -257,14 +259,7 @@ export function Navigation() {
           </div>
 
           {/* Desktop Auth Section */}
-          {isLoading ? (
-            <Link
-              href="/opportunity"
-              className="hidden min-h-10 items-center border border-[#d7f80b]/70 bg-[#d7f80b] px-4 text-sm font-semibold text-[#111707] transition-colors hover:bg-[#efff87] md:inline-flex"
-            >
-              Get started
-            </Link>
-          ) : isAuthenticated ? (
+          {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -318,11 +313,11 @@ export function Navigation() {
             </DropdownMenu>
           ) : (
             <nav className="hidden items-center space-x-2 md:flex">
-              <Button variant="ghost" asChild>
-                <Link href="/login?redirect=/workspace">Sign In</Link>
+              <Button variant="ghost" asChild className={cn(isLoading && 'invisible')}>
+                <Link href="/login?redirect=/workspace" aria-hidden={isLoading || undefined} tabIndex={isLoading ? -1 : undefined}>Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/join">Join free</Link>
+                <Link href="/next-move" data-home-primary-cta>Start free questionnaire</Link>
               </Button>
             </nav>
           )}

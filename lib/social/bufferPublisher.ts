@@ -6,6 +6,12 @@ import {
   buildVestBlockSocialVisualUrl,
   type VestBlockSocialVisualKey,
 } from '@/lib/social/visualCards'
+import {
+  buildStaleBufferClaimPatch,
+  getBufferPublishSkipReason,
+  normalizeBufferAutoPublishService,
+  planBufferLedgerRecovery,
+} from '@/lib/social/bufferPublisherRecovery'
 
 type BufferService = 'facebook' | 'linkedin' | 'twitter' | 'x'
 
@@ -81,11 +87,12 @@ export type BufferDeliveryReconciliationResult = {
   checked: number
   matched: number
   updated: number
+  recovered: number
   errors: string[]
 }
 
-const SUPPORTED_SERVICES = new Set<BufferService>(['facebook', 'linkedin', 'twitter', 'x'])
-
+// VestBlock's approved Buffer destinations are Facebook and LinkedIn only.
+// Keep X copy generation available for previews, but never auto-publish it.
 // These are deliberately product-led, specific posts—not a generic content spinner.
 // The cadence rotates through VestBlock's current operating lanes so every channel
 // explains a practical next step and does not collapse the company back into one niche.
@@ -207,8 +214,7 @@ function centralDayIndex(date: Date) {
 }
 
 function normalizeService(value: string): BufferService | null {
-  const normalized = value.trim().toLowerCase()
-  return SUPPORTED_SERVICES.has(normalized as BufferService) ? (normalized as BufferService) : null
+  return normalizeBufferAutoPublishService(value)
 }
 
 function isVestBlockChannel(channel: BufferChannel) {
@@ -221,10 +227,6 @@ function nextQuarterHour(date = new Date()) {
   scheduled.setUTCMinutes(Math.ceil((scheduled.getUTCMinutes() + 10) / 15) * 15)
   if (scheduled.getTime() <= date.getTime()) scheduled.setUTCMinutes(scheduled.getUTCMinutes() + 15)
   return scheduled
-}
-
-function pillarForDate(date: Date) {
-  return CONTENT_PILLARS[centralDayIndex(date) % CONTENT_PILLARS.length]
 }
 
 function clipForX(value: string) {
@@ -398,7 +400,7 @@ async function recordBufferChannelFailure(service: BufferService, message: strin
   await createAdminTask({
     title: 'Reconnect the VestBlock LinkedIn account in Buffer',
     description:
-      'Buffer can post successfully to VestBlock Facebook and X, but LinkedIn rejected the publishing permission. Reconnect or re-authorize the VestBlock LinkedIn account in Buffer, then the next scheduled content run will resume automatically. No content will be sent to a non-VestBlock account.',
+      'LinkedIn rejected Buffer publishing permission. Reconnect or re-authorize the VestBlock LinkedIn account in Buffer, then the next scheduled content run will resume automatically. VestBlock auto-publishing remains limited to its Facebook and LinkedIn channels.',
     taskType: 'buffer_linkedin_permission',
     priority: 'high',
     entityType: 'buffer_channel',
@@ -439,7 +441,7 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
       sendEnabled,
       scheduledFor,
       channels: [],
-      errors: ['No unpaused Buffer channels named VestBlock were found for Facebook, LinkedIn, or X.'],
+      errors: ['No unpaused VestBlock Facebook or LinkedIn channels were found in Buffer.'],
     }
   }
 
@@ -466,8 +468,14 @@ export async function runBufferPublisher(options: { dryRun?: boolean; send?: boo
     }
 
     const existingMetadata = (existing?.metadata_json || {}) as Record<string, unknown>
-    if (existing?.status === 'published' || existingMetadata.bufferPostId) {
-      results.push({ service, status: 'skipped', reason: 'already_scheduled', bufferPostId: String(existingMetadata.bufferPostId || '') || undefined })
+    const skipReason = getBufferPublishSkipReason({ status: existing?.status, metadata: existingMetadata })
+    if (skipReason) {
+      results.push({
+        service,
+        status: 'skipped',
+        reason: skipReason,
+        bufferPostId: String(existingMetadata.bufferPostId || '') || undefined,
+      })
       continue
     }
 
@@ -644,7 +652,7 @@ export async function reconcileBufferDelivery(
 ): Promise<BufferDeliveryReconciliationResult> {
   const apiKey = String(process.env.BUFFER_API_KEY || '').trim()
   if (!apiKey) {
-    return { ok: false, checked: 0, matched: 0, updated: 0, errors: ['BUFFER_API_KEY is not configured.'] }
+    return { ok: false, checked: 0, matched: 0, updated: 0, recovered: 0, errors: ['BUFFER_API_KEY is not configured.'] }
   }
 
   let connected: ConnectedBufferChannel[]
@@ -656,6 +664,7 @@ export async function reconcileBufferDelivery(
       checked: 0,
       matched: 0,
       updated: 0,
+      recovered: 0,
       errors: [error instanceof Error ? error.message : String(error)],
     }
   }
@@ -665,7 +674,8 @@ export async function reconcileBufferDelivery(
       checked: 0,
       matched: 0,
       updated: 0,
-      errors: ['No unpaused Buffer channels named VestBlock were found for Facebook, LinkedIn, or X.'],
+      recovered: 0,
+      errors: ['No unpaused VestBlock Facebook or LinkedIn channels were found in Buffer.'],
     }
   }
 
@@ -691,23 +701,85 @@ export async function reconcileBufferDelivery(
   const admin = createAdminClient()
   const { data: assets, error: assetError } = await admin
     .from('content_assets')
-    .select('id,status,published_at,scheduled_at,metadata_json')
+    .select('id,status,platform,published_at,scheduled_at,updated_at,metadata_json')
     .eq('content_type', 'social_post')
     .order('created_at', { ascending: false })
     .limit(500)
   if (assetError) {
-    return { ok: false, checked: 0, matched: 0, updated: 0, errors: [...errors, assetError.message] }
+    return { ok: false, checked: 0, matched: 0, updated: 0, recovered: 0, errors: [...errors, assetError.message] }
   }
 
   let checked = 0
   let matched = 0
   let updated = 0
+  let recovered = 0
   const now = options.now || new Date()
   for (const asset of assets || []) {
     const metadata = (asset.metadata_json || {}) as Record<string, unknown>
-    const bufferPostId = String(metadata.bufferPostId || '')
-    if (!bufferPostId) continue
+    const action = planBufferLedgerRecovery({
+      status: asset.status,
+      platform: asset.platform,
+      updatedAt: asset.updated_at,
+      metadata,
+      now,
+    })
+    if (action.kind === 'ignore') continue
     checked += 1
+    if (action.kind === 'quarantine_stale_claim') {
+      const recoveredAt = now.toISOString()
+      const patch = buildStaleBufferClaimPatch({ metadata, recoveredAt, error: action.error })
+      let recoveryQuery = admin
+        .from('content_assets')
+        .update(patch)
+        .eq('id', asset.id)
+      recoveryQuery = asset.updated_at
+        ? recoveryQuery.eq('updated_at', asset.updated_at)
+        : recoveryQuery.is('updated_at', null)
+      const { data: recoveredAsset, error: recoveryError } = await recoveryQuery
+        .select('id')
+        .maybeSingle()
+      if (recoveryError) {
+        errors.push(`asset ${asset.id}: ${recoveryError.message}`)
+        continue
+      }
+      if (!recoveredAsset?.id) {
+        // The publisher or another reconciler changed this row after our read.
+        // Leave the newer state alone so a provider post ID can never be erased.
+        continue
+      }
+      recovered += 1
+      updated += 1
+      await Promise.all([
+        logEvent({
+          eventType: 'admin_action',
+          entityType: 'content_asset',
+          entityId: asset.id,
+          metadata: {
+            source: 'buffer-reconciliation',
+            action: 'stale_publish_claim_quarantined',
+            retryBlocked: true,
+            lastAttemptAt: metadata.lastAttemptAt || asset.updated_at || null,
+          },
+        }),
+        createAdminTask({
+          title: 'Verify an uncertain Buffer publish attempt',
+          description: action.error,
+          taskType: 'buffer_publish_claim_stale',
+          priority: 'high',
+          entityType: 'content_asset',
+          entityId: asset.id,
+          dueAt: adminTaskDueDates.now(),
+          metadata: {
+            service: metadata.bufferService || asset.platform || null,
+            channelId: metadata.bufferChannelId || null,
+            lastAttemptAt: metadata.lastAttemptAt || asset.updated_at || null,
+          },
+        }),
+      ])
+      continue
+    }
+
+    const bufferPostId = action.bufferPostId
     const remote = remoteById.get(bufferPostId)
     if (!remote) continue
     matched += 1
@@ -756,5 +828,5 @@ export async function reconcileBufferDelivery(
     }
   }
 
-  return { ok: errors.length === 0, checked, matched, updated, errors }
+  return { ok: errors.length === 0, checked, matched, updated, recovered, errors }
 }

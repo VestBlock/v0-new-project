@@ -1,201 +1,172 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import Image from "next/image"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowDown, ArrowRight, Check, Pause, Play } from "lucide-react"
-import gsap from "gsap"
-import { ScrollTrigger } from "gsap/ScrollTrigger"
+import { ArrowRight, Check } from "lucide-react"
 
-const lanes = [
-  { number: "01", label: "Capital", short: "Prepare and compare", href: "/capital" },
-  { number: "02", label: "Real Estate", short: "Find the right role", href: "/real-estate" },
-  { number: "03", label: "Opportunity", short: "Build readiness", href: "/opportunity" },
-  { number: "04", label: "DealVault", short: "Keep work connected", href: "/dealvault" },
-]
+const operatorBeats = [
+  {
+    number: "01",
+    label: "Goal",
+    title: "Start with the outcome and the timing.",
+    body: "Choose the result you want across Capital, Real Estate, Business Growth + AI, or a Personal Roadmap. VestBlock captures the objective before it suggests a path.",
+  },
+  {
+    number: "02",
+    label: "Criteria + gaps",
+    title: "Organize criteria. Surface gaps.",
+    body: "VestBlock structures the facts, surfaces missing preparation, and keeps independent decision criteria clear.",
+  },
+  {
+    number: "03",
+    label: "Route + record",
+    title: "Connect the route. Keep the record.",
+    body: "Qualified requests enter the right workflow. DealVault keeps the active record connected.",
+  },
+] as const
 
-const chapters = [
-  { lane: 0, step: "Establish the objective", title: "A real goal enters the room.", evidence: "Owner context in view", action: "Reviewing the working file" },
-  { lane: 0, step: "Mark the priority", title: "Capital readiness is identified.", evidence: "Purpose and timing marked", action: "Organizing the decision inputs" },
-  { lane: 1, step: "Match the criteria", title: "Property information joins the file.", evidence: "Role and criteria compared", action: "Connecting the relevant path" },
-  { lane: 2, step: "Resolve the gaps", title: "Readiness becomes an ordered plan.", evidence: "Preparation gaps surfaced", action: "Sequencing practical actions" },
-  { lane: 3, step: "Preserve the record", title: "Active work stays connected.", evidence: "Decision history recorded", action: "Preparing DealVault continuity" },
-  { lane: 3, step: "Choose the next move", title: "The room resolves to one action.", evidence: "Recommended route ready", action: "Continue with your situation" },
-]
+function DecisionConsole({ activeBeat }: { activeBeat: number }) {
+  return (
+    <div className="vb-decision-console" data-beat={activeBeat} aria-hidden="true">
+      <header className="vb-decision-console__bar">
+        <span><i /> VestBlock decision interface</span>
+        <strong>{operatorBeats[activeBeat].label}</strong>
+      </header>
+
+      <div className="vb-decision-console__canvas">
+        <div className="vb-decision-console__rail">
+          {["Goal", "Criteria / gaps", "Route", "Connected record"].map((label, index) => (
+            <span key={label} data-active={(activeBeat === 0 ? index === 0 : activeBeat === 1 ? index <= 1 : true) || undefined}>
+              <i>{index + 1}</i>{label}
+            </span>
+          ))}
+        </div>
+
+        <section className="vb-decision-console__panel vb-decision-console__goal">
+          <div className="vb-decision-console__panel-head"><span>Input 01</span><b>Goal confirmed</b></div>
+          <p>Selected outcome</p>
+          <h3>Business Growth + AI</h3>
+          <dl>
+            <div><dt>Objective</dt><dd>Respond to every qualified inquiry</dd></div>
+            <div><dt>Timing</dt><dd>Within 30 days</dd></div>
+          </dl>
+        </section>
+
+        <section className="vb-decision-console__panel vb-decision-console__evidence">
+          <div className="vb-decision-console__panel-head"><span>Review 02</span><b>2 gaps surfaced</b></div>
+          <h3>Readiness evidence</h3>
+          <ul>
+            <li data-state="ready"><span>Offer + service area</span><b>Recorded</b></li>
+            <li data-state="ready"><span>Current inquiry volume</span><b>Recorded</b></li>
+            <li data-state="gap"><span>After-hours response path</span><b>Missing</b></li>
+            <li data-state="gap"><span>Qualified-call handoff rule</span><b>Define</b></li>
+          </ul>
+          <p className="vb-decision-console__boundary">Boundary: implementation fit still requires review.</p>
+        </section>
+
+        <section className="vb-decision-console__panel vb-decision-console__route">
+          <div className="vb-decision-console__panel-head"><span>Route 03</span><b>Path matched</b></div>
+          <p>Recommended next workflow</p>
+          <h3>AI receptionist assessment</h3>
+          <div><span>First action</span><strong>Define intake and handoff rules</strong></div>
+          <small>Qualified request · review required</small>
+        </section>
+
+        <section className="vb-decision-console__panel vb-decision-console__record">
+          <div className="vb-decision-console__panel-head"><span>Record 04</span><b>DealVault layer</b></div>
+          <h3>VB–GROW–018</h3>
+          <ul>
+            <li><Check /> Goal + criteria</li>
+            <li><Check /> Readiness review</li>
+            <li><Check /> Next action</li>
+          </ul>
+        </section>
+
+        <div className="vb-decision-console__route-line"><span /><i /></div>
+      </div>
+    </div>
+  )
+}
 
 export function CinematicHero() {
-  const sectionRef = useRef<HTMLElement | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
-  const sceneRef = useRef<HTMLDivElement | null>(null)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const [paused, setPaused] = useState(false)
-  const [chapter, setChapter] = useState(0)
-  const [mediaReady, setMediaReady] = useState(false)
-  const [mediaFailed, setMediaFailed] = useState(false)
+  const [activeBeat, setActiveBeat] = useState(0)
 
   useEffect(() => {
-    const section = sectionRef.current
-    const content = contentRef.current
-    const scene = sceneRef.current
-    const video = videoRef.current
-    if (!section || !content || !scene || !video) return
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-operator-beat]"))
+    let frame = 0
 
-    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)")
-    const reduceMotion = motionPreference.matches
-    if (reduceMotion) {
-      video.pause()
-      return
+    const updateBeat = () => {
+      frame = 0
+      if (window.scrollY < 96) {
+        setActiveBeat(0)
+        return
+      }
+      const targetY = window.innerHeight * (window.innerWidth <= 1100 ? 0.72 : 0.81)
+      const nearest = elements.reduce(
+        (best, element) => {
+          const rect = element.getBoundingClientRect()
+          const distance = Math.abs(rect.top + rect.height / 2 - targetY)
+          return distance < best.distance ? { element, distance } : best
+        },
+        { element: elements[0], distance: Number.POSITIVE_INFINITY },
+      )
+      if (nearest.element) setActiveBeat(Number(nearest.element.dataset.operatorBeat || 0))
     }
 
-    const onTime = () => setChapter(Math.min(chapters.length - 1, Math.floor(video.currentTime / 2)))
-    video.addEventListener("timeupdate", onTime)
-    void video.play().catch(() => setPaused(true))
+    const requestUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateBeat)
+    }
 
-    gsap.registerPlugin(ScrollTrigger)
-    const ctx = gsap.context(() => {
-      gsap.timeline({ defaults: { ease: "power3.out" } })
-        .fromTo(content, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.72 })
-        .fromTo(scene, { opacity: 0, x: 26, clipPath: "inset(0 7% 0 0)" }, { opacity: 1, x: 0, clipPath: "inset(0 0% 0 0)", duration: 0.9 }, 0.1)
-        .fromTo("[data-hero-lane]", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.42, stagger: 0.07 }, 0.48)
-
-      gsap.timeline({
-        scrollTrigger: { trigger: section, start: "top top", end: "bottom 18%", scrub: 0.35 },
-      })
-        .to(content, { y: -28, opacity: 0.32, ease: "none" }, 0)
-        .to(scene, { y: 34, scale: 0.965, filter: "brightness(0.76) saturate(0.82)", ease: "none" }, 0)
-        .to(".vb-material-hero__scene-head", { opacity: 0, y: -10, ease: "none" }, 0)
-        .to(".vb-material-hero__handoff", { opacity: 1, y: 0, ease: "none" }, 0.45)
-    }, section)
-
+    updateBeat()
+    window.addEventListener("scroll", requestUpdate, { passive: true })
+    window.addEventListener("resize", requestUpdate)
     return () => {
-      video.removeEventListener("timeupdate", onTime)
-      ctx.revert()
+      if (frame) window.cancelAnimationFrame(frame)
+      window.removeEventListener("scroll", requestUpdate)
+      window.removeEventListener("resize", requestUpdate)
     }
   }, [])
 
-  const togglePlayback = () => {
-    const video = videoRef.current
-    if (!video || mediaFailed) return
-    if (video.paused) {
-      void video.play()
-      setPaused(false)
-    } else {
-      video.pause()
-      setPaused(true)
-    }
-  }
-
-  const current = chapters[chapter]
-
   return (
-    <section ref={sectionRef} className="vb-material-hero" aria-labelledby="homepage-hero-title">
-      <div className="vb-material-hero__shell">
-        <div ref={contentRef} className="vb-material-hero__content">
-          <p className="vb-material-hero__eyebrow">Capital · Real Estate · Opportunity · DealVault</p>
-          <h1 id="homepage-hero-title">Find your next move.</h1>
-          <p className="vb-material-hero__lede">
-            VestBlock helps people and businesses prepare for and coordinate practical next moves across capital, real estate, financial readiness, business growth, and active deal records.
+    <section className="vb-operator-hero" aria-labelledby="homepage-hero-title">
+      <div className="vb-home-shell vb-operator-hero__grid">
+        <div className="vb-operator-hero__lead" data-operator-beat="0">
+          <p className="vb-home-kicker">Capital · Real Estate · Business Growth + AI · Personal Roadmap</p>
+          <h1 id="homepage-hero-title">Turn a goal into a clear next move.</h1>
+          <p className="vb-operator-hero__lede">
+            VestBlock organizes readiness, routes qualified requests into the right workflow, connects the next action,
+            and preserves active work in DealVault&apos;s record layer.
           </p>
-          <div className="vb-material-hero__actions">
-            <Link href="/next-move" className="vb-button vb-button--primary">Build my free roadmap <ArrowRight className="h-4 w-4" /></Link>
-            <Link href="#choose-your-path" className="vb-button vb-button--text">Choose a path</Link>
+          <div className="vb-operator-hero__actions">
+            <Link href="/next-move" className="vb-home-button vb-home-button--primary">
+              Start the free questionnaire <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link href="#choose-your-path" className="vb-home-button vb-home-button--secondary">
+              Choose an outcome
+            </Link>
           </div>
-          <p className="vb-material-hero__assurance"><Check aria-hidden="true" /> Start free. Keep your work connected when you are ready.</p>
+          <p className="vb-operator-hero__assurance"><Check aria-hidden="true" /> No SSN required to receive a starting plan.</p>
         </div>
 
-        <div ref={sceneRef} className="vb-material-hero__scene" data-chapter={chapter} data-media-failed={mediaFailed || undefined}>
-          <div className="vb-material-hero__scene-head">
-            <span><i aria-hidden="true" /> VestBlock decision room</span>
-            <small>
-              {mediaFailed
-                ? "Static working reference"
-                : mediaReady
-                  ? `Live working session · 0${chapter + 1}/06`
-                  : "Preparing working session"}
-            </small>
-          </div>
+        <div className="vb-operator-hero__stage">
+          <DecisionConsole activeBeat={activeBeat} />
+        </div>
 
-          <div
-            className="vb-material-hero__media"
-            data-ready={(mediaReady && !mediaFailed) || undefined}
-            data-failed={mediaFailed || undefined}
-          >
-            <div className="vb-material-hero__poster">
-              <Image
-                className="vb-material-hero__fallback vb-material-hero__fallback--desktop"
-                src="/hero/decision-room-v2/desktop-poster.webp"
-                alt="A Black business owner and a physical AI robot reviewing the same marked business document in a modern office."
-                fill
-                priority
-                sizes="(max-width: 900px) 100vw, 62vw"
-              />
-              <Image
-                className="vb-material-hero__fallback vb-material-hero__fallback--mobile"
-                src="/hero/decision-room-v2/mobile-poster.webp"
-                alt="A Black business owner and a physical AI robot reviewing the same marked business document in a dedicated mobile composition."
-                fill
-                priority
-                sizes="(max-width: 640px) 100vw, 1px"
-              />
-            </div>
-
-            <video
-              ref={videoRef}
-              className="vb-material-hero__video"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              poster="/hero/decision-room-v2/desktop-poster.webp"
-              onLoadedData={() => setMediaReady(true)}
-              onCanPlay={() => setMediaReady(true)}
-              onPlaying={() => { setMediaReady(true); setPaused(false) }}
-              onPause={() => setPaused(true)}
-              onError={() => { setMediaFailed(true); setMediaReady(false); setPaused(true) }}
-              aria-label="A Black business owner actively reviewing and marking a working file while a physical AI robot responds and organizes the next decision."
+        <div className="vb-operator-hero__steps" aria-label="How VestBlock turns a goal into a connected path">
+          {operatorBeats.slice(1).map((beat, index) => (
+            <article
+              key={beat.number}
+              id={index === 0 ? "operator-criteria" : undefined}
+              data-operator-beat={index + 1}
+              data-active={activeBeat === index + 1 || undefined}
             >
-              <source media="(max-width: 640px)" src="/hero/material-ledger/mobile.webm" type="video/webm" />
-              <source media="(max-width: 640px)" src="/hero/material-ledger/mobile.mp4" type="video/mp4" />
-              <source src="/hero/material-ledger/desktop.webm" type="video/webm" />
-              <source src="/hero/material-ledger/desktop.mp4" type="video/mp4" />
-            </video>
-
-            <div className="vb-material-hero__robot-mask" aria-hidden="true" />
-            <Image className="vb-material-hero__robot" src="/hero/decision-room-v2/robot-pointing.webp" alt="" width="900" height="766" />
-            <div className="vb-material-hero__decision-line" aria-hidden="true"><span /></div>
-
-            <div className="vb-material-hero__decision" aria-live="polite">
-              <span>{current.step}</span>
-              <strong>{current.title}</strong>
-              <div><small>Evidence</small><p>{current.evidence}</p></div>
-              <div><small>AI response</small><p>{current.action}</p></div>
-            </div>
-          </div>
-
-          <nav className="vb-material-hero__lanes" aria-label="Explore VestBlock's four platform lanes">
-            {lanes.map((lane, index) => (
-              <Link key={lane.number} href={lane.href} data-hero-lane data-active={current.lane === index || undefined}>
-                <span>{lane.number}</span>
-                <strong>{lane.label}</strong>
-                <small>{lane.short}</small>
-                <ArrowRight aria-hidden="true" />
-              </Link>
-            ))}
-          </nav>
-
-          {mediaReady && !mediaFailed ? (
-            <button type="button" className="vb-material-hero__playback" onClick={togglePlayback} aria-label={paused ? "Play hero scene" : "Pause hero scene"}>
-              {paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
-              <span>{paused ? "Play" : "Pause"}</span>
-            </button>
-          ) : null}
+              <div><span>{beat.number}</span><small>{beat.label}</small></div>
+              <h2>{beat.title}</h2>
+              <p>{beat.body}</p>
+            </article>
+          ))}
         </div>
       </div>
-
-      <a className="vb-material-hero__handoff" href="#choose-your-path">
-        <span>Continue the decision</span><strong>What are you trying to do next?</strong><ArrowDown aria-hidden="true" />
-      </a>
     </section>
   )
 }

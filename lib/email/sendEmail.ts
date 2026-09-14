@@ -37,6 +37,9 @@ type SendEmailInput = {
   userId?: string | null;
   userEmail?: string | null;
   providerPreference?: 'resend' | 'google';
+  idempotencyKey?: string;
+  correlationId?: string;
+  disableProviderFallback?: boolean;
 };
 
 const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
@@ -113,6 +116,9 @@ async function sendEmailWithGoogle(input: SendEmailInput) {
     `Reply-To: ${getReplyToEmail()}`,
     `To: ${input.to}`,
     `Subject: ${input.subject}`,
+    ...(input.correlationId
+      ? [`Message-ID: <${input.correlationId}@vestblock.io>`, `X-VestBlock-Correlation-ID: ${input.correlationId}`]
+      : []),
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     '',
@@ -373,7 +379,7 @@ export async function sendEmail(input: SendEmailInput) {
       return { ok: true, id: data.id, provider: 'gmail' };
     } catch (error) {
       googleError = error instanceof Error ? error.message : String(error);
-      if (!process.env.RESEND_API_KEY) {
+      if (!process.env.RESEND_API_KEY || input.disableProviderFallback) {
         await recordEmailEvent(input, 'failed', null, googleError);
         await logEvent({
           eventType: 'email_failed',
@@ -388,13 +394,17 @@ export async function sendEmail(input: SendEmailInput) {
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const { data, error } = await resend.emails.send({
-      from: getResendFromEmail(),
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      replyTo: getReplyToEmail(),
-    });
+    const { data, error } = await resend.emails.send(
+      {
+        from: getResendFromEmail(),
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        replyTo: getReplyToEmail(),
+        headers: input.correlationId ? { 'X-VestBlock-Correlation-ID': input.correlationId } : undefined,
+      },
+      input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
+    );
 
     if (error) {
       const message = error.message || 'Resend failed to send email.';

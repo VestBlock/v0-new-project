@@ -11,6 +11,7 @@ import {
   buildInvestorPipelineSnapshotFromRecord,
 } from '@/lib/investors/pipeline'
 import { calculateInvestorScore } from '@/lib/investors/scoring'
+import { isMessageGenerationProtected } from '@/lib/outreach/messageState'
 import type {
   InvestorDashboardSummary,
   InvestorOutreachMessageRecord,
@@ -402,6 +403,19 @@ export async function generateInvestorOutreach(investorId: string, status: 'need
   }
 
   const message = buildInvestorOutreachMessage(investorRecord)
+  const { data: existingMessage, error: existingMessageError } = await admin
+    .from('investor_outreach_messages')
+    .select('*')
+    .eq('investor_profile_id', investorId)
+    .eq('sequence_code', message.sequenceCode)
+    .eq('step_number', 1)
+    .eq('channel', 'email')
+    .maybeSingle()
+  if (existingMessageError) throw existingMessageError
+  if (isMessageGenerationProtected(existingMessage)) {
+    return existingMessage as InvestorOutreachMessageRecord
+  }
+
   const { data, error: messageError } = await admin
     .from('investor_outreach_messages')
     .upsert(
@@ -636,6 +650,19 @@ export async function listInvestorOutreachForAutoApproval(limit = 30) {
 export async function generateInvestorFollowup(investor: InvestorProfileRecord) {
   const admin = createAdminClient()
   const message = buildInvestorFollowupMessage(investor)
+  const { data: existingMessage, error: existingMessageError } = await admin
+    .from('investor_outreach_messages')
+    .select('*')
+    .eq('investor_profile_id', investor.id)
+    .eq('sequence_code', message.sequenceCode)
+    .eq('step_number', 2)
+    .eq('channel', 'email')
+    .maybeSingle()
+  if (existingMessageError) throw existingMessageError
+  if (isMessageGenerationProtected(existingMessage)) {
+    return existingMessage as InvestorOutreachMessageRecord
+  }
+
   const { data, error } = await admin
     .from('investor_outreach_messages')
     .upsert(
@@ -671,6 +698,20 @@ export async function updateInvestorOutreachMessage(id: string, updates: Record<
 
   if (error) throw error
   return data
+}
+
+export async function claimInvestorOutreachMessageForSend(messageId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('investor_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as InvestorOutreachMessageRecord | null
 }
 
 export async function insertInvestorEngagementEvent(input: {

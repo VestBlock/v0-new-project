@@ -133,7 +133,7 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
   }
 }
 
-export async function runDailyInvestorPipeline(options: { dryRun?: boolean } = {}) {
+export async function runDailyInvestorPipeline(options: { dryRun?: boolean; sendLimit?: number } = {}) {
   const run = await startInvestorAutomationRun({
     runType: 'pipeline',
     sourceKey: 'investor_relationship_engine',
@@ -146,7 +146,7 @@ export async function runDailyInvestorPipeline(options: { dryRun?: boolean } = {
     const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(envInt('INVESTORS_DAILY_OUTREACH_LIMIT', 50))
     const followup = await runDailyInvestorFollowup(envInt('INVESTORS_DAILY_FOLLOWUP_LIMIT', 30), { dryRun: options.dryRun })
     const approval = await runDailyInvestorApproval(envInt('INVESTORS_DAILY_APPROVAL_LIMIT', 25), { dryRun: options.dryRun })
-    const send = await runDailyInvestorSend(envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
+    const send = await runDailyInvestorSend(options.sendLimit ?? envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
     const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
 
     const count = discovery.count + scoring.count + outreach.count + followup.count + approval.count + send.count + performance.count

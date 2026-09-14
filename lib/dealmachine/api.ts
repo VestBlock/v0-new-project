@@ -6,12 +6,14 @@ import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/emai
 import {
   createDealMachineV2Client,
   dealMachineApiKey,
+  formatDealMachineThrownError,
   hasDealMachineCredentials,
 } from '@/lib/dealmachine/v2-client.mjs'
 import {
   DEALMACHINE_STRATEGY_FIELDS,
   buildDailyStrategyPlans,
   hydrateStrategyPlan,
+  mergeDealMachineCatalogMetadata,
 } from '@/lib/dealmachine/v2-strategy-catalog.mjs'
 
 type RawRecord = Record<string, any>
@@ -104,7 +106,9 @@ function contactPhones(contact: RawRecord) {
 
 function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: string): NormalizedLeadInput | null {
   const peopleAnchor = plan.anchor === 'people'
-  const property = peopleAnchor ? raw.property || {} : raw
+  const property = peopleAnchor
+    ? raw.property || (Array.isArray(raw.properties) ? raw.properties[0] : null) || {}
+    : raw
   const contacts = peopleAnchor ? [raw] : Array.isArray(raw.contacts) ? raw.contacts : []
   const contact = contacts.find((row) => contactEmails(row).length || contactPhones(row).length) || contacts[0] || {}
   const emails = contactEmails(contact)
@@ -310,16 +314,15 @@ export async function syncDealMachineLeadSource(options: {
   )
 
   try {
-    const [, usage, propertyFilters, peopleFilters, propertyFields, peopleFields] = await Promise.all([
+    const [, usage, propertyFilters, peopleFilters, propertyFields] = await Promise.all([
       client.account(),
       client.usage(),
       client.listFilters('properties'),
       client.listFilters('people'),
       client.listFields('properties'),
-      client.listFields('people'),
     ])
-    const filterMetadata = [...propertyFilters, ...peopleFilters]
-    const availableFields = new Set([...propertyFields, ...peopleFields].map((row) => String(row.field_id || '')))
+    const filterMetadata = mergeDealMachineCatalogMetadata(propertyFilters, peopleFilters)
+    const availablePropertyFields = new Set(propertyFields.map((row) => String(row.field_id || '')))
     const creditBalance = remainingCredits(usage)
 
     for (const plan of selectedPlans) {
@@ -337,11 +340,11 @@ export async function syncDealMachineLeadSource(options: {
       strategyRuns.push(strategyRun)
       try {
         const hydrated = await hydrateStrategyPlan(client, plan, filterMetadata)
-        const fields = DEALMACHINE_STRATEGY_FIELDS.filter((field) => availableFields.has(field))
+        const fields = DEALMACHINE_STRATEGY_FIELDS.filter((field) => availablePropertyFields.has(field))
         hydrated.searchBody.fields = fields
         hydrated.exportBody.fields = fields
         const requestBody = { ...hydrated.searchBody, page: 1, per_page: requestedRows }
-        const estimate = await client.estimatePropertySearch(requestBody)
+        const estimate = await client.estimateRecordSearch(hydrated.searchSourceType, requestBody)
         const cost = estimatedPageCredits(estimate)
         strategyRun.estimatedCredits = cost
         const wouldExceedRunBudget = creditsReserved + cost > maxCredits
@@ -360,14 +363,14 @@ export async function syncDealMachineLeadSource(options: {
           continue
         }
 
-        const payload = await client.searchProperties(requestBody)
+        const payload = await client.searchRecords(hydrated.searchSourceType, requestBody)
         creditsReserved += Number(payload?.credits?.used || cost)
         const rows = Array.isArray(payload?.data) ? payload.data : []
         strategyRun.fetched = rows.length
         strategyRun.status = 'searched'
         for (const raw of rows) rawRows.push({ raw, plan: hydrated })
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = formatDealMachineThrownError(error)
         strategyRun.status = 'failed'
         strategyRun.error = message
         blockers.push(`${plan.key}/${plan.market}: ${message}`)
@@ -405,7 +408,7 @@ export async function syncDealMachineLeadSource(options: {
     return {
       configured: true,
       ok: false,
-      blockedReason: error instanceof Error ? error.message : String(error),
+      blockedReason: formatDealMachineThrownError(error),
       fetched: 0,
       contactable: 0,
       contactless: 0,

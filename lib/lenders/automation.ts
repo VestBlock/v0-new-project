@@ -7,9 +7,11 @@ import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { sendLenderOutreachEmail } from '@/lib/lenders/outbound'
 import {
+  claimLenderOutreachMessageForSend,
   finishLenderOutreachRun,
   listApprovedLenderEmailOutreach,
   listLenderOutreachForAutoApproval,
+  listVerifiedLenderCanaryOutreach,
   updateLenderOutreachMessage,
   updateLenderPerformance,
   updateLenderRecord,
@@ -27,6 +29,11 @@ import { LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
 import { startLenderOutreachRun } from '@/lib/lenders/repository'
 import type { LenderRecord } from '@/lib/lenders/types'
 import { logEvent } from '@/lib/system/logEvent'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
+import { deliveryBreakerAllowsLenderCanary, evaluateLenderRecoveryCanaryReadiness } from '@/lib/lenders/canary'
+import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -112,20 +119,83 @@ export async function runDailyLenderDiscovery(options: { dryRun?: boolean } = {}
   }
 }
 
-export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean } = {}) {
-  const autoSendRequested = envBool('LENDER_AUTO_SEND_ENABLED', false)
-  const deliveryCircuitBreaker = autoSendRequested ? await getDeliveryCircuitBreaker() : null
+export async function runDailyLenderSend(
+  limit = 15,
+  options: { dryRun?: boolean; canary?: boolean; recoveryExplicitlyRequested?: boolean } = {}
+) {
+  const canary = Boolean(options.canary)
+  const canaryEnabled = envBool('OUTREACH_CANARY_ENABLED', false)
+  const lenderAutoSendEnabled = envBool('LENDER_AUTO_SEND_ENABLED', false)
+  const autoSendRequested = lenderAutoSendEnabled && (!canary || canaryEnabled)
+  const deliveryCircuitBreaker = autoSendRequested || canary
+    ? await getDeliveryCircuitBreaker({
+        provider: getConfiguredOutboundProvider(),
+        allowRecoveryCanary: canary,
+      })
+    : null
   const replyCapture = getReplyCaptureReadiness()
-  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
-  const approved = await listApprovedLenderEmailOutreach(limit)
+  const mailingAddressConfigured = Boolean(getCommercialOutreachMailingAddress())
+  const deliveryGateOpen = canary
+    ? deliveryBreakerAllowsLenderCanary({
+        mode: deliveryCircuitBreaker?.mode,
+        recoveryCanaryAllowed: deliveryCircuitBreaker?.recoveryCanaryAllowed === true,
+      })
+    : deliveryCircuitBreaker?.broadSendingAllowed === true
+  const replyCaptureGateOpen = replyCapture.ready && (!canary || replyCapture.configured)
+  let effectiveLimit = canary
+    ? Math.min(5, limit)
+    : Math.min(limit, deliveryCircuitBreaker?.maxBatchSize || Number.POSITIVE_INFINITY)
+  let canarySentLast24h = 0
+  if (canary) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { count, error } = await createAdminClient()
+      .from('lender_outreach_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'sent')
+      .contains('metadata_json', { canary: true })
+      .gte('sent_at', since)
+    if (error) throw error
+    canarySentLast24h = count || 0
+    effectiveLimit = Math.max(0, Math.min(effectiveLimit, 5 - canarySentLast24h))
+  }
+  const approved = effectiveLimit > 0
+    ? canary
+      ? await listVerifiedLenderCanaryOutreach(effectiveLimit)
+      : await listApprovedLenderEmailOutreach(effectiveLimit)
+    : []
+  const verifiedCandidateGateOpen = !canary || approved.length > 0
+  const canaryReadiness = canary
+    ? evaluateLenderRecoveryCanaryReadiness({
+        explicitlyRequested: options.recoveryExplicitlyRequested === true,
+        featureEnabled: canaryEnabled,
+        lenderAutoSendEnabled,
+        deliveryCanaryPermitted: deliveryGateOpen,
+        replyCaptureConfigured: replyCaptureGateOpen,
+        mailingAddressConfigured,
+        eligibleCandidateCount: approved.length,
+        remainingCapacity: effectiveLimit,
+      })
+    : null
+  const sendGateOpen = canary
+    ? canaryReadiness?.allowed === true
+    : autoSendRequested && deliveryGateOpen && replyCaptureGateOpen && mailingAddressConfigured && verifiedCandidateGateOpen
+  const autoSend = sendGateOpen && !options.dryRun
+  const sendBlockedReasons = canary
+    ? canaryReadiness?.blockedReasons || []
+    : [
+        !autoSendRequested ? 'lender_auto_send_disabled' : null,
+        !deliveryGateOpen ? 'broad_delivery_not_permitted' : null,
+        !replyCaptureGateOpen ? 'reply_capture_not_configured' : null,
+        !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
+      ].filter((reason): reason is string => Boolean(reason))
   const results: Array<{ lenderId: string; name: string; status: string }> = []
 
   for (const row of approved) {
     const lender = row.lenders as LenderRecord | null
     if (!lender?.id) continue
 
-    if (!autoSend) {
-      results.push({ lenderId: lender.id, name: lender.name, status: 'queued_for_review' })
+    if (!sendGateOpen) {
+      results.push({ lenderId: lender.id, name: lender.name, status: canary ? 'canary_blocked' : 'queued_for_review' })
       continue
     }
 
@@ -147,17 +217,43 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
       continue
     }
 
-    if (options.dryRun) {
+    if (!autoSend) {
       results.push({ lenderId: lender.id, name: lender.name, status: 'would_send' })
       continue
     }
 
-    const sent = await sendLenderOutreachEmail({ lender, message: row })
+    const finalRecipientGuard = await getOutreachRecipientGuard({
+      scope: 'lender',
+      entityId: lender.id,
+      email: lender.contact_email,
+    })
+    if (!finalRecipientGuard.allowed) {
+      results.push({ lenderId: lender.id, name: lender.name, status: 'suppression_blocked' })
+      continue
+    }
+
+    const claimed = await claimLenderOutreachMessageForSend(row.id)
+    if (!claimed) {
+      results.push({ lenderId: lender.id, name: lender.name, status: 'duplicate_claim_blocked' })
+      continue
+    }
+
+    const sent = await sendLenderOutreachEmail({
+      lender,
+      message: claimed,
+      deliveryMode: canary ? 'recovery_canary' : 'standard',
+    })
     if (!sent.ok) {
       await updateLenderOutreachMessage(row.id, {
         status: 'failed',
         send_provider: sent.provider,
         send_error: sent.error || 'Send failed.',
+        metadata_json: {
+          ...(claimed.metadata_json || {}),
+          idempotencyKey: sent.idempotencyKey || null,
+          correlationId: sent.correlationId || null,
+          canary,
+        },
       })
       await updateLenderRecord(lender.id, { outreach_status: 'failed' })
       await createAdminTask({
@@ -181,9 +277,12 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
       send_provider: sent.provider,
       send_error: null,
       metadata_json: {
-        ...(row.metadata_json || {}),
+        ...(claimed.metadata_json || {}),
         providerMessageId: sent.providerMessageId || null,
         providerAcceptedAt: new Date().toISOString(),
+        idempotencyKey: sent.idempotencyKey || null,
+        correlationId: sent.correlationId || null,
+        canary,
       },
     })
     await updateLenderRecord(lender.id, {
@@ -215,12 +314,31 @@ export async function runDailyLenderSend(limit = 15, options: { dryRun?: boolean
         lenderCategory: lender.category,
         provider: sent.provider,
         providerMessageId: sent.providerMessageId || null,
+        idempotencyKey: sent.idempotencyKey || null,
+        correlationId: sent.correlationId || null,
+        canary,
       },
     }).catch(() => null)
     results.push({ lenderId: lender.id, name: lender.name, status: 'accepted' })
   }
 
-  return { ok: true, count: results.length, results, autoSendEnabled: autoSend, autoSendRequested, deliveryCircuitBreaker, replyCapture }
+  return {
+    ok: true,
+    count: results.length,
+    results,
+    canary,
+    canaryEnabled,
+    canarySentLast24h,
+    eligibleVerifiedCandidates: canary ? approved.length : null,
+    effectiveLimit,
+    autoSendEnabled: autoSend,
+    autoSendRequested,
+    sendGateOpen,
+    sendBlockedReasons,
+    mailingAddressConfigured,
+    deliveryCircuitBreaker,
+    replyCapture,
+  }
 }
 
 async function runLenderStage<T>(name: string, task: () => Promise<T>) {
@@ -287,7 +405,7 @@ export async function runDailyLenderApproval(limit = 20, options: { dryRun?: boo
   }
 }
 
-export async function runDailyLenderPipeline(options: { dryRun?: boolean } = {}) {
+export async function runDailyLenderPipeline(options: { dryRun?: boolean; sendLimit?: number } = {}) {
   const dryRun = Boolean(options.dryRun)
   const discovery = await runLenderStage('discovery', () => runDailyLenderDiscovery({ dryRun }))
   const scoring = await runLenderStage('scoring', () =>
@@ -303,7 +421,7 @@ export async function runDailyLenderPipeline(options: { dryRun?: boolean } = {})
     runDailyLenderApproval(envInt('LENDERS_DAILY_APPROVAL_LIMIT', 20), { dryRun })
   )
   const send = await runLenderStage('send', () =>
-    runDailyLenderSend(envInt('LENDERS_DAILY_SEND_LIMIT', 15), { dryRun })
+    runDailyLenderSend(options.sendLimit ?? envInt('LENDERS_DAILY_SEND_LIMIT', 15), { dryRun })
   )
   const performance = await runLenderStage('performance', () =>
     dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyLenderPerformanceRollup()

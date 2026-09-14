@@ -1,25 +1,19 @@
 import { enrichLeadEmailFromWebsite } from '@/lib/leads/email-enrichment'
-import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { getLeadOutboundPauseReason, isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { generateLeadOutreach } from '@/lib/leads/outreach'
-import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { addLeadNote, finishScrapeRun, insertOutreachSendEvent, listSuppressions, saveLeadScore, saveOutreachMessages, startScrapeRun, updateOutreachMessage, upsertLead, updateLeadRecord } from '@/lib/leads/repository'
 import { scoreLead } from '@/lib/leads/scoring'
 import { safeUrl } from '@/lib/leads/utils'
-import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput, OutreachMessageRecord } from '@/lib/leads/types'
+import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput } from '@/lib/leads/types'
 
 type IngestLeadOptions = {
   scoreOnIngest?: boolean
   autoGenerateOutreach?: boolean
-}
-
-type GenerateOutreachOptions = {
-  allowImmediateAutoSend?: boolean
 }
 
 function shouldTriggerLeadAutomation(category: string | null | undefined, score: number) {
@@ -102,110 +96,6 @@ function shouldAutoGenerateOutreachForLead(sourceKey: string, lead: LeadRecord) 
   if (lead.outreach_status && !['not_started', 'failed'].includes(String(lead.outreach_status))) return false
   if (lead.status && ['contacted', 'closed', 'closed_won', 'closed_lost', 'disqualified', 'do_not_contact'].includes(String(lead.status))) return false
   return true
-}
-
-async function autoSendApprovedLeadEmail(lead: LeadRecord, message: OutreachMessageRecord) {
-  await updateOutreachMessage(message.id, {
-    status: 'queued',
-    send_provider: null,
-    send_error: null,
-  })
-  await insertOutreachSendEvent({
-    leadId: lead.id,
-    outreachMessageId: message.id,
-    channel: 'email',
-    status: 'queued',
-    recipient: lead.email,
-    subject: message.subject,
-    metadata: { action: 'auto_queued_after_approval' },
-  })
-
-  const sendResult = await sendLeadOutreachEmail({
-    lead,
-    message,
-  })
-
-  if (sendResult.ok) {
-    await Promise.all([
-      updateOutreachMessage(message.id, {
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        send_provider: sendResult.provider,
-        send_error: null,
-      }),
-      updateLeadRecord(lead.id, {
-        status: 'contacted',
-        outreach_status: 'sent',
-        delivery_status: 'accepted',
-        last_contacted_at: new Date().toISOString(),
-        next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      }),
-      insertOutreachSendEvent({
-        leadId: lead.id,
-        outreachMessageId: message.id,
-        channel: 'email',
-        provider: sendResult.provider,
-        status: 'accepted',
-        recipient: lead.email,
-        subject: message.subject,
-        metadata: { providerMessageId: sendResult.providerMessageId || null, action: 'auto_sent_after_approval' },
-      }),
-      logEvent({
-        eventType: 'email_sent',
-        entityType: 'lead',
-        entityId: lead.id,
-        metadata: { channel: 'email', provider: sendResult.provider, outreachMessageId: message.id, autoSent: true },
-      }),
-      sendLeadOutreachSentAlertEmail({
-        leadId: lead.id,
-        leadType: lead.lead_type,
-        name: lead.name || lead.business_name || null,
-        email: lead.email,
-        provider: sendResult.provider,
-        subject: message.subject,
-        sourcePath: lead.source_url || lead.source || null,
-        deliveryMode: 'auto',
-      }),
-    ])
-    return { sent: true as const, provider: sendResult.provider }
-  }
-
-  await updateOutreachMessage(message.id, {
-    status: 'failed',
-    send_provider: sendResult.provider,
-    send_error: sendResult.error || 'Send failed.',
-  })
-  await updateLeadRecord(lead.id, {
-    outreach_status: 'failed',
-    delivery_status: /bounce/i.test(sendResult.error || '') ? 'bounced' : 'failed',
-  })
-  await insertOutreachSendEvent({
-    leadId: lead.id,
-    outreachMessageId: message.id,
-    channel: 'email',
-    provider: sendResult.provider,
-    status: 'failed',
-    recipient: lead.email,
-    subject: message.subject,
-    errorMessage: sendResult.error,
-    metadata: {
-      action: 'auto_send_failed_after_approval',
-      reason: sendResult.error || 'send_failed',
-    },
-  })
-  await logEvent({
-    eventType: 'email_failed',
-    entityType: 'lead',
-    entityId: lead.id,
-    metadata: {
-      channel: 'email',
-      provider: sendResult.provider,
-      outreachMessageId: message.id,
-      error: sendResult.error,
-      autoSent: true,
-    },
-  })
-  return { sent: false as const, provider: sendResult.provider, error: sendResult.error }
 }
 
 export async function enrichNormalizedLeadContact(input: NormalizedLeadInput) {
@@ -491,11 +381,7 @@ export async function ingestNormalizedLeads(
   }
 }
 
-export async function generateAndStoreOutreachForLead(
-  lead: LeadRecord,
-  options: GenerateOutreachOptions = {}
-) {
-  const allowImmediateAutoSend = options.allowImmediateAutoSend ?? true
+export async function generateAndStoreOutreachForLead(lead: LeadRecord) {
   const bundle = await generateLeadOutreach(lead)
   const rows = bundleToRows(bundle)
   const saved = await saveOutreachMessages(lead.id, rows)
@@ -503,7 +389,7 @@ export async function generateAndStoreOutreachForLead(
   let finalMessages = saved
 
   if (emailMessage) {
-    const suppressions = await listSuppressions().catch(() => [])
+    const suppressions = await listSuppressions()
     const decision = getLeadEmailAutopilotDecision(lead, suppressions)
 
     const qualityIssue = validateOutreachMessageQuality({ lead, message: emailMessage })
@@ -560,23 +446,6 @@ export async function generateAndStoreOutreachForLead(
           bounceRiskScore: lead.bounce_risk_score,
         },
       })
-
-      if (allowImmediateAutoSend && decision.autoSendEnabled && isCurrentVestblockOutboundLead(lead)) {
-        await autoSendApprovedLeadEmail(lead, {
-          ...approvedMessage,
-          subject: approvedMessage.subject || emailMessage.subject || null,
-          body: approvedMessage.body || emailMessage.body,
-        })
-        finalMessages = finalMessages.map((row) =>
-          row.id === approvedMessage.id
-            ? {
-                ...row,
-                ...approvedMessage,
-                status: 'sent',
-              }
-            : row
-        )
-      }
     }
   }
 

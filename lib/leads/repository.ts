@@ -14,6 +14,7 @@ import type {
   TargetMarketRecord,
 } from '@/lib/leads/types'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
+import { hasActionableReplyEvidence, isMessageGenerationProtected } from '@/lib/outreach/messageState'
 
 type ScrapeRunCreate = {
   sourceKey: string
@@ -599,9 +600,7 @@ export async function saveOutreachMessages(
 
   if (existingError) throw existingError
 
-  const preservedMessages = ((existingMessages || []) as OutreachMessageRecord[]).filter(
-    (row) => row.status === 'sent' || Boolean(row.sent_at)
-  )
+  const preservedMessages = ((existingMessages || []) as OutreachMessageRecord[]).filter(isMessageGenerationProtected)
   const preservedChannels = new Set<string>(preservedMessages.map((row) => row.channel))
   const writableRows = rows.filter((row) => !preservedChannels.has(row.channel))
   const payload = writableRows.map((row) => ({
@@ -685,6 +684,36 @@ export async function updateOutreachMessage(
   return data as OutreachMessageRecord
 }
 
+export async function claimOutreachMessageForSend(messageId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as OutreachMessageRecord | null
+}
+
+export async function claimLeadFollowup(leadId: string, expectedNextFollowUpAt: string | null | undefined) {
+  if (!expectedNextFollowUpAt) return false
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('leads')
+    .update({ next_follow_up_at: null, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
+    .eq('next_follow_up_at', expectedNextFollowUpAt)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw error
+  return Boolean(data?.id)
+}
+
 export async function insertOutreachSendEvent(input: {
   leadId: string
   outreachMessageId?: string | null
@@ -708,9 +737,23 @@ export async function insertOutreachSendEvent(input: {
   recipient?: string | null
   subject?: string | null
   errorMessage?: string | null
+  idempotencyKey?: string | null
+  correlationId?: string | null
   metadata?: Record<string, unknown>
 }) {
   const admin = createAdminClient()
+  if (input.idempotencyKey) {
+    const { data: existing, error: lookupError } = await admin
+      .from('outreach_send_events')
+      .select('*')
+      .eq('status', input.status)
+      .contains('metadata_json', { idempotencyKey: input.idempotencyKey })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (lookupError) throw lookupError
+    if (existing) return existing as OutreachSendEventRecord
+  }
   const { data, error } = await admin
     .from('outreach_send_events')
     .insert({
@@ -722,7 +765,11 @@ export async function insertOutreachSendEvent(input: {
       recipient: input.recipient || null,
       subject: input.subject || null,
       error_message: input.errorMessage || null,
-      metadata_json: input.metadata || {},
+      metadata_json: {
+        ...(input.metadata || {}),
+        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+        ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+      },
     })
     .select('*')
     .single()
@@ -985,7 +1032,7 @@ export async function listLeadEmailFollowupsDue(
   // "no reply" follow-up after responding on another property.
   const repliedEmails = new Set(
     (inboundReplies || [])
-      .filter((reply) => String(reply.classification || '') !== 'spam_noise')
+      .filter((reply) => hasActionableReplyEvidence(reply as { metadata_json?: Record<string, unknown> | null }))
       .map((reply) => normalizeEmailAddress(reply.from_email))
       .filter(Boolean)
   )

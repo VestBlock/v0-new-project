@@ -213,6 +213,7 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
     })
     const sendResult = await sendBuyerPacketEmail({
       buyer,
+      messageId: `buyer-packet:${packet.id}:${buyer.id}`,
       subject,
       body,
       attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
@@ -234,6 +235,8 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
         confidenceScore: match.confidence_score,
         providerMessageId: sendResult.providerMessageId || null,
         providerAcceptedAt: acceptedAt,
+        idempotencyKey: sendResult.idempotencyKey || null,
+        correlationId: sendResult.correlationId || null,
       },
     })
 

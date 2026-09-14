@@ -10,12 +10,14 @@ import {
   createDealMachineV2Client,
   dealMachineApiKey,
   downloadDealMachineExportFile,
+  formatDealMachineThrownError,
   isDealMachineCredentialFormat,
 } from '../lib/dealmachine/v2-client.mjs'
 import {
   DEALMACHINE_STRATEGY_FIELDS,
   buildDailyStrategyPlans,
   hydrateStrategyPlan,
+  mergeDealMachineCatalogMetadata,
 } from '../lib/dealmachine/v2-strategy-catalog.mjs'
 
 const ROOT = process.cwd()
@@ -49,7 +51,9 @@ function flattenSearchRows(payload, plan) {
   const rows = []
   for (const raw of Array.isArray(payload?.data) ? payload.data : []) {
     const peopleAnchor = plan.anchor === 'people'
-    const property = peopleAnchor ? raw.property || {} : raw
+    const property = peopleAnchor
+      ? raw.property || (Array.isArray(raw.properties) ? raw.properties[0] : null) || {}
+      : raw
     const contacts = peopleAnchor ? [raw] : Array.isArray(raw.contacts) ? raw.contacts : []
     const emittedContacts = contacts.length ? contacts : [{}]
     for (const contact of emittedContacts) {
@@ -186,16 +190,15 @@ async function main() {
     totals: { planned: 0, searched: 0, exported: 0, downloadedFiles: 0, rows: 0, ingested: 0, skipped: 0, failed: 0 },
   }
 
-  const [account, propertyFilters, peopleFilters, propertyFields, peopleFields] = await Promise.all([
+  const [account, propertyFilters, peopleFilters, propertyFields] = await Promise.all([
     client.account(),
     client.listFilters('properties'),
     client.listFilters('people'),
     client.listFields('properties'),
-    client.listFields('people'),
   ])
   report.account = redactedAccount(account)
-  const filterMetadata = [...propertyFilters, ...peopleFilters]
-  const availableFields = new Set([...propertyFields, ...peopleFields].map((row) => String(row.field_id || '')))
+  const filterMetadata = mergeDealMachineCatalogMetadata(propertyFilters, peopleFilters)
+  const availableFields = new Set(propertyFields.map((row) => String(row.field_id || '')))
   const plans = buildDailyStrategyPlans({
     date,
     strategyKeys: requestedStrategies,
@@ -247,16 +250,17 @@ async function main() {
         hydrated.searchBody.fields = fields
         hydrated.exportBody.fields = fields
         entry.warnings.push(...hydrated.warnings)
-        const count = await client.countProperties({
-          locations: hydrated.searchBody.locations,
-          filters: hydrated.searchBody.filters,
-          anchor: hydrated.searchBody.anchor,
-          contact_audience: hydrated.searchBody.contact_audience,
-          exclude_previously_exported: hydrated.searchBody.exclude_previously_exported,
-        })
+        const {
+          fields: _fields,
+          page: _page,
+          per_page: _perPage,
+          estimate_cost: _estimateCost,
+          ...countBody
+        } = hydrated.searchBody
+        const count = await client.countRecords(hydrated.searchSourceType, countBody)
         entry.matched = countFromPayload(count)
         const requestedRows = mode === 'export' ? Math.max(1, entry.matched) : planPageSize
-        const estimate = await client.estimatePropertySearch({
+        const estimate = await client.estimateRecordSearch(hydrated.searchSourceType, {
           ...hydrated.searchBody,
           page: 1,
           per_page: Math.min(250, requestedRows),
@@ -280,8 +284,10 @@ async function main() {
           reviewOnly: plan.reviewOnly,
           lowball: plan.lowball,
           market: plan.market,
+          searchSourceType: hydrated.searchSourceType,
           location: hydrated.location,
           filters: hydrated.filters,
+          filterSources: hydrated.filterSources,
           matched: entry.matched,
           estimatedCredits: entry.estimatedCredits,
           sourceObservedAt: new Date().toISOString(),
@@ -341,7 +347,11 @@ async function main() {
         report.budget.reservedCredits += entry.estimatedCredits
         const csvPaths = []
         if (mode === 'search') {
-          const payload = await client.searchProperties({ ...hydrated.searchBody, page: 1, per_page: planPageSize })
+          const payload = await client.searchRecords(hydrated.searchSourceType, {
+            ...hydrated.searchBody,
+            page: 1,
+            per_page: planPageSize,
+          })
           const rows = flattenSearchRows(payload, hydrated)
           const csvPath = path.join(manifestDir, 'search-results.csv')
           fs.writeFileSync(csvPath, rowsToCsv(rows))
@@ -352,7 +362,7 @@ async function main() {
           report.totals.searched += 1
           report.totals.rows += rows.length
         } else {
-          const payload = await client.exportProperties(hydrated.exportBody)
+          const payload = await client.exportRecords(hydrated.searchSourceType, hydrated.exportBody)
           manifest.exportId = payload?.export_id || payload?.data?.export_id || null
           entry.creditsUsed = Number(payload?.credits?.used || payload?.data?.credits?.used || entry.estimatedCredits)
           entry.rows = Number(payload?.record_count || payload?.data?.record_count || 0)
@@ -398,7 +408,7 @@ async function main() {
         saveState(stateFile, state)
       } catch (error) {
         entry.status = 'failed'
-        entry.error = error instanceof Error ? error.message : String(error)
+        entry.error = formatDealMachineThrownError(error)
         report.totals.failed += 1
       }
     }
@@ -420,6 +430,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error)
+  console.error(formatDealMachineThrownError(error))
   process.exitCode = 1
 })

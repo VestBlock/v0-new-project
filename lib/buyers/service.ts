@@ -7,9 +7,10 @@ import { BUYER_OUTREACH_TEMPLATE_VERSION, generateBuyerOutreach } from '@/lib/bu
 import { evaluateBuyerAutoApproval } from '@/lib/buyers/automationCore'
 import {
   addBuyerNote,
+  approveBuyerFollowupMessageIfReviewable,
   createBuyerPacket,
   finishBuyerOutreachRun,
-  getBuyerOutreachMessageByChannel,
+  getReviewableBuyerOutreachMessageByChannel,
   insertBuyerRelationshipEvent,
   listActiveBuyersWithBuyBoxes,
   listBuyersForScoring,
@@ -20,7 +21,6 @@ import {
   saveBuyerScore,
   startBuyerOutreachRun,
   updateBuyerPerformance,
-  updateBuyerOutreachMessage,
   updateBuyerRecord,
   upsertBuyer,
   upsertBuyerMatch,
@@ -496,7 +496,7 @@ export async function runDailyBuyerFollowup(limit = 30, options: { dryRun?: bool
       continue
     }
 
-    const message = await getBuyerOutreachMessageByChannel(buyer.id, 'email_followup')
+    const message = await getReviewableBuyerOutreachMessageByChannel(buyer.id, 'email_followup')
     if (!message) {
       if (!options.dryRun) {
         await updateBuyerRecord(buyer.id, { next_follow_up_at: null })
@@ -532,11 +532,17 @@ export async function runDailyBuyerFollowup(limit = 30, options: { dryRun?: bool
     }
 
     if (!options.dryRun) {
-      await updateBuyerOutreachMessage(message.id, {
-        status: 'approved',
-        approved_at: new Date().toISOString(),
-        send_error: null,
-      })
+      const approvedAt = new Date().toISOString()
+      const approvedMessage = await approveBuyerFollowupMessageIfReviewable(message.id, approvedAt)
+      if (!approvedMessage) {
+        results.push({
+          buyerId: buyer.id,
+          name: buyer.name,
+          action: 'skipped',
+          reason: 'message_state_changed',
+        })
+        continue
+      }
       await updateBuyerRecord(buyer.id, {
         relationship_stage: 'contacted',
         outreach_status: 'approved',

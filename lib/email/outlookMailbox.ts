@@ -2,30 +2,84 @@ import 'server-only'
 
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { updateBuyerRecord, upsertBuyer } from '@/lib/buyers/repository'
+import type { BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import {
+  correlateOutlookInbound,
+  evaluateOutlookInboundIntegrity,
+  selectCorrelatedLead,
+  shouldProcessMailboxSideEffects,
+  type MailboxClassification,
+  type OutlookInboundMessage,
+  type OutlookOutboundEvidence,
+} from '@/lib/email/outlookMailboxIntegrity'
 
-type GraphMessage = {
-  id: string
-  conversationId?: string | null
-  internetMessageId?: string | null
-  subject?: string | null
-  bodyPreview?: string | null
+const OUTBOUND_SEND_STATUSES = ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied']
+const EVIDENCE_PAGE_SIZE = 500
+
+type GraphMessage = OutlookInboundMessage & {
   receivedDateTime?: string | null
-  from?: { emailAddress?: { address?: string | null; name?: string | null } | null } | null
   toRecipients?: Array<{ emailAddress?: { address?: string | null } | null }>
   isRead?: boolean
   categories?: string[]
   webLink?: string | null
 }
 
-type MailboxClassification =
-  | 'hot_seller_lead'
-  | 'partner_reply'
-  | 'spam_noise'
-  | 'operational_alert'
-  | 'low_priority'
+type LeadMatch = {
+  id: string
+  email: string | null
+  name: string | null
+  business_name: string | null
+  property_address: string | null
+  market_segment: string | null
+  category: string | null
+  status: string | null
+}
+
+type LenderMatch = {
+  id: string
+  name: string
+  contact_email: string | null
+  relationship_stage: string | null
+  outreach_status: string | null
+}
+
+type InvestorMatch = {
+  id: string
+  display_name: string
+  contact_email: string | null
+  relationship_stage: string | null
+  outreach_status: string | null
+}
+
+type ReplyMemoryRow = {
+  lead_id: string | null
+  strategy_key: string | null
+  mailbox: string
+  thread_id: string | null
+  message_id: string
+  from_email: string | null
+  to_email: string
+  subject: string
+  property_address: string | null
+  market: null
+  received_at: string
+  classification: MailboxClassification
+  next_step: string
+  reply_summary: string
+  metadata_json: Record<string, unknown>
+}
+
+type MailboxAction = {
+  row: ReplyMemoryRow
+  pending: boolean
+  buyer: BuyerRecord | null
+  lead: LeadMatch | null
+  lender: LenderMatch | null
+  investor: InvestorMatch | null
+}
 
 function envBool(name: string, fallback = false) {
   const value = process.env[name]
@@ -142,47 +196,107 @@ async function moveMessageToJunk(input: {
   )
 }
 
+async function hydrateMessageHeaders(input: {
+  accessToken: string
+  mailbox: string
+  messages: GraphMessage[]
+}) {
+  const hydrated = new Map<string, GraphMessage['internetMessageHeaders']>()
+  for (let offset = 0; offset < input.messages.length; offset += 20) {
+    const batch = input.messages.slice(offset, offset + 20)
+    const response = await fetch('https://graph.microsoft.com/v1.0/$batch', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: batch.map((message, index) => ({
+          id: String(index),
+          method: 'GET',
+          url: `/users/${encodeURIComponent(input.mailbox)}/messages/${encodeURIComponent(message.id)}?$select=internetMessageHeaders`,
+        })),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !Array.isArray(data.responses)) {
+      throw new Error(`Microsoft Graph header batch failed with ${response.status}.`)
+    }
+    for (const item of data.responses) {
+      const batchIndex = Number(item?.id)
+      const message = batch[batchIndex]
+      if (!message || Number(item?.status) < 200 || Number(item?.status) >= 300) {
+        throw new Error('Microsoft Graph could not load integrity headers for an inbox message.')
+      }
+      hydrated.set(
+        message.id,
+        Array.isArray(item?.body?.internetMessageHeaders) ? item.body.internetMessageHeaders : []
+      )
+    }
+  }
+  return input.messages.map((message) => ({
+    ...message,
+    internetMessageHeaders: hydrated.get(message.id) || [],
+  }))
+}
+
+async function loadOutboundEnrollmentRows(
+  admin: ReturnType<typeof createAdminClient>,
+  senderEmails: string[]
+) {
+  const rows: Array<Record<string, unknown>> = []
+  for (let offset = 0; ; offset += EVIDENCE_PAGE_SIZE) {
+    const { data, error } = await admin
+      .from('command_center_outbound_enrollments')
+      .select('lead_id,strategy_key,recipient,last_message_id,metadata_json,created_at,updated_at,status')
+      .eq('channel', 'email')
+      .in('status', OUTBOUND_SEND_STATUSES)
+      .in('recipient', senderEmails)
+      .range(offset, offset + EVIDENCE_PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data || []) as Array<Record<string, unknown>>))
+    if ((data || []).length < EVIDENCE_PAGE_SIZE) break
+  }
+  return rows
+}
+
+async function loadOutboundSendEventRows(
+  admin: ReturnType<typeof createAdminClient>,
+  senderEmails: string[]
+) {
+  const rows: Array<Record<string, unknown>> = []
+  for (let offset = 0; ; offset += EVIDENCE_PAGE_SIZE) {
+    const { data, error } = await admin
+      .from('outreach_send_events')
+      .select('lead_id,outreach_message_id,recipient,metadata_json,created_at,status')
+      .eq('channel', 'email')
+      .in('status', OUTBOUND_SEND_STATUSES)
+      .in('recipient', senderEmails)
+      .range(offset, offset + EVIDENCE_PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data || []) as Array<Record<string, unknown>>))
+    if ((data || []).length < EVIDENCE_PAGE_SIZE) break
+  }
+  return rows
+}
+
+function metadataTimestamp(metadata: Record<string, unknown>, fallback: unknown) {
+  for (const key of ['providerAcceptedAt', 'provider_accepted_at', 'sentAt', 'sent_at', 'createdAt', 'created_at']) {
+    const value = metadata[key]
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return typeof fallback === 'string' ? fallback : null
+}
+
+function hasEnrollmentSendEvidence(row: Record<string, unknown>) {
+  if (typeof row.last_message_id === 'string' && row.last_message_id.trim()) return true
+  const metadata = (row.metadata_json || {}) as Record<string, unknown>
+  return Boolean(metadataTimestamp(metadata, null))
+}
+
 function cleanText(value: string | null | undefined) {
   return String(value || '').replace(/\s+/g, ' ').trim()
-}
-
-function isAutomaticReply(message: GraphMessage) {
-  const subject = cleanText(message.subject).toLowerCase()
-  const preview = cleanText(message.bodyPreview).toLowerCase()
-  return (
-    /\b(automatic reply|auto.?reply|out of office|currently out of (?:the )?office|away from (?:the )?office)\b/.test(subject) ||
-    /\b(i am|i'm|we are|we're) currently out of (?:the )?office\b/.test(preview) ||
-    /\bwill return on\b/.test(preview)
-  )
-}
-
-function classifyMessage(message: GraphMessage): MailboxClassification {
-  const subject = cleanText(message.subject).toLowerCase()
-  const preview = cleanText(message.bodyPreview).toLowerCase()
-  const sender = cleanText(message.from?.emailAddress?.address).toLowerCase()
-  const combined = `${subject} ${preview}`
-
-  if (
-    /\b0rzp4az\b|blood__|community_customs|rod\.ordinary|minerals--|occasionally__|glad--invented/.test(combined) ||
-    /pipelinecontentgrowthplus|\.info$/.test(sender) ||
-    /salesforce conference|content for your blog|new social media manager|add you to my email list/.test(combined)
-  ) return 'spam_noise'
-  if (isAutomaticReply(message)) return 'operational_alert'
-  if (/dealmachine|export complete|contacts export|delivery failure|undeliverable|mail delivery/.test(combined)) {
-    return 'operational_alert'
-  }
-  if (/buy box|acquisition criteria|actively buying|proof of funds|lending box|builder|developer|partner submission/.test(combined)) {
-    return 'partner_reply'
-  }
-  if (/my house|my property|sell my|selling the|mortgage|foreclosure|asking price|property address|interested in your offer/.test(combined)) {
-    return 'hot_seller_lead'
-  }
-  return 'low_priority'
-}
-
-function isExplicitOptOut(message: GraphMessage) {
-  const combined = `${cleanText(message.subject)} ${cleanText(message.bodyPreview)}`
-  return /\b(unsubscribe|do not contact|don't contact|stop emailing|stop contacting|opt[ -]?out|remove me)\b/i.test(combined)
 }
 
 function extractPropertyAddress(text: string) {
@@ -205,7 +319,7 @@ async function updateMailboxJob(input: {
   metrics?: Record<string, unknown>
 }) {
   const admin = createAdminClient()
-  await admin
+  const { data, error } = await admin
     .from('command_center_jobs')
     .update({
       status: input.status,
@@ -217,6 +331,141 @@ async function updateMailboxJob(input: {
       updated_at: new Date().toISOString(),
     })
     .eq('job_key', 'reply-memory-sync')
+    .select('job_key')
+  if (error) throw error
+  if (!data?.length) throw new Error('Reply-memory job status row was not updated.')
+}
+
+async function requireAdminTask(input: Parameters<typeof createAdminTask>[0]) {
+  const result = await createAdminTask(input)
+  if (!result.ok) throw new Error(result.error || 'Admin reply task write failed.')
+}
+
+async function ensureBuyerReplyEvent(input: {
+  buyerId: string
+  messageId: string
+  mailbox: string
+}) {
+  const admin = createAdminClient()
+  const { data: existing, error: lookupError } = await admin
+    .from('buyer_relationship_events')
+    .select('id')
+    .eq('buyer_id', input.buyerId)
+    .eq('event_type', 'responded')
+    .contains('metadata_json', { messageId: input.messageId })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing?.id) return
+  const { error } = await admin.from('buyer_relationship_events').insert({
+    buyer_id: input.buyerId,
+    event_type: 'responded',
+    metadata_json: { messageId: input.messageId, mailbox: input.mailbox },
+  })
+  if (error) throw error
+}
+
+async function ensureLenderReplyEvent(input: {
+  lenderId: string
+  messageId: string
+  mailbox: string
+}) {
+  const admin = createAdminClient()
+  const { data: existing, error: lookupError } = await admin
+    .from('lender_relationship_events')
+    .select('id')
+    .eq('lender_id', input.lenderId)
+    .eq('event_type', 'responded')
+    .contains('metadata_json', { messageId: input.messageId })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing?.id) return
+  const { error } = await admin.from('lender_relationship_events').insert({
+    lender_id: input.lenderId,
+    event_type: 'responded',
+    metadata_json: { messageId: input.messageId, mailbox: input.mailbox },
+  })
+  if (error) throw error
+}
+
+async function ensureInvestorReplyEvent(input: {
+  investorId: string
+  messageId: string
+  mailbox: string
+}) {
+  const admin = createAdminClient()
+  const { data: existing, error: lookupError } = await admin
+    .from('investor_engagement_events')
+    .select('id')
+    .eq('investor_profile_id', input.investorId)
+    .eq('event_type', 'reply')
+    .contains('metadata_json', { messageId: input.messageId })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing?.id) return
+  const { error } = await admin.from('investor_engagement_events').insert({
+    investor_profile_id: input.investorId,
+    event_type: 'reply',
+    event_value: 'mailbox_reply',
+    metadata_json: { messageId: input.messageId, mailbox: input.mailbox },
+  })
+  if (error) throw error
+}
+
+async function archivePendingEmailMessages(input: {
+  leadIds: string[]
+  buyerIds: string[]
+  lenderIds: string[]
+  investorIds: string[]
+}) {
+  const admin = createAdminClient()
+  const mutations: Array<PromiseLike<{ error: { message?: string } | null }>> = []
+  if (input.leadIds.length) {
+    mutations.push(
+      admin
+        .from('outreach_messages')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .in('lead_id', input.leadIds)
+        .eq('channel', 'email')
+        .in('status', ['approved', 'needs_review', 'queued'])
+    )
+  }
+  if (input.buyerIds.length) {
+    mutations.push(
+      admin
+        .from('buyer_outreach_messages')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .in('buyer_id', input.buyerIds)
+        .in('channel', ['email_intro', 'email_followup', 'spanish_email'])
+        .in('status', ['approved', 'needs_review', 'queued'])
+    )
+  }
+  if (input.lenderIds.length) {
+    mutations.push(
+      admin
+        .from('lender_outreach_messages')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .in('lender_id', input.lenderIds)
+        .in('channel', ['email_intro', 'email_followup', 'spanish_email'])
+        .in('status', ['approved', 'needs_review', 'queued'])
+    )
+  }
+  if (input.investorIds.length) {
+    mutations.push(
+      admin
+        .from('investor_outreach_messages')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .in('investor_profile_id', input.investorIds)
+        .eq('channel', 'email')
+        .in('status', ['approved', 'needs_review', 'queued'])
+    )
+  }
+
+  const results = await Promise.all(mutations)
+  const error = results.find((result) => result.error)?.error
+  if (error) throw new Error(error.message || 'Pending opt-out message cancellation failed.')
 }
 
 async function recordSellerReplyOutcome(leadId: string, occurredAt: string) {
@@ -284,7 +533,7 @@ export async function syncOutlookMailbox(options: {
   try {
     const accessToken = await getMicrosoftAccessToken()
     const since = new Date(Date.now() - (options.sinceHours || 72) * 60 * 60 * 1000).toISOString()
-    const limit = Math.min(Math.max(options.limit || 50, 1), 100)
+    const limit = Math.min(Math.max(options.limit || 40, 1), 50)
     const params = new URLSearchParams({
       '$select': 'id,conversationId,internetMessageId,subject,bodyPreview,receivedDateTime,from,toRecipients,isRead,categories,webLink',
       '$filter': `receivedDateTime ge ${since}`,
@@ -300,64 +549,130 @@ export async function syncOutlookMailbox(options: {
       throw new Error(typeof data?.error?.message === 'string' ? data.error.message : `Microsoft Graph failed with ${response.status}.`)
     }
 
-    const messages = (Array.isArray(data.value) ? data.value : []) as GraphMessage[]
+    const baseMessages = (Array.isArray(data.value) ? data.value : []) as GraphMessage[]
+    const messages = await hydrateMessageHeaders({
+      accessToken,
+      mailbox: config.mailbox,
+      messages: baseMessages,
+    })
     const admin = createAdminClient()
     const senderEmails = Array.from(new Set(
       messages
         .map((message) => cleanText(message.from?.emailAddress?.address).toLowerCase())
         .filter(Boolean)
     ))
-    const [buyerResult, leadResult, lenderResult, investorResult] = senderEmails.length
+    const [buyerResult, leadResult, lenderResult, investorResult, enrollmentRows, sendEventRows] = senderEmails.length
       ? await Promise.all([
           admin.from('buyers').select('id,name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
           admin.from('leads').select('id,email,name,business_name,property_address,market_segment,category,status').in('email', senderEmails),
           admin.from('lenders').select('id,name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
           admin.from('investor_profiles').select('id,display_name,contact_email,relationship_stage,outreach_status').in('contact_email', senderEmails),
+          loadOutboundEnrollmentRows(admin, senderEmails),
+          loadOutboundSendEventRows(admin, senderEmails),
         ])
       : [
           { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
+          [],
+          [],
         ]
     if (buyerResult.error) throw buyerResult.error
     if (leadResult.error) throw leadResult.error
     if (lenderResult.error) throw lenderResult.error
     if (investorResult.error) throw investorResult.error
-    const buyersByEmail = new Map((buyerResult.data || []).map((buyer) => [String(buyer.contact_email || '').toLowerCase(), buyer]))
-    const leadsByEmail = new Map((leadResult.data || []).map((lead) => [String(lead.email || '').toLowerCase(), lead]))
-    const lendersByEmail = new Map((lenderResult.data || []).map((lender) => [String(lender.contact_email || '').toLowerCase(), lender]))
-    const investorsByEmail = new Map((investorResult.data || []).map((investor) => [String(investor.contact_email || '').toLowerCase(), investor]))
+    const buyersByEmail = new Map(
+      (buyerResult.data || []).map((buyer) => [String(buyer.contact_email || '').toLowerCase(), buyer as BuyerRecord])
+    )
+    const leads = (leadResult.data || []) as LeadMatch[]
+    const lendersByEmail = new Map(
+      (lenderResult.data || []).map((lender) => [String(lender.contact_email || '').toLowerCase(), lender as LenderMatch])
+    )
+    const investorsByEmail = new Map(
+      (investorResult.data || []).map((investor) => [String(investor.contact_email || '').toLowerCase(), investor as InvestorMatch])
+    )
+    const outboundEvidence: OutlookOutboundEvidence[] = [
+      ...enrollmentRows.filter(hasEnrollmentSendEvidence).map((row) => {
+        const metadata = (row.metadata_json || {}) as Record<string, unknown>
+        return {
+        source: 'enrollment' as const,
+        leadId: typeof row.lead_id === 'string' ? row.lead_id : null,
+        strategyKey: typeof row.strategy_key === 'string' ? row.strategy_key : null,
+          recipient: cleanText(typeof row.recipient === 'string' ? row.recipient : null).toLowerCase() || null,
+        outboundMessageId: typeof row.last_message_id === 'string' ? row.last_message_id : null,
+        occurredAt: metadataTimestamp(metadata, row.created_at),
+        metadata,
+      }}),
+      ...sendEventRows.map((row) => {
+        const metadata = (row.metadata_json || {}) as Record<string, unknown>
+        return {
+        source: 'send_event' as const,
+        leadId: typeof row.lead_id === 'string' ? row.lead_id : null,
+        strategyKey: null,
+          recipient: cleanText(typeof row.recipient === 'string' ? row.recipient : null).toLowerCase() || null,
+        outboundMessageId: typeof row.outreach_message_id === 'string' ? row.outreach_message_id : null,
+        occurredAt: metadataTimestamp(metadata, row.created_at),
+        metadata,
+      }}),
+    ]
+    const messageIds = messages.map((message) => message.id)
+    const { data: existingRows, error: existingError } = messageIds.length
+      ? await admin
+          .from('command_center_reply_memory')
+          .select('message_id,metadata_json')
+          .eq('mailbox', config.mailbox)
+          .in('message_id', messageIds)
+      : { data: [], error: null }
+    if (existingError) throw existingError
+    const existingMetadataByMessageId = new Map(
+      (existingRows || []).map((row) => [
+        String(row.message_id),
+        (row.metadata_json || {}) as Record<string, unknown>,
+      ])
+    )
     const classifications: Record<string, number> = {}
-    const rows = []
+    const rows: ReplyMemoryRow[] = []
+    const actions: MailboxAction[] = []
     const confirmedSpamMessageIds: string[] = []
-    const buyerReplies: Array<{ buyerId: string; buyerName: string; email: string; messageId: string }> = []
-    const lenderReplies: Array<{ lenderId: string; lenderName: string; email: string; messageId: string }> = []
-    const investorReplies: Array<{ investorId: string; investorName: string; email: string; messageId: string }> = []
-    const optOuts = new Set<string>()
 
     for (const message of messages) {
       const preview = cleanText(message.bodyPreview).slice(0, 600)
       const fromEmail = cleanText(message.from?.emailAddress?.address).toLowerCase() || null
-      let buyer = fromEmail ? buyersByEmail.get(fromEmail) : null
-      const lead = fromEmail ? leadsByEmail.get(fromEmail) : null
-      const lender = fromEmail ? lendersByEmail.get(fromEmail) : null
-      const investor = fromEmail ? investorsByEmail.get(fromEmail) : null
-      const explicitOptOut = isExplicitOptOut(message)
-      let classification = classifyMessage(message)
-      if (!explicitOptOut && !['spam_noise', 'operational_alert'].includes(classification)) {
-        if (buyer || lender || investor) classification = 'partner_reply'
-        else if (lead) classification = 'hot_seller_lead'
-      }
+      let buyer = fromEmail ? buyersByEmail.get(fromEmail) || null : null
+      const lender = fromEmail ? lendersByEmail.get(fromEmail) || null : null
+      const investor = fromEmail ? investorsByEmail.get(fromEmail) || null : null
+      const outboundCorrelation = correlateOutlookInbound(message, fromEmail, outboundEvidence)
+      const lead = selectCorrelatedLead({ leads, fromEmail, correlation: outboundCorrelation })
+      const integrity = evaluateOutlookInboundIntegrity({
+        message,
+        correlation: outboundCorrelation,
+        relationships: {
+          buyer: Boolean(buyer),
+          lead: Boolean(lead),
+          lender: Boolean(lender),
+          investor: Boolean(investor),
+        },
+      })
+      const { classification, explicitOptOut } = integrity
       classifications[classification] = (classifications[classification] || 0) + 1
       if (classification === 'spam_noise') confirmedSpamMessageIds.push(message.id)
+      const existingMetadata = existingMetadataByMessageId.get(message.id) || {}
+      const pending = shouldProcessMailboxSideEffects({
+        metadata: existingMetadata,
+        actionableReply: integrity.actionableReply,
+        allowSuppression: integrity.allowSuppression,
+      })
 
       if (
         !options.dryRun &&
-        classification === 'partner_reply' &&
+        pending &&
+        integrity.allowBuyerCreation &&
         fromEmail &&
         isUsableContactEmail(fromEmail) &&
-        !buyer
+        !buyer &&
+        !lender &&
+        !investor
       ) {
         const senderName = cleanText(message.from?.emailAddress?.name) || fromEmail.split('@')[0]
         buyer = await upsertBuyer({
@@ -375,26 +690,17 @@ export async function syncOutlookMailbox(options: {
         buyersByEmail.set(fromEmail, buyer)
       }
 
-      if (classification === 'partner_reply' && buyer?.id && fromEmail) {
-        buyerReplies.push({ buyerId: buyer.id, buyerName: buyer.name, email: fromEmail, messageId: message.id })
-      }
-      if (classification === 'partner_reply' && lender?.id && fromEmail) {
-        lenderReplies.push({ lenderId: lender.id, lenderName: lender.name, email: fromEmail, messageId: message.id })
-      }
-      if (classification === 'partner_reply' && investor?.id && fromEmail) {
-        investorReplies.push({ investorId: investor.id, investorName: investor.display_name, email: fromEmail, messageId: message.id })
-      }
-      if (fromEmail && explicitOptOut) optOuts.add(fromEmail)
-
-      rows.push({
+      const row: ReplyMemoryRow = {
         lead_id: lead?.id || null,
-        strategy_key: buyer?.id
-          ? 'buyer-network'
-          : lender?.id
-            ? 'lender-network'
-            : investor?.id
-              ? 'investor-network'
-              : lead?.market_segment || lead?.category || null,
+        strategy_key:
+          outboundCorrelation.strategyKey ||
+          (buyer?.id
+            ? 'buyer-network'
+            : lender?.id
+              ? 'lender-network'
+              : investor?.id
+                ? 'investor-network'
+                : lead?.market_segment || lead?.category || null),
         mailbox: config.mailbox,
         thread_id: message.conversationId || null,
         message_id: message.id,
@@ -408,6 +714,7 @@ export async function syncOutlookMailbox(options: {
         next_step: nextStepFor(classification),
         reply_summary: preview || 'No message preview was returned by Outlook.',
         metadata_json: {
+          ...existingMetadata,
           internetMessageId: message.internetMessageId || null,
           senderName: cleanText(message.from?.emailAddress?.name) || null,
           isRead: Boolean(message.isRead),
@@ -418,8 +725,17 @@ export async function syncOutlookMailbox(options: {
           lenderId: lender?.id || null,
           investorId: investor?.id || null,
           explicitOptOut,
+          bulkMail: integrity.bulkMail,
+          correlatedOutbound: integrity.correlated,
+          actionableReply: integrity.actionableReply,
+          suppressionAuthorized: integrity.allowSuppression,
+          correlationType: outboundCorrelation.matchType || null,
+          correlatedOutboundMessageId: outboundCorrelation.outboundMessageId || null,
+          correlatedOutboundOccurredAt: outboundCorrelation.occurredAt || null,
         },
-      })
+      }
+      rows.push(row)
+      actions.push({ row, pending, buyer, lead, lender, investor })
     }
 
     let stored = 0
@@ -427,13 +743,6 @@ export async function syncOutlookMailbox(options: {
     let movedSpam = 0
     let spamMoveFailures = 0
     if (!options.dryRun && rows.length) {
-      const messageIds = rows.map((row) => row.message_id)
-      const { data: existingRows, error: existingError } = await admin
-        .from('command_center_reply_memory')
-        .select('message_id')
-        .eq('mailbox', config.mailbox)
-        .in('message_id', messageIds)
-      if (existingError) throw existingError
       const existingMessageIds = new Set((existingRows || []).map((row) => String(row.message_id)))
       const newMessageIds = new Set(messageIds.filter((messageId) => !existingMessageIds.has(messageId)))
       newMessages = newMessageIds.size
@@ -445,132 +754,107 @@ export async function syncOutlookMailbox(options: {
       if (error) throw error
       stored = saved?.length || 0
 
-      for (const reply of buyerReplies.filter((item) => newMessageIds.has(item.messageId))) {
-        await updateBuyerRecord(reply.buyerId, {
-          relationship_stage: 'responded',
-          outreach_status: 'responded',
-          next_follow_up_at: new Date().toISOString(),
-        })
-        await createAdminTask({
-          title: `Capture buyer buy box: ${reply.buyerName}`,
-          description: 'A buyer or partner replied in the acquisitions mailbox. Review the thread, capture markets, asset types, price range, condition tolerance, close speed, and acceptable deal structures before routing properties.',
-          taskType: 'buyer_reply_buy_box_capture',
-          priority: 'urgent',
-          entityType: 'buyer',
-          entityId: reply.buyerId,
-          userEmail: reply.email,
-          dueAt: adminTaskDueDates.now(),
-          metadata: { messageId: reply.messageId, mailbox: config.mailbox },
-        })
-        await admin.from('buyer_relationship_events').insert({
-          buyer_id: reply.buyerId,
-          event_type: 'responded',
-          metadata_json: { messageId: reply.messageId, mailbox: config.mailbox },
-        })
-      }
+      for (const action of actions.filter((candidate) => candidate.pending)) {
+        const { row, buyer, lead, lender, investor } = action
+        const email = row.from_email
+        const actionableReply = row.metadata_json.actionableReply === true
+        const suppressionAuthorized = row.metadata_json.suppressionAuthorized === true
 
-      for (const reply of lenderReplies.filter((item) => newMessageIds.has(item.messageId))) {
-        const [{ error: lenderError }, { error: eventError }] = await Promise.all([
-          admin
-            .from('lenders')
-            .update({
+        if (actionableReply && row.classification === 'partner_reply' && email) {
+          if (buyer?.id) {
+            await updateBuyerRecord(buyer.id, {
               relationship_stage: 'responded',
               outreach_status: 'responded',
               next_follow_up_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
             })
-            .eq('id', reply.lenderId),
-          admin.from('lender_relationship_events').insert({
-            lender_id: reply.lenderId,
-            event_type: 'responded',
-            metadata_json: { messageId: reply.messageId, mailbox: config.mailbox },
-          }),
-        ])
-        if (lenderError) throw lenderError
-        if (eventError) throw eventError
-        await createAdminTask({
-          title: `Capture lender box: ${reply.lenderName}`,
-          description: 'A lender replied in the acquisitions mailbox. Capture states served, deal types, leverage limits, borrower requirements, exclusions, close speed, and the correct submission process.',
-          taskType: 'lender_reply_box_capture',
-          priority: 'urgent',
-          entityType: 'lender',
-          entityId: reply.lenderId,
-          userEmail: reply.email,
-          dueAt: adminTaskDueDates.now(),
-          metadata: { messageId: reply.messageId, mailbox: config.mailbox },
-        })
-      }
-
-      for (const reply of investorReplies.filter((item) => newMessageIds.has(item.messageId))) {
-        const [{ error: investorError }, { error: eventError }] = await Promise.all([
-          admin
-            .from('investor_profiles')
-            .update({
-              relationship_stage: 'responded',
-              outreach_status: 'responded',
-              next_follow_up_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+            await ensureBuyerReplyEvent({
+              buyerId: buyer.id,
+              messageId: row.message_id,
+              mailbox: config.mailbox,
             })
-            .eq('id', reply.investorId),
-          admin.from('investor_engagement_events').insert({
-            investor_profile_id: reply.investorId,
-            event_type: 'reply',
-            event_value: 'mailbox_reply',
-            metadata_json: { messageId: reply.messageId, mailbox: config.mailbox },
-          }),
-        ])
-        if (investorError) throw investorError
-        if (eventError) throw eventError
-        await createAdminTask({
-          title: `Capture investor buy box: ${reply.investorName}`,
-          description: 'An investor or capital partner replied in the acquisitions mailbox. Capture markets, asset types, price range, condition tolerance, close speed, structures, proof-of-funds path, and submission instructions.',
-          taskType: 'investor_reply_buy_box_capture',
-          priority: 'urgent',
-          entityType: 'investor_profile',
-          entityId: reply.investorId,
-          userEmail: reply.email,
-          dueAt: adminTaskDueDates.now(),
-          metadata: { messageId: reply.messageId, mailbox: config.mailbox },
-        })
-      }
+            await requireAdminTask({
+              title: `Capture buyer buy box: ${buyer.name}`,
+              description: 'A buyer or partner replied in the acquisitions mailbox. Review the thread, capture markets, asset types, price range, condition tolerance, close speed, and acceptable deal structures before routing properties.',
+              taskType: 'buyer_reply_buy_box_capture',
+              priority: 'urgent',
+              entityType: 'buyer',
+              entityId: buyer.id,
+              userEmail: email,
+              dueAt: adminTaskDueDates.now(),
+              metadata: { messageId: row.message_id, mailbox: config.mailbox },
+            })
+          }
+          if (lender?.id) {
+            const { data: updatedLenders, error: lenderError } = await admin
+              .from('lenders')
+              .update({
+                relationship_stage: 'responded',
+                outreach_status: 'responded',
+                next_follow_up_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', lender.id)
+              .select('id')
+            if (lenderError) throw lenderError
+            if (!updatedLenders?.length) throw new Error('Lender reply target was not updated.')
+            await ensureLenderReplyEvent({
+              lenderId: lender.id,
+              messageId: row.message_id,
+              mailbox: config.mailbox,
+            })
+            await requireAdminTask({
+              title: `Capture lender box: ${lender.name}`,
+              description: 'A lender replied in the acquisitions mailbox. Capture states served, deal types, leverage limits, borrower requirements, exclusions, close speed, and the correct submission process.',
+              taskType: 'lender_reply_box_capture',
+              priority: 'urgent',
+              entityType: 'lender',
+              entityId: lender.id,
+              userEmail: email,
+              dueAt: adminTaskDueDates.now(),
+              metadata: { messageId: row.message_id, mailbox: config.mailbox },
+            })
+          }
+          if (investor?.id) {
+            const { data: updatedInvestors, error: investorError } = await admin
+              .from('investor_profiles')
+              .update({
+                relationship_stage: 'responded',
+                outreach_status: 'responded',
+                next_follow_up_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', investor.id)
+              .select('id')
+            if (investorError) throw investorError
+            if (!updatedInvestors?.length) throw new Error('Investor reply target was not updated.')
+            await ensureInvestorReplyEvent({
+              investorId: investor.id,
+              messageId: row.message_id,
+              mailbox: config.mailbox,
+            })
+            await requireAdminTask({
+              title: `Capture investor buy box: ${investor.display_name}`,
+              description: 'An investor or capital partner replied in the acquisitions mailbox. Capture markets, asset types, price range, condition tolerance, close speed, structures, proof-of-funds path, and submission instructions.',
+              taskType: 'investor_reply_buy_box_capture',
+              priority: 'urgent',
+              entityType: 'investor_profile',
+              entityId: investor.id,
+              userEmail: email,
+              dueAt: adminTaskDueDates.now(),
+              metadata: { messageId: row.message_id, mailbox: config.mailbox },
+            })
+          }
 
-      const newOptOutEmails = new Set(
-        rows
-          .filter((row) => newMessageIds.has(row.message_id) && row.metadata_json.explicitOptOut && row.from_email)
-          .map((row) => String(row.from_email).toLowerCase())
-      )
-      for (const email of newOptOutEmails) {
-        const { data: existingSuppression } = await admin
-          .from('lead_suppressions')
-          .select('id')
-          .eq('email', email)
-          .eq('status', 'active')
-          .limit(1)
-          .maybeSingle()
-        if (!existingSuppression?.id) {
-          await admin.from('lead_suppressions').insert({ email, reason: 'Explicit email opt-out received in Outlook.' })
+          const { error: enrollmentError } = await admin
+            .from('command_center_outbound_enrollments')
+            .update({ status: 'replied', next_action_at: null, updated_at: new Date().toISOString() })
+            .eq('recipient', email)
+            .eq('channel', 'email')
+          if (enrollmentError) throw enrollmentError
         }
-        await admin.from('leads').update({ delivery_status: 'suppressed', suppression_reason: 'Explicit email opt-out.' }).eq('email', email)
-        await admin.from('buyers').update({ outreach_status: 'do_not_contact' }).eq('contact_email', email)
-        await admin.from('lenders').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email)
-        await admin.from('investor_profiles').update({ outreach_status: 'do_not_contact', next_follow_up_at: null }).eq('contact_email', email)
-        await admin
-          .from('command_center_outbound_enrollments')
-          .update({ status: 'suppressed', suppression_reason: 'Explicit email opt-out.', next_action_at: null, updated_at: new Date().toISOString() })
-          .eq('recipient', email)
-          .eq('channel', 'email')
-      }
 
-      for (const lead of leadsByEmail.values()) {
-        if (!lead?.id || optOuts.has(String(lead.email || '').toLowerCase())) continue
-        const sellerReply = rows.find(
-          (row) =>
-            newMessageIds.has(row.message_id) &&
-            row.lead_id === lead.id &&
-            !['spam_noise', 'operational_alert'].includes(row.classification)
-        )
-        if (sellerReply) {
-          await admin
+        if (actionableReply && row.classification === 'hot_seller_lead' && lead?.id) {
+          const { data: updatedLeads, error: leadError } = await admin
             .from('leads')
             .update({
               status: 'replied',
@@ -580,37 +864,106 @@ export async function syncOutlookMailbox(options: {
               updated_at: new Date().toISOString(),
             })
             .eq('id', lead.id)
-          await recordSellerReplyOutcome(lead.id, sellerReply.received_at || new Date().toISOString())
-          await createAdminTask({
+            .select('id')
+          if (leadError) throw leadError
+          if (!updatedLeads?.length) throw new Error('Seller reply target was not updated.')
+          await recordSellerReplyOutcome(lead.id, row.received_at)
+          await requireAdminTask({
             title: `Qualify seller reply: ${lead.property_address || lead.name || lead.business_name || lead.id}`,
             description: 'A seller replied in the acquisitions mailbox. Confirm authority to sell, condition, occupancy, timeline, asking price, loan balance, liens, access, and whether cash, seller finance, subject-to, novation, or a hybrid path is acceptable. Mark qualified only after the material facts are captured.',
             taskType: 'seller_reply_qualification',
             priority: 'urgent',
             entityType: 'lead',
             entityId: lead.id,
-            userEmail: lead.email || null,
+            userEmail: lead.email,
             dueAt: adminTaskDueDates.now(),
             metadata: {
-              messageId: sellerReply.message_id,
+              messageId: row.message_id,
               mailbox: config.mailbox,
-              propertyAddress: lead.property_address || sellerReply.property_address || null,
+              propertyAddress: lead.property_address || row.property_address,
             },
           })
         }
-      }
 
-      const partnerReplyEmails = new Set(
-        rows
-          .filter((row) => newMessageIds.has(row.message_id) && row.classification === 'partner_reply' && row.from_email)
-          .map((row) => String(row.from_email).toLowerCase())
-      )
-      for (const email of partnerReplyEmails) {
-        const { error: enrollmentError } = await admin
-          .from('command_center_outbound_enrollments')
-          .update({ status: 'replied', next_action_at: null, updated_at: new Date().toISOString() })
-          .eq('recipient', email)
-          .eq('channel', 'email')
-        if (enrollmentError) throw enrollmentError
+        if (suppressionAuthorized) {
+          if (!email) throw new Error('A correlated opt-out is missing the sender address.')
+          const { data: existingSuppression, error: suppressionLookupError } = await admin
+            .from('lead_suppressions')
+            .select('id')
+            .eq('email', email)
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle()
+          if (suppressionLookupError) throw suppressionLookupError
+          if (!existingSuppression?.id) {
+            const { error: suppressionInsertError } = await admin
+              .from('lead_suppressions')
+              .insert({ email, reason: 'Explicit email opt-out received in Outlook.' })
+            if (suppressionInsertError) throw suppressionInsertError
+          }
+          const [leadMutation, buyerMutation, lenderMutation, investorMutation, enrollmentMutation] =
+            await Promise.all([
+            admin
+              .from('leads')
+              .update({ delivery_status: 'suppressed', suppression_reason: 'Explicit email opt-out.' })
+              .eq('email', email)
+              .select('id'),
+            admin
+              .from('buyers')
+              .update({ outreach_status: 'do_not_contact' })
+              .eq('contact_email', email)
+              .select('id'),
+            admin
+              .from('lenders')
+              .update({ outreach_status: 'do_not_contact', next_follow_up_at: null })
+              .eq('contact_email', email)
+              .select('id'),
+            admin
+              .from('investor_profiles')
+              .update({ outreach_status: 'do_not_contact', next_follow_up_at: null })
+              .eq('contact_email', email)
+              .select('id'),
+            admin
+              .from('command_center_outbound_enrollments')
+              .update({
+                status: 'suppressed',
+                suppression_reason: 'Explicit email opt-out.',
+                next_action_at: null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('recipient', email)
+              .eq('channel', 'email'),
+          ])
+          const suppressionError = [
+            leadMutation,
+            buyerMutation,
+            lenderMutation,
+            investorMutation,
+            enrollmentMutation,
+          ].find((result) => result.error)?.error
+          if (suppressionError) throw suppressionError
+          await archivePendingEmailMessages({
+            leadIds: (leadMutation.data || []).map((record) => String(record.id)),
+            buyerIds: (buyerMutation.data || []).map((record) => String(record.id)),
+            lenderIds: (lenderMutation.data || []).map((record) => String(record.id)),
+            investorIds: (investorMutation.data || []).map((record) => String(record.id)),
+          })
+        }
+
+        const completedAt = new Date().toISOString()
+        const completedMetadata = {
+          ...row.metadata_json,
+          mailboxSideEffects: { status: 'completed', completedAt, version: 1 },
+        }
+        const { data: completedRows, error: completionError } = await admin
+          .from('command_center_reply_memory')
+          .update({ metadata_json: completedMetadata, updated_at: completedAt })
+          .eq('mailbox', config.mailbox)
+          .eq('message_id', row.message_id)
+          .select('id')
+        if (completionError) throw completionError
+        if (!completedRows?.length) throw new Error('Mailbox side-effect completion marker was not saved.')
+        row.metadata_json = completedMetadata
       }
 
       if (config.autoCleanSpam) {

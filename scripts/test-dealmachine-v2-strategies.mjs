@@ -6,6 +6,8 @@ import {
   DEALMACHINE_STRATEGY_FIELDS,
   buildDailyStrategyPlans,
   compileStrategyFilters,
+  hydrateStrategyPlan,
+  mergeDealMachineCatalogMetadata,
   selectDailyStrategyMarket,
 } from '../lib/dealmachine/v2-strategy-catalog.mjs'
 
@@ -65,13 +67,108 @@ for (const strategy of DEALMACHINE_STRATEGIES) {
   }
 }
 
+const booleanFilter = (filterId, sourceType) => ({
+  filter_id: filterId,
+  type: 'BOOLEAN',
+  source_type: sourceType,
+  options: [],
+  allowed_operators: [],
+})
+const numberFilter = (filterId, sourceType, allowedOperators = ['range']) => ({
+  filter_id: filterId,
+  type: 'NUMBER',
+  source_type: sourceType,
+  options: [],
+  allowed_operators: allowedOperators,
+})
+const routingClient = {
+  resolveCity: async () => ({ location_id: 'loc_city_123', type: 'city', code: '123', name: 'Tulsa', state: 'OK' }),
+}
+const catalogMetadata = mergeDealMachineCatalogMetadata(
+  [
+    booleanFilter('has_absentee_owners'),
+    numberFilter('estimated_value'),
+    booleanFilter('property_only_filter'),
+  ],
+  [booleanFilter('has_investment_property_additional_investment_flag')]
+)
+
+assert.deepEqual(
+  catalogMetadata.map((row) => row.source_type),
+  ['properties', 'properties', 'properties', 'people'],
+  'Catalog merge must retain endpoint provenance.'
+)
+
+const forcedPeoplePlan = {
+  key: 'people-filter-regression',
+  label: 'People-only routing regression',
+  market: 'Tulsa, OK',
+  anchor: 'properties',
+  variant: {
+    key: 'mixed-catalog',
+    signals: ['portfolio_owner'],
+    filters: [
+      { filterId: 'has_investment_property_additional_investment_flag', operator: null, value: true },
+      { filterId: 'estimated_value', operator: 'range', value: { min: 50_000, max: 1_000_000 } },
+    ],
+  },
+}
+const forcedPeople = await hydrateStrategyPlan(routingClient, forcedPeoplePlan, catalogMetadata)
+assert.equal(forcedPeople.searchSourceType, 'people')
+assert.deepEqual(forcedPeople.peopleOnlyFilterIds, ['has_investment_property_additional_investment_flag'])
+assert.equal(forcedPeople.searchBody.property_match, 'owner')
+assert.equal('anchor' in forcedPeople.searchBody, false, 'People search must not receive property-search anchor.')
+assert.equal('contact_audience' in forcedPeople.searchBody, false, 'People search must not receive property contact audience.')
+assert.equal(
+  forcedPeople.searchBody.filters.some((entry) => 'source_type' in entry),
+  false,
+  'Catalog provenance is routing metadata and must not leak into the provider payload.'
+)
+
+const propertyPlan = {
+  ...forcedPeoplePlan,
+  key: 'property-filter-regression',
+  variant: {
+    ...forcedPeoplePlan.variant,
+    key: 'property-catalog',
+    filters: [{ filterId: 'property_only_filter', operator: null, value: true }],
+  },
+}
+const propertyOnly = await hydrateStrategyPlan(routingClient, propertyPlan, catalogMetadata)
+assert.equal(propertyOnly.searchSourceType, 'properties')
+assert.equal(propertyOnly.searchBody.anchor, 'properties')
+assert.equal(propertyOnly.searchBody.contact_audience, 'owners')
+assert.equal('property_match' in propertyOnly.searchBody, false)
+assert.deepEqual(propertyOnly.searchBody.filters, [{ filter_id: 'property_only_filter', value: true }])
+
+const portfolioPlan = buildDailyStrategyPlans({
+  date: '2026-08-01',
+  strategyKeys: ['portfolio-landlord'],
+})[0]
+const portfolio = await hydrateStrategyPlan(routingClient, portfolioPlan, catalogMetadata)
+assert.equal(portfolio.searchSourceType, 'people')
+assert.equal(portfolio.searchBody.property_match, 'owner')
+assert.equal('anchor' in portfolio.searchBody, false)
+
 const activeSources = [
   fs.readFileSync(new URL('../lib/dealmachine/v2-client.mjs', import.meta.url), 'utf8'),
   fs.readFileSync(new URL('../lib/dealmachine/v2-strategy-catalog.mjs', import.meta.url), 'utf8'),
+  fs.readFileSync(new URL('../lib/dealmachine/api.ts', import.meta.url), 'utf8'),
   fs.readFileSync(new URL('./dealmachine-v2-strategy-run.mjs', import.meta.url), 'utf8'),
 ].join('\n')
 assert.equal(activeSources.includes('api.dealmachine.com/public'), false)
 assert.equal(activeSources.includes('next.v3.dealmachine.com'), false)
 assert.match(activeSources, /api\.v2\.dealmachine\.com/)
+assert.match(activeSources, /estimateRecordSearch\(hydrated\.searchSourceType/)
+assert.match(activeSources, /searchRecords\(hydrated\.searchSourceType/)
+assert.doesNotMatch(activeSources, /estimatePropertySearch\(\{\s*\.\.\.hydrated\.searchBody/)
+assert.doesNotMatch(activeSources, /searchProperties\(\{\s*\.\.\.hydrated\.searchBody/)
+
+const productionSource = fs.readFileSync(new URL('../lib/dealmachine/api.ts', import.meta.url), 'utf8')
+assert.match(
+  productionSource,
+  /envInt\('DEALMACHINE_SYNC_MAX_CREDITS', 75\)/,
+  'The production source-acquisition fail-closed 75-credit default must remain intact.'
+)
 
 console.log('DealMachine v2 strategy tests passed.')

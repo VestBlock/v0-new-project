@@ -9,9 +9,12 @@ import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { updateOutreachMessageSchema } from '@/lib/leads/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getLeadById, insertOutreachSendEvent, listSuppressions, updateLeadRecord, updateOutreachMessage } from '@/lib/leads/repository'
+import { claimOutreachMessageForSend, getLeadById, insertOutreachSendEvent, listSuppressions, updateLeadRecord, updateOutreachMessage } from '@/lib/leads/repository'
 import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { logEvent } from '@/lib/system/logEvent'
+import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import { canApproveOutreachMessage } from '@/lib/outreach/messageState'
 
 export async function PATCH(
   request: NextRequest,
@@ -42,8 +45,20 @@ export async function PATCH(
     if (error || !message) {
       return NextResponse.json({ error: 'Outreach message not found.' }, { status: 404 })
     }
+    if (parsed.data.sendNow && parsed.data.status && parsed.data.status !== 'approved') {
+      return NextResponse.json({ error: 'sendNow can only be combined with approved status.' }, { status: 400 })
+    }
+    if (parsed.data.sendNow && (message.sent_at || ['queued', 'sent'].includes(String(message.status || '')))) {
+      return NextResponse.json({ error: 'This outreach message has already been claimed or sent.' }, { status: 409 })
+    }
 
     const nextStatus = parsed.data.status || (parsed.data.sendNow ? 'approved' : null)
+    if (nextStatus === 'approved' && !canApproveOutreachMessage(message)) {
+      return NextResponse.json(
+        { error: 'Queued or sent outreach cannot be moved back to approved.' },
+        { status: 409 }
+      )
+    }
     if (nextStatus) {
       await updateOutreachMessage(message.id, {
         status: nextStatus,
@@ -76,7 +91,7 @@ export async function PATCH(
       const lead = detail.lead
       const updatedMessage =
         detail.outreach.find((item) => item.id === parsed.data.messageId) || message
-      const suppressions = await listSuppressions().catch(() => [])
+      const suppressions = await listSuppressions()
       const decision = getLeadEmailAutopilotDecision(lead, suppressions)
       const qualityIssue = validateOutreachMessageQuality({ lead, message: updatedMessage })
 
@@ -137,9 +152,27 @@ export async function PATCH(
         return NextResponse.json({ error: errorMessage }, { status: 400 })
       }
 
+      const finalRecipientGuard = await getOutreachRecipientGuard({
+        scope: 'lead',
+        entityId: id,
+        email: lead.email,
+      })
+      if (!finalRecipientGuard.allowed) {
+        return NextResponse.json(
+          { error: `Recipient safety check blocked this send: ${finalRecipientGuard.reason}.` },
+          { status: 409 }
+        )
+      }
+
+      const claimed = await claimOutreachMessageForSend(message.id)
+      if (!claimed) {
+        return NextResponse.json({ error: 'Another worker already claimed or completed this message.' }, { status: 409 })
+      }
+      const identity = buildOutboundSendIdentity({ scope: 'lead', entityId: id, messageId: claimed.id, sequenceStep: 1 })
       const sendResult = await sendLeadOutreachEmail({
         lead,
-        message: updatedMessage as any,
+        message: claimed,
+        sequenceStep: 1,
       })
 
       if (!sendResult.ok) {
@@ -162,6 +195,9 @@ export async function PATCH(
             recipient: lead.email,
             subject: updatedMessage.subject,
             errorMessage: sendResult.error,
+            idempotencyKey: `${identity.idempotencyKey}:failed`,
+            correlationId: identity.correlationId,
+            metadata: outboundIdentityMetadata(identity),
           }),
         ])
         return NextResponse.json(
@@ -172,7 +208,7 @@ export async function PATCH(
 
       await Promise.all([
         updateOutreachMessage(message.id, {
-          status: 'accepted',
+          status: 'sent',
           sent_at: new Date().toISOString(),
           send_provider: sendResult.provider,
           send_error: null,
@@ -192,7 +228,12 @@ export async function PATCH(
           status: 'sent',
           recipient: lead.email,
           subject: updatedMessage.subject,
-          metadata: { providerMessageId: sendResult.providerMessageId || null },
+          idempotencyKey: `${identity.idempotencyKey}:sent`,
+          correlationId: identity.correlationId,
+          metadata: {
+            providerMessageId: sendResult.providerMessageId || null,
+            ...outboundIdentityMetadata(identity),
+          },
         }),
         logEvent({
           eventType: 'outreach_sent',

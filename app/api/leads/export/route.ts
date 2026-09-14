@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient()
-  const suppressions = await listSuppressions().catch(() => [])
+  const suppressions = await listSuppressions()
   let query = admin.from('leads').select('*').order('lead_score', { ascending: false })
   if (parsed.data.source) query = query.or(buildSourceFamilyFilters('source', [parsed.data.source]))
   if (parsed.data.offer) query = query.eq('best_offer', parsed.data.offer)

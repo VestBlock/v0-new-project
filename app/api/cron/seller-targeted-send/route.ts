@@ -5,9 +5,11 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import { getStrategyDeliveryAttribution } from '@/lib/admin/strategyDelivery'
 import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import {
   getLeadById,
+  claimOutreachMessageForSend,
   insertOutreachSendEvent,
   updateLeadRecord,
   updateOutreachMessage,
@@ -17,6 +19,8 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 import { logEvent } from '@/lib/system/logEvent'
+import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 const SUCCESSFUL_SEND_STATUSES = new Set(['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied'])
 
@@ -51,7 +55,7 @@ export async function GET(request: Request) {
     }
 
     const normalizedEmail = String(lead.email).trim().toLowerCase()
-    const [{ data: suppression }, { data: reply }, { data: priorEvents }] = await Promise.all([
+    const [suppressionResult, replyResult, priorEventsResult] = await Promise.all([
       admin
         .from('lead_suppressions')
         .select('id')
@@ -73,6 +77,12 @@ export async function GET(request: Request) {
         .in('status', Array.from(SUCCESSFUL_SEND_STATUSES))
         .limit(1),
     ])
+    if (suppressionResult.error) throw suppressionResult.error
+    if (replyResult.error) throw replyResult.error
+    if (priorEventsResult.error) throw priorEventsResult.error
+    const suppression = suppressionResult.data
+    const reply = replyResult.data
+    const priorEvents = priorEventsResult.data
     if (suppression?.id) return NextResponse.json({ error: 'Recipient is suppressed.' }, { status: 409 })
     if (reply?.id) return NextResponse.json({ error: 'Recipient has already replied.' }, { status: 409 })
     if ((priorEvents || []).length) return NextResponse.json({ error: 'Lead already has a successful send.' }, { status: 409 })
@@ -101,8 +111,31 @@ export async function GET(request: Request) {
       })
     }
 
-    const sendResult = await sendLeadOutreachEmail({ lead, message })
+    const finalRecipientGuard = await getOutreachRecipientGuard({
+      scope: 'lead',
+      entityId: leadId,
+      email: normalizedEmail,
+    })
+    if (!finalRecipientGuard.allowed) {
+      return NextResponse.json(
+        { error: `Recipient safety check blocked this send: ${finalRecipientGuard.reason}.` },
+        { status: 409 }
+      )
+    }
+
+    const claimed = await claimOutreachMessageForSend(message.id)
+    if (!claimed) {
+      return NextResponse.json({ error: 'Another worker already claimed or completed this message.' }, { status: 409 })
+    }
+    const identity = buildOutboundSendIdentity({ scope: 'lead', entityId: leadId, messageId: claimed.id, sequenceStep: 1 })
+    const attribution = await getStrategyDeliveryAttribution(leadId).catch(() => null)
+    const sendResult = await sendLeadOutreachEmail({ lead, message: claimed, sequenceStep: 1 })
     if (!sendResult.ok) {
+      await updateOutreachMessage(message.id, {
+        status: 'failed',
+        send_provider: sendResult.provider,
+        send_error: sendResult.error || 'Targeted seller send failed.',
+      })
       await insertOutreachSendEvent({
         leadId,
         outreachMessageId: message.id,
@@ -112,14 +145,20 @@ export async function GET(request: Request) {
         recipient: normalizedEmail,
         subject: message.subject,
         errorMessage: sendResult.error || 'Targeted seller send failed.',
-        metadata: { action: 'seller_targeted_send' },
+        idempotencyKey: `${identity.idempotencyKey}:failed`,
+        correlationId: identity.correlationId,
+        metadata: {
+          action: 'seller_targeted_send',
+          ...outboundIdentityMetadata(identity),
+          campaignRunId: attribution?.campaign_run_id || null,
+        },
       })
       return NextResponse.json({ error: sendResult.error || 'Send failed.' }, { status: 502 })
     }
 
     const now = new Date().toISOString()
     const nextFollowUpAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
-    const strategyKey = lead.market_segment || 'seller-outreach'
+    const strategyKey = attribution?.strategy_key || lead.market_segment || 'seller-outreach'
     const auditWrites = await Promise.allSettled([
       updateOutreachMessage(message.id, {
         status: 'sent',
@@ -142,14 +181,18 @@ export async function GET(request: Request) {
         status: 'accepted',
         recipient: normalizedEmail,
         subject: message.subject,
+        idempotencyKey: `${identity.idempotencyKey}:accepted`,
+        correlationId: identity.correlationId,
         metadata: {
+          ...outboundIdentityMetadata(identity),
           action: 'seller_targeted_send',
-          sequenceStep: 1,
           strategyKey,
           providerMessageId: sendResult.providerMessageId || null,
+          campaignRunId: attribution?.campaign_run_id || null,
         },
       }),
       recordOutboundEnrollment({
+        campaignRunId: attribution?.campaign_run_id || null,
         strategyKey,
         channel: 'email',
         status: 'accepted',
@@ -160,7 +203,7 @@ export async function GET(request: Request) {
         propertyAddress: lead.property_address,
         nextActionAt: nextFollowUpAt,
         metadata: {
-          sequenceStep: 1,
+          ...outboundIdentityMetadata(identity),
           source: lead.source,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,

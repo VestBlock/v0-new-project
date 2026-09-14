@@ -2,17 +2,28 @@ import { Resend } from 'resend'
 import type { LenderOutreachMessageRecord, LenderRecord } from '@/lib/lenders/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
-import { shouldPreferResend } from '@/lib/outreach/provider-preference'
+import {
+  getOutboundProviderAvailability,
+  getPreferredOutboundProvider,
+} from '@/lib/outreach/provider-preference'
+import { buildOutboundSendIdentity, type OutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
+import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
+import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 
 type SendLenderEmailInput = {
   lender: LenderRecord
   message: LenderOutreachMessageRecord
+  identity?: OutboundSendIdentity
+  deliveryMode?: 'standard' | 'recovery_canary'
 }
 
 type SendLenderEmailResult = {
   ok: boolean
   provider: 'gmail' | 'resend' | 'none'
   providerMessageId?: string | null
+  idempotencyKey?: string
+  correlationId?: string
   error?: string
 }
 
@@ -37,23 +48,11 @@ function getReplyToEmail() {
 }
 
 function buildOutreachBody(message: LenderOutreachMessageRecord) {
-  const body = String(message.body || '').trim()
-  const compliance = String(
-    message.compliance_note || 'If this is not relevant, reply and we will not contact you again.'
-  ).trim()
-  return body.toLowerCase().includes(compliance.toLowerCase()) ? body : `${body}\n\n${compliance}`
-}
-
-function hasGmailConfig() {
-  return Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN
-  )
-}
-
-function hasResendConfig() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL)
+  return buildCommercialOutreachBody({
+    body: message.body,
+    complianceNote: message.compliance_note,
+    mailingAddress: getCommercialOutreachMailingAddress(),
+  })
 }
 
 async function getGoogleAccessToken() {
@@ -87,7 +86,13 @@ async function sendWithGmail(input: SendLenderEmailInput): Promise<SendLenderEma
   const accessToken = await getGoogleAccessToken()
   const recipient = input.lender.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
-    return { ok: false, provider: 'gmail', error: 'Lender does not have a usable contact email.' }
+    return {
+      ok: false,
+      provider: 'gmail',
+      error: 'Lender does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
 
   const mime = [
@@ -95,6 +100,9 @@ async function sendWithGmail(input: SendLenderEmailInput): Promise<SendLenderEma
     `Reply-To: ${getReplyToEmail()}`,
     `To: ${recipient}`,
     `Subject: ${input.message.subject || 'VestBlock partnership note'}`,
+    ...(input.identity
+      ? [`Message-ID: <${input.identity.correlationId}@vestblock.io>`, `X-VestBlock-Correlation-ID: ${input.identity.correlationId}`]
+      : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     '',
@@ -116,81 +124,170 @@ async function sendWithGmail(input: SendLenderEmailInput): Promise<SendLenderEma
       ok: false,
       provider: 'gmail',
       error: typeof data?.error?.message === 'string' ? data.error.message : `Gmail send failed with ${response.status}.`,
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
     }
   }
 
-  return { ok: true, provider: 'gmail', providerMessageId: data.id || null }
+  return {
+    ok: true,
+    provider: 'gmail',
+    providerMessageId: data.id || null,
+    idempotencyKey: input.identity?.idempotencyKey,
+    correlationId: input.identity?.correlationId,
+  }
 }
 
 async function sendWithResend(input: SendLenderEmailInput): Promise<SendLenderEmailResult> {
   const recipient = input.lender.contact_email?.trim() || ''
   if (!isUsableContactEmail(recipient)) {
-    return { ok: false, provider: 'resend', error: 'Lender does not have a usable contact email.' }
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { data, error } = await resend.emails.send({
-    from: getResendSender(),
-    to: recipient,
-    subject: input.message.subject || 'VestBlock partnership note',
-    text: buildOutreachBody(input.message),
-    replyTo: getReplyToEmail(),
-  })
-
-  if (error) {
-    return { ok: false, provider: 'resend', error: error.message || 'Resend send failed.' }
-  }
-
-  return { ok: true, provider: 'resend', providerMessageId: data?.id || null }
-}
-
-export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Promise<SendLenderEmailResult> {
-  const replyCapture = getReplyCaptureReadiness()
-  if (!replyCapture.ready) {
-    return { ok: false, provider: 'none', error: replyCapture.reason || 'Reply capture is disconnected.' }
-  }
-  if (!isUsableContactEmail(input.lender.contact_email)) {
-    return { ok: false, provider: 'none', error: 'Lender does not have a usable contact email.' }
-  }
-  const availability = { gmail: hasGmailConfig(), resend: hasResendConfig() }
-  const preferResend = shouldPreferResend(availability)
-  let resendError: string | null = null
-
-  if (availability.resend && preferResend) {
-    const resendResult = await sendWithResend(input)
-    if (resendResult.ok || !availability.gmail) return resendResult
-    resendError = resendResult.error || 'Resend send failed.'
-  }
-
-  if (availability.gmail) {
-    try {
-      const gmailResult = await sendWithGmail(input)
-      if (gmailResult.ok || !availability.resend) return gmailResult
-      if (resendError) {
-        return { ...gmailResult, error: `Resend: ${resendError}; Gmail: ${gmailResult.error || 'send failed.'}` }
-      }
-    } catch (error) {
-      const gmailError = error instanceof Error ? error.message : 'Google Workspace sender failed.'
-      if (resendError) {
-        return { ok: false, provider: 'gmail', error: `Resend: ${resendError}; Gmail: ${gmailError}` }
-      }
-      if (!availability.resend) {
-        return {
-          ok: false,
-          provider: 'gmail',
-          error: gmailError,
-        }
-      }
+    return {
+      ok: false,
+      provider: 'resend',
+      error: 'Lender does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
     }
   }
 
-  if (availability.resend && !preferResend) {
-    return sendWithResend(input)
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const { data, error } = await resend.emails.send(
+    {
+      from: getResendSender(),
+      to: recipient,
+      subject: input.message.subject || 'VestBlock partnership note',
+      text: buildOutreachBody(input.message),
+      replyTo: getReplyToEmail(),
+      headers: input.identity ? { 'X-VestBlock-Correlation-ID': input.identity.correlationId } : undefined,
+    },
+    input.identity ? { idempotencyKey: input.identity.idempotencyKey } : undefined
+  )
+
+  if (error) {
+    return {
+      ok: false,
+      provider: 'resend',
+      error: error.message || 'Resend send failed.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   }
 
   return {
-    ok: false,
-    provider: 'none',
-    error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
+    ok: true,
+    provider: 'resend',
+    providerMessageId: data?.id || null,
+    idempotencyKey: input.identity?.idempotencyKey,
+    correlationId: input.identity?.correlationId,
+  }
+}
+
+export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Promise<SendLenderEmailResult> {
+  input = {
+    ...input,
+    identity: buildOutboundSendIdentity({
+      scope: 'lender',
+      entityId: input.lender.id,
+      messageId: input.message.id,
+      sequenceStep: input.message.channel === 'email_followup' ? 2 : 1,
+    }),
+  }
+  const replyCapture = getReplyCaptureReadiness()
+  if (!replyCapture.ready) {
+    return {
+      ok: false,
+      provider: 'none',
+      error: replyCapture.reason || 'Reply capture is disconnected.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
+  }
+  if (!getCommercialOutreachMailingAddress()) {
+    return {
+      ok: false,
+      provider: 'none',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+      error: 'Lender outreach is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
+    }
+  }
+  if (!isUsableContactEmail(input.lender.contact_email)) {
+    return {
+      ok: false,
+      provider: 'none',
+      error: 'Lender does not have a usable contact email.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
+  }
+  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
+  if (provider === 'none') {
+    return {
+      ok: false,
+      provider,
+      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
+  }
+
+  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
+  try {
+    const recipientGuard = await getOutreachRecipientGuard({
+      scope: 'lender',
+      entityId: input.lender.id,
+      email: input.lender.contact_email,
+    })
+    if (!recipientGuard.allowed) {
+      return {
+        ok: false,
+        provider: 'none',
+        error: `Lender outreach blocked before send: ${recipientGuard.reason}.`,
+        idempotencyKey: input.identity?.idempotencyKey,
+        correlationId: input.identity?.correlationId,
+      }
+    }
+    deliveryAttempt = await acquireGuardedDeliveryAttempt({
+      provider,
+      scope: 'lender',
+      messageId: input.message.id,
+      recoveryCanary: input.deliveryMode === 'recovery_canary',
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      provider: 'none',
+      error: `Lender outreach safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
+  }
+  if (!deliveryAttempt.allowed) {
+    return {
+      ok: false,
+      provider: 'none',
+      error: `Lender outreach blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
+  }
+
+  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
+  try {
+    const result = provider === 'resend'
+      ? await sendWithResend(input)
+      : await sendWithGmail(input).catch((error) => ({
+          ok: false as const,
+          provider: 'gmail' as const,
+          error: error instanceof Error ? error.message : 'Google Workspace sender failed.',
+          idempotencyKey: input.identity?.idempotencyKey,
+          correlationId: input.identity?.correlationId,
+        }))
+    outcome = result.ok ? 'accepted' : 'failed'
+    return result
+  } finally {
+    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome).catch((error) => {
+      console.error('[outreach] failed to release global lender delivery permit', error)
+    })
   }
 }

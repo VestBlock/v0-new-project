@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
         .eq('status', 'failed')
         .order('started_at', { ascending: false })
         .limit(10),
-      listSuppressions().catch(() => []),
+      listSuppressions(),
     ])
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

@@ -34,6 +34,7 @@
     "test:operating-architecture": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-operating-architecture.ts",
     "test:operating-loops": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-operating-loops.ts",
     "test:delivery-status": "pnpm exec ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/test-delivery-status.ts",
+    "test:delivery-control-plane": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-delivery-control-plane.ts",
     "test:partner-outreach-guards": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-partner-outreach-guards.ts",
     "test:qualified-seller-routing": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-qualified-seller-routing.ts",
     "test:revenue-funnel": "TS_NODE_BASEURL=. pnpm exec ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/test-revenue-funnel.ts",
