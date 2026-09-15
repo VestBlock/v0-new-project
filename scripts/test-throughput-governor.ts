@@ -84,21 +84,23 @@ const controlledTrial = decision({ mode: 'controlled_trial', sampleSize: 5_000 }
 assert.equal(controlledTrial.stage, 'recovery')
 assert.equal(controlledTrial.effectiveDailyCap, 5)
 assert.match(controlledTrial.reason, /delivery_mode_controlled_trial/)
+assert.equal(controlledTrial.allocationPlan.byKey.lenders, 5)
+assert.deepEqual(controlledTrial.allocationPlan.groupTotals, {
+  seller: 0,
+  business: 0,
+  partner: 5,
+})
 assert.ok(
-  Math.max(...controlledTrial.allocationPlan.allocations.map((lane) => lane.target)) -
-    Math.min(...controlledTrial.allocationPlan.allocations.map((lane) => lane.target)) <=
-    1
+  controlledTrial.allocationPlan.allocations
+    .filter((lane) => lane.key !== 'lenders')
+    .every((lane) => lane.target === 0)
 )
 const nextDayControlledTrial = decision({
   mode: 'controlled_trial',
   sampleSize: 5_000,
   now: new Date('2026-09-16T17:00:00.000Z'),
 })
-assert.notDeepEqual(
-  controlledTrial.allocationPlan.allocations.filter((lane) => lane.target > 0).map((lane) => lane.key),
-  nextDayControlledTrial.allocationPlan.allocations.filter((lane) => lane.target > 0).map((lane) => lane.key),
-  'controlled-trial remainder slots should keep rotating between business dates'
-)
+assert.equal(nextDayControlledTrial.allocationPlan.byKey.lenders, 5)
 
 const realisticRecoveryCanary = decision({
   mode: 'recovery_canary',

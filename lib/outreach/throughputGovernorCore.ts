@@ -109,7 +109,7 @@ function lowerStage(
   return OUTREACH_THROUGHPUT_STAGES[Math.min(currentIndex, ceilingIndex)]
 }
 
-function allocateRecoveryCanaryOutput(target: number, now?: Date): DailyStrategyOutputPlan {
+function allocateVerifiedCanaryOutput(target: number, now?: Date): DailyStrategyOutputPlan {
   const plan = allocateDailyStrategyOutput(target, now)
   const allocations = plan.allocations.map((lane) => ({
     ...lane,
@@ -132,10 +132,12 @@ function allocateRecoveryCanaryOutput(target: number, now?: Date): DailyStrategy
 /**
  * Converts delivery evidence into a conservative daily send ceiling, then
  * distributes normal throughput evenly across every canonical strategy lane.
- * An explicitly requested recovery canary reserves its five-message allowance
- * for the verified lender path. This function is intentionally side-effect
- * free so every sender can use the same decision before an atomic database
- * reservation.
+ * Controlled trials and explicitly requested recovery canaries reserve their
+ * five-message allowance for the verified lender path. Concentrating the
+ * sender-health test prevents human-review seller lanes, or an empty rotating
+ * lane, from starving the evidence needed to progress. Normal ramp stages keep
+ * the even 23-lane allocation. This function is intentionally side-effect free
+ * so every sender can use the same decision before an atomic reservation.
  */
 export function evaluateOutreachThroughputGovernor(
   input: OutreachThroughputGovernorInput
@@ -211,8 +213,11 @@ export function evaluateOutreachThroughputGovernor(
 
   const stageCap = OUTREACH_THROUGHPUT_STAGE_CAPS[stage]
   const effectiveDailyCap = Math.min(requestedDailyTarget, stageCap)
-  const allocationPlan = explicitRecoveryCanary && stage === 'recovery'
-    ? allocateRecoveryCanaryOutput(effectiveDailyCap, input.now)
+  const verifiedCanaryStage =
+    stage === 'recovery' &&
+    (input.mode === 'controlled_trial' || explicitRecoveryCanary)
+  const allocationPlan = verifiedCanaryStage
+    ? allocateVerifiedCanaryOutput(effectiveDailyCap, input.now)
     : allocateDailyStrategyOutput(effectiveDailyCap, input.now)
 
   return {
