@@ -7,6 +7,97 @@ import {
   evaluateOutreachDispatchHealth,
   isControlledTrialAllowanceFilled,
 } from '../lib/outreach/outreachDispatchCore'
+import {
+  prioritizeAndDedupeOutreachQueueCandidates,
+  prioritizeOutreachQueueCandidates,
+  sellerQueueCandidateReadinessTier,
+} from '../lib/outreach/sendQueuePriorityCore'
+
+assert.equal(
+  sellerQueueCandidateReadinessTier({
+    compliantCopy: true,
+    provenanceAutoApproval: true,
+    explicitAdminApproval: false,
+    messageStatus: 'needs_review',
+  }),
+  3,
+  'a compliant provenance-backed seller draft must rank ahead of blocked legacy drafts'
+)
+assert.equal(
+  sellerQueueCandidateReadinessTier({
+    compliantCopy: true,
+    provenanceAutoApproval: false,
+    explicitAdminApproval: true,
+    messageStatus: 'approved',
+  }),
+  3,
+  'an explicitly approved sensitive seller draft remains eligible'
+)
+assert.equal(
+  sellerQueueCandidateReadinessTier({
+    compliantCopy: true,
+    provenanceAutoApproval: false,
+    explicitAdminApproval: false,
+    messageStatus: 'needs_review',
+  }),
+  1,
+  'an unapproved sensitive seller draft must not starve an autonomously eligible record'
+)
+assert.equal(
+  sellerQueueCandidateReadinessTier({
+    compliantCopy: false,
+    provenanceAutoApproval: false,
+    explicitAdminApproval: false,
+    messageStatus: 'needs_review',
+  }),
+  0
+)
+
+assert.equal(
+  sellerQueueCandidateReadinessTier({
+    compliantCopy: true,
+    provenanceAutoApproval: true,
+    explicitAdminApproval: false,
+    messageStatus: 'queued',
+  }),
+  0,
+  'a stale queued row is not sendable and must never receive a ready tier'
+)
+
+const rankedCandidates = prioritizeOutreachQueueCandidates(
+  [
+    { id: 'legacy-review', tier: 1 },
+    { id: 'safe-provenance', tier: 3 },
+    { id: 'invalid', tier: 0 },
+    { id: 'explicit-approval', tier: 3 },
+  ],
+  (candidate) => candidate.tier,
+  2
+)
+assert.deepEqual(
+  rankedCandidates.map((candidate) => candidate.id),
+  ['safe-provenance', 'explicit-approval'],
+  'readiness ranking must happen before a lane candidate cap and remain stable within a tier'
+)
+
+const dedupedCandidates = prioritizeAndDedupeOutreachQueueCandidates(
+  [
+    { id: 'blocked-same-recipient', recipient: 'owner@example.com', property: '1 MAIN ST', tier: 1 },
+    { id: 'safe-same-recipient', recipient: 'owner@example.com', property: '2 MAIN ST', tier: 3 },
+    { id: 'blocked-same-property', recipient: 'old@example.com', property: '3 MAIN ST', tier: 1 },
+    { id: 'safe-same-property', recipient: 'new@example.com', property: '3 MAIN ST', tier: 3 },
+  ],
+  (candidate) => candidate.tier,
+  {
+    recipient: (candidate) => candidate.recipient,
+    sellerProperty: (candidate) => candidate.property,
+  }
+)
+assert.deepEqual(
+  dedupedCandidates.map((candidate) => candidate.id),
+  ['safe-same-recipient', 'safe-same-property'],
+  'sendable rows must outrank blocked duplicates before recipient and seller-property dedupe'
+)
 
 const healthy = {
   dryRun: false,
@@ -175,6 +266,19 @@ assert.match(
   leadAutomation,
   /leadOpsAlertEmail && !options\.dryRun && !options\.suppressDigest/,
   'frequent refill runs must honor the cron digest suppression flag'
+)
+
+const leadRepository = readFileSync(
+  resolve(process.cwd(), 'lib/leads/repository.ts'),
+  'utf8'
+)
+assert.match(leadRepository, /sellerQueueCandidateReadinessTier/)
+assert.match(leadRepository, /prioritizeOutreachQueueCandidates/)
+assert.match(leadRepository, /prioritizeAndDedupeOutreachQueueCandidates/)
+assert.match(
+  leadRepository,
+  /fetchCandidates\(\['approved'\], 'approved_at', false\)/,
+  'the bounded approved scan must prefer recent rows so a 10,000-row legacy backlog cannot hide new approvals'
 )
 
 console.log('outreach-dispatch-health: ok')

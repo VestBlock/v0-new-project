@@ -24,6 +24,7 @@ import type { LeadRecord } from '@/lib/leads/types'
 import { allocateDailyStrategyOutput, configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
 import { getReplyCaptureReadiness, type ReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { formatStructuredError } from '@/lib/system/errorMessage'
 
 type StrategyMarketStateRow = {
   id: string
@@ -1077,7 +1078,7 @@ export async function runStrategyExecutionEngine(options: {
         limit: envInt('STRATEGY_SOURCE_ORCHESTRATOR_LIMIT', 1000),
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = formatStructuredError(error, 'Strategy source orchestration failed.')
       sourceAcquisition = emptySourceAcquisition(dryRun, `Property-intelligence orchestration failed: ${message}`)
     }
   }

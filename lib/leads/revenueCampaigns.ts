@@ -299,6 +299,44 @@ export function getLeadRevenueFitIssue(
   return null
 }
 
+function hasAffirmativeSellerGuaranteeOrGovernmentClaim(value: string) {
+  const claimsOnly = value
+    .replace(/[’]/g, "'")
+    .replace(
+      /\b(?:(?:do|does|did)\s+not|don(?:'|’)t|doesn(?:'|’)t|didn(?:'|’)t|cannot|can(?:'|’)t|never)\s+guarantee(?:s|d|ing)?\b/gi,
+      ''
+    )
+    .replace(/\b(?:cannot|can(?:'|’)t|can\s+never)\s+be\s+guaranteed\b/gi, '')
+    .replace(/\b(?:is|are|was|were)\s+(?:never|not)\s+(?:a\s+)?guaranteed\b/gi, '')
+    .replace(
+      /\bno\s+(?:[a-z-]+\s+){0,6}(?:(?:is|are|was|were)\s+(?:ever\s+)?|can\s+be\s+)guaranteed\b/gi,
+      ''
+    )
+    .replace(/\bnothing\s+(?:(?:is\s+)?(?:ever\s+)?|can\s+be\s+)guaranteed\b/gi, '')
+    .replace(/\bwithout\s+(?:any\s+|a\s+)?guarantee(?:s|d)?\b/gi, '')
+    .replace(/\bno\s+guarantee(?:s|d)?\b/gi, '')
+    .replace(/\bnot\s+(?:a\s+)?guarantee(?:d)?\b/gi, '')
+    .replace(
+      /\b(?:we|vestblock|this|that|it)\s+(?:(?:is|are|was|were)\s+not|isn(?:'|’)t|aren(?:'|’)t|wasn(?:'|’)t|weren(?:'|’)t)\s+(?:an?\s+)?government(?:\s+(?:program|agency|entity))?\b/gi,
+      ''
+    )
+    .replace(
+      /\b(?:not|never)\s+affiliated\s+with\s+(?:any\s+|the\s+)?government(?:\s+(?:agency|program|entity))?\b/gi,
+      ''
+    )
+    .replace(
+      /\b(?:have|has|had)\s+no\s+(?:affiliation|connection|association)\s+with\s+(?:any\s+|the\s+)?government(?:\s+(?:agency|program|entity))?\b/gi,
+      ''
+    )
+    .replace(
+      /\bnot\s+(?:endorsed|sponsored|approved)\s+by\s+(?:any\s+|the\s+)?government(?:\s+(?:agency|program|entity))?\b/gi,
+      ''
+    )
+    .replace(/\bno\s+government\s+(?:affiliation|endorsement|sponsorship)\b/gi, '')
+
+  return /\bguarantee(?:s|d|ing)?\b|\bgovernment\b/i.test(claimsOnly)
+}
+
 export function validateOutreachMessageQuality(input: {
   lead: LeadRecord
   message: Pick<OutreachMessageRecord, 'subject' | 'body' | 'compliance_note'>
@@ -317,7 +355,7 @@ export function validateOutreachMessageQuality(input: {
     if (!/reply/i.test(combined)) return 'missing_soft_reply_cta'
     if (!/opt out|unsubscribe|do not contact/i.test(complianceNote)) return 'missing_opt_out_note'
     if (propertyAddress && !combined.toLowerCase().includes(propertyAddress)) return 'missing_property_identity'
-    if (/guaranteed|guarantee approval|guaranteed closing|stop foreclosure guaranteed|government program/i.test(combined)) {
+    if (hasAffirmativeSellerGuaranteeOrGovernmentClaim(combined)) {
       return 'overpromising_or_government_claim'
     }
     if (/\[(your name|your company|company name|insert|name|su nombre)\]|\{\{|\}\}|todo|lorem ipsum/i.test(combined)) {

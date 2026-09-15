@@ -1,7 +1,12 @@
+import { isStrategyEngineAutoApprovalAllowed } from '@/lib/admin/strategyLeadProvenance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { evaluateOutreachV2Lead } from '@/lib/leads/outreachV2'
-import { getLeadRevenueFitIssue, getRevenueCampaignPriority } from '@/lib/leads/revenueCampaigns'
+import {
+  getLeadRevenueFitIssue,
+  getRevenueCampaignPriority,
+  validateOutreachMessageQuality,
+} from '@/lib/leads/revenueCampaigns'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
 import type {
   LeadSuppressionRecord,
@@ -27,6 +32,11 @@ import {
   getDailyStrategyOutputLane,
   type DailyStrategyOutputLaneKey,
 } from '@/lib/outreach/dailyStrategyOutputCore'
+import {
+  prioritizeAndDedupeOutreachQueueCandidates,
+  prioritizeOutreachQueueCandidates,
+  sellerQueueCandidateReadinessTier,
+} from '@/lib/outreach/sendQueuePriorityCore'
 
 type ScrapeRunCreate = {
   sourceKey: string
@@ -277,6 +287,27 @@ function sortMessagesForSendQueue(rows: Array<OutreachMessageRecord & { leads: L
     if (priorityDelta !== 0) return priorityDelta
 
     return messageQueuedAtMs(left) - messageQueuedAtMs(right)
+  })
+}
+
+function sellerMessageReadinessTier(
+  message: OutreachMessageRecord & { leads: LeadRecord | null }
+) {
+  const lead = message.leads
+  const isSellerLead =
+    lead?.category === 'seller_lead' || lead?.lead_type === 'sell_house'
+  if (!lead || !isSellerLead) return 0
+
+  const explicitAdminApproval =
+    message.status === 'approved' &&
+    Boolean(message.approved_by_user_id) &&
+    Boolean(message.approved_at)
+
+  return sellerQueueCandidateReadinessTier({
+    compliantCopy: !validateOutreachMessageQuality({ lead, message }),
+    provenanceAutoApproval: isStrategyEngineAutoApprovalAllowed(lead),
+    explicitAdminApproval,
+    messageStatus: message.status,
   })
 }
 
@@ -956,7 +987,10 @@ export async function listEmailOutreachForSendQueue(
     return rows
   }
   const [approvedRows, reviewRows] = await Promise.all([
-    fetchCandidates(['approved'], 'approved_at', true),
+    // Recent autonomous approvals must remain visible even when a large
+    // historical approved backlog exists. Final ranking below still preserves
+    // stable order within the same readiness tier.
+    fetchCandidates(['approved'], 'approved_at', false),
     fetchCandidates(['queued', 'needs_review'], 'last_generated_at', false),
   ])
   const data = [...approvedRows, ...reviewRows]
@@ -995,17 +1029,17 @@ export async function listEmailOutreachForSendQueue(
     return !enrolledKey || !contactedProperties.has(enrolledKey)
   })
 
-  const seenRecipients = new Set<string>()
-  const seenSellerProperties = new Set<string>()
-  const deduped = sortMessagesForSendQueue(eligible).filter((row) => {
-    const recipient = normalizeEmailAddress(row.leads?.email)
-    if (recipient && seenRecipients.has(recipient)) return false
-    const propertyKey = sellerPropertyKey(row.leads)
-    if (propertyKey && seenSellerProperties.has(propertyKey)) return false
-    if (recipient) seenRecipients.add(recipient)
-    if (propertyKey) seenSellerProperties.add(propertyKey)
-    return true
-  })
+  // Readiness must participate before recipient/property dedupe. Otherwise an
+  // old blocked approval can erase a newer provenance-backed draft for the
+  // same seller before the lane ranking ever sees the sendable record.
+  const deduped = prioritizeAndDedupeOutreachQueueCandidates(
+    sortMessagesForSendQueue(eligible),
+    sellerMessageReadinessTier,
+    {
+      recipient: (row) => normalizeEmailAddress(row.leads?.email),
+      sellerProperty: (row) => sellerPropertyKey(row.leads),
+    }
+  )
   if (!options.laneTargets) return deduped.slice(0, limit)
 
   const { data: reservations, error: reservationError } = await admin
@@ -1059,9 +1093,22 @@ export async function listEmailOutreachForSendQueue(
     const remaining = remainingByLane.get(key) || 0
     if (remaining < 1) continue
     const bucket = buckets.get(key) || []
-    if (bucket.length >= remaining * candidatesPerSlot) continue
     bucket.push(row)
     buckets.set(key, bucket)
+  }
+
+  // A lane may contain years of review-only or invalid legacy drafts ahead of
+  // newly provenance-backed records. Rank the complete scanned bucket before
+  // applying its per-slot candidate cap so blocked rows cannot starve a safe
+  // autonomous send. The send path independently repeats every guard.
+  for (const [key, bucket] of buckets.entries()) {
+    const candidateLimit = (remainingByLane.get(key) || 0) * candidatesPerSlot
+    const ranked = prioritizeOutreachQueueCandidates(
+      bucket,
+      sellerMessageReadinessTier,
+      candidateLimit
+    )
+    buckets.set(key, ranked)
   }
 
   const balanced: Array<OutreachMessageRecord & { leads: LeadRecord | null }> = []

@@ -202,6 +202,53 @@ const preforeclosureDraft = buildStrategyEmailDraft('preforeclosure-equity', pre
 assert.match(preforeclosureDraft.body, /not a foreclosure-rescue promise or legal advice/i)
 assert.match(preforeclosureDraft.body, /verified ownership/i)
 
+for (const strategyKey of ['lien-equity', 'novation-retail-equity']) {
+  const disclaimerDraft = buildStrategyEmailDraft(strategyKey, preforeclosure)
+  assert.equal(
+    validateOutreachMessageQuality({
+      lead: preforeclosure,
+      message: {
+        subject: disclaimerDraft.subject,
+        body: disclaimerDraft.body,
+        compliance_note: disclaimerDraft.complianceNote,
+      },
+    }),
+    null,
+    `${strategyKey} risk disclaimers must not be misclassified as affirmative guarantees`
+  )
+}
+const prohibitedPromise = buildStrategyEmailDraft('active-stale-creative', preforeclosure)
+const sellerClaimQualityMatrix = [
+  ['VestBlock guarantees a closing.', 'overpromising_or_government_claim'],
+  ['VestBlock guarantees your sale.', 'overpromising_or_government_claim'],
+  ['We guarantee you will close.', 'overpromising_or_government_claim'],
+  ['This is an official government assistance program.', 'overpromising_or_government_claim'],
+  ["We don't guarantee closing.", null],
+  ['Results are never guaranteed.', null],
+  ['No result is ever guaranteed.', null],
+  ['This is not a guarantee.', null],
+  ['No outcome can be guaranteed.', null],
+  ['Closing cannot be guaranteed.', null],
+  ['We are not affiliated with any government program.', null],
+  ["VestBlock isn’t a government program.", null],
+  ['We have no affiliation with the government.', null],
+] as const
+
+for (const [claim, expectedIssue] of sellerClaimQualityMatrix) {
+  assert.equal(
+    validateOutreachMessageQuality({
+      lead: preforeclosure,
+      message: {
+        subject: prohibitedPromise.subject,
+        body: `${prohibitedPromise.body}\n\n${claim}`,
+        compliance_note: prohibitedPromise.complianceNote,
+      },
+    }),
+    expectedIssue,
+    `seller claim quality classification failed for: ${claim}`
+  )
+}
+
 const taxCode = lead({
   source: 'dealmachine_contacts_export',
   pain_signal: 'Tax delinquent with an active code violation and boarded structure.',

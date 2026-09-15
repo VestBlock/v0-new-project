@@ -3,6 +3,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 
 import { STRATEGY_EXECUTION_LANES, type StrategyLane } from '@/lib/admin/strategyExecutionCatalog'
+import { buildStrategyMarketStatePersistencePlan } from '@/lib/admin/strategyExecutionCore'
 import {
   evaluatePropertyStrategyStack,
   strategySourceContract,
@@ -401,10 +402,21 @@ export async function runStrategySourceOrchestrator(input: { dryRun?: boolean; l
       updated_at: generatedAt,
     }))
     if (marketRows.length) {
-      const { error } = await admin.from('strategy_market_state').upsert(marketRows, {
-        onConflict: 'strategy_key,market,source_provider',
-      })
-      if (error) throw error
+      const persistencePlan = buildStrategyMarketStatePersistencePlan(marketRows)
+      const { error: seedError } = await admin
+        .from('strategy_market_state')
+        .upsert(persistencePlan.seedRows, persistencePlan.seedOptions)
+      if (seedError) throw seedError
+
+      for (const update of persistencePlan.mutableUpdates) {
+        const { error: updateError } = await admin
+          .from('strategy_market_state')
+          .update(update.patch)
+          .eq('strategy_key', update.identity.strategy_key)
+          .eq('market', update.identity.market)
+          .eq('source_provider', update.identity.source_provider)
+        if (updateError) throw updateError
+      }
     }
 
     const eventPayload = {
