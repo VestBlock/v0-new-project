@@ -65,6 +65,16 @@ export function normalizeDeliveryBudget(
   }
 }
 
-export function deliveryModeRequiresBudget(mode: string) {
-  return mode === 'controlled_trial' || mode === 'recovery_canary'
+/**
+ * The command-center five-attempt budget predates the sender-specific atomic
+ * throughput governor. Keeping both active double-counts one provider attempt
+ * and lets traffic from one sender exhaust another sender's recovery capacity.
+ *
+ * The legacy budget reader remains for historical diagnostics, but every live
+ * send is now authorized by reserve_outreach_throughput_attempt, which applies
+ * the authoritative sender ramp, rolling global cap, lane cap, recipient
+ * cooldown, and idempotency identity in one database transaction.
+ */
+export function deliveryModeRequiresBudget(_mode: string) {
+  return false
 }

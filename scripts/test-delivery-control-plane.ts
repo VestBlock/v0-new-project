@@ -242,8 +242,11 @@ assert.deepEqual(
 )
 
 assert.equal(OUTREACH_DELIVERY_BUDGET_LIMIT, 5)
-assert.equal(deliveryModeRequiresBudget('controlled_trial'), true)
-assert.equal(deliveryModeRequiresBudget('recovery_canary'), true)
+// The sender-specific atomic throughput reservation is now the authoritative
+// rolling cap. The retired global counter must not consume capacity from a
+// different sender or duplicate the same controlled-trial reservation.
+assert.equal(deliveryModeRequiresBudget('controlled_trial'), false)
+assert.equal(deliveryModeRequiresBudget('recovery_canary'), false)
 assert.equal(deliveryModeRequiresBudget('healthy'), false)
 const activeBudget = normalizeDeliveryBudget(
   { windowStartedAt: '2026-09-14T11:00:00.000Z', attemptCount: 4 },
