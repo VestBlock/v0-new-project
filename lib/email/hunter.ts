@@ -1,4 +1,5 @@
-import { safeUrl, toTitleCase } from '@/lib/leads/utils'
+import { companyWebsiteDomain } from '@/lib/email/companyDomain'
+import { toTitleCase } from '@/lib/leads/utils'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 
 const HUNTER_API_BASE = 'https://api.hunter.io/v2'
@@ -57,15 +58,13 @@ function getHunterApiKey() {
   return process.env.HUNTER_API_KEY?.trim() || ''
 }
 
-function extractDomain(website?: string | null) {
-  const normalized = safeUrl(website)
-  if (!normalized) return null
+export function hunterLookupStatusForHttp(status: number): 'error' | 'not_found' {
+  if ([401, 402, 403, 408, 409, 425, 429].includes(status) || status >= 500) return 'error'
+  return 'not_found'
+}
 
-  try {
-    return new URL(normalized).host.replace(/^www\./i, '').toLowerCase()
-  } catch {
-    return null
-  }
+function extractDomain(website?: string | null) {
+  return companyWebsiteDomain(website)
 }
 
 function titleCaseName(firstName?: string | null, lastName?: string | null) {
@@ -174,7 +173,7 @@ async function fetchHunterDomainSearch(domain: string) {
         `Hunter request failed with ${response.status}.`
 
       return {
-        status: response.status === 401 || response.status === 402 || response.status === 429 ? 'error' : 'not_found',
+        status: hunterLookupStatusForHttp(response.status),
         domain,
         organization: null,
         pattern: null,

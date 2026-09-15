@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       ? !enabled(process.env.BUYERS_PIPELINE_CRON_SEND)
       : enabled(requestedDryRun)
     const result = await runDailyBuyerPipeline({ dryRun })
-    return NextResponse.json({ success: result.ok, dryRun, ...result }, { status: result.ok ? 200 : 207 })
+    return NextResponse.json({ success: result.ok, dryRun, ...result }, { status: result.ok ? 200 : 500 })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Buyer pipeline failed.' },

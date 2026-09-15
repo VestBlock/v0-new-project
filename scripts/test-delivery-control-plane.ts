@@ -15,6 +15,11 @@ import {
   isVerifiedLenderCanaryCandidate,
 } from '../lib/lenders/canary'
 import { evaluateDeliveryCircuitBreaker, providerHasDeliveryTelemetry } from '../lib/leads/deliveryHealthCore'
+import {
+  classifyDealMachineAcquisitionOutcome,
+  dealMachineAcquisitionHttpStatus,
+  dealMachineAcquisitionPersistenceStatus,
+} from '../lib/n8n/dealMachineSourceAcquisitionCore'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '../lib/outreach/commercialCompliance'
 import { buildOutboundSendIdentity } from '../lib/outreach/deliveryIdentity'
 import {
@@ -22,7 +27,10 @@ import {
   normalizeDeliveryBudget,
   OUTREACH_DELIVERY_BUDGET_LIMIT,
 } from '../lib/outreach/deliveryBudgetCore'
-import { allocatePartnerPipelineSendCap } from '../lib/outreach/partnerPipelineCore'
+import {
+  allocatePartnerPipelineSendCap,
+  partnerPipelineRotationOffset,
+} from '../lib/outreach/partnerPipelineCore'
 import { evaluateOutreachRecipientSnapshot } from '../lib/outreach/suppressionCore'
 import { getConfiguredOutboundProvider } from '../lib/outreach/provider-preference'
 import {
@@ -34,6 +42,43 @@ import {
 } from '../lib/outreach/messageState'
 
 const now = new Date('2026-09-14T12:00:00.000Z')
+
+const dealMachinePartial = {
+  ok: false,
+  fetched: 10,
+  ingested: 10,
+  creditsReserved: 27,
+  strategyRuns: [
+    { status: 'searched' },
+    { status: 'failed' },
+    { status: 'skipped_budget' },
+  ],
+}
+assert.equal(classifyDealMachineAcquisitionOutcome(dealMachinePartial), 'partial')
+assert.equal(
+  dealMachineAcquisitionHttpStatus({ ok: false, deferred: false, outcome: 'partial' }),
+  502
+)
+assert.equal(dealMachineAcquisitionPersistenceStatus('partial'), 'failed')
+assert.equal(dealMachineAcquisitionPersistenceStatus('blocked'), 'blocked')
+assert.equal(
+  classifyDealMachineAcquisitionOutcome({
+    ok: false,
+    fetched: 0,
+    ingested: 0,
+    creditsReserved: 0,
+    strategyRuns: [{ status: 'failed' }],
+  }),
+  'blocked'
+)
+assert.equal(
+  dealMachineAcquisitionHttpStatus({ ok: false, deferred: false, outcome: 'blocked' }),
+  503
+)
+assert.equal(
+  dealMachineAcquisitionHttpStatus({ ok: true, deferred: true, outcome: 'deferred' }),
+  200
+)
 const runId = 'run-test-001'
 const runningPayload = buildRevenueLoopJobPayload({
   status: 'running',
@@ -171,8 +216,75 @@ const expiredBudget = normalizeDeliveryBudget(
   now
 )
 assert.equal(expiredBudget.attemptCount, 0)
+const trailingBudget = normalizeDeliveryBudget(
+  {
+    windowStartedAt: '2026-09-13T12:00:01.000Z',
+    attemptCount: 3,
+    attemptMarkers: [
+      { attemptedAt: '2026-09-13T11:59:59.000Z' },
+      { attemptedAt: '2026-09-13T12:00:01.000Z' },
+      { attemptedAt: '2026-09-14T11:59:59.000Z' },
+    ],
+  },
+  now
+)
+assert.equal(trailingBudget.attemptCount, 2)
+assert.deepEqual(
+  trailingBudget.attemptMarkers.map((marker) => marker.attemptedAt),
+  ['2026-09-13T12:00:01.000Z', '2026-09-14T11:59:59.000Z']
+)
+const skewedBudget = normalizeDeliveryBudget(
+  {
+    windowStartedAt: '2026-09-14T11:00:00.000Z',
+    attemptCount: 5,
+    attemptMarkers: [
+      { attemptedAt: '2026-09-14T12:00:01.000Z' },
+      { attemptedAt: 'invalid' },
+      { attemptedAt: '2026-09-14T11:55:00.000Z' },
+      { attemptedAt: '2026-09-14T11:56:00.000Z' },
+      { attemptedAt: '2026-09-14T11:57:00.000Z' },
+    ],
+  },
+  now
+)
+assert.equal(skewedBudget.attemptCount, 5)
+assert.equal(skewedBudget.attemptMarkers.length, 5)
+const futureWindowBudget = normalizeDeliveryBudget(
+  {
+    windowStartedAt: '2026-09-14T12:00:01.000Z',
+    attemptCount: 5,
+    attemptMarkers: Array.from({ length: 5 }, (_, index) => ({
+      attemptedAt: '2026-09-14T12:00:01.000Z',
+      permitId: `future-${index}`,
+    })),
+  },
+  now
+)
+assert.equal(futureWindowBudget.attemptCount, 5)
+assert.equal(futureWindowBudget.attemptMarkers.length, 5)
+assert.equal(futureWindowBudget.windowStartedAt, now.toISOString())
+assert.equal(
+  normalizeDeliveryBudget(futureWindowBudget, new Date('2026-09-15T12:00:00.000Z')).attemptCount,
+  0
+)
+const missingStartBudget = normalizeDeliveryBudget(
+  { windowStartedAt: null, attemptCount: 5, attemptMarkers: [] },
+  now
+)
+assert.equal(missingStartBudget.attemptCount, 5)
+assert.equal(missingStartBudget.windowStartedAt, now.toISOString())
+assert.equal(
+  normalizeDeliveryBudget(missingStartBudget, new Date('2026-09-15T12:00:00.000Z')).attemptCount,
+  0
+)
 assert.deepEqual(allocatePartnerPipelineSendCap(5), { buyers: 2, lenders: 2, investors: 1 })
+assert.deepEqual(allocatePartnerPipelineSendCap(5, 1), { buyers: 1, lenders: 2, investors: 2 })
+assert.deepEqual(allocatePartnerPipelineSendCap(5, 2), { buyers: 2, lenders: 1, investors: 2 })
+assert.deepEqual(allocatePartnerPipelineSendCap(5, 0, ['buyers', 'investors']), { buyers: 3, lenders: 0, investors: 2 })
+assert.deepEqual(allocatePartnerPipelineSendCap(5, 1, ['buyers', 'investors']), { buyers: 2, lenders: 0, investors: 3 })
+assert.deepEqual(allocatePartnerPipelineSendCap(5, 0, []), { buyers: 0, lenders: 0, investors: 0 })
 assert.equal(Object.values(allocatePartnerPipelineSendCap(14)).reduce((sum, value) => sum + value, 0), 14)
+assert.equal(partnerPipelineRotationOffset(new Date('2026-09-14T23:59:59.000Z')), partnerPipelineRotationOffset(new Date('2026-09-14T00:00:00.000Z')))
 assert.equal(
   getConfiguredOutboundProvider({
     RESEND_API_KEY: 'resend-key',
@@ -484,21 +596,37 @@ for (const servicePath of ['lib/buyers/service.ts', 'lib/lenders/service.ts']) {
   assert.match(serviceSource, /const approvedMessage = await approve(?:Buyer|Lender)FollowupMessageIfReviewable/)
   assert.match(serviceSource, /if \(!approvedMessage\)[\s\S]*reason: 'message_state_changed'[\s\S]*continue/)
 }
+const buyerServiceSource = source('lib/buyers/service.ts')
+assert.doesNotMatch(buyerServiceSource, /BUYER_DISCOVERY_PREFER_FREE === 'true'[\s\S]*enrichContactFromHunter/)
+assert.match(buyerServiceSource, /isUsableContactEmail\(buyer\.contact_email\)/)
+assert.match(buyerServiceSource, /isUsableContactEmail\(analysis\.contactEmail\)/)
+assert.match(buyerServiceSource, /verificationStatus === 'valid'[\s\S]*?candidate\.confidence >= 90/)
 
 const canaryRouteSource = source('app/api/cron/outreach-canary/route.ts')
 assert.match(canaryRouteSource, /mode === 'recovery_canary'/)
 assert.match(canaryRouteSource, /runDailyLenderSend\(5/)
 assert.match(canaryRouteSource, /dryRun: !send/)
 assert.match(canaryRouteSource, /recoveryExplicitlyRequested: explicitRecoveryRequest/)
+assert.doesNotMatch(source('lib/lenders/automation.ts'), /\.eq\('status', 'sent'\)[\s\S]*\.contains\('metadata_json', \{ canary: true \}\)/)
+assert.match(source('lib/lenders/automation.ts'), /\.contains\('metadata_json', \{ canary: true \}\)[\s\S]*\.not\('sent_at', 'is', null\)/)
 
 assert.match(
   source('lib/investors/service.ts'),
-  /effectiveLimit = Math\.min\(limit, deliveryCircuitBreaker\?\.maxBatchSize/
+  /effectiveLimit = Math\.max\([\s\S]*deliveryCircuitBreaker\?\.maxBatchSize/
 )
 assert.match(
   source('lib/lenders/automation.ts'),
   /Math\.min\(limit, deliveryCircuitBreaker\?\.maxBatchSize/
 )
+assert.match(
+  source('lib/lenders/automation.ts'),
+  /decision\.reason === 'stale_template'[\s\S]*generateAndStoreLenderOutreach\(lender\)[\s\S]*refreshedIntro/
+)
+for (const automationPath of ['lib/buyers/automation.ts', 'lib/lenders/automation.ts']) {
+  const automationSource = source(automationPath)
+  assert.match(automationSource, /approval_revalidation:/)
+  assert.match(automationSource, /\.not\('sent_at', 'is', null\)|canarySentLast24h/)
+}
 assert.match(source('lib/investors/outbound.ts'), /disableProviderFallback: true/)
 
 const leadServiceSource = source('lib/leads/service.ts')
@@ -539,6 +667,27 @@ for (const claimPath of [
   assert.match(source(claimPath), /getOutreachRecipientGuard/)
 }
 
+for (const repositoryPath of [
+  'lib/buyers/repository.ts',
+  'lib/lenders/repository.ts',
+  'lib/investors/repository.ts',
+]) {
+  const repositorySource = source(repositoryPath)
+  assert.match(
+    repositorySource,
+    /downgrade(?:Buyer|Lender|Investor)OutreachMessageIfApproved[\s\S]*?\.eq\('status', 'approved'\)[\s\S]*?\.is\('sent_at', null\)/
+  )
+}
+for (const revalidationPath of [
+  'lib/buyers/automation.ts',
+  'lib/lenders/automation.ts',
+  'lib/investors/service.ts',
+]) {
+  const revalidationSource = source(revalidationPath)
+  assert.match(revalidationSource, /downgrade(?:Buyer|Lender|Investor)OutreachMessageIfApproved/)
+  assert.match(revalidationSource, /message_state_changed/)
+}
+
 const budgetSource = source('lib/outreach/deliveryBudget.ts')
 assert.match(budgetSource, /job_type: 'suppression_sync'/)
 assert.match(budgetSource, /\.eq\('updated_at', row\.updated_at\)/)
@@ -556,5 +705,31 @@ for (const approvalRoute of [
 }
 assert.doesNotMatch(source('app/api/admin/leads/bulk/route.ts'), /\.in\('status', \['needs_review', 'queued'\]\)/)
 assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /allocatePartnerPipelineSendCap/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /Promise\.allSettled/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /serializePartnerSend/)
+for (const pipelinePath of [
+  'lib/buyers/automation.ts',
+  'lib/lenders/automation.ts',
+  'lib/investors/automation.ts',
+]) {
+  const pipelineSource = source(pipelinePath)
+  assert.match(pipelineSource, /sendExecutor/)
+  assert.match(pipelineSource, /options\.sendExecutor/)
+}
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /deliveryCircuitBreaker\.mode === 'controlled_trial'/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /LENDERS_PIPELINE_CRON_SEND/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /INVESTORS_PIPELINE_CRON_SEND/)
+assert.doesNotMatch(
+  source('app/api/cron/partner-network-pipeline/route.ts'),
+  /PARTNER_PIPELINE_CRON_SEND \|\| process\.env\.BUYERS_PIPELINE_CRON_SEND/
+)
+const investorPipelineRoute = source('app/api/cron/investors-pipeline/route.ts')
+assert.match(investorPipelineRoute, /INVESTORS_PIPELINE_CRON_SEND/)
+assert.match(investorPipelineRoute, /requestedDryRun === null[\s\S]*!liveEnabled/)
+const investorSendRoute = source('app/api/cron/investors-send/route.ts')
+assert.match(investorSendRoute, /searchParams\.get\('send'\)/)
+assert.match(investorSendRoute, /INVESTORS_PIPELINE_CRON_SEND/)
+assert.match(investorSendRoute, /INVESTOR_AUTO_SEND_ENABLED/)
+assert.match(investorSendRoute, /status: 409/)
 
 console.log('delivery-control-plane: ok')

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { evaluateLenderAutoApproval } from '../lib/lenders/automationCore'
 import { generateLenderOutreach, LENDER_OUTREACH_TEMPLATE_VERSION } from '../lib/lenders/outreach'
@@ -86,5 +88,26 @@ const followup = buildInvestorFollowupMessage(investor)
 assert.match(followup.body, /acquisitions@vestblock\.io/)
 assert.match(followup.body, /opt out/i)
 assert.match(followup.body, /buy[- ]box/i)
+
+const buyerAutomationSource = readFileSync(resolve(process.cwd(), 'lib/buyers/automation.ts'), 'utf8')
+const lenderAutomationSource = readFileSync(resolve(process.cwd(), 'lib/lenders/automation.ts'), 'utf8')
+const investorServiceSource = readFileSync(resolve(process.cwd(), 'lib/investors/service.ts'), 'utf8')
+const investorAutomationSource = readFileSync(resolve(process.cwd(), 'lib/investors/automation.ts'), 'utf8')
+const partnerRouteSource = readFileSync(resolve(process.cwd(), 'app/api/cron/partner-network-pipeline/route.ts'), 'utf8')
+const buyerRouteSource = readFileSync(resolve(process.cwd(), 'app/api/cron/buyers-pipeline/route.ts'), 'utf8')
+const investorPipelineRouteSource = readFileSync(resolve(process.cwd(), 'app/api/cron/investors-pipeline/route.ts'), 'utf8')
+const investorSendRouteSource = readFileSync(resolve(process.cwd(), 'app/api/cron/investors-send/route.ts'), 'utf8')
+
+for (const source of [buyerAutomationSource, lenderAutomationSource, investorServiceSource]) {
+  assert.match(source, /operationalFailureCount/)
+  assert.match(source, /ok: operationalFailureCount === 0/)
+}
+assert.match(investorAutomationSource, /const errorCount = results\.filter\(\(item\) => Boolean\(item\.error\)\)\.length/)
+assert.match(investorAutomationSource, /status: ok \? 'completed' : 'failed'/)
+assert.match(investorAutomationSource, /const ok = stages\.every\(\(stage\) => stage\.ok !== false\)/)
+for (const source of [partnerRouteSource, buyerRouteSource, investorPipelineRouteSource, investorSendRouteSource]) {
+  assert.doesNotMatch(source, /status: [^\n]*207/)
+  assert.match(source, /status: [^\n]*\? 200 : 500/)
+}
 
 console.log('partner-outreach-guards: ok')

@@ -4,6 +4,11 @@ import { createHash } from 'node:crypto'
 
 import { syncDealMachineLeadSource, type DealMachineSyncResult } from '@/lib/dealmachine/api'
 import { hasDealMachineCredentials } from '@/lib/dealmachine/v2-client.mjs'
+import {
+  classifyDealMachineAcquisitionOutcome,
+  dealMachineAcquisitionPersistenceStatus,
+  type DealMachineAcquisitionOutcome,
+} from '@/lib/n8n/dealMachineSourceAcquisitionCore'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type SourceEventRow = {
@@ -16,6 +21,7 @@ type SourceEventRow = {
 
 export type N8nDealMachineAcquisitionResult = {
   ok: boolean
+  outcome: DealMachineAcquisitionOutcome
   duplicate: boolean
   deferred: boolean
   date: string
@@ -34,6 +40,8 @@ export type N8nDealMachineAcquisitionResult = {
     contactless: number
     strategiesAttempted: number
     strategiesCompleted: number
+    strategiesFailed: number
+    strategiesSkipped: number
     nextCursor: number
   }
   blocker: string | null
@@ -106,10 +114,6 @@ function sourceEventCredits(row: SourceEventRow) {
   return numericValue(payload.creditsReserved ?? payload.creditsUsed ?? payload.credits_used)
 }
 
-function safeStatus(result: DealMachineSyncResult) {
-  return result.ok || result.fetched > 0 || result.ingested > 0 ? 'completed' : 'blocked'
-}
-
 function compactResult(input: {
   ok: boolean
   duplicate?: boolean
@@ -123,8 +127,16 @@ function compactResult(input: {
   blocker?: string | null
 }): N8nDealMachineAcquisitionResult {
   const source = input.result
+  const outcome: DealMachineAcquisitionOutcome = input.deferred
+    ? 'deferred'
+    : source
+      ? classifyDealMachineAcquisitionOutcome(source)
+      : input.ok
+        ? 'completed'
+        : 'blocked'
   return {
     ok: input.ok,
+    outcome,
     duplicate: Boolean(input.duplicate),
     deferred: Boolean(input.deferred),
     date: input.date,
@@ -143,6 +155,8 @@ function compactResult(input: {
       contactless: source?.contactless || 0,
       strategiesAttempted: source?.strategyRuns.length || 0,
       strategiesCompleted: source?.strategyRuns.filter((run) => run.status === 'searched').length || 0,
+      strategiesFailed: source?.strategyRuns.filter((run) => run.status === 'failed').length || 0,
+      strategiesSkipped: source?.strategyRuns.filter((run) => run.status.startsWith('skipped')).length || 0,
       nextCursor: source?.nextAfter || 0,
     },
     blocker: input.blocker ?? source?.blockedReason ?? null,
@@ -219,7 +233,7 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     const payload = existing.data.payload_json || {}
     const previous = payload.result as DealMachineSyncResult | undefined
     return compactResult({
-      ok: ['completed', 'partial'].includes(String(existing.data.status || '')),
+      ok: String(existing.data.status || '') === 'completed' || payload.deferred === true,
       duplicate: true,
       deferred: payload.deferred === true,
       date,
@@ -300,9 +314,11 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
       strategyRuns: result.strategyRuns,
     },
     completedAt,
+    outcome: classifyDealMachineAcquisitionOutcome(result),
   }
+  const outcome = classifyDealMachineAcquisitionOutcome(result)
   const { error: completionError } = await admin.from('strategy_source_events').update({
-    status: safeStatus(result),
+    status: dealMachineAcquisitionPersistenceStatus(outcome),
     rows_received: result.fetched,
     rows_ingested: result.ingested,
     error_message: result.blockedReason,

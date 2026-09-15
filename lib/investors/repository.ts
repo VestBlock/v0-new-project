@@ -10,7 +10,9 @@ import {
   buildInvestorPipelineSnapshot,
   buildInvestorPipelineSnapshotFromRecord,
 } from '@/lib/investors/pipeline'
-import { calculateInvestorScore } from '@/lib/investors/scoring'
+import { calculateInvestorScore, scoreExistingInvestor } from '@/lib/investors/scoring'
+import { companyWebsiteDomain } from '@/lib/email/companyDomain'
+import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { isMessageGenerationProtected } from '@/lib/outreach/messageState'
 import type {
   InvestorDashboardSummary,
@@ -25,6 +27,85 @@ function cleanArray(values?: string[] | null) {
   return Array.from(new Set((values || []).map((value) => value.trim()).filter(Boolean)))
 }
 
+function mergeArrays(existing?: string[] | null, incoming?: string[] | null) {
+  return cleanArray([...(existing || []), ...(incoming || [])])
+}
+
+function nonBlank(value?: string | null) {
+  const cleaned = value?.trim()
+  return cleaned || null
+}
+
+function usableEmail(value?: string | null) {
+  return isUsableContactEmail(value) ? normalizeEmailAddress(value) : null
+}
+
+function hasBuyBoxData(value?: NormalizedInvestorInput['estimatedBuyBox'] | null) {
+  return Boolean(value && Object.values(value).some((entry) => Array.isArray(entry) ? entry.length > 0 : entry !== null && entry !== undefined && entry !== ''))
+}
+
+export function mergeInvestorRediscoveryInput(
+  input: NormalizedInvestorInput,
+  existing: InvestorProfileRecord | null
+): NormalizedInvestorInput {
+  if (!existing) {
+    return {
+      ...input,
+      displayName: nonBlank(input.displayName) || input.displayName,
+      personName: nonBlank(input.personName),
+      llcName: nonBlank(input.llcName),
+      companyName: nonBlank(input.companyName),
+      contactEmail: usableEmail(input.contactEmail),
+      contactPhone: nonBlank(input.contactPhone),
+      website: nonBlank(input.website),
+      linkedinUrl: nonBlank(input.linkedinUrl),
+      facebookUrl: nonBlank(input.facebookUrl),
+      classificationTags: cleanArray(input.classificationTags),
+      markets: cleanArray(input.markets),
+      propertyTypes: cleanArray(input.propertyTypes),
+      financingIndicators: cleanArray(input.financingIndicators),
+      sourceNames: cleanArray(input.sourceNames),
+    }
+  }
+
+  return {
+    ...input,
+    displayName: nonBlank(input.displayName) || existing.display_name,
+    personName: nonBlank(input.personName) || existing.person_name,
+    llcName: nonBlank(input.llcName) || existing.llc_name,
+    companyName: nonBlank(input.companyName) || existing.company_name,
+    primaryInvestorType: input.primaryInvestorType || existing.primary_investor_type,
+    classificationTags: mergeArrays(existing.classification_tags, input.classificationTags),
+    // Discovery is additive. Preserve a verified usable contact, but allow an
+    // invalid placeholder or generic inbox to be repaired by new evidence.
+    contactEmail: usableEmail(existing.contact_email) || usableEmail(input.contactEmail),
+    contactPhone: nonBlank(existing.contact_phone) || nonBlank(input.contactPhone),
+    website: nonBlank(input.website) || existing.website,
+    linkedinUrl: nonBlank(input.linkedinUrl) || existing.linkedin_url,
+    facebookUrl: nonBlank(input.facebookUrl) || existing.facebook_url,
+    markets: mergeArrays(existing.markets, input.markets),
+    propertyTypes: mergeArrays(existing.property_types, input.propertyTypes),
+    estimatedBuyBox: hasBuyBoxData(input.estimatedBuyBox)
+      ? { ...(existing.estimated_buy_box || {}), ...(input.estimatedBuyBox || {}) }
+      : existing.estimated_buy_box,
+    financingIndicators: mergeArrays(existing.financing_indicators, input.financingIndicators),
+    sourceNames: mergeArrays(existing.source_names, input.sourceNames),
+    notes: nonBlank(input.notes) || existing.notes,
+    metadata: {
+      ...((existing.metadata_json || {}) as Record<string, unknown>),
+      ...(input.metadata || {}),
+    },
+  }
+}
+
+function sourceConfidenceFor(input: NormalizedInvestorInput, existing: InvestorProfileRecord | null) {
+  if (!input.evidence?.length) return Number(existing?.source_confidence_score || 0)
+  const observed = Math.round(
+    input.evidence.reduce((sum, row) => sum + (row.confidenceScore ?? 50), 0) / input.evidence.length
+  )
+  return Math.max(Number(existing?.source_confidence_score || 0), Math.max(0, Math.min(100, observed)))
+}
+
 function sourceIdentityFor(input: NormalizedInvestorInput) {
   if (input.sourceIdentity) return input.sourceIdentity
   if (input.contactEmail) return `email:${input.contactEmail.toLowerCase()}`
@@ -32,9 +113,157 @@ function sourceIdentityFor(input: NormalizedInvestorInput) {
   return null
 }
 
+export const INVESTOR_HUNTER_LOOKUP_COOLDOWN_DAYS = 30
+export const INVESTOR_HUNTER_ERROR_RETRY_HOURS = 6
+export const INVESTOR_HUNTER_STALE_CLAIM_HOURS = 2
+
+const COMMON_INVALID_CONTACT_PREFIXES = [
+  'admin',
+  'billing',
+  'contact',
+  'contact-us',
+  'contactus',
+  'hello',
+  'info',
+  'leasing',
+  'mail',
+  'main',
+  'office',
+  'operations',
+  'sales',
+  'service',
+  'support',
+  'team',
+]
+
+export function investorWebsiteDomain(website?: string | null) {
+  return companyWebsiteDomain(website)
+}
+
+function hunterEnrichmentState(metadata?: Record<string, unknown> | null) {
+  const value = metadata?.hunterContactEnrichment
+  if (!value || typeof value !== 'object') return { checkedAt: null, status: null }
+  const record = value as Record<string, unknown>
+  const checkedAt = record.checkedAt
+  return {
+    checkedAt: typeof checkedAt === 'string' && Number.isFinite(Date.parse(checkedAt)) ? checkedAt : null,
+    status: typeof record.status === 'string' ? record.status : null,
+  }
+}
+
+export function isInvestorHunterEnrichmentEligible(
+  investor: Pick<InvestorProfileRecord, 'contact_email' | 'website' | 'metadata_json'>,
+  now = new Date(),
+  cooldownDays = INVESTOR_HUNTER_LOOKUP_COOLDOWN_DAYS
+) {
+  if (isUsableContactEmail(investor.contact_email)) return false
+  if (!investorWebsiteDomain(investor.website)) return false
+
+  const { checkedAt, status } = hunterEnrichmentState(investor.metadata_json)
+  if (!checkedAt) return true
+  const ageMs = now.getTime() - Date.parse(checkedAt)
+  if (ageMs < 0) return false
+  if (status === 'checking') return ageMs >= INVESTOR_HUNTER_STALE_CLAIM_HOURS * 3600000
+  if (status === 'error' || status === 'skipped') return ageMs >= INVESTOR_HUNTER_ERROR_RETRY_HOURS * 3600000
+  // Legacy rows without a status and terminal found/not_found results keep the
+  // long cooldown so paid credits are not repeatedly consumed.
+  return ageMs >= cooldownDays * 86400000
+}
+
+type InvestorHunterCandidateForPersistence = {
+  email: string
+  fullName?: string | null
+  confidence: number
+  verificationStatus?: string | null
+}
+
+type InvestorHunterEnrichmentForPersistence = {
+  status: string
+  domain?: string | null
+  organization?: string | null
+  checkedAt: string
+  claimId?: string | null
+  reservationId?: string | null
+  budgetReason?: string | null
+  candidate?: InvestorHunterCandidateForPersistence | null
+  topCandidateConfidence?: number | null
+  topCandidateVerificationStatus?: string | null
+}
+
+function safeHunterStatus(value: string) {
+  return ['found', 'not_found', 'skipped', 'error', 'checking'].includes(value) ? value : 'error'
+}
+
+function safeMetadataText(value?: string | null, maximumLength = 160) {
+  return value?.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maximumLength) || null
+}
+
+function safeHunterOpaqueId(value?: string | null) {
+  const normalized = value?.trim() || ''
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+    ? normalized.toLowerCase()
+    : null
+}
+
+function safeHunterBudgetReason(value?: string | null) {
+  return [
+    'investor_hunter_daily_budget_exhausted',
+    'investor_hunter_claim_already_reserved',
+    'investor_hunter_budget_contention',
+    'investor_hunter_budget_reservation_failed',
+    'budget_date_is_missing_or_invalid',
+    'budget_date_is_in_the_future',
+    'budget_state_is_invalid',
+    'budget_marker_date_is_invalid',
+  ].includes(value || '')
+    ? value
+    : null
+}
+
+export function buildSanitizedInvestorHunterMetadata(input: InvestorHunterEnrichmentForPersistence) {
+  const checkedTime = Date.parse(input.checkedAt)
+  const checkedAt = Number.isFinite(checkedTime) ? new Date(checkedTime).toISOString() : new Date().toISOString()
+  const confidence = Number(input.candidate?.confidence)
+  const normalizedEmail = normalizeEmailAddress(input.candidate?.email)
+  const candidateAccepted = Boolean(
+    normalizedEmail &&
+      isUsableContactEmail(normalizedEmail) &&
+      input.candidate?.verificationStatus === 'valid' &&
+      Number.isFinite(confidence) &&
+      confidence >= 90
+  )
+
+  return {
+    metadata: {
+      provider: 'hunter',
+      status: safeHunterStatus(input.status),
+      domain: investorWebsiteDomain(input.domain) || safeMetadataText(input.domain, 120),
+      organization: safeMetadataText(input.organization),
+      checkedAt,
+      claimId: safeHunterOpaqueId(input.claimId),
+      reservationId: safeHunterOpaqueId(input.reservationId),
+      budgetReason: safeHunterBudgetReason(input.budgetReason),
+      accepted: candidateAccepted,
+      acceptedConfidence: candidateAccepted ? confidence : null,
+      acceptedVerificationStatus: candidateAccepted ? 'valid' : null,
+      topCandidateConfidence: Number.isFinite(Number(input.topCandidateConfidence))
+        ? Number(input.topCandidateConfidence)
+        : null,
+      topCandidateVerificationStatus: safeMetadataText(input.topCandidateVerificationStatus, 40),
+    },
+    candidate: candidateAccepted
+      ? {
+          email: normalizedEmail,
+          fullName: safeMetadataText(input.candidate?.fullName, 120),
+          confidence,
+          verificationStatus: 'valid' as const,
+        }
+      : null,
+  }
+}
+
 export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
   const admin = createAdminClient()
-  const score = calculateInvestorScore(input)
   const sourceIdentity = sourceIdentityFor(input)
   let existing: InvestorProfileRecord | null = null
 
@@ -47,37 +276,30 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
     existing = (data as InvestorProfileRecord | null) || null
   }
 
-  const sourceConfidenceScore = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        (input.evidence || []).reduce((sum, row) => sum + (row.confidenceScore || 50), 0) /
-          Math.max(1, input.evidence?.length || 1)
-      )
-    )
-  )
+  const mergedInput = mergeInvestorRediscoveryInput(input, existing)
+  const score = calculateInvestorScore(mergedInput)
+  const sourceConfidenceScore = sourceConfidenceFor(input, existing)
+  const mergedMetadata = {
+    ...(mergedInput.metadata || {}),
+    ...(sourceIdentity ? { sourceIdentity } : {}),
+  }
   const pipeline = buildInvestorPipelineSnapshot({
     relationshipStage: existing?.relationship_stage,
     outreachStatus: existing?.outreach_status,
-    contactEmail: input.contactEmail || existing?.contact_email,
-    contactPhone: input.contactPhone || existing?.contact_phone,
-    website: input.website || existing?.website,
-    markets: input.markets || existing?.markets,
-    propertyTypes: input.propertyTypes || existing?.property_types,
-    classificationTags: input.classificationTags || existing?.classification_tags,
-    estimatedBuyBox: input.estimatedBuyBox || existing?.estimated_buy_box,
-    metadata: {
-      ...((existing?.metadata_json || {}) as Record<string, unknown>),
-      ...(input.metadata || {}),
-      ...(sourceIdentity ? { sourceIdentity } : {}),
-    },
-    sourceConfidenceScore: sourceConfidenceScore || existing?.source_confidence_score,
-    sourceNames: input.sourceNames || existing?.source_names,
+    contactEmail: mergedInput.contactEmail,
+    contactPhone: mergedInput.contactPhone,
+    website: mergedInput.website,
+    markets: mergedInput.markets,
+    propertyTypes: mergedInput.propertyTypes,
+    classificationTags: mergedInput.classificationTags,
+    estimatedBuyBox: mergedInput.estimatedBuyBox,
+    metadata: mergedMetadata,
+    sourceConfidenceScore,
+    sourceNames: mergedInput.sourceNames,
     sourceEvidenceCount: input.evidence?.length,
-    displayName: input.displayName || existing?.display_name,
-    primaryInvestorType: input.primaryInvestorType || existing?.primary_investor_type,
-    notes: input.notes || existing?.notes,
+    displayName: mergedInput.displayName,
+    primaryInvestorType: mergedInput.primaryInvestorType,
+    notes: mergedInput.notes,
   })
   const preserveRelationshipStage =
     existing?.relationship_stage &&
@@ -100,22 +322,22 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
         : 'researched')
   const outreachStatus = preserveOutreachStatus || (pipeline.outreachReady ? 'draft_ready' : 'not_started')
   const payload = {
-    display_name: input.displayName,
-    person_name: input.personName || null,
-    llc_name: input.llcName || null,
-    company_name: input.companyName || null,
-    primary_investor_type: input.primaryInvestorType || 'fix_and_flip',
-    classification_tags: cleanArray(input.classificationTags),
-    contact_email: input.contactEmail || null,
-    contact_phone: input.contactPhone || null,
-    website: input.website || null,
-    linkedin_url: input.linkedinUrl || null,
-    facebook_url: input.facebookUrl || null,
-    markets: cleanArray(input.markets),
-    property_types: cleanArray(input.propertyTypes),
-    estimated_buy_box: input.estimatedBuyBox || {},
-    financing_indicators: cleanArray(input.financingIndicators),
-    source_names: cleanArray(input.sourceNames),
+    display_name: mergedInput.displayName,
+    person_name: mergedInput.personName || null,
+    llc_name: mergedInput.llcName || null,
+    company_name: mergedInput.companyName || null,
+    primary_investor_type: mergedInput.primaryInvestorType || 'fix_and_flip',
+    classification_tags: cleanArray(mergedInput.classificationTags),
+    contact_email: mergedInput.contactEmail || null,
+    contact_phone: mergedInput.contactPhone || null,
+    website: mergedInput.website || null,
+    linkedin_url: mergedInput.linkedinUrl || null,
+    facebook_url: mergedInput.facebookUrl || null,
+    markets: cleanArray(mergedInput.markets),
+    property_types: cleanArray(mergedInput.propertyTypes),
+    estimated_buy_box: mergedInput.estimatedBuyBox || {},
+    financing_indicators: cleanArray(mergedInput.financingIndicators),
+    source_names: cleanArray(mergedInput.sourceNames),
     source_confidence_score: sourceConfidenceScore,
     recent_activity_score: score.recentActivity,
     transaction_volume_score: score.transactionVolume,
@@ -131,29 +353,26 @@ export async function upsertInvestorProfile(input: NormalizedInvestorInput) {
     assigned_sequence: score.assignedSequence,
     outreach_status: outreachStatus,
     relationship_stage: relationshipStage,
-    notes: input.notes || existing?.notes || score.fitSummary,
+    notes: mergedInput.notes || score.fitSummary,
     last_scored_at: new Date().toISOString(),
     metadata_json: buildInvestorPipelineMetadata(
       {
         relationshipStage,
         outreachStatus,
-        contactEmail: input.contactEmail || existing?.contact_email,
-        contactPhone: input.contactPhone || existing?.contact_phone,
-        website: input.website || existing?.website,
-        markets: input.markets || existing?.markets,
-        propertyTypes: input.propertyTypes || existing?.property_types,
-        classificationTags: input.classificationTags || existing?.classification_tags,
-        estimatedBuyBox: input.estimatedBuyBox || existing?.estimated_buy_box,
-        metadata: {
-          ...((existing?.metadata_json || {}) as Record<string, unknown>),
-          ...(input.metadata || {}),
-        },
+        contactEmail: mergedInput.contactEmail,
+        contactPhone: mergedInput.contactPhone,
+        website: mergedInput.website,
+        markets: mergedInput.markets,
+        propertyTypes: mergedInput.propertyTypes,
+        classificationTags: mergedInput.classificationTags,
+        estimatedBuyBox: mergedInput.estimatedBuyBox,
+        metadata: mergedMetadata,
         sourceConfidenceScore,
-        sourceNames: input.sourceNames || existing?.source_names,
+        sourceNames: mergedInput.sourceNames,
         sourceEvidenceCount: input.evidence?.length,
-        displayName: input.displayName || existing?.display_name,
-        primaryInvestorType: input.primaryInvestorType || existing?.primary_investor_type,
-        notes: input.notes || existing?.notes,
+        displayName: mergedInput.displayName,
+        primaryInvestorType: mergedInput.primaryInvestorType,
+        notes: mergedInput.notes,
       },
       {
         ...(sourceIdentity ? { sourceIdentity } : {}),
@@ -570,6 +789,267 @@ export async function updateInvestorRecord(id: string, updates: Record<string, u
   return data as InvestorProfileRecord
 }
 
+export async function listInvestorsNeedingHunterEnrichment(limit = 20) {
+  const admin = createAdminClient()
+  const effectiveLimit = Math.max(1, Math.floor(limit))
+  const now = new Date()
+  const selected: InvestorProfileRecord[] = []
+  const seen = new Set<string>()
+  const collect = (rows: InvestorProfileRecord[]) => {
+    for (const investor of rows) {
+      if (selected.length >= effectiveLimit) break
+      if (seen.has(investor.id)) continue
+      seen.add(investor.id)
+      if (isInvestorHunterEnrichmentEligible(investor, now)) selected.push(investor)
+    }
+  }
+
+  // Prioritize the records the database can identify cheaply before scanning
+  // for malformed addresses that require the canonical application validator.
+  const missing = await admin
+    .from('investor_profiles')
+    .select('*')
+    .is('contact_email', null)
+    .not('website', 'is', null)
+    .order('updated_at', { ascending: true })
+    .limit(effectiveLimit)
+  if (missing.error) throw missing.error
+  collect((missing.data || []) as InvestorProfileRecord[])
+
+  if (selected.length < effectiveLimit) {
+    const commonInvalid = await admin
+      .from('investor_profiles')
+      .select('*')
+      .not('website', 'is', null)
+      .or(COMMON_INVALID_CONTACT_PREFIXES.map((prefix) => `contact_email.ilike.${prefix}@%`).join(','))
+      .order('updated_at', { ascending: true })
+      .limit(Math.max(effectiveLimit * 5, 100))
+    if (commonInvalid.error) throw commonInvalid.error
+    collect((commonInvalid.data || []) as InvestorProfileRecord[])
+  }
+
+  const pageSize = 250
+  const maxScanned = Math.max(1_000, effectiveLimit * 100)
+  for (let offset = 0; selected.length < effectiveLimit && offset < maxScanned; offset += pageSize) {
+    const page = await admin
+      .from('investor_profiles')
+      .select('*')
+      .not('website', 'is', null)
+      .order('updated_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (page.error) throw page.error
+    const rows = (page.data || []) as InvestorProfileRecord[]
+    collect(rows)
+    if (rows.length < pageSize) break
+  }
+
+  return selected
+}
+
+export async function claimInvestorForHunterEnrichment(input: {
+  investor: InvestorProfileRecord
+  checkedAt: string
+  claimId: string
+}) {
+  const { investor, checkedAt, claimId } = input
+  if (!isInvestorHunterEnrichmentEligible(investor, new Date(checkedAt))) return null
+  const domain = investorWebsiteDomain(investor.website)
+  if (!domain) return null
+
+  const admin = createAdminClient()
+  let query = admin
+    .from('investor_profiles')
+    .update({
+      metadata_json: {
+        ...(investor.metadata_json || {}),
+        hunterContactEnrichment: {
+          provider: 'hunter',
+          status: 'checking',
+          domain,
+          checkedAt,
+          claimId,
+          accepted: false,
+        },
+      },
+      updated_at: checkedAt,
+    })
+    .eq('id', investor.id)
+
+  if (investor.updated_at) query = query.eq('updated_at', investor.updated_at)
+  if (nonBlank(investor.contact_email)) {
+    query = query.eq('contact_email', investor.contact_email)
+  } else {
+    query = query.is('contact_email', null)
+  }
+  const { data, error } = await query.select('*').maybeSingle()
+  if (error) throw error
+  return (data as InvestorProfileRecord | null) || null
+}
+
+export async function saveInvestorHunterEnrichmentResult(input: {
+  investorId: string
+  enrichment: InvestorHunterEnrichmentForPersistence
+}) {
+  const sanitized = buildSanitizedInvestorHunterMetadata(input.enrichment)
+  const admin = createAdminClient()
+
+  // Retry once if another safe profile update wins between our read and compare-and-set write.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { data: currentData, error: currentError } = await admin
+      .from('investor_profiles')
+      .select('*')
+      .eq('id', input.investorId)
+      .maybeSingle()
+    if (currentError) throw currentError
+    const current = currentData as InvestorProfileRecord | null
+    if (!current) return null
+
+    const expectedClaimId = sanitized.metadata.claimId
+    const currentClaimState = current.metadata_json?.hunterContactEnrichment
+    const currentClaimId = currentClaimState && typeof currentClaimState === 'object'
+      ? (currentClaimState as Record<string, unknown>).claimId
+      : null
+    if (expectedClaimId && currentClaimId !== expectedClaimId) return null
+
+    const candidateCanFillMissingContact = Boolean(!isUsableContactEmail(current.contact_email) && sanitized.candidate)
+    const nextRecord = {
+      ...current,
+      contact_email: candidateCanFillMissingContact ? sanitized.candidate?.email || null : current.contact_email,
+      person_name:
+        candidateCanFillMissingContact && !nonBlank(current.person_name)
+          ? sanitized.candidate?.fullName || null
+          : current.person_name,
+      metadata_json: {
+        ...(current.metadata_json || {}),
+        hunterContactEnrichment: {
+          ...sanitized.metadata,
+          accepted: candidateCanFillMissingContact,
+        },
+      },
+    } satisfies InvestorProfileRecord
+    const score = scoreExistingInvestor(nextRecord)
+    const metadata = buildInvestorPipelineMetadata(
+      {
+        relationshipStage: nextRecord.relationship_stage,
+        outreachStatus: nextRecord.outreach_status,
+        contactEmail: nextRecord.contact_email,
+        contactPhone: nextRecord.contact_phone,
+        website: nextRecord.website,
+        markets: nextRecord.markets,
+        propertyTypes: nextRecord.property_types,
+        classificationTags: nextRecord.classification_tags,
+        estimatedBuyBox: nextRecord.estimated_buy_box,
+        metadata: nextRecord.metadata_json,
+        sourceConfidenceScore: nextRecord.source_confidence_score,
+        sourceNames: nextRecord.source_names,
+        displayName: nextRecord.display_name,
+        primaryInvestorType: nextRecord.primary_investor_type,
+        notes: nextRecord.notes,
+      },
+      { scoreSummary: score.fitSummary }
+    )
+    const pipeline = buildInvestorPipelineSnapshot({
+      relationshipStage: nextRecord.relationship_stage,
+      outreachStatus: nextRecord.outreach_status,
+      contactEmail: nextRecord.contact_email,
+      contactPhone: nextRecord.contact_phone,
+      website: nextRecord.website,
+      markets: nextRecord.markets,
+      propertyTypes: nextRecord.property_types,
+      classificationTags: nextRecord.classification_tags,
+      estimatedBuyBox: nextRecord.estimated_buy_box,
+      metadata,
+      sourceConfidenceScore: nextRecord.source_confidence_score,
+      sourceNames: nextRecord.source_names,
+      displayName: nextRecord.display_name,
+      primaryInvestorType: nextRecord.primary_investor_type,
+      notes: nextRecord.notes,
+    })
+    const currentUpdatedAt = Date.parse(current.updated_at)
+    const completedAt = new Date(
+      Math.max(Date.now(), Number.isFinite(currentUpdatedAt) ? currentUpdatedAt + 1 : 0)
+    ).toISOString()
+    const updates: Record<string, unknown> = {
+      person_name: nextRecord.person_name,
+      recent_activity_score: score.recentActivity,
+      transaction_volume_score: score.transactionVolume,
+      geographic_fit_score: score.geographicFit,
+      financing_need_score: score.financingNeed,
+      disposition_need_score: score.dispositionNeed,
+      partnership_potential_score: score.partnershipPotential,
+      partnership_score: score.partnershipScore,
+      deal_flow_fit: score.dealFlowFit,
+      disposition_fit: score.dispositionFit,
+      financing_fit: score.financingFit,
+      partnership_fit: score.partnershipFit,
+      assigned_sequence: score.assignedSequence,
+      last_scored_at: completedAt,
+      metadata_json: metadata,
+      automation_flags_json: {
+        ...(current.automation_flags_json || {}),
+        researchGate: {
+          ready: pipeline.researchReady,
+          outreachReady: pipeline.outreachReady,
+          blockedReasons: pipeline.blockedReasons,
+          nextAction: pipeline.nextAction,
+        },
+      },
+      updated_at: completedAt,
+    }
+    if (candidateCanFillMissingContact) updates.contact_email = nextRecord.contact_email
+
+    let updateQuery = admin
+      .from('investor_profiles')
+      .update(updates)
+      .eq('id', current.id)
+      .eq('updated_at', current.updated_at)
+    if (expectedClaimId) {
+      updateQuery = updateQuery.contains('metadata_json', {
+        hunterContactEnrichment: { claimId: expectedClaimId },
+      })
+    }
+    if (candidateCanFillMissingContact) {
+      if (nonBlank(current.contact_email)) {
+        updateQuery = updateQuery.eq('contact_email', current.contact_email)
+      } else {
+        updateQuery = updateQuery.is('contact_email', null)
+      }
+    }
+    const { data: updated, error: updateError } = await updateQuery.select('*').maybeSingle()
+    if (updateError?.code === '23505' && candidateCanFillMissingContact) {
+      // Another investor profile already owns this address. Treat the lookup
+      // as a terminal rejected candidate so duplicate company rows do not keep
+      // repurchasing the same Hunter result.
+      const duplicateCompletedAt = new Date(Date.parse(completedAt) + 1).toISOString()
+      const { data: duplicateRecorded, error: duplicateError } = await admin
+        .from('investor_profiles')
+        .update({
+          metadata_json: {
+            ...(current.metadata_json || {}),
+            hunterContactEnrichment: {
+              ...sanitized.metadata,
+              status: 'duplicate_contact',
+              accepted: false,
+            },
+          },
+          updated_at: duplicateCompletedAt,
+        })
+        .eq('id', current.id)
+        .eq('updated_at', current.updated_at)
+        .select('*')
+        .maybeSingle()
+      if (duplicateError) throw duplicateError
+      if (duplicateRecorded) return duplicateRecorded as InvestorProfileRecord
+      continue
+    }
+    if (updateError) throw updateError
+    if (updated) return updated as InvestorProfileRecord
+  }
+
+  return null
+}
+
 export async function listInvestorsForScoring(limit = 100) {
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -700,11 +1180,53 @@ export async function updateInvestorOutreachMessage(id: string, updates: Record<
   return data
 }
 
-export async function claimInvestorOutreachMessageForSend(messageId: string) {
+export async function claimInvestorOutreachMessageForSend(messageId: string, expectedUpdatedAt?: string) {
+  const admin = createAdminClient()
+  let query = admin
+    .from('investor_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt)
+  const { data, error } = await query
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as InvestorOutreachMessageRecord | null
+}
+
+export async function restoreInvestorOutreachMessageAfterQuotaDenial(
+  messageId: string,
+  claimedUpdatedAt: string
+) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('investor_outreach_messages')
-    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .update({ status: 'approved', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as InvestorOutreachMessageRecord | null
+}
+
+export async function downgradeInvestorOutreachMessageIfApproved(
+  messageId: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('investor_outreach_messages')
+    .update({
+      ...updates,
+      status: 'needs_review',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', messageId)
     .eq('status', 'approved')
     .is('sent_at', null)

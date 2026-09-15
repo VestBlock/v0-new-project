@@ -1,6 +1,13 @@
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { queueSeoForBuyerRecord } from '@/lib/content/entitySeoExpansion'
 import { enrichContactFromHunter } from '@/lib/email/hunter'
+import { companyWebsiteDomain } from '@/lib/email/companyDomain'
+import {
+  reserveBuyerHunterDailyLookup,
+  type BuyerHunterLookupReservation,
+} from '@/lib/buyers/hunterBudget'
 import { discoverBuyersForMarket } from '@/lib/buyers/discovery'
 import { matchPropertyToBuyers } from '@/lib/buyers/matching'
 import { BUYER_OUTREACH_TEMPLATE_VERSION, generateBuyerOutreach } from '@/lib/buyers/outreach'
@@ -8,8 +15,10 @@ import { evaluateBuyerAutoApproval } from '@/lib/buyers/automationCore'
 import {
   addBuyerNote,
   approveBuyerFollowupMessageIfReviewable,
+  claimBuyerForHunterEnrichment,
   createBuyerPacket,
   finishBuyerOutreachRun,
+  getBuyerRecordById,
   getReviewableBuyerOutreachMessageByChannel,
   insertBuyerRelationshipEvent,
   listActiveBuyersWithBuyBoxes,
@@ -22,6 +31,7 @@ import {
   startBuyerOutreachRun,
   updateBuyerPerformance,
   updateBuyerRecord,
+  updateBuyerRecordIfVersion,
   upsertBuyer,
   upsertBuyerMatch,
   upsertDealPipelineItem,
@@ -37,6 +47,30 @@ import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/par
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const BUYER_HUNTER_TERMINAL_COOLDOWN_DAYS = 30
+const BUYER_HUNTER_ERROR_RETRY_HOURS = 6
+const BUYER_HUNTER_STALE_CLAIM_HOURS = 2
+
+export function isBuyerHunterEnrichmentEligible(
+  buyer: Pick<BuyerRecord, 'contact_email' | 'website' | 'metadata_json'>,
+  now = new Date()
+) {
+  if (isUsableContactEmail(buyer.contact_email) || !companyWebsiteDomain(buyer.website)) return false
+  const raw = buyer.metadata_json?.hunterContactEnrichment
+  if (!raw || typeof raw !== 'object') return true
+  const state = raw as Record<string, unknown>
+  const checkedAt = typeof state.checkedAt === 'string' ? Date.parse(state.checkedAt) : Number.NaN
+  if (!Number.isFinite(checkedAt)) return true
+  const ageMs = now.getTime() - checkedAt
+  if (ageMs < 0) return false
+  const status = typeof state.status === 'string' ? state.status : null
+  if (status === 'checking') return ageMs >= BUYER_HUNTER_STALE_CLAIM_HOURS * 3600000
+  if (status === 'error' || status === 'skipped' || status === 'skipped_budget') {
+    return ageMs >= BUYER_HUNTER_ERROR_RETRY_HOURS * 3600000
+  }
+  return ageMs >= BUYER_HUNTER_TERMINAL_COOLDOWN_DAYS * 86400000
 }
 
 function buildBuyBoxesFromAnalysis(buyer: BuyerRecord, analysis: Awaited<ReturnType<typeof analyzeBuyerWebsite>>): Array<Partial<BuyerBuyBoxRecord>> {
@@ -170,43 +204,138 @@ export async function discoverAndIngestBuyersForMarket(input: {
   }
 }
 
-export async function enrichAndScoreBuyer(buyer: BuyerRecord) {
+export async function enrichAndScoreBuyer(
+  buyer: BuyerRecord,
+  options: {
+    allowPaidHunter?: boolean
+    onHunterReservation?: (reservation: BuyerHunterLookupReservation) => void
+  } = {}
+) {
   const analysis = await analyzeBuyerWebsite(buyer.website)
-  const preferFreeEnrichment =
-    process.env.BUYER_ENRICHMENT_PREFER_FREE === 'true' ||
-    process.env.BUYER_DISCOVERY_PREFER_FREE === 'true'
-  const hunterResult =
-    preferFreeEnrichment || buyer.contact_email || !buyer.website
-      ? null
-      : await enrichContactFromHunter({
-          website: buyer.website,
-          contactName: buyer.contact_name || null,
-        })
+  const currentContactEmail = isUsableContactEmail(buyer.contact_email) ? buyer.contact_email : null
+  const websiteContactEmail = isUsableContactEmail(analysis.contactEmail) ? analysis.contactEmail : null
+  const publicContactEmail = currentContactEmail || websiteContactEmail
+  const hunterDailyLimit = Math.min(25, envInt('BUYERS_DAILY_HUNTER_LOOKUP_LIMIT', 10))
+  let writeBase = buyer
+  let hunterClaimId: string | null = null
+  let hunterResult: Awaited<ReturnType<typeof enrichContactFromHunter>> | null = null
+  let hunterReservation: BuyerHunterLookupReservation | null = null
+  const existingHunterState = buyer.metadata_json?.hunterContactEnrichment
+  const existingHunterRecord = existingHunterState && typeof existingHunterState === 'object'
+    ? existingHunterState as Record<string, unknown>
+    : null
+  const existingClaimCheckedAt = typeof existingHunterRecord?.checkedAt === 'string'
+    ? Date.parse(existingHunterRecord.checkedAt)
+    : Number.NaN
+  const existingClaimAgeMs = Date.now() - existingClaimCheckedAt
+  const freshHunterClaim =
+    existingHunterRecord?.status === 'checking' &&
+    Number.isFinite(existingClaimCheckedAt) &&
+    existingClaimAgeMs < BUYER_HUNTER_STALE_CLAIM_HOURS * 3600000
 
-  const updated = await updateBuyerRecord(buyer.id, {
-    contact_email: buyer.contact_email || analysis.contactEmail || hunterResult?.primaryCandidate?.email || null,
-    contact_phone: buyer.contact_phone || analysis.contactPhone || null,
-    contact_name: buyer.contact_name || hunterResult?.primaryCandidate?.fullName || null,
-    bilingual_support: buyer.bilingual_support || analysis.bilingualSupport,
-    spanish_support: buyer.spanish_support || analysis.spanishSupport,
-    closing_speed: buyer.closing_speed || analysis.closingSpeed || null,
-    proof_of_funds_status: buyer.proof_of_funds_status || analysis.proofOfFundsSignal || null,
-    fit_summary: buyer.fit_summary || analysis.summary,
-    metadata_json: {
-      ...(buyer.metadata_json || {}),
-      buyerSiteAnalysis: analysis,
-      hunterContactEnrichment: hunterResult
-        ? {
-            status: hunterResult.status,
-            domain: hunterResult.domain,
-            note: hunterResult.note,
-            checkedAt: new Date().toISOString(),
-            primaryCandidate: hunterResult.primaryCandidate,
-            candidates: hunterResult.candidates.slice(0, 5),
-          }
-        : (buyer.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined),
+  if (!currentContactEmail && freshHunterClaim) return buyer
+
+  if (
+    options.allowPaidHunter &&
+    !publicContactEmail &&
+    buyer.website &&
+    isBuyerHunterEnrichmentEligible(buyer)
+  ) {
+    const claimId = randomUUID()
+    const claimed = await claimBuyerForHunterEnrichment({ buyer, claimId })
+    if (claimed) {
+      writeBase = claimed
+      hunterClaimId = claimId
+      try {
+        hunterReservation = await reserveBuyerHunterDailyLookup({
+          buyerId: claimed.id,
+          claimId,
+          dailyLimit: hunterDailyLimit,
+        })
+      } catch {
+        hunterReservation = {
+          allowed: false,
+          reason: 'buyer_hunter_budget_reservation_failed',
+          attemptCount: 0,
+          remaining: 0,
+        }
+      }
+      options.onHunterReservation?.(hunterReservation)
+
+      if (hunterReservation.allowed) {
+        hunterResult = await enrichContactFromHunter({
+          website: claimed.website,
+          contactName: claimed.contact_name || null,
+        })
+      }
+    } else {
+      return (await getBuyerRecordById(buyer.id)) || buyer
+    }
+  }
+
+  const verifiedHunterContact = hunterResult?.candidates.find(
+    (candidate) =>
+      candidate.verificationStatus === 'valid' &&
+      candidate.confidence >= 90 &&
+      isUsableContactEmail(candidate.email)
+  ) || null
+
+  const effectiveContactEmail = isUsableContactEmail(writeBase.contact_email)
+    ? writeBase.contact_email
+    : websiteContactEmail || verifiedHunterContact?.email || null
+  const checkedAt = new Date().toISOString()
+  const hunterMetadata = hunterResult
+    ? {
+        provider: 'hunter',
+        status: hunterResult.status,
+        domain: hunterResult.domain,
+        organization: hunterResult.organization,
+        checkedAt,
+        claimId: hunterClaimId,
+        reservationId: hunterReservation?.reservationId || null,
+        accepted: Boolean(verifiedHunterContact),
+        acceptedConfidence: verifiedHunterContact?.confidence ?? null,
+        acceptedVerificationStatus: verifiedHunterContact?.verificationStatus ?? null,
+        topCandidateConfidence: hunterResult.primaryCandidate?.confidence ?? null,
+        topCandidateVerificationStatus: hunterResult.primaryCandidate?.verificationStatus ?? null,
+      }
+    : hunterClaimId
+      ? {
+          provider: 'hunter',
+          status: hunterReservation?.reason === 'buyer_hunter_daily_budget_exhausted'
+            ? 'skipped_budget'
+            : 'error',
+          checkedAt,
+          claimId: hunterClaimId,
+          reservationId: hunterReservation?.reservationId || null,
+          budgetReason: hunterReservation?.reason || 'buyer_hunter_lookup_not_reserved',
+          accepted: false,
+        }
+      : (writeBase.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined)
+
+  const updatedByVersion = await updateBuyerRecordIfVersion({
+    buyerId: writeBase.id,
+    expectedUpdatedAt: writeBase.updated_at,
+    expectedContactEmail: writeBase.contact_email,
+    hunterClaimId,
+    updates: {
+      contact_email: effectiveContactEmail,
+      contact_phone: writeBase.contact_phone || analysis.contactPhone || null,
+      contact_name: writeBase.contact_name || verifiedHunterContact?.fullName || null,
+      bilingual_support: writeBase.bilingual_support || analysis.bilingualSupport,
+      spanish_support: writeBase.spanish_support || analysis.spanishSupport,
+      closing_speed: writeBase.closing_speed || analysis.closingSpeed || null,
+      proof_of_funds_status: writeBase.proof_of_funds_status || analysis.proofOfFundsSignal || null,
+      fit_summary: writeBase.fit_summary || analysis.summary,
+      metadata_json: {
+        ...(writeBase.metadata_json || {}),
+        buyerSiteAnalysis: analysis,
+        hunterContactEnrichment: hunterMetadata,
+      },
     },
   })
+  const updated = updatedByVersion || (await getBuyerRecordById(writeBase.id))
+  if (!updated) throw new Error(`Buyer ${writeBase.id} no longer exists.`)
 
   const buyBoxes = await replaceBuyerBuyBoxes(updated.id, buildBuyBoxesFromAnalysis(updated, analysis))
   const score = scoreBuyer(updated, buyBoxes)
@@ -450,11 +579,40 @@ export async function addBuyerNoteAndLog(buyerId: string, authorUserId: string |
 export async function runDailyBuyerScoring(limit = 100) {
   const buyers = await listBuyersForScoring(limit)
   const results: Array<{ buyerId: string; name: string; confidenceScore: number }> = []
-  for (const buyer of buyers) {
-    const scored = await enrichAndScoreBuyer(buyer)
-    results.push({ buyerId: scored.id, name: scored.name, confidenceScore: scored.confidence_score })
+  const paidHunterEnabled =
+    process.env.BUYER_ENRICHMENT_PREFER_FREE?.trim().toLowerCase() === 'false' &&
+    Boolean(process.env.HUNTER_API_KEY?.trim())
+  const hunterLookupLimit = Math.min(25, envInt('BUYERS_DAILY_HUNTER_LOOKUP_LIMIT', 10))
+  const concurrency = Math.min(5, envInt('BUYERS_SCORING_CONCURRENCY', 4))
+  let hunterLookupsUsed = 0
+
+  for (let offset = 0; offset < buyers.length; offset += concurrency) {
+    const batch = buyers.slice(offset, offset + concurrency)
+    const scoredBuyers = await Promise.all(batch.map((buyer) =>
+      enrichAndScoreBuyer(buyer, {
+        allowPaidHunter: paidHunterEnabled && isBuyerHunterEnrichmentEligible(buyer),
+        onHunterReservation: (reservation) => {
+          if (reservation.allowed) hunterLookupsUsed += 1
+        },
+      })
+    ))
+    results.push(...scoredBuyers.map((scored) => ({
+      buyerId: scored.id,
+      name: scored.name,
+      confidenceScore: scored.confidence_score,
+    })))
   }
-  return { ok: true, count: results.length, results }
+  return {
+    ok: true,
+    count: results.length,
+    results,
+    hunter: {
+      enabled: paidHunterEnabled,
+      attempted: hunterLookupsUsed,
+      limit: hunterLookupLimit,
+      concurrency,
+    },
+  }
 }
 
 export async function runDailyBuyerOutreach(limit = 40, options: { dryRun?: boolean } = {}) {

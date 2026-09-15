@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+import { isStrategyMarketDue, STRATEGY_MARKET_STATE_SEED_OPTIONS } from '../lib/admin/strategyExecutionCore'
+
 import {
   getStrategyLeadFreshness,
   STRATEGY_EXECUTION_LANES,
@@ -42,6 +44,44 @@ function lane(key: string) {
   assert.ok(found, `Missing strategy lane ${key}`)
   return found
 }
+
+assert.deepEqual(
+  STRATEGY_MARKET_STATE_SEED_OPTIONS,
+  {
+    onConflict: 'strategy_key,market,source_provider',
+    ignoreDuplicates: true,
+  },
+  'Market seeding must never rewrite immutable strategy identity on an existing state'
+)
+
+const selectionNow = Date.parse('2026-09-14T12:00:00.000Z')
+assert.equal(
+  isStrategyMarketDue({
+    nextRunAt: '2026-09-21T12:00:00.000Z',
+    availableCandidates: 1,
+    nowMs: selectionNow,
+  }),
+  true,
+  'Fresh unassigned inventory must wake an existing market without updating its identity-bound row'
+)
+assert.equal(
+  isStrategyMarketDue({
+    nextRunAt: '2026-09-21T12:00:00.000Z',
+    availableCandidates: 0,
+    nowMs: selectionNow,
+  }),
+  false,
+  'A future market without inventory must remain scheduled'
+)
+assert.equal(
+  isStrategyMarketDue({
+    nextRunAt: '2026-09-13T12:00:00.000Z',
+    availableCandidates: 0,
+    nowMs: selectionNow,
+  }),
+  true,
+  'An expired market schedule must remain due'
+)
 
 const staleListing = lead({
   form_data: {

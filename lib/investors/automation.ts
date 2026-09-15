@@ -9,6 +9,7 @@ import {
   discoverAndIngestInvestorsForMarket,
   runDailyInvestorApproval,
   runDailyInvestorFollowup,
+  runDailyInvestorHunterEnrichment,
   runDailyInvestorOutreach,
   runDailyInvestorPerformanceRollup,
   runDailyInvestorScoring,
@@ -18,6 +19,7 @@ import {
   finishInvestorAutomationRun,
   startInvestorAutomationRun,
 } from '@/lib/investors/repository'
+import { logEvent } from '@/lib/system/logEvent'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -102,7 +104,14 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
     }
 
     const count = results.reduce((sum, item) => sum + item.count, 0)
-    await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: count })
+    const errorCount = results.filter((item) => Boolean(item.error)).length
+    const ok = errorCount === 0
+    const partial = errorCount > 0 && errorCount < results.length
+    await finishInvestorAutomationRun(run.id, {
+      status: ok ? 'completed' : 'failed',
+      resultCount: count,
+      errorMessage: ok ? null : `${errorCount} of ${results.length} investor discovery market(s) failed.`,
+    })
 
     if (!options.dryRun) {
       await sendAdminDigest(
@@ -117,7 +126,9 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
     }
 
     return {
-      ok: true,
+      ok,
+      partial,
+      errorCount,
       mode,
       count,
       results,
@@ -133,7 +144,13 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
   }
 }
 
-export async function runDailyInvestorPipeline(options: { dryRun?: boolean; sendLimit?: number } = {}) {
+export async function runDailyInvestorPipeline(
+  options: {
+    dryRun?: boolean
+    sendLimit?: number
+    sendExecutor?: <T>(task: () => Promise<T>) => Promise<T>
+  } = {}
+) {
   const run = await startInvestorAutomationRun({
     runType: 'pipeline',
     sourceKey: 'investor_relationship_engine',
@@ -142,16 +159,55 @@ export async function runDailyInvestorPipeline(options: { dryRun?: boolean; send
 
   try {
     const discovery = await runDailyInvestorDiscovery({ dryRun: options.dryRun })
+    const enrichment = options.dryRun
+      ? {
+          ok: true,
+          partial: false,
+          configured: Boolean(process.env.HUNTER_API_KEY),
+          count: 0,
+          enrichedCount: 0,
+          errorCount: 0,
+          results: [],
+        }
+      : await runDailyInvestorHunterEnrichment().catch(async () => {
+          const message = 'Investor Hunter enrichment stage failed unexpectedly.'
+          await logEvent({
+            eventType: 'admin_action',
+            entityType: 'investor_pipeline',
+            entityId: 'enrichment',
+            metadata: { action: 'investor_enrichment_stage_failed', error: message },
+          }).catch(() => null)
+          return {
+            ok: false,
+            partial: false,
+            configured: Boolean(process.env.HUNTER_API_KEY),
+            count: 0,
+            enrichedCount: 0,
+            errorCount: 1,
+            results: [],
+            error: message,
+          }
+        })
     const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(envInt('INVESTORS_DAILY_SCORE_LIMIT', 120))
     const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(envInt('INVESTORS_DAILY_OUTREACH_LIMIT', 50))
     const followup = await runDailyInvestorFollowup(envInt('INVESTORS_DAILY_FOLLOWUP_LIMIT', 30), { dryRun: options.dryRun })
     const approval = await runDailyInvestorApproval(envInt('INVESTORS_DAILY_APPROVAL_LIMIT', 25), { dryRun: options.dryRun })
-    const send = await runDailyInvestorSend(options.sendLimit ?? envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
+    const executeSend = () =>
+      runDailyInvestorSend(options.sendLimit ?? envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
+    const send = options.sendExecutor ? await options.sendExecutor(executeSend) : await executeSend()
     const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
 
-    const count = discovery.count + scoring.count + outreach.count + followup.count + approval.count + send.count + performance.count
-    await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: count })
-    return { ok: true, discovery, scoring, outreach, followup, approval, send, performance }
+    const count = discovery.count + enrichment.count + scoring.count + outreach.count + followup.count + approval.count + send.count + performance.count
+    const stages = [discovery, enrichment, scoring, outreach, followup, approval, send, performance]
+    const ok = stages.every((stage) => stage.ok !== false)
+    await finishInvestorAutomationRun(run.id, {
+      status: ok ? 'completed' : 'failed',
+      resultCount: count,
+      errorMessage: ok
+        ? null
+        : 'Investor pipeline completed with one or more failed stages. Inspect the stage results before retrying.',
+    })
+    return { ok, partial: !ok, discovery, enrichment, scoring, outreach, followup, approval, send, performance }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',

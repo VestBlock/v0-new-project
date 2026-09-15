@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nextLenderHunterCasTimestamp } from '@/lib/lenders/hunterBudgetCore'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import {
   FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
   isMessageGenerationProtected,
@@ -162,6 +164,72 @@ export async function updateLenderRecord(id: string, updates: Record<string, unk
 
   if (error) throw error
   return data as LenderRecord
+}
+
+export async function findLenderRecordById(id: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('lenders').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data ? (data as LenderRecord) : null
+}
+
+export async function updateLenderRecordIfVersion(input: {
+  lenderId: string
+  expectedUpdatedAt: string
+  expectedContactEmail: string | null
+  updates: Record<string, unknown>
+  hunterClaimId?: string | null
+  now?: Date
+}) {
+  const admin = createAdminClient()
+  let query = admin
+    .from('lenders')
+    .update({
+      ...input.updates,
+      updated_at: nextLenderHunterCasTimestamp(input.expectedUpdatedAt, input.now),
+    })
+    .eq('id', input.lenderId)
+    .eq('updated_at', input.expectedUpdatedAt)
+
+  query = input.expectedContactEmail === null
+    ? query.is('contact_email', null)
+    : query.eq('contact_email', input.expectedContactEmail)
+
+  if (input.hunterClaimId) {
+    query = query.contains('metadata_json', {
+      hunterContactEnrichment: { claimId: input.hunterClaimId },
+    })
+  }
+
+  const { data, error } = await query.select('*').maybeSingle()
+  if (error) throw error
+  return data ? (data as LenderRecord) : null
+}
+
+export async function claimLenderForHunterEnrichment(input: {
+  lender: LenderRecord
+  claimId: string
+  claimedAt?: Date
+}) {
+  if (isUsableContactEmail(input.lender.contact_email)) return null
+  const claimedAt = input.claimedAt || new Date()
+  return updateLenderRecordIfVersion({
+    lenderId: input.lender.id,
+    expectedUpdatedAt: input.lender.updated_at,
+    expectedContactEmail: input.lender.contact_email,
+    now: claimedAt,
+    updates: {
+      metadata_json: {
+        ...(input.lender.metadata_json || {}),
+        hunterContactEnrichment: {
+          provider: 'hunter',
+          status: 'checking',
+          claimId: input.claimId,
+          checkedAt: claimedAt.toISOString(),
+        },
+      },
+    },
+  })
 }
 
 export async function saveLenderScore(
@@ -360,11 +428,53 @@ export async function updateLenderOutreachMessage(messageId: string, updates: Re
   return data as LenderOutreachMessageRecord
 }
 
-export async function claimLenderOutreachMessageForSend(messageId: string) {
+export async function claimLenderOutreachMessageForSend(messageId: string, expectedUpdatedAt?: string) {
+  const admin = createAdminClient()
+  let query = admin
+    .from('lender_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt)
+  const { data, error } = await query
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
+}
+
+export async function restoreLenderOutreachMessageAfterQuotaDenial(
+  messageId: string,
+  claimedUpdatedAt: string
+) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('lender_outreach_messages')
-    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .update({ status: 'approved', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
+}
+
+export async function downgradeLenderOutreachMessageIfApproved(
+  messageId: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .update({
+      ...updates,
+      status: 'needs_review',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', messageId)
     .eq('status', 'approved')
     .is('sent_at', null)

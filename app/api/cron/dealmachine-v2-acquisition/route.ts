@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 
 import { formatDealMachineThrownError } from '@/lib/dealmachine/v2-client.mjs'
 import { runN8nDealMachineSourceAcquisition } from '@/lib/n8n/dealMachineSourceAcquisition'
+import { dealMachineAcquisitionHttpStatus } from '@/lib/n8n/dealMachineSourceAcquisitionCore'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
 /**
@@ -18,7 +19,10 @@ export async function GET(request: Request) {
 
   try {
     const result = await runN8nDealMachineSourceAcquisition()
-    return NextResponse.json({ trigger: 'vercel_cron_fallback', ...result })
+    return NextResponse.json(
+      { trigger: 'vercel_cron_fallback', ...result },
+      { status: dealMachineAcquisitionHttpStatus(result) }
+    )
   } catch (error) {
     return NextResponse.json({ ok: false, error: formatDealMachineThrownError(error) }, { status: 500 })
   }

@@ -1,13 +1,26 @@
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { queueSeoForLenderRecord } from '@/lib/content/entitySeoExpansion'
-import { enrichContactFromHunter } from '@/lib/email/hunter'
+import {
+  enrichContactFromHunter,
+  type HunterContactCandidate,
+  type HunterContactLookupResult,
+} from '@/lib/email/hunter'
+import { companyWebsiteDomain } from '@/lib/email/companyDomain'
 import { discoverLendersForMarket } from '@/lib/lenders/discovery'
+import {
+  reserveLenderHunterDailyLookup,
+  type LenderHunterLookupReservation,
+} from '@/lib/lenders/hunterBudget'
 import { matchBorrowerToLenders } from '@/lib/lenders/matching'
 import { generateLenderOutreach, LENDER_OUTREACH_TEMPLATE_VERSION } from '@/lib/lenders/outreach'
 import { evaluateLenderAutoApproval } from '@/lib/lenders/automationCore'
 import {
   addLenderNote,
   approveLenderFollowupMessageIfReviewable,
+  claimLenderForHunterEnrichment,
+  findLenderRecordById,
   finishLenderOutreachRun,
   insertLenderRelationshipEvent,
   getReviewableLenderOutreachMessageByChannel,
@@ -20,6 +33,7 @@ import {
   startLenderOutreachRun,
   updateLenderPerformance,
   updateLenderRecord,
+  updateLenderRecordIfVersion,
   upsertLender,
   upsertLenderMatch,
 } from '@/lib/lenders/repository'
@@ -34,6 +48,115 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const LENDER_HUNTER_TERMINAL_COOLDOWN_DAYS = 30
+const LENDER_HUNTER_ERROR_RETRY_HOURS = 6
+const LENDER_HUNTER_STALE_CLAIM_HOURS = 2
+
+function lenderHunterState(metadata?: Record<string, unknown> | null) {
+  const raw = metadata?.hunterContactEnrichment
+  if (!raw || typeof raw !== 'object') return { status: null, checkedAt: null }
+  const state = raw as Record<string, unknown>
+  const checkedAt = typeof state.checkedAt === 'string' && Number.isFinite(Date.parse(state.checkedAt))
+    ? state.checkedAt
+    : null
+  return { status: typeof state.status === 'string' ? state.status : null, checkedAt }
+}
+
+export function isLenderHunterEnrichmentEligible(
+  lender: Pick<LenderRecord, 'contact_email' | 'website' | 'metadata_json'>,
+  now = new Date()
+) {
+  if (isUsableContactEmail(lender.contact_email) || !companyWebsiteDomain(lender.website)) return false
+  const { status, checkedAt } = lenderHunterState(lender.metadata_json)
+  if (!checkedAt) return true
+  const ageMs = now.getTime() - Date.parse(checkedAt)
+  if (ageMs < 0) return false
+  if (status === 'checking') return ageMs >= LENDER_HUNTER_STALE_CLAIM_HOURS * 3600000
+  if (status === 'error' || status === 'skipped' || status === 'skipped_budget') {
+    return ageMs >= LENDER_HUNTER_ERROR_RETRY_HOURS * 3600000
+  }
+  return ageMs >= LENDER_HUNTER_TERMINAL_COOLDOWN_DAYS * 86400000
+}
+
+export function selectVerifiedLenderHunterCandidate(candidates: HunterContactCandidate[]) {
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.verificationStatus === 'valid' &&
+        Number(candidate.confidence) >= 90 &&
+        isUsableContactEmail(candidate.email)
+    )
+    .sort((left, right) => right.score - left.score || right.confidence - left.confidence)[0] || null
+}
+
+function safeHunterMetadataText(value?: string | null, maximumLength = 160) {
+  return value?.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maximumLength) || null
+}
+
+export function buildSanitizedLenderHunterMetadata(input: {
+  status: string
+  domain?: string | null
+  organization?: string | null
+  checkedAt: string
+  claimId?: string | null
+  reservationId?: string | null
+  budgetReason?: string | null
+  candidate?: HunterContactCandidate | null
+  topCandidateConfidence?: number | null
+  topCandidateVerificationStatus?: string | null
+}) {
+  const accepted = Boolean(
+    input.candidate &&
+      input.candidate.verificationStatus === 'valid' &&
+      Number(input.candidate.confidence) >= 90 &&
+      isUsableContactEmail(input.candidate.email)
+  )
+  const checkedTime = Date.parse(input.checkedAt)
+  const safeStatuses = new Set(['found', 'not_found', 'skipped', 'skipped_budget', 'error', 'checking'])
+  return {
+    provider: 'hunter',
+    status: safeStatuses.has(input.status) ? input.status : 'error',
+    domain: companyWebsiteDomain(input.domain) || safeHunterMetadataText(input.domain, 120),
+    organization: safeHunterMetadataText(input.organization),
+    checkedAt: Number.isFinite(checkedTime) ? new Date(checkedTime).toISOString() : new Date().toISOString(),
+    claimId: input.claimId || null,
+    reservationId: input.reservationId || null,
+    budgetReason: safeHunterMetadataText(input.budgetReason, 120),
+    accepted,
+    acceptedConfidence: accepted ? Number(input.candidate?.confidence) : null,
+    acceptedVerificationStatus: accepted ? 'valid' : null,
+    topCandidateConfidence:
+      typeof input.topCandidateConfidence === 'number' && Number.isFinite(input.topCandidateConfidence)
+        ? input.topCandidateConfidence
+        : null,
+    topCandidateVerificationStatus: safeHunterMetadataText(input.topCandidateVerificationStatus, 40),
+  }
+}
+
+export type LenderScoringOutcome = {
+  scored: LenderRecord | null
+  failed: boolean
+  hunterAttempted: boolean
+  result: {
+    lenderId: string
+    name: string
+    confidenceScore: number | null
+    status: string
+    reason?: string
+  }
+}
+
+export function summarizeLenderScoringOutcomes(outcomes: LenderScoringOutcome[]) {
+  const errorCount = outcomes.filter((outcome) => outcome.failed).length
+  return {
+    ok: errorCount === 0,
+    partial: errorCount > 0 && errorCount < outcomes.length,
+    errorCount,
+    scoredCount: outcomes.filter((outcome) => Boolean(outcome.scored)).length,
+    hunterAttempted: outcomes.filter((outcome) => outcome.hunterAttempted).length,
+  }
 }
 
 export async function discoverAndIngestLendersForMarket(input: {
@@ -124,46 +247,157 @@ export async function discoverAndIngestLendersForMarket(input: {
   }
 }
 
-export async function enrichAndScoreLender(lender: LenderRecord) {
+export async function enrichAndScoreLender(
+  lender: LenderRecord,
+  options: {
+    allowPaidHunter?: boolean
+    onHunterReservation?: (reservation: LenderHunterLookupReservation) => void
+  } = {}
+): Promise<LenderScoringOutcome> {
   const siteAnalysis = await analyzeLenderWebsite(lender.website)
-  const hunterResult =
-    lender.contact_email || !lender.website
-      ? null
-      : await enrichContactFromHunter({
-          website: lender.website,
-          contactName: lender.contact_name || null,
-        })
+  const existingContactEmail = isUsableContactEmail(lender.contact_email) ? lender.contact_email : null
+  const publicContactEmail = isUsableContactEmail(siteAnalysis.contactEmail) ? siteAnalysis.contactEmail : null
+  const paidGateOpen =
+    options.allowPaidHunter === true &&
+    process.env.LENDER_ENRICHMENT_PREFER_FREE?.trim().toLowerCase() === 'false' &&
+    Boolean(process.env.HUNTER_API_KEY?.trim())
+  const hunterDailyLimit = Math.min(25, envInt('LENDERS_DAILY_HUNTER_LOOKUP_LIMIT', 10))
+  let writeBase = lender
+  let hunterClaimId: string | null = null
+  let hunterReservation: LenderHunterLookupReservation | null = null
+  let hunterResult: HunterContactLookupResult | null = null
+  let reservationFailed = false
+  const currentHunterState = lenderHunterState(lender.metadata_json)
+  const currentHunterClaimAgeMs = currentHunterState.checkedAt
+    ? Date.now() - Date.parse(currentHunterState.checkedAt)
+    : Number.POSITIVE_INFINITY
+  const freshHunterClaim =
+    currentHunterState.status === 'checking' &&
+    currentHunterClaimAgeMs < LENDER_HUNTER_STALE_CLAIM_HOURS * 3600000
 
-  const updated = await updateLenderRecord(lender.id, {
-    contact_email: lender.contact_email || siteAnalysis.contactEmail || hunterResult?.primaryCandidate?.email || null,
-    contact_phone: lender.contact_phone || siteAnalysis.contactPhone || null,
-    contact_name: lender.contact_name || hunterResult?.primaryCandidate?.fullName || null,
-    startup_allowed: lender.startup_allowed || siteAnalysis.startupAllowed,
-    investor_allowed: lender.investor_allowed || siteAnalysis.investorAllowed,
-    owner_occupied_allowed: lender.owner_occupied_allowed || siteAnalysis.ownerOccupiedAllowed,
-    bilingual_support: lender.bilingual_support || siteAnalysis.bilingualSupport,
-    spanish_support: lender.spanish_support || siteAnalysis.spanishSupport,
-    low_doc: lender.low_doc || siteAnalysis.lowDoc,
-    cash_out_allowed: lender.cash_out_allowed || siteAnalysis.cashOutAllowed,
-    first_time_investor_allowed: lender.first_time_investor_allowed || siteAnalysis.firstTimeInvestorAllowed,
-    loan_amount_min: lender.loan_amount_min ?? siteAnalysis.loanAmountMin ?? null,
-    loan_amount_max: lender.loan_amount_max ?? siteAnalysis.loanAmountMax ?? null,
-    fit_summary: lender.fit_summary || siteAnalysis.summary,
-    metadata_json: {
-      ...(lender.metadata_json || {}),
-      lenderSiteAnalysis: siteAnalysis,
-      hunterContactEnrichment: hunterResult
-        ? {
-            status: hunterResult.status,
-            domain: hunterResult.domain,
-            note: hunterResult.note,
-            checkedAt: new Date().toISOString(),
-            primaryCandidate: hunterResult.primaryCandidate,
-            candidates: hunterResult.candidates.slice(0, 5),
-          }
-        : (lender.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined),
+  if (!existingContactEmail && freshHunterClaim) {
+    return {
+      scored: null,
+      failed: false,
+      hunterAttempted: false,
+      result: {
+        lenderId: lender.id,
+        name: lender.name,
+        confidenceScore: lender.confidence_score,
+        status: 'concurrent_claim_blocked',
+      },
+    }
+  }
+
+  if (
+    paidGateOpen &&
+    !existingContactEmail &&
+    !publicContactEmail &&
+    isLenderHunterEnrichmentEligible(lender)
+  ) {
+    const claimId = randomUUID()
+    const claimed = await claimLenderForHunterEnrichment({ lender, claimId })
+    if (claimed) {
+      writeBase = claimed
+      hunterClaimId = claimId
+      try {
+        hunterReservation = await reserveLenderHunterDailyLookup({
+          lenderId: claimed.id,
+          claimId,
+          dailyLimit: hunterDailyLimit,
+        })
+      } catch {
+        hunterReservation = {
+          allowed: false,
+          reason: 'lender_hunter_budget_reservation_failed',
+          attemptCount: 0,
+          remaining: 0,
+        }
+      }
+      options.onHunterReservation?.(hunterReservation)
+      reservationFailed = !hunterReservation.allowed &&
+        hunterReservation.reason !== 'lender_hunter_daily_budget_exhausted'
+
+      if (hunterReservation.allowed) {
+        hunterResult = await enrichContactFromHunter({
+          website: claimed.website,
+          contactName: claimed.contact_name || null,
+        })
+      }
+    } else {
+      return {
+        scored: null,
+        failed: false,
+        hunterAttempted: false,
+        result: {
+          lenderId: lender.id,
+          name: lender.name,
+          confidenceScore: lender.confidence_score,
+          status: 'concurrent_claim_blocked',
+        },
+      }
+    }
+  }
+
+  const verifiedHunterContact = selectVerifiedLenderHunterCandidate(hunterResult?.candidates || [])
+  const checkedAt = new Date().toISOString()
+  const hunterMetadata = hunterResult
+    ? buildSanitizedLenderHunterMetadata({
+        status: hunterResult.status,
+        domain: hunterResult.domain,
+        organization: hunterResult.organization,
+        checkedAt,
+        claimId: hunterClaimId,
+        reservationId: hunterReservation?.reservationId || null,
+        candidate: verifiedHunterContact,
+        topCandidateConfidence: hunterResult.primaryCandidate?.confidence ?? null,
+        topCandidateVerificationStatus: hunterResult.primaryCandidate?.verificationStatus ?? null,
+      })
+    : hunterClaimId
+      ? buildSanitizedLenderHunterMetadata({
+          status: hunterReservation?.reason === 'lender_hunter_daily_budget_exhausted'
+            ? 'skipped_budget'
+            : 'error',
+          checkedAt,
+          claimId: hunterClaimId,
+          reservationId: hunterReservation?.reservationId || null,
+          budgetReason: hunterReservation?.reason || 'lender_hunter_lookup_not_reserved',
+          candidate: null,
+        })
+      : (writeBase.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined)
+  const effectiveContactEmail = isUsableContactEmail(writeBase.contact_email)
+    ? writeBase.contact_email
+    : publicContactEmail || verifiedHunterContact?.email || null
+  const updatedByVersion = await updateLenderRecordIfVersion({
+    lenderId: writeBase.id,
+    expectedUpdatedAt: writeBase.updated_at,
+    expectedContactEmail: writeBase.contact_email,
+    hunterClaimId,
+    updates: {
+      contact_email: effectiveContactEmail,
+      contact_phone: writeBase.contact_phone || siteAnalysis.contactPhone || null,
+      contact_name: writeBase.contact_name || verifiedHunterContact?.fullName || null,
+      startup_allowed: writeBase.startup_allowed || siteAnalysis.startupAllowed,
+      investor_allowed: writeBase.investor_allowed || siteAnalysis.investorAllowed,
+      owner_occupied_allowed: writeBase.owner_occupied_allowed || siteAnalysis.ownerOccupiedAllowed,
+      bilingual_support: writeBase.bilingual_support || siteAnalysis.bilingualSupport,
+      spanish_support: writeBase.spanish_support || siteAnalysis.spanishSupport,
+      low_doc: writeBase.low_doc || siteAnalysis.lowDoc,
+      cash_out_allowed: writeBase.cash_out_allowed || siteAnalysis.cashOutAllowed,
+      first_time_investor_allowed: writeBase.first_time_investor_allowed || siteAnalysis.firstTimeInvestorAllowed,
+      loan_amount_min: writeBase.loan_amount_min ?? siteAnalysis.loanAmountMin ?? null,
+      loan_amount_max: writeBase.loan_amount_max ?? siteAnalysis.loanAmountMax ?? null,
+      fit_summary: writeBase.fit_summary || siteAnalysis.summary,
+      metadata_json: {
+        ...(writeBase.metadata_json || {}),
+        lenderSiteAnalysis: siteAnalysis,
+        hunterContactEnrichment: hunterMetadata,
+      },
     },
   })
+  const persistenceConflict = !updatedByVersion
+  const updated = updatedByVersion || (await findLenderRecordById(writeBase.id))
+  if (!updated) throw new Error(`Lender ${writeBase.id} no longer exists.`)
 
   const score = scoreLender(updated)
   const scored = await saveLenderScore(updated.id, score, updated.metadata_json || {})
@@ -173,7 +407,42 @@ export async function enrichAndScoreLender(lender: LenderRecord) {
     entityId: updated.id,
     metadata: { confidenceScore: score.confidenceScore, category: updated.category },
   })
-  return scored
+
+  const hunterAttempted = Boolean(hunterReservation?.allowed)
+  const hunterLookupFailed = hunterResult?.status === 'error' || hunterResult?.status === 'skipped'
+  const hunterPersistenceFailed = hunterAttempted && persistenceConflict
+  const failed = reservationFailed || hunterLookupFailed || hunterPersistenceFailed
+  const status = failed
+    ? 'error'
+    : verifiedHunterContact &&
+        scored.contact_email?.toLowerCase() === verifiedHunterContact.email.toLowerCase()
+      ? 'enriched'
+      : hunterResult?.status === 'found'
+        ? 'candidate_rejected'
+        : hunterResult?.status ||
+          (hunterReservation?.reason === 'lender_hunter_daily_budget_exhausted'
+            ? 'skipped_budget'
+            : 'scored_free')
+  const reason = reservationFailed
+    ? hunterReservation?.reason || 'lender_hunter_budget_reservation_failed'
+    : hunterLookupFailed
+      ? 'hunter_lookup_failed'
+      : hunterPersistenceFailed
+        ? 'record_persistence_conflict'
+        : undefined
+
+  return {
+    scored,
+    failed,
+    hunterAttempted,
+    result: {
+      lenderId: scored.id,
+      name: scored.name,
+      confidenceScore: scored.confidence_score,
+      status,
+      ...(reason ? { reason } : {}),
+    },
+  }
 }
 
 export async function generateAndStoreLenderOutreach(lender: LenderRecord) {
@@ -332,17 +601,84 @@ export async function addLenderNoteAndLog(lenderId: string, authorUserId: string
 }
 
 export async function runDailyLenderScoring(limit = 100) {
-  const lenders = await listLendersForScoring(limit)
-  const results: Array<{ lenderId: string; name: string; confidenceScore: number }> = []
-  for (const lender of lenders) {
-    const scored = await enrichAndScoreLender(lender)
-    results.push({
-      lenderId: scored.id,
-      name: scored.name,
-      confidenceScore: scored.confidence_score,
+  const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 100
+  const effectiveLimit = Math.min(50, Math.max(1, normalizedLimit))
+  const paidHunterEnabled =
+    process.env.LENDER_ENRICHMENT_PREFER_FREE?.trim().toLowerCase() === 'false' &&
+    Boolean(process.env.HUNTER_API_KEY?.trim())
+  const concurrency = Math.min(5, envInt('LENDERS_HUNTER_CONCURRENCY', 4))
+  const hunterLookupLimit = Math.min(25, envInt('LENDERS_DAILY_HUNTER_LOOKUP_LIMIT', 10))
+  const run = await startLenderOutreachRun({
+    runType: 'scoring',
+    sourceKey: 'lender_profiles_and_hunter',
+    requestParams: {
+      requestedLimit: limit,
+      effectiveLimit,
+      concurrency,
+      paidHunterEnabled,
+      hunterLookupLimit,
+      terminalCooldownDays: LENDER_HUNTER_TERMINAL_COOLDOWN_DAYS,
+      providerErrorRetryHours: LENDER_HUNTER_ERROR_RETRY_HOURS,
+    },
+  })
+
+  try {
+    const lenders = await listLendersForScoring(effectiveLimit)
+    const outcomes: LenderScoringOutcome[] = []
+    for (let offset = 0; offset < lenders.length; offset += concurrency) {
+      const batch = lenders.slice(offset, offset + concurrency)
+      const settled = await Promise.allSettled(
+        batch.map((lender) => enrichAndScoreLender(lender, { allowPaidHunter: paidHunterEnabled }))
+      )
+      outcomes.push(...settled.map((item, index) => {
+        if (item.status === 'fulfilled') return item.value
+        const lender = batch[index]
+        return {
+          scored: null,
+          failed: true,
+          hunterAttempted: false,
+          result: {
+            lenderId: lender.id,
+            name: lender.name,
+            confidenceScore: null,
+            status: 'error',
+            reason: 'worker_rejected',
+          },
+        }
+      }))
+    }
+
+    const summary = summarizeLenderScoringOutcomes(outcomes)
+    const results = outcomes.map((outcome) => outcome.result)
+    const errorMessage = summary.ok
+      ? null
+      : `${summary.errorCount} of ${results.length} lender scoring or Hunter enrichment record(s) failed.`
+    await finishLenderOutreachRun(run.id, {
+      status: summary.ok ? 'completed' : summary.partial ? 'partial' : 'failed',
+      resultCount: results.length,
+      errorMessage,
     })
+    return {
+      ...summary,
+      configured: paidHunterEnabled,
+      count: results.length,
+      results,
+      hunter: {
+        enabled: paidHunterEnabled,
+        attempted: summary.hunterAttempted,
+        limit: hunterLookupLimit,
+        concurrency,
+      },
+      ...(errorMessage ? { error: errorMessage } : {}),
+    }
+  } catch (error) {
+    await finishLenderOutreachRun(run.id, {
+      status: 'failed',
+      resultCount: 0,
+      errorMessage: 'Lender scoring and Hunter enrichment stage failed.',
+    })
+    throw error
   }
-  return { ok: true, count: results.length, results }
 }
 
 export async function runDailyLenderOutreach(limit = 40) {

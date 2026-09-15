@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nextHunterCasTimestamp } from '@/lib/buyers/hunterBudgetCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import {
   FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
@@ -135,6 +136,70 @@ export async function updateBuyerRecord(id: string, updates: Record<string, unkn
 
   if (error) throw error
   return data as BuyerRecord
+}
+
+export async function getBuyerRecordById(id: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('buyers').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data ? (data as BuyerRecord) : null
+}
+
+export async function updateBuyerRecordIfVersion(input: {
+  buyerId: string
+  expectedUpdatedAt: string
+  expectedContactEmail: string | null
+  updates: Record<string, unknown>
+  hunterClaimId?: string | null
+  now?: Date
+}) {
+  const admin = createAdminClient()
+  const updatedAt = nextHunterCasTimestamp(input.expectedUpdatedAt, input.now)
+  let query = admin
+    .from('buyers')
+    .update({ ...input.updates, updated_at: updatedAt })
+    .eq('id', input.buyerId)
+    .eq('updated_at', input.expectedUpdatedAt)
+
+  query = input.expectedContactEmail === null
+    ? query.is('contact_email', null)
+    : query.eq('contact_email', input.expectedContactEmail)
+
+  if (input.hunterClaimId) {
+    query = query.contains('metadata_json', {
+      hunterContactEnrichment: { claimId: input.hunterClaimId },
+    })
+  }
+
+  const { data, error } = await query.select('*').maybeSingle()
+  if (error) throw error
+  return data ? (data as BuyerRecord) : null
+}
+
+export async function claimBuyerForHunterEnrichment(input: {
+  buyer: BuyerRecord
+  claimId: string
+  claimedAt?: Date
+}) {
+  if (isUsableContactEmail(input.buyer.contact_email)) return null
+  const claimedAt = input.claimedAt || new Date()
+  return updateBuyerRecordIfVersion({
+    buyerId: input.buyer.id,
+    expectedUpdatedAt: input.buyer.updated_at,
+    expectedContactEmail: input.buyer.contact_email,
+    now: claimedAt,
+    updates: {
+      metadata_json: {
+        ...(input.buyer.metadata_json || {}),
+        hunterContactEnrichment: {
+          provider: 'hunter',
+          status: 'checking',
+          claimId: input.claimId,
+          checkedAt: claimedAt.toISOString(),
+        },
+      },
+    },
+  })
 }
 
 export async function saveBuyerScore(
@@ -329,11 +394,53 @@ export async function updateBuyerOutreachMessage(messageId: string, updates: Rec
   return data as BuyerOutreachMessageRecord
 }
 
-export async function claimBuyerOutreachMessageForSend(messageId: string) {
+export async function claimBuyerOutreachMessageForSend(messageId: string, expectedUpdatedAt?: string) {
+  const admin = createAdminClient()
+  let query = admin
+    .from('buyer_outreach_messages')
+    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'approved')
+    .is('sent_at', null)
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt)
+  const { data, error } = await query
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
+}
+
+export async function restoreBuyerOutreachMessageAfterQuotaDenial(
+  messageId: string,
+  claimedUpdatedAt: string
+) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('buyer_outreach_messages')
-    .update({ status: 'queued', send_error: null, updated_at: new Date().toISOString() })
+    .update({ status: 'approved', send_error: null, updated_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
+}
+
+export async function downgradeBuyerOutreachMessageIfApproved(
+  messageId: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .update({
+      ...updates,
+      status: 'needs_review',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', messageId)
     .eq('status', 'approved')
     .is('sent_at', null)

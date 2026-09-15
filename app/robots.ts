@@ -38,6 +38,10 @@ const publicCrawlerAccess = [
   '/smart-contracts',
   '/dealflow-growth-system',
   '/proof',
+  '/privacy',
+  '/security',
+  '/terms',
+  '/accessibility',
 ];
 
 const privateAppPaths = [

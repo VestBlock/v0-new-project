@@ -14,11 +14,54 @@ export function normalizeDeliveryBudget(
   windowMs = OUTREACH_DELIVERY_BUDGET_WINDOW_MS
 ) {
   const startedAt = metrics?.windowStartedAt ? Date.parse(metrics.windowStartedAt) : Number.NaN
-  const expired = !Number.isFinite(startedAt) || now.getTime() - startedAt >= windowMs || startedAt > now.getTime()
+  const aggregateAttemptCount = Math.max(0, Math.floor(Number(metrics?.attemptCount || 0)))
+  const rawMarkers = Array.isArray(metrics?.attemptMarkers) ? metrics.attemptMarkers : []
+  const activeMarkers = rawMarkers.filter((marker) => {
+    const attemptedAt = typeof marker.attemptedAt === 'string' ? Date.parse(marker.attemptedAt) : Number.NaN
+    return (
+      Number.isFinite(attemptedAt) &&
+      attemptedAt <= now.getTime() &&
+      now.getTime() - attemptedAt < windowMs
+    )
+  })
+  const legacyWindowActive =
+    aggregateAttemptCount > 0 &&
+    (!Number.isFinite(startedAt) || startedAt > now.getTime() || now.getTime() - startedAt < windowMs)
+  const suspiciousMarkers = legacyWindowActive
+    ? rawMarkers
+        .filter((marker) => {
+          const attemptedAt = typeof marker.attemptedAt === 'string' ? Date.parse(marker.attemptedAt) : Number.NaN
+          return !Number.isFinite(attemptedAt) || attemptedAt > now.getTime()
+        })
+        .map((marker) => ({
+          ...marker,
+          attemptedAt: now.toISOString(),
+          normalizedFromUntrustedTimestamp: true,
+        }))
+    : []
+  // Older budget rows only recorded an aggregate count. Keep that count until
+  // its original window expires while all new attempts age out individually.
+  const legacyAttemptCount = legacyWindowActive
+    ? Math.max(0, aggregateAttemptCount - rawMarkers.length)
+    : 0
+  const retainedMarkers = [...activeMarkers, ...suspiciousMarkers]
+  const oldestMarkerAt = retainedMarkers.reduce<number | null>((oldest, marker) => {
+    const attemptedAt = Date.parse(String(marker.attemptedAt))
+    return oldest === null || attemptedAt < oldest ? attemptedAt : oldest
+  }, null)
+
   return {
-    windowStartedAt: expired ? now.toISOString() : String(metrics?.windowStartedAt),
-    attemptCount: expired ? 0 : Math.max(0, Math.floor(Number(metrics?.attemptCount || 0))),
-    attemptMarkers: expired || !Array.isArray(metrics?.attemptMarkers) ? [] : metrics.attemptMarkers.slice(-20),
+    windowStartedAt: legacyAttemptCount > 0
+      ? Number.isFinite(startedAt)
+        ? startedAt > now.getTime()
+          ? now.toISOString()
+          : String(metrics?.windowStartedAt)
+        : now.toISOString()
+      : oldestMarkerAt === null
+        ? now.toISOString()
+        : new Date(oldestMarkerAt).toISOString(),
+    attemptCount: legacyAttemptCount + retainedMarkers.length,
+    attemptMarkers: retainedMarkers.slice(-20),
   }
 }
 

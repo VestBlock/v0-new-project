@@ -7,9 +7,11 @@ import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import {
   claimBuyerOutreachMessageForSend,
+  downgradeBuyerOutreachMessageIfApproved,
   finishBuyerOutreachRun,
   listApprovedBuyerEmailOutreach,
   listBuyerOutreachForAutoApproval,
+  restoreBuyerOutreachMessageAfterQuotaDenial,
   updateBuyerOutreachMessage,
   updateBuyerPerformance,
   updateBuyerRecord,
@@ -28,8 +30,10 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
+import { reserveAutomaticEmailLaneAttempt } from '@/lib/outreach/laneAttemptQuota'
 import { runQualifiedSellerBuyerRouting } from '@/lib/buyers/qualifiedSellerRouting'
-import type { BuyerRecord } from '@/lib/buyers/types'
+import type { BuyerOutreachMessageRecord, BuyerRecord } from '@/lib/buyers/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 
@@ -130,14 +134,22 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
     ? await getDeliveryCircuitBreaker({ provider: getConfiguredOutboundProvider(), allowControlledTrial: true })
     : null
   const replyCapture = getReplyCaptureReadiness()
-  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
+  const mailingAddressConfigured = Boolean(getCommercialOutreachMailingAddress())
+  const sendGateOpen = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready && mailingAddressConfigured
+  const autoSend = sendGateOpen && !options.dryRun
+  const sendBlockedReasons = [
+    !autoSendRequested ? 'buyer_auto_send_disabled' : null,
+    deliveryCircuitBreaker?.allowed !== true ? 'delivery_not_permitted' : null,
+    !replyCapture.ready ? 'reply_capture_not_configured' : null,
+    !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
+  ].filter((reason): reason is string => Boolean(reason))
   const dailyLimit = envInt('BUYERS_DAILY_SEND_LIMIT', 25)
   const admin = createAdminClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { count: sentLast24h, error: countError } = await admin
     .from('buyer_outreach_messages')
     .select('id', { count: 'exact', head: true })
-    .eq('status', 'sent')
+    .not('sent_at', 'is', null)
     .gte('sent_at', since)
   if (countError) throw countError
 
@@ -151,7 +163,28 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
     const buyer = row.buyers as BuyerRecord | null
     if (!buyer?.id) continue
 
-    if (!autoSend) {
+    const approvalDecision = evaluateBuyerAutoApproval({
+      buyer,
+      message: row as BuyerOutreachMessageRecord,
+      templateVersion: BUYER_OUTREACH_TEMPLATE_VERSION,
+      minimumScore: envInt('BUYER_AUTO_APPROVE_MIN_SCORE', 40),
+      allowedChannels: ['email_intro', 'email_followup', 'spanish_email'],
+    })
+    if (!approvalDecision.approved) {
+      if (!options.dryRun) {
+        const downgraded = await downgradeBuyerOutreachMessageIfApproved(row.id, {
+          send_error: `approval_revalidation:${approvalDecision.reason}`,
+        })
+        if (!downgraded) {
+          results.push({ buyerId: buyer.id, name: buyer.name, status: 'message_state_changed' })
+          continue
+        }
+      }
+      results.push({ buyerId: buyer.id, name: buyer.name, status: `approval_revalidation_blocked:${approvalDecision.reason}` })
+      continue
+    }
+
+    if (!sendGateOpen) {
       results.push({ buyerId: buyer.id, name: buyer.name, status: 'queued_for_review' })
       continue
     }
@@ -174,7 +207,7 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
       continue
     }
 
-    if (options.dryRun) {
+    if (!autoSend) {
       results.push({ buyerId: buyer.id, name: buyer.name, status: 'would_send' })
       continue
     }
@@ -189,10 +222,47 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
       continue
     }
 
-    const claimed = await claimBuyerOutreachMessageForSend(row.id)
+    const claimed = await claimBuyerOutreachMessageForSend(row.id, row.updated_at)
     if (!claimed) {
       results.push({ buyerId: buyer.id, name: buyer.name, status: 'duplicate_claim_blocked' })
       continue
+    }
+
+    let laneAttemptReservation
+    try {
+      laneAttemptReservation = await reserveAutomaticEmailLaneAttempt({
+        lane: 'buyer',
+        messageId: claimed.id,
+        claimId: `${claimed.id}:${claimed.updated_at}`,
+        dailyLimit,
+      })
+    } catch {
+      const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
+        claimed.id,
+        claimed.updated_at
+      ).catch(() => null)
+      results.push({
+        buyerId: buyer.id,
+        name: buyer.name,
+        status: restored
+          ? 'automatic_email_attempt_quota_unavailable'
+          : 'automatic_email_attempt_quota_restore_failed',
+      })
+      break
+    }
+    if (!laneAttemptReservation.allowed) {
+      const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
+        claimed.id,
+        claimed.updated_at
+      ).catch(() => null)
+      results.push({
+        buyerId: buyer.id,
+        name: buyer.name,
+        status: restored
+          ? laneAttemptReservation.reason || 'automatic_email_attempt_quota_denied'
+          : 'automatic_email_attempt_quota_restore_failed',
+      })
+      break
     }
 
     const sent = await sendBuyerOutreachEmail({ buyer, message: claimed })
@@ -274,12 +344,21 @@ export async function runDailyBuyerSend(limit = 15, options: { dryRun?: boolean 
     results.push({ buyerId: buyer.id, name: buyer.name, status: 'accepted' })
   }
 
+  const operationalFailureCount = results.filter((result) =>
+    result.status === 'failed' ||
+    (result.status.startsWith('automatic_email_') && result.status !== 'automatic_email_daily_attempt_quota_exhausted')
+  ).length
+
   return {
-    ok: true,
+    ok: operationalFailureCount === 0,
+    operationalFailureCount,
     count: results.length,
     results,
     autoSendEnabled: autoSend,
     autoSendRequested,
+    sendGateOpen,
+    sendBlockedReasons,
+    mailingAddressConfigured,
     deliveryCircuitBreaker,
     replyCapture,
     dailyLimit,
@@ -358,7 +437,19 @@ export async function runDailyBuyerApproval(
 
 async function runBuyerStage<T>(name: string, task: () => Promise<T>) {
   try {
-    return { ok: true as const, name, result: await task() }
+    const result = await task()
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'ok' in result &&
+      (result as { ok?: unknown }).ok === false
+    ) {
+      const error = 'error' in result && typeof (result as { error?: unknown }).error === 'string'
+        ? String((result as { error: string }).error)
+        : `${name} reported an operational failure.`
+      throw new Error(error)
+    }
+    return { ok: true as const, name, result }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await logEvent({
@@ -371,7 +462,13 @@ async function runBuyerStage<T>(name: string, task: () => Promise<T>) {
   }
 }
 
-export async function runDailyBuyerPipeline(options: { dryRun?: boolean; sendLimit?: number } = {}) {
+export async function runDailyBuyerPipeline(
+  options: {
+    dryRun?: boolean
+    sendLimit?: number
+    sendExecutor?: <T>(task: () => Promise<T>) => Promise<T>
+  } = {}
+) {
   const dryRun = Boolean(options.dryRun)
   const pipelineRun = await startBuyerOutreachRun({
     runType: 'daily_pipeline',
@@ -385,8 +482,20 @@ export async function runDailyBuyerPipeline(options: { dryRun?: boolean; sendLim
 
   try {
     const discovery = await runBuyerStage('discovery', () => runDailyBuyerDiscovery({ dryRun }))
+    const scoringLimit = Math.min(
+      50,
+      envInt('BUYERS_DAILY_SCORE_LIMIT', 90),
+      envInt('BUYERS_PIPELINE_SCORE_LIMIT_CAP', 30)
+    )
     const scoring = await runBuyerStage('scoring', () =>
-      dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyBuyerScoring(envInt('BUYERS_DAILY_SCORE_LIMIT', 90))
+      dryRun
+        ? Promise.resolve({
+            ok: true,
+            count: 0,
+            results: [],
+            hunter: { enabled: false, attempted: 0, limit: 0, concurrency: 0 },
+          })
+        : runDailyBuyerScoring(scoringLimit)
     )
     const outreach = await runBuyerStage('outreach', () =>
       runDailyBuyerOutreach(envInt('BUYERS_DAILY_OUTREACH_LIMIT', 30), { dryRun })
@@ -397,8 +506,10 @@ export async function runDailyBuyerPipeline(options: { dryRun?: boolean; sendLim
     const approval = await runBuyerStage('approval', () =>
       runDailyBuyerApproval(envInt('BUYERS_DAILY_APPROVAL_LIMIT', 20), { dryRun })
     )
-    const send = await runBuyerStage('send', () =>
+    const executeSend = () =>
       runDailyBuyerSend(options.sendLimit ?? envInt('BUYERS_SEND_LIMIT_PER_RUN', 10), { dryRun })
+    const send = await runBuyerStage('send', () =>
+      options.sendExecutor ? options.sendExecutor(executeSend) : executeSend()
     )
     const performance = await runBuyerStage('performance', () =>
       dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyBuyerPerformanceRollup()

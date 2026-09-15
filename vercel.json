@@ -55,7 +55,7 @@
     },
     {
       "path": "/api/cron/mailbox-sync",
-      "schedule": "15 * * * *"
+      "schedule": "7 * * * *"
     },
     {
       "path": "/api/cron/attom-enrichment?limit=10&mode=smart",

@@ -973,6 +973,13 @@ export function SellPage({ market }: SellPageProps) {
                 </a>
               </div>
 
+              <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                <a className="transition-colors hover:text-white" href="/privacy">Privacy</a>
+                <a className="transition-colors hover:text-white" href="/security">Security</a>
+                <a className="transition-colors hover:text-white" href="/terms">Terms</a>
+                <a className="transition-colors hover:text-white" href="/accessibility">Accessibility</a>
+              </nav>
+
               <p className="text-sm text-muted-foreground">
                 © {new Date().getFullYear()} VestBlock. All rights reserved.
               </p>

@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     if (send && !result.sendGateOpen) {
       return NextResponse.json({ ...payload, success: false }, { status: 409 })
     }
-    return NextResponse.json(payload)
+    return NextResponse.json(payload, { status: result.ok ? 200 : 500 })
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Outreach canary failed.' },

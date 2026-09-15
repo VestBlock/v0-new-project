@@ -12,6 +12,7 @@ import {
   type StrategyLane,
   type StrategySourceProvider,
 } from '@/lib/admin/strategyExecutionCatalog'
+import { isStrategyMarketDue, STRATEGY_MARKET_STATE_SEED_OPTIONS } from '@/lib/admin/strategyExecutionCore'
 import { buildStrategyEmailDraft } from '@/lib/admin/strategyOutreachTemplates'
 import { getStrategyLeadProvenance, strategySourceProviderForLead } from '@/lib/admin/strategyLeadProvenance'
 import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
@@ -458,13 +459,10 @@ async function seedMarketStates(
   for (let index = 0; index < rows.length; index += 250) {
     const { data, error } = await admin
       .from('strategy_market_state')
-      .upsert(rows.slice(index, index + 250), {
-        onConflict: 'strategy_key,market,source_provider',
-        // Fresh, unassigned inventory must wake an existing market immediately.
-        // Once the leads are enrolled they leave `pools`, so this does not create
-        // a perpetual retry loop for exhausted or cooling markets.
-        ignoreDuplicates: false,
-      })
+      // Existing rows can carry immutable canonical-strategy bindings. Insert
+      // missing states without rewriting identity columns on a conflict; fresh
+      // inventory wakes existing states in `chooseTargets` below.
+      .upsert(rows.slice(index, index + 250), STRATEGY_MARKET_STATE_SEED_OPTIONS)
       .select('id')
     if (error) throw error
     seeded += data?.length || 0
@@ -486,7 +484,13 @@ async function loadMarketStates() {
 
 function chooseTargets(states: StrategyMarketStateRow[], pools: Map<string, Candidate[]>, limit: number) {
   const now = Date.now()
-  const due = states.filter((state) => !state.next_run_at || Date.parse(state.next_run_at) <= now)
+  const due = states.filter((state) =>
+    isStrategyMarketDue({
+      nextRunAt: state.next_run_at,
+      availableCandidates: pools.get(poolKey(state.strategy_key, state.market, state.source_provider))?.length || 0,
+      nowMs: now,
+    })
+  )
   const byLane = new Map<string, StrategyMarketStateRow[]>()
   for (const state of due) {
     const lane = STRATEGY_EXECUTION_LANES.find((item) => item.key === state.strategy_key && item.enabled)

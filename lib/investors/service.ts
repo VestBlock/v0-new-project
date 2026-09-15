@@ -1,20 +1,32 @@
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
+import {
+  enrichContactFromHunter,
+  type HunterContactCandidate,
+  type HunterContactLookupResult,
+} from '@/lib/email/hunter'
 import { discoverInvestorsForMarket } from '@/lib/investors/discovery'
 import { sendInvestorOutreachEmail } from '@/lib/investors/outbound'
 import { scoreExistingInvestor } from '@/lib/investors/scoring'
 import {
   claimInvestorOutreachMessageForSend,
+  claimInvestorForHunterEnrichment,
+  downgradeInvestorOutreachMessageIfApproved,
   finishInvestorAutomationRun,
   generateInvestorFollowup,
   generateInvestorOutreach,
   insertInvestorEngagementEvent,
   listApprovedInvestorEmailOutreach,
   listInvestorOutreachForAutoApproval,
+  listInvestorsNeedingHunterEnrichment,
   listInvestorsForScoring,
   listInvestorsNeedingFollowup,
   listInvestorsNeedingOutreach,
+  restoreInvestorOutreachMessageAfterQuotaDenial,
   startInvestorAutomationRun,
+  saveInvestorHunterEnrichmentResult,
   updateInvestorOutreachMessage,
   updateInvestorRecord,
   upsertInvestorProfile,
@@ -28,12 +40,383 @@ import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { evaluateInvestorAutoApproval } from '@/lib/investors/automationCore'
 import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
+import { reserveInvestorHunterDailyLookup, type InvestorHunterLookupReservation } from '@/lib/investors/hunterBudget'
+import { INVESTOR_HUNTER_BUDGET_HARD_LIMIT } from '@/lib/investors/hunterBudgetCore'
 import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
+import { reserveAutomaticEmailLaneAttempt } from '@/lib/outreach/laneAttemptQuota'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export function selectVerifiedInvestorHunterCandidate(candidates: HunterContactCandidate[]) {
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.verificationStatus === 'valid' &&
+        Number(candidate.confidence) >= 90 &&
+        isUsableContactEmail(candidate.email)
+    )
+    .sort((left, right) => right.score - left.score || right.confidence - left.confidence)[0] || null
+}
+
+type InvestorHunterEnrichmentRecordResult = {
+  investorId: string
+  name: string
+  status: string
+  reason?:
+    | 'claim_failed'
+    | 'hunter_budget_reservation_failed'
+    | 'investor_hunter_daily_budget_exhausted'
+    | 'hunter_lookup_failed'
+    | 'record_persistence_failed'
+    | 'worker_rejected'
+  errorStatePersisted?: boolean
+}
+
+export type InvestorHunterEnrichmentRecordOutcome = {
+  enriched: boolean
+  failed: boolean
+  result: InvestorHunterEnrichmentRecordResult
+}
+
+type InvestorHunterEnrichmentWorkerDependencies = {
+  now: () => Date
+  claimInvestor: typeof claimInvestorForHunterEnrichment
+  reserveLookup: (input: {
+    investorId: string
+    claimId: string
+    now?: Date
+  }) => Promise<InvestorHunterLookupReservation>
+  lookupContact: (input: {
+    website?: string | null
+    contactName?: string | null
+  }) => Promise<HunterContactLookupResult>
+  saveResult: typeof saveInvestorHunterEnrichmentResult
+  recordEnrichedEvent: (input: {
+    investorId: string
+    confidence: number | null
+    verificationStatus: string | null
+  }) => Promise<void>
+}
+
+function errorCode(error: unknown) {
+  if (!error || typeof error !== 'object' || !('code' in error)) return null
+  const code = String((error as { code?: unknown }).code || '').trim()
+  return /^[a-z0-9_-]{1,32}$/i.test(code) ? code : null
+}
+
+function savedHunterStatus(investor: InvestorProfileRecord | null) {
+  const enrichment = investor?.metadata_json?.hunterContactEnrichment
+  if (!enrichment || typeof enrichment !== 'object') return null
+  const status = (enrichment as Record<string, unknown>).status
+  return typeof status === 'string' ? status : null
+}
+
+function persistenceInput(
+  lookup: HunterContactLookupResult,
+  checkedAt: string,
+  candidate: HunterContactCandidate | null,
+  claimId: string,
+  reservationId: string | null
+) {
+  return {
+    status: lookup.status,
+    domain: lookup.domain,
+    organization: lookup.organization,
+    checkedAt,
+    claimId,
+    reservationId,
+    candidate,
+    topCandidateConfidence: lookup.primaryCandidate?.confidence ?? null,
+    topCandidateVerificationStatus: lookup.primaryCandidate?.verificationStatus ?? null,
+  }
+}
+
+async function persistInvestorHunterErrorState(input: {
+  investor: InvestorProfileRecord
+  checkedAt: string
+  claimId: string
+  reservationId: string | null
+  lookup: HunterContactLookupResult | null
+  dependencies: InvestorHunterEnrichmentWorkerDependencies
+}) {
+  try {
+    const saved = await input.dependencies.saveResult({
+      investorId: input.investor.id,
+      enrichment: {
+        status: 'error',
+        domain: input.lookup?.domain || input.investor.website,
+        organization: input.lookup?.organization || null,
+        checkedAt: input.checkedAt,
+        claimId: input.claimId,
+        reservationId: input.reservationId,
+        candidate: null,
+        topCandidateConfidence: input.lookup?.primaryCandidate?.confidence ?? null,
+        topCandidateVerificationStatus: input.lookup?.primaryCandidate?.verificationStatus ?? null,
+      },
+    })
+    return Boolean(saved)
+  } catch {
+    return false
+  }
+}
+
+async function persistDuplicateInvestorHunterContact(input: {
+  investor: InvestorProfileRecord
+  checkedAt: string
+  claimId: string
+  reservationId: string | null
+  lookup: HunterContactLookupResult
+  dependencies: InvestorHunterEnrichmentWorkerDependencies
+}) {
+  try {
+    const saved = await input.dependencies.saveResult({
+      investorId: input.investor.id,
+      enrichment: {
+        ...persistenceInput(
+          input.lookup,
+          input.checkedAt,
+          null,
+          input.claimId,
+          input.reservationId
+        ),
+        // Keep this terminal instead of an error retry. The paid lookup was
+        // valid, but another profile already owns the discovered address.
+        status: 'found',
+        candidate: null,
+      },
+    })
+    return Boolean(saved)
+  } catch {
+    return false
+  }
+}
+
+export async function processInvestorHunterEnrichmentRecord(
+  investor: InvestorProfileRecord,
+  dependencies: InvestorHunterEnrichmentWorkerDependencies
+): Promise<InvestorHunterEnrichmentRecordOutcome> {
+  const checkedAt = dependencies.now().toISOString()
+  const claimId = randomUUID()
+  let claimed: InvestorProfileRecord | null = null
+  let reservation: InvestorHunterLookupReservation | null = null
+  let lookup: HunterContactLookupResult | null = null
+  let phase: 'claim' | 'budget' | 'lookup' | 'persist' = 'claim'
+
+  try {
+    claimed = await dependencies.claimInvestor({ investor, checkedAt, claimId })
+    if (!claimed) {
+      return {
+        enriched: false,
+        failed: false,
+        result: { investorId: investor.id, name: investor.display_name, status: 'concurrent_claim_blocked' },
+      }
+    }
+
+    phase = 'budget'
+    reservation = await dependencies.reserveLookup({
+      investorId: claimed.id,
+      claimId,
+      now: new Date(checkedAt),
+    })
+    if (!reservation.allowed) {
+      const budgetExhausted = reservation.reason === 'investor_hunter_daily_budget_exhausted'
+      phase = 'persist'
+      const saved = await dependencies.saveResult({
+        investorId: claimed.id,
+        enrichment: {
+          status: budgetExhausted ? 'skipped' : 'error',
+          domain: claimed.website,
+          organization: null,
+          checkedAt,
+          claimId,
+          reservationId: null,
+          budgetReason: reservation.reason || 'investor_hunter_budget_reservation_failed',
+          candidate: null,
+          topCandidateConfidence: null,
+          topCandidateVerificationStatus: null,
+        },
+      })
+      if (!saved) {
+        return {
+          enriched: false,
+          failed: true,
+          result: {
+            investorId: claimed.id,
+            name: claimed.display_name,
+            status: 'error',
+            reason: 'record_persistence_failed',
+            errorStatePersisted: false,
+          },
+        }
+      }
+
+      return {
+        enriched: false,
+        failed: !budgetExhausted,
+        result: {
+          investorId: claimed.id,
+          name: claimed.display_name,
+          status: budgetExhausted ? 'skipped_budget' : 'error',
+          reason: budgetExhausted
+            ? 'investor_hunter_daily_budget_exhausted'
+            : 'hunter_budget_reservation_failed',
+          errorStatePersisted: !budgetExhausted,
+        },
+      }
+    }
+
+    phase = 'lookup'
+    lookup = await dependencies.lookupContact({
+      website: claimed.website,
+      contactName: claimed.person_name || null,
+    })
+    const acceptedCandidate = selectVerifiedInvestorHunterCandidate(lookup.candidates)
+
+    phase = 'persist'
+    const saved = await dependencies.saveResult({
+      investorId: claimed.id,
+      enrichment: persistenceInput(
+        lookup,
+        checkedAt,
+        acceptedCandidate,
+        claimId,
+        reservation.reservationId || null
+      ),
+    })
+    if (!saved) {
+      const errorStatePersisted = await persistInvestorHunterErrorState({
+        investor: claimed,
+        checkedAt,
+        claimId,
+        reservationId: reservation.reservationId || null,
+        lookup,
+        dependencies,
+      })
+      return {
+        enriched: false,
+        failed: true,
+        result: {
+          investorId: claimed.id,
+          name: claimed.display_name,
+          status: 'error',
+          reason: 'record_persistence_failed',
+          errorStatePersisted,
+        },
+      }
+    }
+
+    if (savedHunterStatus(saved) === 'duplicate_contact') {
+      return {
+        enriched: false,
+        failed: false,
+        result: { investorId: claimed.id, name: claimed.display_name, status: 'duplicate_contact' },
+      }
+    }
+
+    const enriched = Boolean(
+      acceptedCandidate &&
+        saved.contact_email &&
+        saved.contact_email.toLowerCase() === acceptedCandidate.email.toLowerCase()
+    )
+    if (enriched) {
+      await dependencies.recordEnrichedEvent({
+        investorId: claimed.id,
+        confidence: acceptedCandidate?.confidence ?? null,
+        verificationStatus: acceptedCandidate?.verificationStatus ?? null,
+      }).catch(() => undefined)
+    }
+
+    if (lookup.status === 'error') {
+      return {
+        enriched: false,
+        failed: true,
+        result: {
+          investorId: claimed.id,
+          name: claimed.display_name,
+          status: 'error',
+          reason: 'hunter_lookup_failed',
+          errorStatePersisted: true,
+        },
+      }
+    }
+
+    return {
+      enriched,
+      failed: false,
+      result: {
+        investorId: claimed.id,
+        name: claimed.display_name,
+        status: enriched
+          ? 'enriched'
+          : lookup.status === 'found'
+            ? 'candidate_rejected'
+            : lookup.status,
+      },
+    }
+  } catch (error) {
+    if (claimed && lookup && errorCode(error) === '23505') {
+      const duplicateRecorded = await persistDuplicateInvestorHunterContact({
+        investor: claimed,
+        checkedAt,
+        claimId,
+        reservationId: reservation?.reservationId || null,
+        lookup,
+        dependencies,
+      })
+      if (duplicateRecorded) {
+        return {
+          enriched: false,
+          failed: false,
+          result: { investorId: claimed.id, name: claimed.display_name, status: 'duplicate_contact' },
+        }
+      }
+    }
+
+    const errorStatePersisted = claimed
+      ? await persistInvestorHunterErrorState({
+          investor: claimed,
+          checkedAt,
+          claimId,
+          reservationId: reservation?.reservationId || null,
+          lookup,
+          dependencies,
+        })
+      : false
+    return {
+      enriched: false,
+      failed: true,
+      result: {
+        investorId: claimed?.id || investor.id,
+        name: claimed?.display_name || investor.display_name,
+        status: 'error',
+        reason:
+          phase === 'claim'
+            ? 'claim_failed'
+            : phase === 'budget'
+              ? 'hunter_budget_reservation_failed'
+            : phase === 'lookup'
+              ? 'hunter_lookup_failed'
+              : 'record_persistence_failed',
+        errorStatePersisted,
+      },
+    }
+  }
+}
+
+export function summarizeInvestorHunterEnrichmentOutcomes(
+  outcomes: InvestorHunterEnrichmentRecordOutcome[]
+) {
+  const errorCount = outcomes.filter((outcome) => outcome.failed).length
+  return {
+    ok: errorCount === 0,
+    partial: errorCount > 0 && errorCount < outcomes.length,
+    errorCount,
+  }
 }
 
 export async function discoverAndIngestInvestorsForMarket(input: {
@@ -98,6 +481,133 @@ export async function discoverAndIngestInvestorsForMarket(input: {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',
       errorMessage: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
+}
+
+export async function runDailyInvestorHunterEnrichment(limit?: number) {
+  const configuredLimit = Math.min(
+    INVESTOR_HUNTER_BUDGET_HARD_LIMIT,
+    envInt('INVESTORS_DAILY_HUNTER_LOOKUP_LIMIT', 20)
+  )
+  const effectiveLimit = Math.min(Math.max(1, Math.floor(limit || configuredLimit)), configuredLimit)
+  const concurrency = Math.min(5, envInt('INVESTORS_HUNTER_CONCURRENCY', 4))
+  const run = await startInvestorAutomationRun({
+    // The production run-type constraint predates this bounded enrichment
+    // stage; keep the existing scoring type and distinguish it by source key.
+    runType: 'scoring',
+    sourceKey: 'hunter_investor_domain_search',
+    requestParams: {
+      limit: effectiveLimit,
+      dailyBudgetLimit: configuredLimit,
+      budgetResetTimeZone: 'America/Chicago',
+      concurrency,
+      cooldownDays: 30,
+      errorRetryHours: 6,
+    },
+  })
+
+  try {
+    if (!process.env.HUNTER_API_KEY?.trim()) {
+      await finishInvestorAutomationRun(run.id, {
+        status: 'completed',
+        resultCount: 0,
+        errorMessage: 'Hunter API key is not configured; no investor records were claimed.',
+      })
+      return {
+        ok: true,
+        partial: false,
+        configured: false,
+        count: 0,
+        enrichedCount: 0,
+        errorCount: 0,
+        results: [],
+      }
+    }
+
+    const investors = await listInvestorsNeedingHunterEnrichment(effectiveLimit)
+    const outcomes: InvestorHunterEnrichmentRecordOutcome[] = []
+    let enrichedCount = 0
+    const dependencies: InvestorHunterEnrichmentWorkerDependencies = {
+      now: () => new Date(),
+      claimInvestor: claimInvestorForHunterEnrichment,
+      reserveLookup: (input) => reserveInvestorHunterDailyLookup({
+        ...input,
+        dailyLimit: configuredLimit,
+      }),
+      lookupContact: enrichContactFromHunter,
+      saveResult: saveInvestorHunterEnrichmentResult,
+      recordEnrichedEvent: async ({ investorId, confidence, verificationStatus }) => {
+        await logEvent({
+          eventType: 'admin_action',
+          entityType: 'investor',
+          entityId: investorId,
+          metadata: {
+            action: 'investor_contact_enriched',
+            provider: 'hunter',
+            confidence,
+            verificationStatus,
+          },
+        })
+      },
+    }
+
+    for (let offset = 0; offset < investors.length; offset += concurrency) {
+      const batch = investors.slice(offset, offset + concurrency)
+      const settledBatch = await Promise.allSettled(
+        batch.map((investor) => processInvestorHunterEnrichmentRecord(investor, dependencies))
+      )
+      const batchResults = settledBatch.map((settled, index) => {
+        if (settled.status === 'fulfilled') return settled.value
+        const investor = batch[index]
+        return {
+          enriched: false,
+          failed: true,
+          result: {
+            investorId: investor.id,
+            name: investor.display_name,
+            status: 'error',
+            reason: 'worker_rejected' as const,
+            errorStatePersisted: false,
+          },
+        }
+      })
+      enrichedCount += batchResults.filter((item) => item.enriched).length
+      outcomes.push(...batchResults)
+      if (
+        batchResults.some(
+          (item) =>
+            item.result.status === 'skipped_budget' ||
+            item.result.reason === 'hunter_budget_reservation_failed'
+        )
+      ) {
+        break
+      }
+    }
+
+    const summary = summarizeInvestorHunterEnrichmentOutcomes(outcomes)
+    const results = outcomes.map((outcome) => outcome.result)
+    const errorMessage = summary.ok
+      ? null
+      : `${summary.errorCount} of ${results.length} investor Hunter enrichment record(s) failed.`
+    await finishInvestorAutomationRun(run.id, {
+      status: summary.ok ? 'completed' : 'failed',
+      resultCount: results.length,
+      errorMessage,
+    })
+    return {
+      ...summary,
+      configured: true,
+      count: results.length,
+      enrichedCount,
+      results,
+      ...(errorMessage ? { error: errorMessage } : {}),
+    }
+  } catch (error) {
+    await finishInvestorAutomationRun(run.id, {
+      status: 'failed',
+      errorMessage: `Investor Hunter enrichment stage failed${errorCode(error) ? ` (${errorCode(error)})` : ''}.`,
     })
     throw error
   }
@@ -179,21 +689,95 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
     ? await getDeliveryCircuitBreaker({ provider: getConfiguredOutboundProvider(), allowControlledTrial: true })
     : null
   const replyCapture = getReplyCaptureReadiness()
-  const autoSend = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready
-  const effectiveLimit = Math.min(limit, deliveryCircuitBreaker?.maxBatchSize || Number.POSITIVE_INFINITY)
+  const mailingAddressConfigured = Boolean(getCommercialOutreachMailingAddress())
+  const dailyLimit = envInt('INVESTORS_DAILY_SEND_LIMIT', 20)
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count: sentLast24h, error: sentCountError } = await createAdminClient()
+    .from('investor_outreach_messages')
+    .select('id', { count: 'exact', head: true })
+    .not('sent_at', 'is', null)
+    .gte('sent_at', since)
+  if (sentCountError) throw sentCountError
+  const remainingDailyCapacity = Math.max(0, dailyLimit - (sentLast24h || 0))
+  const autoSend =
+    autoSendRequested &&
+    deliveryCircuitBreaker?.allowed === true &&
+    replyCapture.ready &&
+    mailingAddressConfigured &&
+    remainingDailyCapacity > 0
+  const effectiveLimit = Math.max(
+    0,
+    Math.min(
+      limit,
+      remainingDailyCapacity,
+      deliveryCircuitBreaker?.maxBatchSize ?? Number.POSITIVE_INFINITY
+    )
+  )
+  const sendBlockedReasons = [
+    !autoSendRequested ? 'investor_auto_send_disabled' : null,
+    autoSendRequested && deliveryCircuitBreaker?.allowed !== true ? 'delivery_circuit_breaker_blocked' : null,
+    !replyCapture.ready ? 'reply_capture_not_configured' : null,
+    !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
+    remainingDailyCapacity <= 0 ? 'daily_send_limit_reached' : null,
+  ].filter((reason): reason is string => Boolean(reason))
   const run = await startInvestorAutomationRun({
     runType: 'outreach_send',
     sourceKey: 'investor_outreach_messages',
-    requestParams: { limit, dryRun: options.dryRun || false, autoSend },
+    requestParams: {
+      limit,
+      dryRun: options.dryRun || false,
+      autoSend,
+      dailyLimit,
+      sentLast24h: sentLast24h || 0,
+      sendBlockedReasons,
+    },
   })
 
   try {
-    const approved = await listApprovedInvestorEmailOutreach(effectiveLimit)
-    const results: Array<{ investorId: string; name: string; status: string }> = []
+    const approved = effectiveLimit > 0 ? await listApprovedInvestorEmailOutreach(effectiveLimit) : []
+    const minimumScore = envInt('INVESTOR_AUTO_APPROVE_MIN_SCORE', 45)
+    const results: Array<{ investorId: string; name: string; status: string; reason?: string }> = []
 
     for (const row of approved) {
       const investor = row.investor_profiles as InvestorProfileRecord | null
       if (!investor?.id) continue
+
+      const approvalDecision = evaluateInvestorAutoApproval({
+        investor,
+        message: row,
+        templateVersion: INVESTOR_OUTREACH_TEMPLATE_VERSION,
+        minimumScore,
+      })
+      if (!approvalDecision.approved) {
+        if (!options.dryRun) {
+          const downgraded = await downgradeInvestorOutreachMessageIfApproved(row.id, {
+            metadata_json: {
+              ...(row.metadata_json || {}),
+              approvalRevalidation: {
+                status: 'blocked',
+                reason: approvalDecision.reason,
+                checkedAt: new Date().toISOString(),
+              },
+            },
+          })
+          if (!downgraded) {
+            results.push({
+              investorId: investor.id,
+              name: investor.display_name,
+              status: 'message_state_changed',
+              reason: approvalDecision.reason,
+            })
+            continue
+          }
+        }
+        results.push({
+          investorId: investor.id,
+          name: investor.display_name,
+          status: 'approval_revalidation_blocked',
+          reason: approvalDecision.reason,
+        })
+        continue
+      }
 
       if (!autoSend) {
         results.push({ investorId: investor.id, name: investor.display_name, status: 'queued_for_review' })
@@ -233,10 +817,47 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         continue
       }
 
-      const claimed = await claimInvestorOutreachMessageForSend(row.id)
+      const claimed = await claimInvestorOutreachMessageForSend(row.id, row.updated_at)
       if (!claimed) {
         results.push({ investorId: investor.id, name: investor.display_name, status: 'duplicate_claim_blocked' })
         continue
+      }
+
+      let laneAttemptReservation
+      try {
+        laneAttemptReservation = await reserveAutomaticEmailLaneAttempt({
+          lane: 'investor',
+          messageId: claimed.id,
+          claimId: `${claimed.id}:${claimed.updated_at}`,
+          dailyLimit,
+        })
+      } catch {
+        const restored = await restoreInvestorOutreachMessageAfterQuotaDenial(
+          claimed.id,
+          claimed.updated_at
+        ).catch(() => null)
+        results.push({
+          investorId: investor.id,
+          name: investor.display_name,
+          status: restored
+            ? 'automatic_email_attempt_quota_unavailable'
+            : 'automatic_email_attempt_quota_restore_failed',
+        })
+        break
+      }
+      if (!laneAttemptReservation.allowed) {
+        const restored = await restoreInvestorOutreachMessageAfterQuotaDenial(
+          claimed.id,
+          claimed.updated_at
+        ).catch(() => null)
+        results.push({
+          investorId: investor.id,
+          name: investor.display_name,
+          status: restored
+            ? laneAttemptReservation.reason || 'automatic_email_attempt_quota_denied'
+            : 'automatic_email_attempt_quota_restore_failed',
+        })
+        break
       }
 
       const sent = await sendInvestorOutreachEmail({ investor, message: claimed })
@@ -319,15 +940,31 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
       results.push({ investorId: investor.id, name: investor.display_name, status: 'accepted' })
     }
 
-    await finishInvestorAutomationRun(run.id, { status: 'completed', resultCount: results.length })
+    const operationalFailureCount = results.filter((result) =>
+      result.status === 'failed' ||
+      (result.status.startsWith('automatic_email_') && result.status !== 'automatic_email_daily_attempt_quota_exhausted')
+    ).length
+    await finishInvestorAutomationRun(run.id, {
+      status: operationalFailureCount === 0 ? 'completed' : 'failed',
+      resultCount: results.length,
+      errorMessage: operationalFailureCount > 0
+        ? `${operationalFailureCount} investor send operation(s) failed.`
+        : null,
+    })
     return {
-      ok: true,
+      ok: operationalFailureCount === 0,
+      operationalFailureCount,
       count: results.length,
       results,
       autoSendEnabled: autoSend,
       autoSendRequested,
       deliveryCircuitBreaker,
       replyCapture,
+      mailingAddressConfigured,
+      dailyLimit,
+      sentLast24h: sentLast24h || 0,
+      remainingDailyCapacity,
+      sendBlockedReasons,
       effectiveLimit,
     }
   } catch (error) {
