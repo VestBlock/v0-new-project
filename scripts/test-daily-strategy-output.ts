@@ -8,6 +8,7 @@ import {
   getDailyStrategyOutputLane,
   totalDailyStrategyOutputByGroup,
 } from '@/lib/outreach/dailyStrategyOutputCore'
+import { normalizeStrategyLeadMemberships } from '@/lib/outreach/strategyMembershipShape'
 
 const expectedSellerKeys = [
   'preforeclosure-equity',
@@ -116,5 +117,14 @@ assert.equal(getDailyStrategyOutputLane('ai_receptionist')?.group, 'business')
 assert.equal(getDailyStrategyOutputLane('missing-strategy'), null)
 assert.equal(defaultPlan.byKey['preforeclosure-equity'], defaultPlan.allocations[0].target)
 assert.equal(defaultPlan.byKey.investors, defaultPlan.allocations.at(-1)?.target)
+
+const singularMembership = { strategy_key: 'tax-code-stack', created_at: '2026-09-15T18:00:00.000Z' }
+assert.deepEqual(
+  normalizeStrategyLeadMemberships(singularMembership),
+  [singularMembership],
+  'a unique PostgREST relationship is embedded as an object and must remain iterable'
+)
+assert.deepEqual(normalizeStrategyLeadMemberships([singularMembership]), [singularMembership])
+assert.deepEqual(normalizeStrategyLeadMemberships(null), [])
 
 console.log('Daily strategy output allocation tests passed.')

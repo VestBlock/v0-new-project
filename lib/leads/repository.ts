@@ -18,6 +18,10 @@ import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/emai
 import { assessHunterSendVerificationCache } from '@/lib/outreach/hunterSendVerificationCore'
 import { hasActionableReplyEvidence, isMessageGenerationProtected } from '@/lib/outreach/messageState'
 import {
+  normalizeStrategyLeadMemberships,
+  type StrategyLeadMembershipShape,
+} from '@/lib/outreach/strategyMembershipShape'
+import {
   chicagoBusinessDate,
   DAILY_STRATEGY_OUTPUT_LANES,
   getDailyStrategyOutputLane,
@@ -1027,9 +1031,12 @@ export async function listEmailOutreachForSendQueue(
 
   const strategyForRow = (row: OutreachMessageRecord & { leads: LeadRecord | null }) => {
     const lead = row.leads as (LeadRecord & {
-      strategy_lead_memberships?: Array<{ strategy_key?: string | null; created_at?: string | null }>
+      strategy_lead_memberships?:
+        | StrategyLeadMembershipShape
+        | StrategyLeadMembershipShape[]
+        | null
     }) | null
-    const memberships = [...(lead?.strategy_lead_memberships || [])].sort(
+    const memberships = normalizeStrategyLeadMemberships(lead?.strategy_lead_memberships).sort(
       (left, right) => Date.parse(String(right.created_at || '')) - Date.parse(String(left.created_at || ''))
     )
     const candidates = [
