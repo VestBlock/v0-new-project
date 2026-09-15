@@ -100,8 +100,20 @@ assert.deepEqual(
     configuredDailyLimit: 100,
     configuredPerRunLimit: 20,
   }),
-  { dailyLimit: 5, perRunLimit: 3 },
-  'Recovery-stage verification must remain bounded to live governor capacity'
+  { dailyLimit: 100, perRunLimit: 20 },
+  'An explicit replacement budget may inspect more candidates than send slots without raising provider capacity'
+)
+assert.deepEqual(
+  deriveHunterSendVerificationLimits({
+    effectiveDailyCap: 5,
+    requestedSendLimit: 4,
+    globalRemaining: 0,
+    leadLaneRemaining: 4,
+    configuredDailyLimit: 100,
+    configuredPerRunLimit: 20,
+  }),
+  { dailyLimit: 0, perRunLimit: 0 },
+  'Hunter spend must remain closed when no provider-send opportunity exists'
 )
 assert.deepEqual(
   deriveHunterSendVerificationLimits({

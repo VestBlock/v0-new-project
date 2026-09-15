@@ -107,7 +107,11 @@ for (const [file, listFunction, claimFunction, downgradeFunction] of [
     new RegExp(`${listFunction}\\(hunterVerificationReplacementScanLimit\\(effectiveLimit\\)\\)`),
     `${file} must scan a bounded replacement pool`
   )
-  assert.match(automation, /allowNetwork: hunterVerificationAttempts < effectiveLimit/)
+  assert.match(
+    automation,
+    /allowNetwork:\s*hunterVerificationAttempts < hunterVerificationReplacementScanLimit\(effectiveLimit\)/,
+    `${file} must use a bounded replacement-verification pool instead of one lookup per send slot`
+  )
   assert.match(automation, new RegExp(`${downgradeFunction}\\(row\\.id`))
   assert.match(automation, /shouldQuarantineHunterVerificationStatus\(hunterPreflight\.status\)/)
   assert.match(automation, /if \(hunterPreflight\.deferredScope !== 'record'\) break/)

@@ -342,7 +342,8 @@ export async function runDailyLenderSend(
         provider: outboundProvider,
         isFollowup: row.channel === 'email_followup',
         deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
-        allowNetwork: hunterVerificationAttempts < effectiveLimit,
+        allowNetwork:
+          hunterVerificationAttempts < hunterVerificationReplacementScanLimit(effectiveLimit),
       })
       if (hunterPreflight.creditReserved) hunterVerificationAttempts += 1
       if (hunterPreflight.cache) {

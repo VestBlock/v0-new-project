@@ -852,7 +852,8 @@ export async function runDailyInvestorSend(limit?: number, options: { dryRun?: b
         provider: outboundProvider,
         isFollowup: row.step_number > 1,
         deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
-        allowNetwork: hunterVerificationAttempts < effectiveLimit,
+        allowNetwork:
+          hunterVerificationAttempts < hunterVerificationReplacementScanLimit(effectiveLimit),
       })
       if (hunterPreflight.creditReserved) hunterVerificationAttempts += 1
       if (hunterPreflight.cache) {

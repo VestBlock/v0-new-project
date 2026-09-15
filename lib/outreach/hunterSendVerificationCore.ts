@@ -112,10 +112,6 @@ export function deriveHunterSendVerificationLimits(input: {
     HUNTER_SEND_VERIFICATION_DAILY_HARD_LIMIT,
     Math.max(0, Math.floor(input.effectiveDailyCap))
   )
-  const requestedDailyLimit = Number.isFinite(input.configuredDailyLimit)
-    ? Math.max(0, Math.floor(Number(input.configuredDailyLimit)))
-    : effectiveDailyCap
-  const dailyLimit = Math.min(effectiveDailyCap, requestedDailyLimit)
   const sendOpportunity = Math.max(
     0,
     Math.min(
@@ -124,13 +120,28 @@ export function deriveHunterSendVerificationLimits(input: {
       Math.floor(input.leadLaneRemaining)
     )
   )
+  if (effectiveDailyCap < 1 || sendOpportunity < 1) {
+    return { dailyLimit: 0, perRunLimit: 0 }
+  }
+
+  // Verification is a candidate-quality budget, not a provider-send budget.
+  // A failed/ambiguous address must not consume the only lookup available for
+  // a send slot. Explicit configuration may fund a bounded replacement pool;
+  // the independent delivery governor still caps actual provider attempts.
+  const requestedDailyLimit = Number.isFinite(input.configuredDailyLimit)
+    ? Math.max(0, Math.floor(Number(input.configuredDailyLimit)))
+    : effectiveDailyCap
+  const dailyLimit = Math.min(
+    HUNTER_SEND_VERIFICATION_DAILY_HARD_LIMIT,
+    requestedDailyLimit
+  )
   const requestedPerRunLimit = Number.isFinite(input.configuredPerRunLimit)
     ? Math.max(0, Math.floor(Number(input.configuredPerRunLimit)))
     : sendOpportunity
 
   return {
     dailyLimit,
-    perRunLimit: Math.min(dailyLimit, sendOpportunity, requestedPerRunLimit),
+    perRunLimit: Math.min(dailyLimit, requestedPerRunLimit),
   }
 }
 
