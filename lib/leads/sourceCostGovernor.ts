@@ -1,10 +1,13 @@
 import 'server-only'
 
+import { getPaidSourceDailyLimit } from './paidSourceBudgetCore'
+
 export type SourceCostProvider =
   | 'dealmachine'
   | 'homeharvest'
   | 'google_places'
   | 'outscraper'
+  | 'apify'
   | 'instantly'
   | 'public_records'
   | 'manual_csv'
@@ -86,6 +89,7 @@ const DEFAULT_POLICIES: Record<SourceCostProvider, SourcePolicy> = {
     costTier: 'paid',
     dailyLimit: 3,
     cooldownHours: 24,
+    requiresPaidApproval: true,
     requiresApiKey: 'GOOGLE_PLACES_API_KEY',
     envEnableFlag: 'LEADS_ENABLE_GOOGLE_PLACES',
     defaultEnabled: false,
@@ -99,6 +103,17 @@ const DEFAULT_POLICIES: Record<SourceCostProvider, SourcePolicy> = {
     requiresPaidApproval: true,
     requiresApiKey: 'OUTSCRAPER_API_KEY',
     envEnableFlag: 'LEADS_ENABLE_OUTSCRAPER',
+    defaultEnabled: false,
+  },
+  apify: {
+    provider: 'apify',
+    label: 'Apify Yelp',
+    costTier: 'paid',
+    dailyLimit: 4,
+    cooldownHours: 0,
+    requiresPaidApproval: true,
+    requiresApiKey: 'APIFY_TOKEN',
+    envEnableFlag: 'LEADS_ENABLE_APIFY_YELP',
     defaultEnabled: false,
   },
   instantly: {
@@ -159,11 +174,27 @@ export function isPaidScrapingApproved(env: EnvShape = process.env) {
   return envBool(env, 'ALLOW_PAID_SCRAPING', false)
 }
 
+export function isGooglePlacesApproved(env: EnvShape = process.env) {
+  return (
+    isPaidScrapingApproved(env) &&
+    envBool(env, 'LEADS_ENABLE_GOOGLE_PLACES', false) &&
+    Boolean(env.GOOGLE_PLACES_API_KEY?.trim())
+  )
+}
+
 export function isOutscraperApproved(env: EnvShape = process.env) {
   return (
     isPaidScrapingApproved(env) &&
     envBool(env, 'LEADS_ENABLE_OUTSCRAPER', false) &&
     Boolean(env.OUTSCRAPER_API_KEY?.trim())
+  )
+}
+
+export function isApifyApproved(env: EnvShape = process.env) {
+  return (
+    isPaidScrapingApproved(env) &&
+    envBool(env, 'LEADS_ENABLE_APIFY_YELP', false) &&
+    Boolean(env.APIFY_TOKEN?.trim())
   )
 }
 
@@ -180,7 +211,10 @@ export function evaluateSourceCost(provider: SourceCostProvider, input: SourceCo
   const base = DEFAULT_POLICIES[provider]
   const policy = { ...base, ...(input.policy || {}) }
   const now = input.now || new Date()
-  const dailyLimit = envInt(env, `SOURCE_LIMIT_${provider.toUpperCase()}_DAILY`, policy.dailyLimit)
+  const dailyLimit =
+    provider === 'google_places' || provider === 'outscraper' || provider === 'apify'
+      ? getPaidSourceDailyLimit(provider, env)
+      : envInt(env, `SOURCE_LIMIT_${provider.toUpperCase()}_DAILY`, policy.dailyLimit)
   const usedToday = Math.max(0, Math.round(input.usedToday || 0))
   const lastRunAt = input.lastRunAt || null
   const cooldownHours = envInt(env, `SOURCE_COOLDOWN_${provider.toUpperCase()}_HOURS`, policy.cooldownHours)
@@ -196,8 +230,12 @@ export function evaluateSourceCost(provider: SourceCostProvider, input: SourceCo
       canRun: false,
       costTier: policy.costTier,
       reason:
-        provider === 'outscraper'
-            ? 'Paid scraper disabled. Enable only with funded credits, ALLOW_PAID_SCRAPING=true, LEADS_ENABLE_OUTSCRAPER=true, and a daily source limit.'
+        provider === 'google_places' || provider === 'outscraper' || provider === 'apify'
+          ? provider === 'google_places'
+            ? 'Paid search disabled. Enable only with funded billing, ALLOW_PAID_SCRAPING=true, LEADS_ENABLE_GOOGLE_PLACES=true, and a daily source limit.'
+            : provider === 'outscraper'
+              ? 'Paid scraper disabled. Enable only with funded credits, ALLOW_PAID_SCRAPING=true, LEADS_ENABLE_OUTSCRAPER=true, and a daily source limit.'
+              : 'Paid scraper disabled. Enable only with funded credits, ALLOW_PAID_SCRAPING=true, LEADS_ENABLE_APIFY_YELP=true, and a daily source limit.'
           : 'Source disabled by environment policy.',
       dailyLimit,
       usedToday,
@@ -231,6 +269,22 @@ export function evaluateSourceCost(provider: SourceCostProvider, input: SourceCo
       canRun: false,
       costTier: policy.costTier,
       reason: `${policy.requiresApiKey} is not configured.`,
+      dailyLimit,
+      usedToday,
+      cooldownHours,
+      lastRunAt,
+      nextAllowedAt: null,
+    }
+  }
+
+  if (policy.costTier === 'paid' && dailyLimit === 0) {
+    return {
+      provider,
+      label: policy.label,
+      status: 'blocked',
+      canRun: false,
+      costTier: policy.costTier,
+      reason: 'Paid source daily budget is configured to zero.',
       dailyLimit,
       usedToday,
       cooldownHours,
@@ -294,6 +348,7 @@ function sourceKeyMatches(row: Record<string, any>, provider: SourceCostProvider
   if (provider === 'homeharvest') return source.includes('homeharvest') || source.includes('stale_listing')
   if (provider === 'google_places') return source.includes('google_places')
   if (provider === 'outscraper') return source.includes('outscraper')
+  if (provider === 'apify') return source.includes('apify')
   if (provider === 'instantly') return source.includes('instantly')
   if (provider === 'public_records') return /code|tax|probate|preforeclosure|vacant|accela|cincinnati|milwaukee/.test(source)
   return source.includes('csv')
@@ -328,6 +383,7 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
     'public_records',
     'google_places',
     'outscraper',
+    'apify',
     'instantly',
     'manual_csv',
   ]

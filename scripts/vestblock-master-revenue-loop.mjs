@@ -4,14 +4,15 @@
  * VestBlock master revenue loop.
  *
  * This is the source -> stack -> enrich -> outreach -> buyer/dispo -> report
- * runner. It intentionally defaults to preview mode; live seller outreach and
- * paid discovery only happen when the caller passes --send / --run-paid.
+ * runner. It intentionally defaults to preview mode. Paid discovery remains
+ * explicit; live outreach now runs only through outreach:dispatch:live.
  */
 
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { loadDealMachineStrategyLearning } from "./lib/dealmachine-strategy-learning.mjs"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const ROOT = process.cwd()
 const args = process.argv.slice(2)
@@ -185,13 +186,14 @@ function renderMarkdown(summary) {
   lines.push("Preview:")
   lines.push("`npm run vestblock:master-loop`")
   lines.push("")
-  lines.push("Live seller outreach on the Pro:")
-  lines.push("`npm run vestblock:master-loop:send -- --daily-cap=500 --run-paid`")
+  lines.push("Governed live outreach:")
+  lines.push("`pnpm run outreach:dispatch:live`")
   return `${lines.join("\n")}\n`
 }
 
 async function main() {
   const send = hasFlag("--send")
+  quarantineLegacyDirectLiveSend({ requested: send, entry: "vestblock-master-revenue-loop" })
   const runPaid = hasFlag("--run-paid")
   const dailyCap = intArg("--daily-cap", Number.parseInt(process.env.SELLER_OUTREACH_DAILY_CAP || "500", 10), 1000)
   const sellerMarkets = getArg(

@@ -24,7 +24,9 @@ const dealmachineTargetLeads = getArg('dealmachine-target-leads', '1000')
 const dealmachineMaxBuilds = getArg('dealmachine-max-builds', String(ALL_DEALMACHINE_STRATEGIES.length))
 const dealmachineStrategies = getArg('dealmachine-strategies', ALL_DEALMACHINE_STRATEGIES.join('|'))
 const dealmachineMode = getArg('dealmachine-mode', process.env.DEALMACHINE_WEB_TOKEN ? 'token-rebuilder' : 'website-builder')
-const runOutscraper = !hasFlag('skip-outscraper') && !hasFlag('verify-only')
+// Legacy Outscraper execution is quarantined. This opt-in produces provider-free
+// preview plans only; paid discovery must use the governed application paths.
+const runOutscraper = hasFlag('outscraper-preview') && !hasFlag('verify-only')
 const runSellers = !hasFlag('skip-sellers') && !hasFlag('verify-only')
 const runDealMachine = hasFlag('dealmachine') && !hasFlag('verify-only')
 
@@ -33,13 +35,6 @@ function run(label, command, commandArgs, options = {}) {
   console.log([command, ...commandArgs].join(' '))
   const result = spawnSync(command, commandArgs, { cwd: ROOT, stdio: 'inherit', env: process.env, ...options })
   return { label, ok: result.status === 0, status: result.status, signal: result.signal }
-}
-function latestFile(dir, pattern) {
-  if (!fs.existsSync(dir)) return ''
-  return fs.readdirSync(dir)
-    .filter((name) => pattern.test(name))
-    .map((name) => path.join(dir, name))
-    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0] || ''
 }
 function ensureHomeHarvest() {
   const python = path.join(ROOT, '.venv-homeharvest', 'bin', 'python')
@@ -92,19 +87,21 @@ async function main() {
 
   if (runOutscraper) {
     for (const lane of outscraperLanes) {
-      steps.push(run(`OutScraper ${lane}`, 'node', [
+      steps.push(run(`OutScraper preview ${lane}`, 'node', [
         '--env-file=.env.local',
         'scripts/outscraper-real-estate-discovery.mjs',
-        '--run',
         `--lane=${lane}`,
         `--market=${markets}`,
         '--max-niches=5',
         '--limit-per-niche=2',
         '--timeout-ms=60000',
       ]))
-      const csv = latestFile(path.join(ROOT, 'artifacts', 'outscraper', DATE, lane), new RegExp(`^outscraper-${lane}-.*\\.csv$`, 'i'))
-      if (csv) steps.push(run(`Import ${lane} to command center`, 'node', ['--env-file=.env.local', 'scripts/import-outsourced-real-estate-leads.mjs', `--input=${csv}`, `--lane=${lane}`]))
-      else steps.push({ label: `Import ${lane} to command center`, ok: false, error: 'No OutScraper CSV found.' })
+      steps.push({
+        label: `Import ${lane} to command center`,
+        ok: true,
+        skipped: true,
+        reason: 'outscraper_preview_does_not_import_or_spend',
+      })
     }
   }
 

@@ -1,6 +1,7 @@
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
 import { getLeadOutboundPauseReason } from '@/lib/leads/outboundEligibility'
 import { getEmailQualityIssue } from '@/lib/outreach/email-quality'
+import { configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
 
 export type OutreachV2SegmentKey =
   | 'dealvault_records'
@@ -275,7 +276,7 @@ export function isOutreachV2Enabled() {
 }
 
 export function getOutreachV2DailyTarget() {
-  return envInt('OUTREACH_V2_DAILY_QUALITY_TARGET', envInt('LEADS_TARGET_EMAILS_PER_DAY', 500))
+  return configuredDailyStrategyOutputTarget()
 }
 
 function textFromUnknown(value: unknown) {

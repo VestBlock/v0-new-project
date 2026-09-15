@@ -1,4 +1,3 @@
-import { enrichContactFromHunter } from '@/lib/email/hunter'
 import { decodeHtmlEntities, safeUrl } from '@/lib/leads/utils'
 
 type EmailCandidate = {
@@ -319,44 +318,5 @@ export async function enrichLeadEmailFromWebsite(website?: string | null): Promi
   }
 
   const publicResult = await runPublicWebsiteEmailEnrichment(normalized)
-  if (publicResult.primaryEmail) return publicResult
-
-  const hunterResult = await enrichContactFromHunter({ website: normalized, preferGenericInbox: true })
-  const hunterNote = hunterResult.note
-  if (!hunterResult.primaryCandidate) {
-    return {
-      ...publicResult,
-      note: hunterResult.status === 'skipped' ? publicResult.note : `${publicResult.note} ${hunterNote}`.trim(),
-    }
-  }
-
-  const hunterCandidates = hunterResult.candidates.slice(0, 6).map((candidate) => ({
-    email: candidate.email,
-    score: candidate.score,
-    sourceUrl: candidate.sourceUrls[0] || `hunter:${hunterResult.domain || 'unknown'}`,
-    reason: 'hunter_domain_search',
-  }))
-
-  const primary = hunterCandidates[0] || null
-  const confidence =
-    !primary ? 'none' : primary.score >= 18 ? 'high' : primary.score >= 10 ? 'medium' : 'low'
-
-  return {
-    primaryEmail: primary?.email || null,
-    candidates: [...publicResult.candidates, ...hunterCandidates].slice(0, 6),
-    sourceUrls: Array.from(
-      new Set([
-        ...publicResult.sourceUrls,
-        ...hunterResult.candidates.flatMap((candidate) => candidate.sourceUrls),
-      ])
-    ),
-    attemptedUrls: [...publicResult.attemptedUrls, `hunter:${hunterResult.domain || 'unknown'}`],
-    contactPageUrls: publicResult.contactPageUrls,
-    contactFormUrls: publicResult.contactFormUrls,
-    hasContactForm: publicResult.hasContactForm,
-    confidence,
-    status: 'found',
-    provider: publicResult.candidates.length ? 'public_website_plus_hunter' : 'hunter',
-    note: `${publicResult.note} ${hunterResult.note}`.trim(),
-  }
+  return publicResult
 }

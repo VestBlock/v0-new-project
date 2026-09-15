@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 
 import { loadSentLedgerSummary } from '../lib/leads/outreach-v4/sent-ledger.mjs'
 import { getEmailDeliverabilityIssue } from './shared-email-quality.mjs'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const MANUAL_ONLY_VERTICALS = new Set(['funding_prep', 'distressed_house'])
 const REQUIRED_OPTOUT = 'reply no and i will not follow up'
@@ -319,6 +320,7 @@ async function main() {
   const dailyCap = intArg('--daily-cap', Number.parseInt(getEnv('OUTREACH_V4_DAILY_SEND_LIMIT') || '500', 10), 500)
   const perDomainLimit = intArg('--per-domain-limit', 1, 5)
   const send = hasFlag('--send')
+  quarantineLegacyDirectLiveSend({ requested: send, entry: 'outreach-v4-send-approved' })
   const liveSendConfirm = getArgValue('--confirm-live-send', getEnv('OUTREACH_V4_LIVE_SEND_CONFIRM'))
   const artifactDir = path.join(process.cwd(), 'artifacts', 'outreach-v4', date)
   const approvedPath = path.join(artifactDir, 'approved-drafts.json')

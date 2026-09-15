@@ -7,12 +7,35 @@ type ProviderAvailability = {
 
 type ProviderEnvironment = Readonly<Record<string, string | undefined>>
 
+const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
+
+export function getOutboundSenderForProvider(
+  provider: OutboundEmailProvider,
+  env: ProviderEnvironment = process.env
+) {
+  const configured = provider === 'resend'
+    ? env.RESEND_FROM_EMAIL ||
+      env.RESEND_EMAIL ||
+      env.OUTREACH_FROM_EMAIL ||
+      env.FROM_EMAIL
+    : env.OUTREACH_FROM_EMAIL ||
+      env.GOOGLE_WORKSPACE_SENDER ||
+      env.FROM_EMAIL ||
+      env.RESEND_EMAIL ||
+      env.RESEND_FROM_EMAIL
+
+  return String(configured || DEFAULT_OUTREACH_SENDER).trim()
+}
+
 export function getOutboundProviderAvailability(
   env: ProviderEnvironment = process.env
 ): ProviderAvailability {
   return {
     gmail: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN),
-    resend: Boolean(env.RESEND_API_KEY && env.FROM_EMAIL),
+    resend: Boolean(
+      env.RESEND_API_KEY &&
+      (env.RESEND_FROM_EMAIL || env.RESEND_EMAIL || env.OUTREACH_FROM_EMAIL || env.FROM_EMAIL)
+    ),
   }
 }
 
@@ -45,4 +68,8 @@ export function shouldPreferResend(availability: ProviderAvailability) {
 
 export function getConfiguredOutboundProvider(env: ProviderEnvironment = process.env) {
   return getPreferredOutboundProvider(getOutboundProviderAvailability(env), env)
+}
+
+export function getConfiguredOutboundSender(env: ProviderEnvironment = process.env) {
+  return getOutboundSenderForProvider(getConfiguredOutboundProvider(env), env).toLowerCase()
 }

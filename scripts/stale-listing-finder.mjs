@@ -12,19 +12,19 @@
  *      listing agent can take to their seller. Listing agents are business
  *      contacts — cleaner compliance posture than cold homeowner contact.
  *
- * DRY RUN BY DEFAULT. Nothing sends unless --send is passed.
+ * PREVIEW/INGEST ONLY. Live delivery runs through the platform governor.
  *
  * USAGE:
  *   node --env-file=.env.local scripts/stale-listing-finder.mjs --input-csv=data/stale-listings/manual-export.csv
- *   node --env-file=.env.local scripts/stale-listing-finder.mjs --input-csv=data/stale-listings/manual-export.csv --send
+ *   pnpm run outreach:dispatch:live
  *   node --env-file=.env.local scripts/stale-listing-finder.mjs --source=homeharvest --offer-mode=lowball --market="Milwaukee, WI|Toledo, OH" --min-dom=30 --limit=100
  *
  * ENV:
  *   OUTSCRAPER_API_KEY   optional, only used with --source=outscraper
  *   ANALYZER_URL         analyzer base URL (default https://vestblock.io)
- *   RESEND_API_KEY       required for --send
+ *   RESEND_API_KEY       used by the governed platform delivery path
  *   FROM_EMAIL           sender (default acquisitions@vestblock.io)
- *   OUTREACH_MAILING_ADDRESS  required for --send (CAN-SPAM)
+ *   OUTREACH_MAILING_ADDRESS  required by governed delivery (CAN-SPAM)
  *
  * OUTPUT:
  *   data/stale-listings/<market>-<date>.csv          harvest + analyzer numbers
@@ -39,6 +39,7 @@ import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -832,6 +833,12 @@ function selectQualifiedListings(scoredListings, alreadySent) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  if (SOURCE === "outscraper") {
+    throw new Error(
+      "legacy_stale_listing_outscraper_quarantined: This standalone finder cannot spend Outscraper credits. Use the governed production discovery paths, which reserve bounded Chicago-day work units before every request."
+    )
+  }
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "stale-listing-finder" })
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
 

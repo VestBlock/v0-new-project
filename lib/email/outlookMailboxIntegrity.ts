@@ -27,6 +27,8 @@ export type OutboundCorrelation = {
   leadId?: string | null
   strategyKey?: string | null
   outboundMessageId?: string | null
+  provider?: string | null
+  providerMessageId?: string | null
   occurredAt?: string | null
 }
 
@@ -36,8 +38,17 @@ export type OutlookOutboundEvidence = {
   strategyKey: string | null
   recipient: string | null
   outboundMessageId: string | null
+  provider?: string | null
+  providerMessageId?: string | null
   occurredAt: string | null
   metadata: Record<string, unknown>
+}
+
+export type OutlookSenderAuthentication = {
+  aligned: boolean
+  method: 'dmarc' | 'dkim' | 'spf' | null
+  status: 'aligned' | 'missing' | 'failed_or_unaligned'
+  fromDomain: string | null
 }
 
 export const OUTLOOK_REPLY_WINDOW_DAYS = 120
@@ -59,6 +70,82 @@ function headerValue(message: OutlookInboundMessage, name: string) {
   return cleanText(
     message.internetMessageHeaders?.find((header) => cleanText(header.name).toLowerCase() === target)?.value
   )
+}
+
+function headerValues(message: OutlookInboundMessage, names: string[]) {
+  const targets = new Set(names.map((name) => name.toLowerCase()))
+  return (message.internetMessageHeaders || [])
+    .filter((header) => targets.has(cleanText(header.name).toLowerCase()))
+    .map((header) => cleanText(header.value))
+    .filter(Boolean)
+}
+
+function emailDomain(value: string | null | undefined) {
+  const normalized = cleanText(value)
+    .replace(/^mailto:/i, '')
+    .replace(/^<|>$/g, '')
+    .replace(/[;,].*$/, '')
+    .toLowerCase()
+  const domain = normalized.includes('@') ? normalized.slice(normalized.lastIndexOf('@') + 1) : normalized
+  return /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(domain) && domain.includes('.')
+    ? domain
+    : null
+}
+
+function domainsAlign(fromDomain: string, authenticatedDomain: string) {
+  return (
+    fromDomain === authenticatedDomain ||
+    fromDomain.endsWith(`.${authenticatedDomain}`) ||
+    authenticatedDomain.endsWith(`.${fromDomain}`)
+  )
+}
+
+/**
+ * Recipient-only correlation is convenient but the visible From header is not
+ * proof of identity. Authentication-Results is retained as diagnostic evidence
+ * only: Graph does not identify which duplicate header was stamped by the
+ * receiver, so it cannot safely authorize a state change by itself. Exact
+ * reply/thread evidence is evaluated separately.
+ */
+export function evaluateOutlookSenderAuthentication(
+  message: OutlookInboundMessage,
+  fromEmail: string | null | undefined
+): OutlookSenderAuthentication {
+  const fromDomain = emailDomain(fromEmail)
+  // Only consume the receiver-stamped Authentication-Results field. An
+  // ARC-Authentication-Results value is not authoritative unless the ARC
+  // chain itself has been independently validated, which this boundary does
+  // not attempt to do.
+  const authenticationHeaders = headerValues(message, ['authentication-results'])
+  if (!fromDomain || authenticationHeaders.length === 0) {
+    return { aligned: false, method: null, status: 'missing', fromDomain }
+  }
+
+  const methodProperties = {
+    dmarc: 'header\\.from',
+    dkim: 'header\\.d',
+    spf: 'smtp\\.mailfrom',
+  } as const
+  for (const method of ['dmarc', 'dkim', 'spf'] as const) {
+    const property = methodProperties[method]
+    for (const value of authenticationHeaders) {
+      const result = new RegExp(
+        `(?:^|;)\\s*${method}\\s*=\\s*pass\\b([^;]*)`,
+        'i'
+      ).exec(value)
+      if (!result) continue
+      const identity = new RegExp(
+        `\\b${property}\\s*=\\s*<?([^\\s;>]+)>?`,
+        'i'
+      ).exec(result[1] || '')
+      const authenticatedDomain = emailDomain(identity?.[1])
+      if (authenticatedDomain && domainsAlign(fromDomain, authenticatedDomain)) {
+        return { aligned: true, method, status: 'aligned', fromDomain }
+      }
+    }
+  }
+
+  return { aligned: false, method: null, status: 'failed_or_unaligned', fromDomain }
 }
 
 function metadataString(metadata: Record<string, unknown>, keys: string[]) {
@@ -124,6 +211,13 @@ function evidenceTimestamp(item: OutlookOutboundEvidence) {
   )
 }
 
+function evidenceProvider(item: OutlookOutboundEvidence) {
+  return (
+    cleanText(item.provider) ||
+    cleanText(metadataString(item.metadata, ['provider', 'sendProvider', 'send_provider']))
+  ).toLowerCase() || null
+}
+
 function eligibleEvidence(
   message: OutlookInboundMessage,
   evidence: OutlookOutboundEvidence[],
@@ -145,15 +239,18 @@ function eligibleEvidence(
 function correlationFromEvidence(
   item: OutlookOutboundEvidence,
   matchType: NonNullable<OutboundCorrelation['matchType']>,
-  occurredAt: string,
-  outboundMessageId?: string | null
+  occurredAt: string
 ): OutboundCorrelation {
   return {
     matched: true,
     matchType,
     leadId: item.leadId,
     strategyKey: item.strategyKey,
-    outboundMessageId: outboundMessageId || item.outboundMessageId,
+    outboundMessageId: item.outboundMessageId,
+    provider: evidenceProvider(item),
+    providerMessageId:
+      item.providerMessageId ||
+      metadataString(item.metadata, ['providerMessageId', 'provider_message_id']),
     occurredAt,
   }
 }
@@ -212,6 +309,7 @@ export function correlateOutlookInbound(
   for (const { item, occurredAt } of eligible) {
     const messageIdentifiers = [
       item.outboundMessageId,
+      item.providerMessageId,
       metadataString(item.metadata, ['providerMessageId', 'provider_message_id']),
       metadataString(item.metadata, ['internetMessageId', 'internet_message_id']),
       metadataString(item.metadata, ['messageId', 'message_id']),
@@ -220,7 +318,7 @@ export function correlateOutlookInbound(
       references.some((reference) => identifiersMatch(reference, identifier))
     )
     if (matchedIdentifier) {
-      return correlationFromEvidence(item, 'message_reference', occurredAt, matchedIdentifier)
+      return correlationFromEvidence(item, 'message_reference', occurredAt)
     }
   }
 
@@ -241,15 +339,22 @@ export function correlateOutlookInbound(
 
   const recipientMatch = recipientMatches[0]
   if (recipientMatch) {
-    return correlationFromEvidence(
-      recipientMatch.item,
-      'recipient',
-      recipientMatch.occurredAt,
-      metadataString(recipientMatch.item.metadata, ['providerMessageId', 'provider_message_id'])
-    )
+    return correlationFromEvidence(recipientMatch.item, 'recipient', recipientMatch.occurredAt)
   }
 
   return { matched: false }
+}
+
+export function requireOutlookThroughputProjectionUpdated(result: unknown) {
+  const outcome = result && typeof result === 'object'
+    ? result as { updated?: unknown; reason?: unknown }
+    : null
+  if (outcome?.updated === true) return outcome
+
+  const reason = typeof outcome?.reason === 'string' && outcome.reason.trim()
+    ? outcome.reason.trim()
+    : 'unknown_reason'
+  throw new Error(`Mailbox throughput reply projection was not updated: ${reason}`)
 }
 
 export function selectCorrelatedLead<
@@ -378,11 +483,26 @@ export function evaluateOutlookInboundIntegrity(input: {
   const { message, correlation, relationships } = input
   const bulkMail = isBulkMail(message)
   const explicitOptOut = directOptOutIntent(message, bulkMail)
+  const senderAuthentication = evaluateOutlookSenderAuthentication(
+    message,
+    message.from?.emailAddress?.address
+  )
+  const exactCorrelation = ['correlation_id', 'message_reference', 'thread'].includes(
+    String(correlation.matchType || '')
+  )
+  // A standard Authentication-Results header can be injected upstream and
+  // Graph does not expose a trusted-header provenance bit. Therefore a
+  // recipient-only match always stays in manual review, even when its reported
+  // authentication domains align. Only an exact VestBlock correlation,
+  // provider-message reference, or known thread can mutate CRM/suppression.
+  const stateChangeAuthorized = correlation.matched && exactCorrelation
+  const manualReviewRequired =
+    correlation.matched && !stateChangeAuthorized && correlation.matchType === 'recipient'
   let classification: MailboxClassification = 'low_priority'
 
   if (isKnownSpam(message)) classification = 'spam_noise'
   else if (isOperationalMessage(message)) classification = 'operational_alert'
-  else if (bulkMail || explicitOptOut || !correlation.matched) classification = 'low_priority'
+  else if (bulkMail || explicitOptOut || !stateChangeAuthorized) classification = 'low_priority'
   else if (
     relationships.buyer ||
     relationships.lender ||
@@ -395,12 +515,12 @@ export function evaluateOutlookInboundIntegrity(input: {
   else if (sellerLanguage(message)) classification = 'hot_seller_lead'
 
   const actionableReply =
-    correlation.matched &&
+    stateChangeAuthorized &&
     !bulkMail &&
     !explicitOptOut &&
     (classification === 'partner_reply' || classification === 'hot_seller_lead')
   const allowSuppression =
-    correlation.matched && explicitOptOut && !bulkMail && classification === 'low_priority'
+    stateChangeAuthorized && explicitOptOut && !bulkMail && classification === 'low_priority'
   const allowBuyerCreation =
     actionableReply &&
     classification === 'partner_reply' &&
@@ -414,6 +534,10 @@ export function evaluateOutlookInboundIntegrity(input: {
     explicitOptOut,
     bulkMail,
     correlated: correlation.matched,
+    exactCorrelation,
+    stateChangeAuthorized,
+    manualReviewRequired,
+    senderAuthentication,
     actionableReply,
     allowRelationshipMutation: actionableReply,
     allowBuyerCreation,

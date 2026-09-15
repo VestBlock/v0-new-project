@@ -1,11 +1,11 @@
 /**
  * VestBlock — Outscraper real estate discovery.
  *
- * Preview by default. Pass --run to spend Outscraper credits.
+ * Preview only. Legacy live execution is quarantined; production discovery must
+ * reserve the shared atomic source budget before it contacts Outscraper.
  *
  * Examples:
  *   node scripts/outscraper-real-estate-discovery.mjs --lane=fire-damage-builders --market="Kansas City,MO"
- *   node scripts/outscraper-real-estate-discovery.mjs --run --lane=land-developers --market="Toledo,OH|Milwaukee,WI" --limit-per-niche=3
  */
 
 import fs from 'node:fs'
@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 
 const args = process.argv.slice(2)
 const RUN = args.includes('--run')
+const LIVE_RUN_QUARANTINE_REASON = 'legacy_outscraper_live_run_quarantined'
 const OUTSCRAPER_API_BASE_URL = String(process.env.OUTSCRAPER_API_BASE_URL || 'https://api.datapipeplatform.cloud').replace(/\/+$/, '')
 
 function getArg(name, fallback = null) {
@@ -321,6 +322,12 @@ async function searchOutscraper({ apiKey, lane, market, niches, limitPerNiche, t
 }
 
 async function main() {
+  if (RUN) {
+    throw new Error(
+      `${LIVE_RUN_QUARANTINE_REASON}: This standalone script cannot spend Outscraper credits. Use the governed production discovery paths, which reserve bounded Chicago-day work units before every request.`
+    )
+  }
+
   const lane = getArg('lane', 'buyer-developer')
   const preset = LANE_PRESETS[lane]
   if (!preset) {
@@ -356,11 +363,11 @@ async function main() {
   console.log(`Markets:    ${markets.map((market) => market.label).join(' | ')}`)
   console.log(`Niches:     ${niches.length}`)
   console.log(`Per niche:  ${limitPerNiche}`)
-  console.log(`Mode:       ${RUN ? 'LIVE OUTSCRAPER RUN' : 'PREVIEW ONLY (no credits spent)'}`)
+  console.log('Mode:       PREVIEW ONLY (no credits spent)')
   console.log(`Artifacts:  ${outDir}`)
 
   if (!RUN) {
-    console.log('\nPreview complete. Re-run with --run to spend Outscraper credits.')
+    console.log('\nPreview complete. Paid execution is available only through governed production discovery.')
     return
   }
 

@@ -1,9 +1,13 @@
 import 'server-only'
 
+import { randomUUID } from 'node:crypto'
+
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { sendBuyerPacketEmail } from '@/lib/buyers/outbound'
 import {
+  claimBuyerPacketSend,
   getBuyerPacketById,
+  finalizeQueuedBuyerPacketSend,
   insertBuyerRelationshipEvent,
   updateBuyerMatchStatus,
   updateBuyerPacket,
@@ -11,8 +15,12 @@ import {
   upsertBuyerPacketSend,
   upsertDealPipelineItem,
 } from '@/lib/buyers/repository'
+import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 import type { BuyerPacketRecord, BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
+import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
 import { buildBuyerPacketFileName, buildPremiumBuyerPacketPdf } from '@/lib/property/buyerPacketPdf'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
@@ -40,9 +48,32 @@ const ACCEPTED_OR_FURTHER = new Set([
   'accepted',
   'sent',
   'delivered',
+  'delivery_delayed',
   'opened',
   'replied',
   'interested',
+  'rejected',
+  'bounced',
+  'complained',
+  'suppressed',
+])
+
+const PROVIDER_ACCEPTED_OR_FURTHER = new Set([
+  'accepted',
+  'sent',
+  'delivered',
+  'delivery_delayed',
+  'opened',
+  'replied',
+  'interested',
+])
+
+const FAILED_OR_CLOSED = new Set([
+  'failed',
+  'rejected',
+  'bounced',
+  'complained',
+  'suppressed',
 ])
 
 const CONFIRMED_BUYER_STAGES = new Set(['responded', 'reviewing', 'active_buyer'])
@@ -186,6 +217,11 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
   const filename = packet.file_name || buildBuyerPacketFileName(packet.property_address)
   const results: DeliveryResult[] = []
   let acceptedCount = 0
+  let deferredCount = 0
+  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
+    provider: getConfiguredOutboundProvider(),
+    allowControlledTrial: true,
+  })
 
   for (const match of rows as any[]) {
     const buyer = match.buyers as BuyerRecord
@@ -211,44 +247,76 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
       buyerName: buyer.contact_name || buyer.name,
       summary: packet.summary,
     })
-    const sendResult = await sendBuyerPacketEmail({
-      buyer,
-      messageId: `buyer-packet:${packet.id}:${buyer.id}`,
-      subject,
-      body,
-      attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
+    const messageId = `buyer-packet:${packet.id}:${buyer.id}`
+    const identity = buildOutboundSendIdentity({
+      scope: 'buyer-packet',
+      entityId: buyer.id,
+      messageId,
+      sequenceStep: 1,
     })
-    const acceptedAt = sendResult.ok ? new Date().toISOString() : null
-
-    await upsertBuyerPacketSend({
+    const claimToken = randomUUID()
+    const sendClaim = await claimBuyerPacketSend({
       buyerPacketId: packet.id,
       buyerId: buyer.id,
       buyerMatchId: match.id,
       buyerEmail: email,
       subject,
-      status: sendResult.ok ? 'accepted' : 'failed',
+      claimToken,
+      metadata: {
+        confidenceScore: match.confidence_score,
+        ...outboundIdentityMetadata(identity),
+      },
+    })
+    if (!sendClaim.claimed || !sendClaim.send) {
+      deferredCount += 1
+      results.push({
+        buyerId: buyer.id,
+        matchId: match.id,
+        ok: false,
+        status: 'deferred',
+        error: `Buyer packet send was not claimed: ${sendClaim.reason || 'unknown_claim_state'}.`,
+      })
+      continue
+    }
+    const queuedSend = sendClaim.send
+    const sendResult = await sendBuyerPacketEmail({
+      buyer,
+      messageId,
+      subject,
+      body,
+      attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
+      deliveryCircuitBreaker,
+    })
+    const acceptedAt = sendResult.ok ? new Date().toISOString() : null
+
+    await finalizeQueuedBuyerPacketSend(queuedSend.id, claimToken, {
+      status: sendResult.ok ? 'accepted' : sendResult.deferred ? 'queued' : 'failed',
       sendProvider: sendResult.provider,
       providerMessageId: sendResult.providerMessageId || null,
       sentAt: acceptedAt,
       sendError: sendResult.error || null,
       metadata: {
         confidenceScore: match.confidence_score,
+        ...outboundIdentityMetadata(identity),
         providerMessageId: sendResult.providerMessageId || null,
         providerAcceptedAt: acceptedAt,
         idempotencyKey: sendResult.idempotencyKey || null,
         correlationId: sendResult.correlationId || null,
+        acceptedRecipientHash: hashHunterVerificationEmail(email),
       },
     })
 
     if (!sendResult.ok) {
+      if (sendResult.deferred) deferredCount += 1
       results.push({
         buyerId: buyer.id,
         matchId: match.id,
         ok: false,
-        status: 'failed',
+        status: sendResult.deferred ? 'deferred' : 'failed',
         provider: sendResult.provider,
         error: sendResult.error,
       })
+      if (sendResult.deferred && sendResult.deferredScope !== 'record') break
       continue
     }
 
@@ -306,13 +374,42 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
     })
   }
 
-  const failedCount = results.filter((item) => !item.ok).length
-  const nextStatus = acceptedCount === 0 ? 'failed' : failedCount > 0 ? 'partial' : 'accepted'
+  const failedCount = results.filter((item) => !item.ok && item.status !== 'deferred').length
+  const { data: packetSends, error: packetSendsError } = await admin
+    .from('property_buyer_packet_sends')
+    .select('status,sent_at,send_claim_token,send_claim_expires_at')
+    .eq('buyer_packet_id', packet.id)
+  if (packetSendsError) throw packetSendsError
+  const aggregateAcceptedCount = (packetSends || []).filter((item) =>
+    PROVIDER_ACCEPTED_OR_FURTHER.has(String(item.status || ''))
+  ).length
+  const aggregateFailedCount = (packetSends || []).filter((item) =>
+    FAILED_OR_CLOSED.has(String(item.status || ''))
+  ).length
+  const aggregateQueuedCount = (packetSends || []).filter((item) => item.status === 'queued').length
+  const activeClaimCount = (packetSends || []).filter(
+    (item) =>
+      item.status === 'queued' &&
+      Boolean(item.send_claim_token) &&
+      Date.parse(String(item.send_claim_expires_at || '')) > Date.now()
+  ).length
+  const aggregateLastSentAt = (packetSends || [])
+    .map((item) => String(item.sent_at || ''))
+    .filter(Boolean)
+    .sort()
+    .at(-1) || packet.last_sent_at
+  let nextStatus: BuyerPacketRecord['status'] = 'ready'
+  if (aggregateAcceptedCount === 0 && activeClaimCount > 0) nextStatus = 'sending'
+  else if (aggregateAcceptedCount === 0 && aggregateFailedCount > 0 && aggregateQueuedCount === 0) {
+    nextStatus = 'failed'
+  } else if (aggregateAcceptedCount > 0 && (aggregateFailedCount > 0 || aggregateQueuedCount > 0)) {
+    nextStatus = 'partial'
+  } else if (aggregateAcceptedCount > 0) nextStatus = 'accepted'
   const updatedPacket = await updateBuyerPacket(packet.id, {
     status: nextStatus,
-    selected_buyer_count: rows.length,
-    sent_count: acceptedCount,
-    last_sent_at: acceptedCount > 0 ? new Date().toISOString() : packet.last_sent_at,
+    selected_buyer_count: Math.max(packet.selected_buyer_count || 0, allRows.length, (packetSends || []).length),
+    sent_count: aggregateAcceptedCount,
+    last_sent_at: aggregateLastSentAt,
   })
 
   await upsertDealPipelineItem({
@@ -323,18 +420,18 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
     city: packet.city,
     state: packet.state,
     zipCode: packet.zip_code,
-    currentStage: acceptedCount > 0 ? 'buyer_packet_sent' : 'analyzed',
-    priority: acceptedCount > 0 ? 'high' : 'normal',
+    currentStage: aggregateAcceptedCount > 0 ? 'buyer_packet_sent' : 'analyzed',
+    priority: aggregateAcceptedCount > 0 ? 'high' : 'normal',
     dealGrade: String((packet.opportunity_json as any)?.dealMath?.grade || ''),
     dealStrengthScore: numberOrNull((packet.opportunity_json as any)?.dealStrength?.score),
-    buyerPacketSentCount: acceptedCount,
+    buyerPacketSentCount: aggregateAcceptedCount,
     estimatedAssignmentFee: numberOrNull((packet.opportunity_json as any)?.dealMath?.assignmentFee),
     expectedProfit: numberOrNull((packet.opportunity_json as any)?.dealMath?.endBuyerProfit),
     nextAction:
-      acceptedCount > 0
+      aggregateAcceptedCount > 0
         ? 'Confirm provider delivery, watch buyer replies, and move interested buyers into assignment terms.'
         : 'Fix buyer email coverage or reply capture, then retry this packet.',
-    nextActionAt: acceptedCount > 0 ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() : null,
+    nextActionAt: aggregateAcceptedCount > 0 ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() : null,
     metadata: { packetStatus: nextStatus, sendResults: results },
   })
 
@@ -351,7 +448,7 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
     recipientCount: rows.length,
     acceptedCount,
     failedCount,
-    skippedCount: allRows.length - rows.length,
+    skippedCount: allRows.length - rows.length + deferredCount,
     results,
   }
 }

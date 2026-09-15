@@ -15,9 +15,23 @@ import { searchWeakWebPresenceBusinesses } from '@/lib/leads/connectors/weak-web
 import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
 import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
-import { buildOutreachV2EmailDraft, getOutreachV2DailyTarget, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
-import { classifyLeadRevenueCampaign, getRevenueCampaignAllocation, REVENUE_CAMPAIGN_ORDER, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
-import { isOutscraperApproved } from '@/lib/leads/sourceCostGovernor'
+import { buildOutreachV2EmailDraft, evaluateOutreachV2Lead, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
+import {
+  paidSourceFailureDetail,
+  paidSourceReservationDetail,
+  runPaidSourceAttempt,
+  type PaidSourceAttemptReservation,
+} from '@/lib/leads/paidSourceBudget'
+import {
+  buildApifyYelpPaidWorkPlan,
+  buildOutscraperPaidWorkPlan,
+} from '@/lib/leads/paidSourceBudgetCore'
+import { classifyLeadRevenueCampaign, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
+import {
+  isApifyApproved,
+  isGooglePlacesApproved,
+  isOutscraperApproved,
+} from '@/lib/leads/sourceCostGovernor'
 import { buildSourceFamilyFilters } from '@/lib/leads/source-keys'
 import { discoverMarkets, markMarketRunResult, pickDiscoveryTermsForMarket, updateMarketPerformance } from '@/lib/leads/marketExpansion'
 import {
@@ -30,6 +44,8 @@ import {
   listLeadsForScoring,
   listLeadsNeedingOutreach,
   listSuppressions,
+  restoreLeadFollowupAfterDeliveryDeferral,
+  restoreOutreachMessageAfterDeliveryDeferral,
   updateLeadRecord,
   updateOutreachMessage,
 } from '@/lib/leads/repository'
@@ -38,9 +54,18 @@ import type { LeadRecord, OutreachMessageRecord, TargetMarketRecord } from '@/li
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
-import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { getOperationalReplyCaptureReadiness, getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import { configuredDailyStrategyOutputTarget, DAILY_STRATEGY_OUTPUT_LANES, getDailyStrategyOutputLane } from '@/lib/outreach/dailyStrategyOutputCore'
+import { ensureFreshHunterSendVerification } from '@/lib/outreach/hunterSendVerification'
+import {
+  classifyHunterVerificationFailureScope,
+  deriveHunterSendVerificationLimits,
+} from '@/lib/outreach/hunterSendVerificationCore'
+import { readOutreachDispatchCapacity } from '@/lib/outreach/outreachDispatchCapacity'
+import { isControlledTrialAllowanceFilled } from '@/lib/outreach/outreachDispatchCore'
+import { evaluateOutreachThroughputGovernor } from '@/lib/outreach/throughputGovernorCore'
 
 type MarketConfig = {
   id?: string
@@ -68,6 +93,7 @@ type LeadAutomationOptions = {
   refillNicheCount?: number
   refillMapTimeoutMs?: number
   weakWebPresenceOnly?: boolean
+  suppressDigest?: boolean
 }
 
 type LeadEmailEnrichmentOptions = {
@@ -197,6 +223,17 @@ function strategyEngineAllowsAutoApproval(lead: LeadRecord) {
   return !isSellerLead || isStrategyEngineAutoApprovalAllowed(lead)
 }
 
+function strategyEngineAllowsApprovedDelivery(
+  lead: LeadRecord,
+  message: OutreachMessageRecord
+) {
+  const explicitlyApprovedByAdmin =
+    message.status === 'approved' &&
+    Boolean(message.approved_by_user_id) &&
+    Boolean(message.approved_at)
+  return strategyEngineAllowsAutoApproval(lead) || explicitlyApprovedByAdmin
+}
+
 function envMs(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed >= 1000 ? parsed : fallback
@@ -208,10 +245,7 @@ function envNonNegativeInt(name: string, fallback: number) {
 }
 
 function getLeadDailyTarget() {
-  if (isOutreachV2Enabled()) {
-    return getOutreachV2DailyTarget()
-  }
-  return envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 500))
+  return configuredDailyStrategyOutputTarget()
 }
 
 async function getLeadEmailSentCountLast24h() {
@@ -470,8 +504,29 @@ function shouldAllowMismatchedPublicEmail(lead: LeadRecord, decisionReason: stri
   return decisionReason === 'mismatched_domain' && Boolean(getVerifiedPublicEmailCandidate(lead))
 }
 
+function dailyStrategyLaneForLead(lead: LeadRecord | null | undefined, subject = '') {
+  if (!lead) return null
+  const metadata = (lead.metadata_json || {}) as Record<string, unknown>
+  const strategyEngine =
+    lead.automation_flags_json?.strategyEngine &&
+    typeof lead.automation_flags_json.strategyEngine === 'object'
+      ? (lead.automation_flags_json.strategyEngine as Record<string, unknown>)
+      : {}
+  const candidates = [
+    lead.market_segment,
+    metadata.strategyPrimary,
+    strategyEngine.strategyKey,
+    evaluateOutreachV2Lead(lead, subject).segmentKey,
+  ]
+  for (const candidate of candidates) {
+    const lane = getDailyStrategyOutputLane(String(candidate || ''))
+    if (lane && lane.group !== 'partner') return lane
+  }
+  return null
+}
+
 function classifyOutreachService(lead: LeadRecord | null | undefined, subject = '') {
-  return classifyLeadRevenueCampaign(lead, subject).label
+  return dailyStrategyLaneForLead(lead, subject)?.label || classifyLeadRevenueCampaign(lead, subject).label
 }
 
 function incrementCount(map: Map<string, number>, key: string, amount = 1) {
@@ -522,30 +577,21 @@ function balanceEmailQueueByService<T extends { leads: LeadRecord | null; subjec
 ) {
   const groups = new Map<string, T[]>()
   for (const row of rows) {
-    const service = classifyOutreachService(row.leads, row.subject || '')
+    const service = dailyStrategyLaneForLead(row.leads, row.subject || '')?.key || 'unattributed'
     const group = groups.get(service) || []
     group.push(row)
     groups.set(service, group)
   }
 
-  const preferredOrder = REVENUE_CAMPAIGN_ORDER
+  const preferredOrder = DAILY_STRATEGY_OUTPUT_LANES
+    .filter((lane) => lane.group !== 'partner')
+    .map((lane) => lane.key)
   const preferredSet = new Set<string>(preferredOrder)
   const allServices = [
     ...preferredOrder.filter((service) => groups.has(service)),
     ...Array.from(groups.keys()).filter((service) => !preferredSet.has(service)),
   ]
   const balanced: T[] = []
-  const allocations = getRevenueCampaignAllocation(limit)
-
-  for (const service of preferredOrder) {
-    const group = groups.get(service)
-    let remainingAllocation = allocations.get(service) || 0
-    while (group?.length && remainingAllocation > 0 && balanced.length < limit) {
-      const next = group.shift()
-      if (next) balanced.push(next)
-      remainingAllocation -= 1
-    }
-  }
 
   while (balanced.length < limit && allServices.some((service) => (groups.get(service)?.length || 0) > 0)) {
     for (const service of allServices) {
@@ -622,9 +668,34 @@ function isInvalidGooglePlacesKeyError(error: unknown) {
 }
 
 function resolveDailyMapsProvider() {
-  if (process.env.GOOGLE_PLACES_API_KEY && !isLegacyGooglePlacesPhaseOutEnabled()) return 'google' as const
+  if (isGooglePlacesApproved() && !isLegacyGooglePlacesPhaseOutEnabled()) return 'google' as const
   if (isOutscraperApproved()) return 'outscraper' as const
   return null
+}
+
+function buildPaidSourceAttemptKey(input: {
+  mode: 'daily' | 'refill' | 'weak_web'
+  source: 'maps' | 'yelp' | 'weak_web'
+  market: MarketConfig
+  niches: string[]
+}) {
+  const location = `${input.market.city}-${input.market.state}`.trim().toLowerCase()
+  const language = (input.market.language || 'en').trim().toLowerCase()
+  const nicheKey = [...input.niches]
+    .map((niche) => niche.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join('|')
+  return `${input.mode}:${input.source}:${location}:${language}:${nicheKey}`
+}
+
+function appendPaidSourceReservationDetail(
+  detail: string | undefined,
+  reservation: PaidSourceAttemptReservation | null | undefined
+) {
+  if (!reservation?.allowed) return detail
+  const budgetDetail = paidSourceReservationDetail(reservation)
+  return detail ? `${detail} ${budgetDetail}` : budgetDetail
 }
 
 export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
@@ -723,8 +794,8 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
       count: 0,
       status: 'skipped',
       detail: isLegacyGooglePlacesPhaseOutEnabled()
-        ? 'Daily maps scraping is paused because Google Places is phased out here and Outscraper is disabled until revenue justifies paid scraping.'
-        : 'Add GOOGLE_PLACES_API_KEY to enable owned maps scraping, or set ALLOW_PAID_SCRAPING=true plus LEADS_ENABLE_OUTSCRAPER=true only when paid Outscraper usage is approved.',
+        ? 'Daily maps scraping is paused because Google Places is phased out here and Outscraper is not explicitly approved.'
+        : 'Paid maps discovery is paused. Enable a funded provider intentionally with ALLOW_PAID_SCRAPING, its provider-specific enable flag and credential, and a bounded Chicago-day source limit.',
     })
   } else {
     const refillMarketOffset = emailReadyRefillOnly
@@ -748,6 +819,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
         break
       }
 
+      let paidReservation: PaidSourceAttemptReservation | null = null
       try {
         const baseNiches = market.preferredNiches?.length
           ? market.preferredNiches
@@ -764,36 +836,117 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
         const limitPerNiche = emailReadyRefillOnly
           ? Math.max(1, Math.floor(scrapeLimitPerSource / Math.max(niches.length, 1)))
           : Math.max(3, Math.floor(scrapeLimitPerSource / Math.max(niches.length, 1)))
-        const mapSearch =
-          mapsProvider === 'outscraper'
-            ? searchOutscraperGoogleMaps({
-                city: market.city,
-                state: market.state,
-                language: market.language || 'en',
-                region: market.region || 'US',
-                niches,
-                limitPerNiche,
-                includeWebsiteAnalysis: !emailReadyRefillOnly,
-                requestTimeoutMs: emailReadyRefillOnly
+        let leads
+        if (mapsProvider === 'outscraper') {
+          const requestedWorkPlan = buildOutscraperPaidWorkPlan({
+            niches,
+            limitPerNiche,
+          })
+          const paidAttempt = await runPaidSourceAttempt({
+            provider: 'outscraper',
+            attemptKey: buildPaidSourceAttemptKey({
+              mode: emailReadyRefillOnly ? 'refill' : 'daily',
+              source: 'maps',
+              market,
+              niches,
+            }),
+            units: requestedWorkPlan.estimatedBillableUnits,
+            execute: (reservation) => {
+              const reservedWorkPlan = buildOutscraperPaidWorkPlan({
+                niches: requestedWorkPlan.niches,
+                limitPerNiche: requestedWorkPlan.limitPerNiche,
+                unitBudget: reservation.reservedUnits,
+              })
+              return withTimeout(
+                searchOutscraperGoogleMaps({
+                  city: market.city,
+                  state: market.state,
+                  language: market.language || 'en',
+                  region: market.region || 'US',
+                  niches: reservedWorkPlan.niches,
+                  limitPerNiche: reservedWorkPlan.limitPerNiche,
+                  includeWebsiteAnalysis: !emailReadyRefillOnly,
+                  requestTimeoutMs: emailReadyRefillOnly
+                    ? options.refillMapTimeoutMs || envMs('LEADS_THROUGHPUT_REFILL_MAPS_TIMEOUT_MS', 12000)
+                    : envMs('LEADS_DAILY_MAPS_TIMEOUT_MS', 30000),
+                }),
+                emailReadyRefillOnly
                   ? options.refillMapTimeoutMs || envMs('LEADS_THROUGHPUT_REFILL_MAPS_TIMEOUT_MS', 12000)
                   : envMs('LEADS_DAILY_MAPS_TIMEOUT_MS', 30000),
-              })
-            : searchGooglePlaces({
-                city: market.city,
-                state: market.state,
-                language: market.language || 'en',
-                region: market.region || 'US',
-                niches,
-                limitPerNiche,
-                includeWebsiteAnalysis: false,
-              })
-        const leads = await withTimeout(
-          mapSearch,
-          emailReadyRefillOnly
-            ? options.refillMapTimeoutMs || envMs('LEADS_THROUGHPUT_REFILL_MAPS_TIMEOUT_MS', 12000)
-            : envMs('LEADS_DAILY_MAPS_TIMEOUT_MS', 30000),
-          `${mapsProvider === 'outscraper' ? 'Outscraper Maps' : 'Google Places'} ${market.city}`
-        )
+                `Outscraper Maps ${market.city}`
+              )
+            },
+          })
+          paidReservation = paidAttempt.reservation
+          if (paidAttempt.status === 'skipped') {
+            results.push({
+              source: `outscraper_google_maps_businesses:${market.city}:${market.language || 'en'}`,
+              count: 0,
+              status: 'skipped',
+              detail: paidSourceReservationDetail(paidAttempt.reservation),
+            })
+            if (paidAttempt.reservation.reason === 'paid_source_attempt_already_reserved') continue
+            break
+          }
+          if (paidAttempt.status === 'failed') {
+            results.push({
+              source: `outscraper_google_maps_businesses:${market.city}:${market.language || 'en'}`,
+              count: 0,
+              status: 'failed',
+              detail: paidSourceFailureDetail(paidAttempt),
+            })
+            break
+          }
+          leads = paidAttempt.value
+        } else {
+          const paidAttempt = await runPaidSourceAttempt({
+            provider: 'google_places',
+            attemptKey: buildPaidSourceAttemptKey({
+              mode: emailReadyRefillOnly ? 'refill' : 'daily',
+              source: 'maps',
+              market,
+              niches,
+            }),
+            units: niches.length,
+            execute: (reservation) =>
+              withTimeout(
+                searchGooglePlaces({
+                  city: market.city,
+                  state: market.state,
+                  language: market.language || 'en',
+                  region: market.region || 'US',
+                  niches: niches.slice(0, reservation.reservedUnits),
+                  limitPerNiche,
+                  includeWebsiteAnalysis: false,
+                }),
+                emailReadyRefillOnly
+                  ? options.refillMapTimeoutMs || envMs('LEADS_THROUGHPUT_REFILL_MAPS_TIMEOUT_MS', 12000)
+                  : envMs('LEADS_DAILY_MAPS_TIMEOUT_MS', 30000),
+                `Google Places ${market.city}`
+              ),
+          })
+          paidReservation = paidAttempt.reservation
+          if (paidAttempt.status === 'skipped') {
+            results.push({
+              source: `google_places_businesses:${market.city}:${market.language || 'en'}`,
+              count: 0,
+              status: 'skipped',
+              detail: paidSourceReservationDetail(paidAttempt.reservation),
+            })
+            if (paidAttempt.reservation.reason === 'paid_source_attempt_already_reserved') continue
+            break
+          }
+          if (paidAttempt.status === 'failed') {
+            results.push({
+              source: `google_places_businesses:${market.city}:${market.language || 'en'}`,
+              count: 0,
+              status: 'failed',
+              detail: paidSourceFailureDetail(paidAttempt),
+            })
+            break
+          }
+          leads = paidAttempt.value
+        }
 
         const sourceKey =
           mapsProvider === 'outscraper'
@@ -866,10 +1019,12 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           source: `${sourceKey}:${market.city}:${market.language || 'en'}`,
           count: saved.length,
           status: 'completed',
-          detail:
+          detail: appendPaidSourceReservationDetail(
             enrichmentHits || contactFormHits
               ? `Immediate enrichment found ${enrichmentHits} usable email(s) and ${contactFormHits} contact-form fallback(s).`
               : undefined,
+            paidReservation
+          ),
         })
       } catch (error) {
         if (mapsProvider === 'google' && isInvalidGooglePlacesKeyError(error)) {
@@ -887,8 +1042,12 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           source: `maps:${market.city}:${market.language || 'en'}`,
           count: 0,
           status: 'failed',
-          detail: error instanceof Error ? error.message : String(error),
+          detail: appendPaidSourceReservationDetail(
+            error instanceof Error ? error.message : String(error),
+            paidReservation
+          ),
         })
+        if (paidReservation?.allowed) break
       }
     }
   }
@@ -897,8 +1056,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
   if (
     !weakWebPresenceOnly &&
     (!emailReadyRefillOnly || apifyRefillEnabled) &&
-    envBool('LEADS_ENABLE_APIFY_YELP', true) &&
-    process.env.APIFY_TOKEN
+    isApifyApproved()
   ) {
     const apifyMarketOffset = emailReadyRefillOnly
       ? (options.refillMarketOffset ?? getEmailRefillMarketOffset()) +
@@ -925,6 +1083,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
         break
       }
 
+      let paidReservation: PaidSourceAttemptReservation | null = null
       try {
         const nicheCount = emailReadyRefillOnly
           ? options.refillNicheCount || envInt('LEADS_THROUGHPUT_REFILL_APIFY_NICHE_COUNT', 2)
@@ -934,13 +1093,56 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           nicheCount,
           apifyMarketOffset
         )
-        const leads = await searchApifyYelp({
-          city: market.city,
-          state: market.state,
+        const requestedWorkPlan = buildApifyYelpPaidWorkPlan({
           niches,
           limitPerNiche: apifyPerNicheLimit,
-          proxyCountry: process.env.APIFY_PROXY_COUNTRY || 'US',
         })
+        const paidAttempt = await runPaidSourceAttempt({
+          provider: 'apify',
+          attemptKey: buildPaidSourceAttemptKey({
+            mode: emailReadyRefillOnly ? 'refill' : 'daily',
+            source: 'yelp',
+            market,
+            niches,
+          }),
+          units: requestedWorkPlan.estimatedBillableUnits,
+          minimumUnits: 2,
+          execute: (reservation) => {
+            const reservedWorkPlan = buildApifyYelpPaidWorkPlan({
+              niches: requestedWorkPlan.niches,
+              limitPerNiche: requestedWorkPlan.limitPerNiche,
+              unitBudget: reservation.reservedUnits,
+            })
+            return searchApifyYelp({
+              city: market.city,
+              state: market.state,
+              niches: reservedWorkPlan.niches,
+              limitPerNiche: reservedWorkPlan.limitPerNiche,
+              proxyCountry: process.env.APIFY_PROXY_COUNTRY || 'US',
+            })
+          },
+        })
+        paidReservation = paidAttempt.reservation
+        if (paidAttempt.status === 'skipped') {
+          results.push({
+            source: `apify_yelp_businesses:${market.city}:${market.language || 'en'}`,
+            count: 0,
+            status: 'skipped',
+            detail: paidSourceReservationDetail(paidAttempt.reservation),
+          })
+          if (paidAttempt.reservation.reason === 'paid_source_attempt_already_reserved') continue
+          break
+        }
+        if (paidAttempt.status === 'failed') {
+          results.push({
+            source: `apify_yelp_businesses:${market.city}:${market.language || 'en'}`,
+            count: 0,
+            status: 'failed',
+            detail: paidSourceFailureDetail(paidAttempt),
+          })
+          break
+        }
+        const leads = paidAttempt.value
 
         const stagedLeads = leads
           .map((lead) => ({
@@ -1012,25 +1214,31 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           source: `apify_yelp_businesses:${market.city}:${market.language || 'en'}`,
           count: saved.length,
           status: 'completed',
-          detail:
+          detail: appendPaidSourceReservationDetail(
             enrichmentHits || contactFormHits
               ? `Immediate enrichment found ${enrichmentHits} usable email(s) and ${contactFormHits} contact-form fallback(s).`
               : undefined,
+            paidReservation
+          ),
         })
       } catch (error) {
         results.push({
           source: `apify_yelp_businesses:${market.city}:${market.language || 'en'}`,
           count: 0,
           status: 'failed',
-          detail: error instanceof Error ? error.message : String(error),
+          detail: appendPaidSourceReservationDetail(
+            error instanceof Error ? error.message : String(error),
+            paidReservation
+          ),
         })
+        if (paidReservation?.allowed) break
       }
     }
   } else {
     const apifySkipDetail = weakWebPresenceOnly
       ? 'Skipped during weak-web-only scraping.'
-      : !process.env.APIFY_TOKEN
-        ? 'Add APIFY_TOKEN to enable Apify Yelp lead expansion.'
+      : !isApifyApproved()
+        ? 'Apify Yelp is paused. Enable ALLOW_PAID_SCRAPING and LEADS_ENABLE_APIFY_YELP with APIFY_TOKEN and a bounded daily source limit.'
         : emailReadyRefillOnly && !apifyRefillEnabled
           ? 'Apify Yelp refill is disabled by LEADS_ENABLE_APIFY_YELP_REFILL.'
           : 'Apify Yelp expansion is disabled by LEADS_ENABLE_APIFY_YELP.'
@@ -1046,8 +1254,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
   if (
     !emailReadyRefillOnly &&
     (weakWebPresenceOnly || envBool('LEADS_ENABLE_WEAK_WEB_PRESENCE_LANE', false)) &&
-    envBool('LEADS_ENABLE_OUTSCRAPER', false) &&
-    process.env.OUTSCRAPER_API_KEY
+    isOutscraperApproved()
   ) {
     const weakMarketOffset = envNonNegativeInt('LEADS_WEAK_WEB_MARKET_OFFSET', getEmailRefillMarketOffset())
     const weakMarketConfigs = await buildDailyBusinessMarketConfigs(
@@ -1068,21 +1275,64 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
         break
       }
 
+      let paidReservation: PaidSourceAttemptReservation | null = null
       try {
         const niches = normalizeEmailRefillNiches(
           market.preferredNiches?.length ? market.preferredNiches : WEAK_WEB_PRESENCE_NICHES,
           weakNicheCount,
           weakMarketOffset
         )
-        const leads = await searchWeakWebPresenceBusinesses({
-          city: market.city,
-          state: market.state,
-          language: market.language || 'en',
-          region: market.region || 'US',
+        const requestedWorkPlan = buildOutscraperPaidWorkPlan({
           niches,
           limitPerNiche: weakLimitPerNiche,
-          requestTimeoutMs: envMs('LEADS_WEAK_WEB_TIMEOUT_MS', 25000),
         })
+        const paidAttempt = await runPaidSourceAttempt({
+          provider: 'outscraper',
+          attemptKey: buildPaidSourceAttemptKey({
+            mode: 'weak_web',
+            source: 'weak_web',
+            market,
+            niches,
+          }),
+          units: requestedWorkPlan.estimatedBillableUnits,
+          execute: (reservation) => {
+            const reservedWorkPlan = buildOutscraperPaidWorkPlan({
+              niches: requestedWorkPlan.niches,
+              limitPerNiche: requestedWorkPlan.limitPerNiche,
+              unitBudget: reservation.reservedUnits,
+            })
+            return searchWeakWebPresenceBusinesses({
+              city: market.city,
+              state: market.state,
+              language: market.language || 'en',
+              region: market.region || 'US',
+              niches: reservedWorkPlan.niches,
+              limitPerNiche: reservedWorkPlan.limitPerNiche,
+              requestTimeoutMs: envMs('LEADS_WEAK_WEB_TIMEOUT_MS', 25000),
+            })
+          },
+        })
+        paidReservation = paidAttempt.reservation
+        if (paidAttempt.status === 'skipped') {
+          results.push({
+            source: `weak_web_presence_businesses:${market.city}:${market.language || 'en'}`,
+            count: 0,
+            status: 'skipped',
+            detail: paidSourceReservationDetail(paidAttempt.reservation),
+          })
+          if (paidAttempt.reservation.reason === 'paid_source_attempt_already_reserved') continue
+          break
+        }
+        if (paidAttempt.status === 'failed') {
+          results.push({
+            source: `weak_web_presence_businesses:${market.city}:${market.language || 'en'}`,
+            count: 0,
+            status: 'failed',
+            detail: paidSourceFailureDetail(paidAttempt),
+          })
+          break
+        }
+        const leads = paidAttempt.value
         const stagedLeads = leads
           .map((lead) => ({
             ...lead,
@@ -1161,17 +1411,24 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           source: `weak_web_presence_businesses:${market.city}:${market.language || 'en'}`,
           count: saved.length,
           status: saved.length ? 'completed' : 'skipped',
-          detail: saved.length
-            ? 'Saved weak/no-website prospects for website, AI receptionist, and search visibility follow-up.'
-            : 'No weak/no-website prospects found in this market slice.',
+          detail: appendPaidSourceReservationDetail(
+            saved.length
+              ? 'Saved weak/no-website prospects for website, AI receptionist, and search visibility follow-up.'
+              : 'No weak/no-website prospects found in this market slice.',
+            paidReservation
+          ),
         })
       } catch (error) {
         results.push({
           source: `weak_web_presence_businesses:${market.city}:${market.language || 'en'}`,
           count: 0,
           status: 'failed',
-          detail: error instanceof Error ? error.message : String(error),
+          detail: appendPaidSourceReservationDetail(
+            error instanceof Error ? error.message : String(error),
+            paidReservation
+          ),
         })
+        if (paidReservation?.allowed) break
       }
     }
   } else if (!emailReadyRefillOnly && (weakWebPresenceOnly || envBool('LEADS_ENABLE_WEAK_WEB_PRESENCE_LANE', false))) {
@@ -1179,7 +1436,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
       source: 'weak_web_presence_businesses',
       count: 0,
       status: 'skipped',
-      detail: 'Weak/no-website business lane is paused because it uses Outscraper. Set LEADS_ENABLE_OUTSCRAPER=true only when paid scraping is approved.',
+      detail: 'Weak/no-website business lane is paused because it uses Outscraper. Enable ALLOW_PAID_SCRAPING and LEADS_ENABLE_OUTSCRAPER with a configured API key and bounded daily source limit.',
     })
   }
 
@@ -1234,7 +1491,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
   }
 
   const leadOpsAlertEmail = getLeadOpsAlertEmail()
-  if (leadOpsAlertEmail && !options.dryRun) {
+  if (leadOpsAlertEmail && !options.dryRun && !options.suppressDigest) {
     const bestCity = [...marketSummary].sort((a, b) => b.count - a.count)[0]
     const bestNiche = marketSummary
       .flatMap((item) => item.niches.map((niche) => ({ niche, count: item.count })))
@@ -1399,7 +1656,7 @@ export async function runDailyLeadOutreach(options: LeadAutomationOptions = {}) 
     results.push(...batchResults)
     processedCount += batch.length
   }
-  if (!options.dryRun) {
+  if (!options.dryRun && !options.suppressDigest) {
     await sendAdminDigest(
       'VestBlock morning outreach draft report',
       'Outreach drafts generated',
@@ -1418,7 +1675,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const startedAtMs = options.startedAtMs || Date.now()
   const budgetMs = options.budgetMs || envMs('LEADS_CRON_BUDGET_MS', 45000)
   const dailyTarget = getLeadDailyTarget()
-  const requestedSendLimit = options.sendLimit || (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 500))
+  const requestedSendLimit = options.sendLimit ?? (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 500))
   const sentLast24h = isOutreachV2Enabled() ? await getLeadEmailSentCountLast24h() : 0
   const targetGap24h = isOutreachV2Enabled() ? Math.max(0, dailyTarget - sentLast24h) : requestedSendLimit
   const uncappedSendLimit = isOutreachV2Enabled() ? Math.min(requestedSendLimit, targetGap24h) : requestedSendLimit
@@ -1427,16 +1684,56 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const manualContactFormTaskLimit = envInt('LEADS_CONTACT_FORM_TASK_LIMIT_PER_RUN', 15)
   const providerFailureStopThreshold = envInt('LEADS_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
   const outboundReadiness = getOutboundProviderReadiness()
-  const replyCaptureReadiness = getReplyCaptureReadiness()
+  const replyCaptureReadiness = await getOperationalReplyCaptureReadiness()
   const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
     provider: outboundReadiness.defaultProvider,
     allowControlledTrial: true,
   })
-  const sendLimit = Math.min(
+  const throughputDecision = evaluateOutreachThroughputGovernor({
+    mode: deliveryCircuitBreaker.mode,
+    sampleSize: deliveryCircuitBreaker.sampleSize,
+    complained: deliveryCircuitBreaker.complained,
+    badRate: deliveryCircuitBreaker.badRate,
+    globalFailureRate: deliveryCircuitBreaker.globalFailureRate,
+    terminalCompleteness: deliveryCircuitBreaker.terminalCompleteness,
+    requestedDailyTarget: dailyTarget,
+  })
+  const preliminarySendLimit = Math.min(
     uncappedSendLimit,
-    deliveryCircuitBreaker.maxBatchSize || Number.POSITIVE_INFINITY
+    deliveryCircuitBreaker.maxBatchSize ?? Number.POSITIVE_INFINITY,
+    throughputDecision.effectiveDailyCap
   )
-  const queue = await listEmailOutreachForSendQueue(sendLimit * queueMultiplier)
+  const throughputCapacity = throughputDecision.effectiveDailyCap > 0
+    ? await readOutreachDispatchCapacity(throughputDecision)
+    : {
+        globalAttemptCount: 0,
+        globalRemaining: 0,
+        remainingByLane: {},
+        leadLaneRemaining: 0,
+        partnerLaneRemaining: 0,
+      }
+  const sendLimit = Math.min(
+    preliminarySendLimit,
+    throughputCapacity.globalRemaining,
+    throughputCapacity.leadLaneRemaining
+  )
+  const hunterVerificationLimits = deriveHunterSendVerificationLimits({
+    effectiveDailyCap: throughputDecision.effectiveDailyCap,
+    requestedSendLimit: sendLimit,
+    globalRemaining: throughputCapacity.globalRemaining,
+    leadLaneRemaining: throughputCapacity.leadLaneRemaining,
+    configuredDailyLimit: envNonNegativeInt(
+      'LEADS_HUNTER_DAILY_VERIFY_LIMIT',
+      throughputDecision.effectiveDailyCap
+    ),
+    configuredPerRunLimit: envNonNegativeInt('LEADS_HUNTER_VERIFY_LIMIT_PER_RUN', sendLimit),
+  })
+  const queue = sendLimit > 0
+    ? await listEmailOutreachForSendQueue(sendLimit * queueMultiplier, {
+        laneTargets: throughputDecision.allocationPlan.byKey,
+        candidatesPerSlot: queueMultiplier,
+      })
+    : []
   const suppressions = await listSuppressions()
   const autoSendEnabled = autoSendApproved && deliveryCircuitBreaker.allowed && replyCaptureReadiness.ready
   const sendResults: Array<{ leadId: string; status: string; provider?: string; detail?: string }> = []
@@ -1453,6 +1750,10 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   let manualContactFormTaskCount = 0
   let providerFailureCount = 0
   let sentCount = 0
+  let hunterVerificationAttempts = 0
+  let hunterVerificationCacheHits = 0
+  let hunterVerificationBlocked = 0
+  let hunterDailyBudgetRemaining: number | null = null
   let truncated = false
   let circuitBreakerTripped = false
   const getQueueRowContactFormCount = (lead: LeadRecord | null | undefined) =>
@@ -1650,6 +1951,83 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       continue
     }
 
+    const eligibleForHunterPreflight =
+      !options.dryRun &&
+      autoSendEnabled &&
+      outboundReadiness.mailingAddressConfigured &&
+      effectiveEligible &&
+      strategyEngineAllowsApprovedDelivery(currentLead, currentRow) &&
+      (currentRow.status === 'approved' || currentRow.status === 'needs_review')
+    if (eligibleForHunterPreflight) {
+      const preflightRecipientGuard = await getOutreachRecipientGuard({
+        scope: 'lead',
+        entityId: currentLead.id,
+        email: currentLead.email,
+      })
+      if (!preflightRecipientGuard.allowed) {
+        const reason = preflightRecipientGuard.reason || 'recipient_safety_blocked'
+        incrementCount(skipReasonCounts, reason)
+        await persistSkippedSendEvent({
+          lead: currentLead,
+          outreachMessageId: currentRow.id,
+          subject: currentRow.subject,
+          reason,
+        })
+        sendResults.push({ leadId: currentLead.id, status: 'suppression_blocked', detail: reason })
+        continue
+      }
+
+      const hunterVerification = await ensureFreshHunterSendVerification({
+        lead: currentLead,
+        messageId: currentRow.id,
+        allowNetwork: hunterVerificationAttempts < hunterVerificationLimits.perRunLimit,
+        dailyLimit: hunterVerificationLimits.dailyLimit,
+      }).catch(() => ({
+        sendable: false,
+        status: 'unverified' as const,
+        source: 'blocked' as const,
+        reason: 'hunter_verification_safety_unavailable',
+        creditReserved: false,
+        dailyBudgetRemaining: undefined,
+        cache: undefined,
+      }))
+      if (hunterVerification.creditReserved) hunterVerificationAttempts += 1
+      if (hunterVerification.source === 'cache') hunterVerificationCacheHits += 1
+      if (typeof hunterVerification.dailyBudgetRemaining === 'number') {
+        hunterDailyBudgetRemaining = hunterVerification.dailyBudgetRemaining
+      }
+      if (hunterVerification.cache) {
+        currentLead = {
+          ...currentLead,
+          metadata_json: {
+            ...(currentLead.metadata_json || {}),
+            hunterSendVerification: hunterVerification.cache,
+          },
+        }
+      }
+      if (!hunterVerification.sendable || hunterVerification.status !== 'valid') {
+        hunterVerificationBlocked += 1
+        const reason = hunterVerification.reason || `hunter_${hunterVerification.status}_blocked`
+        incrementCount(skipReasonCounts, reason)
+        await persistSkippedSendEvent({
+          lead: currentLead,
+          outreachMessageId: currentRow.id,
+          subject: currentRow.subject,
+          reason,
+        })
+        sendResults.push({
+          leadId: currentLead.id,
+          status: 'hunter_verification_blocked',
+          detail: reason,
+        })
+        if (classifyHunterVerificationFailureScope(reason) !== 'record') {
+          truncated = true
+          break
+        }
+        continue
+      }
+    }
+
     if (
       !options.dryRun &&
       autoSendEnabled &&
@@ -1705,7 +2083,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       !options.dryRun &&
       outboundReadiness.mailingAddressConfigured &&
       effectiveEligible &&
-      strategyEngineAllowsAutoApproval(currentLead) &&
+      strategyEngineAllowsApprovedDelivery(currentLead, currentRow) &&
       currentRow.status === 'approved'
 
     if (!canSend) {
@@ -1723,10 +2101,10 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
               ? 'missing_mailing_address'
               : decision.reason === 'missing_email' && contactFormUrls.length
                 ? 'contact_form_available'
-                : currentRow.status !== 'approved'
-                  ? !strategyEngineAllowsAutoApproval(currentLead)
-                    ? 'strategy_review_required'
-                    : decision.reason || 'manual_review_required'
+                : !strategyEngineAllowsApprovedDelivery(currentLead, currentRow)
+                  ? 'strategy_review_required'
+                  : currentRow.status !== 'approved'
+                    ? decision.reason || 'manual_review_required'
                   : allowVerifiedPublicEmail
                     ? 'verified_public_email_pending_send'
                     : decision.reason || 'manual_review_required'
@@ -1837,7 +2215,37 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           },
     })
 
-    const sendResult = await sendLeadOutreachEmail({ lead: currentLead, message: currentRow, sequenceStep: 1 })
+    const sendResult = await sendLeadOutreachEmail({
+      lead: currentLead,
+      message: currentRow,
+      sequenceStep: 1,
+      deliveryCircuitBreaker,
+    })
+    if (!sendResult.ok && sendResult.deferred) {
+      const restored = await restoreOutreachMessageAfterDeliveryDeferral(
+        currentRow.id,
+        claimedMessage.updated_at,
+        sendResult.error || 'Delivery deferred by the outreach governor.'
+      )
+      await Promise.all([
+        restored ? updateLeadRecord(currentLead.id, { outreach_status: 'approved' }) : Promise.resolve(),
+      ])
+      incrementCount(
+        skipReasonCounts,
+        restored ? 'delivery_governor_deferred' : 'delivery_governor_deferred_restore_failed'
+      )
+      sendResults.push({
+        leadId: currentLead.id,
+        status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
+        provider: sendResult.provider,
+        detail: sendResult.error,
+      })
+      if (!restored || !['lane', 'record'].includes(String(sendResult.deferredScope || ''))) {
+        truncated = true
+        break
+      }
+      continue
+    }
     if (sendResult.ok) {
       await Promise.all([
         updateOutreachMessage(currentRow.id, {
@@ -2002,6 +2410,10 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     `Auto-approved by autopilot: ${autoApprovedCount}`,
     `Auto-repaired stale approved copy: ${autoRepairedMessageCount}`,
     `Emails recovered by in-queue enrichment: ${enrichedInQueueCount}`,
+    `Hunter pre-send verification attempts: ${hunterVerificationAttempts}/${hunterVerificationLimits.perRunLimit}`,
+    `Hunter fresh-cache hits: ${hunterVerificationCacheHits}`,
+    `Hunter verification blocks replaced in queue: ${hunterVerificationBlocked}`,
+    `Hunter daily verification budget: ${hunterVerificationLimits.dailyLimit}${hunterDailyBudgetRemaining === null ? '' : ` (${hunterDailyBudgetRemaining} remaining after this run)`}`,
     `Emails sent: ${sentCount}`,
     `Provider failures this run: ${providerFailureCount}${circuitBreakerTripped ? ' (send queue stopped by circuit breaker)' : ''}`,
     `Target status: ${sentCount >= sendLimit ? 'hit' : `behind by ${sendLimit - sentCount}`}`,
@@ -2027,7 +2439,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     `Outbound provider: ${outboundReadiness.defaultProvider}`,
   ]
 
-  if (!options.dryRun) {
+  if (!options.dryRun && !options.suppressDigest) {
     await sendAdminDigest(
       'VestBlock outreach send queue report',
       'Send queue summary',
@@ -2039,7 +2451,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   const missingEmailSkips = skipReasonCounts.get('missing_email') || 0
   const underfilledQueue = sentCount < sendLimit
 
-  if (!options.dryRun && underfilledQueue) {
+  if (!options.dryRun && !options.suppressDigest && underfilledQueue) {
     const topSkipReasons = Array.from(skipReasonCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
@@ -2067,6 +2479,11 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         autoRepairedMessageCount,
         autoApprovedCount,
         providerFailureCount,
+        hunterVerificationAttempts,
+        hunterVerificationCacheHits,
+        hunterVerificationBlocked,
+        hunterVerificationLimits,
+        hunterDailyBudgetRemaining,
         circuitBreakerTripped,
         sentServiceCounts: Object.fromEntries(sentServiceCounts.entries()),
         emailReadyServiceCounts: Object.fromEntries(emailReadyServiceCounts.entries()),
@@ -2115,7 +2532,16 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     truncated,
     skipReasonCounts: Object.fromEntries(skipReasonCounts.entries()),
     providerFailureCount,
+    hunterVerificationAttempts,
+    hunterVerificationCacheHits,
+    hunterVerificationBlocked,
+    hunterVerificationLimits,
+    hunterDailyBudgetRemaining,
+    throughputCapacity,
     circuitBreakerTripped,
+    autoSendRequested: autoSendApproved,
+    autoSendEnabled,
+    throughputDecision,
     deliveryCircuitBreaker,
     replyCaptureReadiness,
     mailingAddressConfigured: outboundReadiness.mailingAddressConfigured,
@@ -2146,8 +2572,13 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     startedAtMs,
   })
 
-  const remainingAfterFirstSend = Math.max(0, target - firstSend.sentCount)
-  const controlledTrialCompleted = firstSend.deliveryCircuitBreaker.mode === 'controlled_trial'
+  const effectiveTarget = firstSend.effectiveSendLimit
+  const remainingAfterFirstSend = Math.max(0, effectiveTarget - firstSend.sentCount)
+  const controlledTrialCompleted = isControlledTrialAllowanceFilled({
+    mode: firstSend.deliveryCircuitBreaker.mode,
+    effectiveSendLimit: effectiveTarget,
+    sentCount: firstSend.sentCount,
+  })
 
   const firstOutreach =
     remainingAfterFirstSend > 0 && getRemainingBudgetMs(startedAtMs, budgetMs) > 12000
@@ -2160,7 +2591,10 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
       : null
 
   const secondSend =
-    remainingAfterFirstSend > 0 && !controlledTrialCompleted && getRemainingBudgetMs(startedAtMs, budgetMs) > 8000
+    remainingAfterFirstSend > 0 &&
+    !controlledTrialCompleted &&
+    !firstSend.truncated &&
+    getRemainingBudgetMs(startedAtMs, budgetMs) > 8000
       ? await runDailyLeadSendQueue({
           ...options,
           sendLimit: remainingAfterFirstSend,
@@ -2169,7 +2603,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
       })
       : null
 
-  const remainingAfterSecondSend = Math.max(0, target - firstSend.sentCount - (secondSend?.sentCount || 0))
+  const remainingAfterSecondSend = Math.max(0, effectiveTarget - firstSend.sentCount - (secondSend?.sentCount || 0))
 
   const preDraftEnrichment =
     !options.dryRun &&
@@ -2230,19 +2664,20 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
   }
 
   const sentTotal = firstSend.sentCount + (secondSend?.sentCount || 0) + (finalSend?.sentCount || 0)
-  const remainingTarget = Math.max(0, target - sentTotal)
+  const remainingTarget = Math.max(0, effectiveTarget - sentTotal)
 
   if (!options.dryRun && remainingTarget > 0 && !firstSend.truncated && !(secondSend?.truncated) && !(finalSend?.truncated)) {
     await createAdminTask({
       title: 'Daily outreach target missed because qualified lead supply is short',
-      description: `The throughput sprint could not safely reach the email target.\n\nTarget: ${target}\nSent this sprint: ${sentTotal}\nRemaining gap: ${remainingTarget}\n\nThe system attempted safe send, email enrichment, draft generation, and email-ready lead refill. Keep the send guardrails; fix this by adding better email-ready sources or increasing enrichment coverage, not by sending weak/no-email leads.`,
+      description: `The throughput sprint could not safely reach the current email allowance.\n\nRequested per-run target: ${target}\nEffective guarded allowance: ${effectiveTarget}\nSent this sprint: ${sentTotal}\nRemaining gap: ${remainingTarget}\n\nThe system attempted safe send, email enrichment, draft generation, and email-ready lead refill. Keep the send guardrails; fix this by adding better email-ready sources or increasing enrichment coverage, not by sending weak/no-email leads.`,
       taskType: 'lead_throughput_supply_gap',
-      priority: remainingTarget >= Math.ceil(target / 2) ? 'urgent' : 'high',
+      priority: remainingTarget >= Math.ceil(effectiveTarget / 2) ? 'urgent' : 'high',
       entityType: 'lead_throughput',
       entityId: `target-gap-${new Date().toISOString().slice(0, 10)}`,
       dueAt: adminTaskDueDates.now(),
       metadata: {
         target,
+        effectiveTarget,
         sentTotal,
         remainingTarget,
         firstSendCount: firstSend.sentCount,
@@ -2262,6 +2697,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
   return {
     ok: true,
     target,
+    effectiveTarget,
     budgetMs,
     sentTotal,
     remainingTarget,
@@ -2424,8 +2860,28 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       messageId: initialMessage.id,
       sequenceStep: 2,
     })
-    const sendResult = await sendLeadOutreachEmail({ lead, message, sequenceStep: 2 })
+    const sendResult = await sendLeadOutreachEmail({
+      lead,
+      message,
+      sequenceStep: 2,
+      deliveryCircuitBreaker,
+    })
     const now = new Date().toISOString()
+    if (!sendResult.ok && sendResult.deferred) {
+      const restored = await restoreLeadFollowupAfterDeliveryDeferral(
+        lead.id,
+        followupClaimed.updated_at,
+        String(lead.next_follow_up_at)
+      )
+      results.push({
+        leadId: lead.id,
+        label: leadLabel(lead),
+        status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
+        error: sendResult.error || null,
+      })
+      if (!restored || sendResult.deferredScope !== 'lane') break
+      continue
+    }
     if (!sendResult.ok) {
       await insertOutreachSendEvent({
         leadId: lead.id,

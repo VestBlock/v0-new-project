@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { NormalizedLeadInput } from '@/lib/leads/types'
 import { analyzeWebsiteWeakness } from '@/lib/leads/website-analysis'
 import { normalizePhone, safeUrl } from '@/lib/leads/utils'
+import { buildApifyYelpPaidWorkPlan } from '@/lib/leads/paidSourceBudgetCore'
 
 type SearchApifyYelpInput = {
   city: string
@@ -43,9 +44,8 @@ function apifyActorPath(actorId: string) {
   return actorId.replace(/\//g, '~')
 }
 
-function envInt(name: string, fallback: number) {
-  const parsed = Number.parseInt(process.env[name] || '', 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+function envNumber(name: string) {
+  return Number.parseInt(process.env[name] || '', 10)
 }
 
 async function apifyRequest<T>(path: string, init?: RequestInit) {
@@ -147,37 +147,45 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
   }
 
   const actorId = process.env.APIFY_YELP_ACTOR_ID || 'tri_angle/yelp-scraper'
-  const proxyCountry = input.proxyCountry || process.env.APIFY_PROXY_COUNTRY || 'US'
-  const memoryMbytes = envInt('APIFY_YELP_MEMORY_MBYTES', 1024)
-  const timeoutSecs = input.timeoutSecs || envInt('APIFY_YELP_TIMEOUT_SECS', 180)
-  const maxConcurrency = envInt('APIFY_YELP_MAX_CONCURRENCY', 3)
+  const workPlan = buildApifyYelpPaidWorkPlan({
+    niches: input.niches,
+    limitPerNiche: input.limitPerNiche,
+    memoryMbytes: envNumber('APIFY_YELP_MEMORY_MBYTES'),
+    timeoutSecs: input.timeoutSecs ?? envNumber('APIFY_YELP_TIMEOUT_SECS'),
+    maxWaitMs: input.maxWaitMs ?? envNumber('APIFY_YELP_MAX_WAIT_MS'),
+    maxConcurrency: envNumber('APIFY_YELP_MAX_CONCURRENCY'),
+    proxyCountry: input.proxyCountry || process.env.APIFY_PROXY_COUNTRY || 'US',
+  })
+  if (workPlan.estimatedBillableUnits <= 0) {
+    throw new Error('Apify Yelp run has no work inside the enforced resource and result limits.')
+  }
   const normalizedLeads: NormalizedLeadInput[] = []
   const location = `${input.city}${input.state ? `, ${input.state}` : ''}`
   const runResult = runSchema.parse(
-    await apifyRequest(`/acts/${apifyActorPath(actorId)}/runs?memory=${memoryMbytes}&timeout=${timeoutSecs}`, {
+    await apifyRequest(`/acts/${apifyActorPath(actorId)}/runs?memory=${workPlan.memoryMbytes}&timeout=${workPlan.timeoutSecs}`, {
       method: 'POST',
       body: JSON.stringify({
-        searchTerms: input.niches,
+        searchTerms: workPlan.niches,
         locations: [location],
-        searchLimit: input.limitPerNiche,
+        searchLimit: workPlan.limitPerNiche,
         useApifyProxy: true,
-        apifyProxyCountry: proxyCountry,
-        maxRequestRetries: 2,
-        maxConcurrency,
+        apifyProxyCountry: workPlan.proxyCountry,
+        maxRequestRetries: 0,
+        maxConcurrency: workPlan.maxConcurrency,
       }),
     })
   )
 
   const completed = await waitForRunCompletion(
     runResult.data.id,
-    input.maxWaitMs || envInt('APIFY_YELP_MAX_WAIT_MS', 300000)
+    workPlan.maxWaitMs
   )
   const datasetId = completed.defaultDatasetId || runResult.data.defaultDatasetId
   if (!datasetId) {
     throw new Error(`Apify actor ${actorId} did not return a dataset id.`)
   }
 
-  const items = await fetchDatasetItems(datasetId)
+  const items = (await fetchDatasetItems(datasetId)).slice(0, workPlan.resultUnits)
 
   for (const item of items) {
     const parsed = yelpItemSchema.safeParse(item)
@@ -189,12 +197,12 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
     const categoryLabel = pickCategory(record.categories)?.toLowerCase() || ''
     const businessLabel = `${record.name || ''} ${categoryLabel}`.toLowerCase()
     const matchedNiche =
-      input.niches.find((niche) =>
+      workPlan.niches.find((niche) =>
         niche
           .toLowerCase()
           .split(/\s+/)
           .some((part) => part.length > 3 && businessLabel.includes(part))
-      ) || input.niches[0]
+      ) || workPlan.niches[0]
     const lowerNiche = matchedNiche.toLowerCase()
     const weakSignals = websiteReport.weakSignals
     const category = inferCategory(lowerNiche, weakSignals, websiteReport.hasOnlineBooking, websiteReport.hasChat)

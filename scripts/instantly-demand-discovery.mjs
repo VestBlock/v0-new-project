@@ -19,6 +19,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const API_BASE_URL = String(process.env.INSTANTLY_API_BASE_URL || 'https://api.instantly.ai').replace(/\/+$/, '')
@@ -549,6 +550,10 @@ async function main() {
   const verify = hasFlag('--verify')
   const verbose = hasFlag('--verbose')
   const campaignId = getArg('--campaign-id')
+  quarantineLegacyDirectLiveSend({
+    requested: push && Boolean(campaignId),
+    entry: 'instantly-demand-discovery campaign import',
+  })
   const listName = getArg('--list-name', `${preset.listPrefix} ${today()}`)
 
   const discovery = await probeDiscovery(apiKey, preset, markets, Math.min(limit, 100))

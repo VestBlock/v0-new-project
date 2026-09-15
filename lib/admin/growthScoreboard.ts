@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { countUniqueProviderAcceptedSends } from '@/lib/outreach/delivery-status'
+import { configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
 import { logEvent } from '@/lib/system/logEvent'
 
 type LeadRow = {
@@ -57,11 +58,6 @@ type FundingPaymentRow = {
   status?: string | null
   created_at?: string | null
   updated_at?: string | null
-}
-
-function envInt(name: string, fallback: number) {
-  const parsed = Number.parseInt(process.env[name] || '', 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 export type HardScoreboard = {
@@ -225,7 +221,7 @@ export function computeHardScoreboard(input: {
   const hardScoreboardTargets = {
     monthlyRevenue: monthlyRevenueTarget,
     newLeads24h: 10,
-    totalOutreach24h: envInt('LEADS_TARGET_EMAILS_PER_DAY', 500),
+    totalOutreach24h: configuredDailyStrategyOutputTarget(),
     partnerOutreach24h: 6,
     replySignals7d: 7,
     bookedOrWon7d: 3,

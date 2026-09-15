@@ -3,12 +3,13 @@
  *
  * Counts today's DealMachine owner-contact sends, calculates remaining daily
  * capacity, then rotates through known DealMachine contact exports until the
- * seller email cap is reached. Live sends require --send.
+ * seller email cap is reached. Live delivery now uses outreach:dispatch:live.
  */
 
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -142,6 +143,7 @@ function runMarket({ market, exportCsv, limit, throttle, send }) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "seller-outreach-autopilot" })
   const date = todayIso()
   const dailyCap = intArg("--daily-cap", Number.parseInt(process.env.SELLER_OUTREACH_DAILY_CAP || "500", 10), 1000)
   const throttle = intArg("--throttle", 1800, 30000)

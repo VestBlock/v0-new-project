@@ -4,7 +4,7 @@
  * Pulls current on-market land listings, excludes Biloxi when requested, and
  * sends concise agent outreach for an active land buyer.
  *
- * Dry run by default. Use --send for live email.
+ * Dry run by default. Live delivery is quarantined; use the governed dispatcher.
  */
 
 import fs from "node:fs"
@@ -12,6 +12,7 @@ import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { Resend } from "resend"
 import { getEmailQualityIssue, normalizeEmailAddress } from "./shared-email-quality.mjs"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -191,6 +192,7 @@ function buildEmail(listing) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "land-buyer-backed-agent-outreach" })
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.mkdirSync(OUTREACH_DIR, { recursive: true })
 

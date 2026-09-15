@@ -505,7 +505,7 @@ function writeOutputs(rows) {
       "```bash",
       "pnpm run distress:dealmachine:ingest-export:apply -- --file=/path/to/dealmachine-contacts.csv --split-by-market",
       "pnpm run distress:dealmachine:export-request:all",
-      "pnpm run distress:dealmachine:export-outreach -- --strategy=<strategy-key> --config-file=<config.json> --limit=100 --send",
+      "pnpm run outreach:dispatch:live",
       "```",
       "",
     ].join("\n")

@@ -5,13 +5,14 @@
  * DealMachine lead records, extracts returned owner email addresses, writes a
  * contact report, and sends a soft seller-option email through Resend.
  *
- * DRY RUN BY DEFAULT. Nothing sends unless --send is passed.
+ * RETIRED: the legacy DealMachine API path is permanently disabled. Use the
+ * governed platform ingestion and outreach dispatcher instead.
  *
  * Usage:
  *   node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100
  *   node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100 --address-pass
  *   node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100 --export=/path/to/dealmachine-export.csv
- *   node --env-file=.env.local scripts/dealmachine-owner-email.mjs --limit=100 --send
+ *   pnpm run outreach:dispatch:live
  */
 
 import { Resend } from "resend"
@@ -782,7 +783,7 @@ async function main() {
   }
 
   if (!SEND) {
-    console.log("Dry run only. Re-run with --send to deliver through Resend.")
+    console.log("Dry run only. Use pnpm run outreach:dispatch:live for governed delivery.")
     return
   }
 

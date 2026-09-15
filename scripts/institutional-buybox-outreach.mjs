@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Resend } from 'resend'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const SEND = args.includes('--send')
@@ -140,6 +141,7 @@ function sleep(ms) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: 'institutional-buybox-outreach' })
   if (!fs.existsSync(CSV_PATH)) throw new Error(`CSV not found: ${CSV_PATH}`)
   fs.mkdirSync(OUT_DIR, { recursive: true })
   const sentEmails = readSentEmails()

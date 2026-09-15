@@ -25,8 +25,8 @@
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
 - `RESEND_API_KEY`
-- `FROM_EMAIL`
-  Verified VestBlock sender address used by the Resend provider readiness check.
+- `RESEND_FROM_EMAIL` (or `RESEND_EMAIL`, `OUTREACH_FROM_EMAIL`, then `FROM_EMAIL`)
+  Verified VestBlock sender address. The selected provider and the throughput-reservation ledger resolve this identity in the same order.
 
 ## Guarded outreach
 
@@ -35,27 +35,33 @@
 - `RESEND_WEBHOOK_SECRET`
   Verifies delivery events before they update records or suppression state.
 - `OUTREACH_REPLY_TO_EMAIL`
-  Monitored Outlook address used to correlate replies with the originating message.
+  Monitored Outlook address used to correlate replies with the originating message. After trimming and lowercasing, this must exactly match `OUTLOOK_ACQUISITIONS_MAILBOX`; a mismatch blocks every live send even if the legacy reply-capture override is enabled.
 - `MICROSOFT_GRAPH_CLIENT_ID`
 - `MICROSOFT_GRAPH_REFRESH_TOKEN`
   Delegated Outlook mailbox authentication. For application authentication, use `MICROSOFT_GRAPH_CLIENT_SECRET` and `MICROSOFT_TENANT_ID` instead of a refresh token.
 - `OUTLOOK_ACQUISITIONS_MAILBOX`
-  Outlook mailbox address read by Microsoft Graph for reply capture.
+  Outlook mailbox address read by Microsoft Graph for reply capture. Configure the actual mailbox explicitly; unverified reply-to aliases are not accepted as equivalent.
 - `OUTREACH_MAILING_ADDRESS`
   Physical business mailing address appended to commercial outreach.
 - `OUTREACH_REQUIRE_REPLY_CAPTURE=true`
 - `OUTREACH_ALLOW_WITHOUT_REPLY_CAPTURE=false`
   These two settings fail closed if the monitored reply path is unavailable.
+- `OUTREACH_REPLY_CAPTURE_MAX_AGE_MINUTES=120`
+  Maximum age of a successful whole-mailbox sync before live sending closes.
+- `VESTBLOCK_DAILY_OUTREACH_TARGET=1000`
+  Canonical daily attempt target shared across all 23 strategy lanes. Allocation is 43 per lane plus one rotating attempt for 11 lanes each business day. The delivery-health governor can only lower this target while evidence is insufficient or unhealthy.
+- `OUTREACH_DISPATCH_CRON_SEND=true`
+- `AUTO_SEND_ENABLED=true`
+- `LEADS_AUTO_SEND_APPROVED=true`
+  Required lead-dispatch gates. Review-only strategies still require a recorded human approval before scheduled delivery.
+- `OUTREACH_DISPATCH_PER_RUN=30`
+  Maximum lead attempts requested by each admitted 15-minute dispatch run. The database governor applies the lower global, lane, sender-stage, and trailing-24-hour limits.
 - `PARTNER_PIPELINE_CRON_SEND=true`
   Master switch for the scheduled partner pipeline. A lane still requires its own switch.
 - `BUYERS_PIPELINE_CRON_SEND`, `LENDERS_PIPELINE_CRON_SEND`, `INVESTORS_PIPELINE_CRON_SEND`
   Independent buyer, lender, and investor pipeline switches.
 - `BUYER_AUTO_SEND_ENABLED`, `LENDER_AUTO_SEND_ENABLED`, `INVESTOR_AUTO_SEND_ENABLED`
   Independent send gates. Delivery health, suppression, content validation, and daily caps still apply.
-- `PARTNER_PIPELINE_SEND_LIMIT`
-  Total healthy-mode partner send allocation per scheduled run. Controlled trials are capped separately.
-- `BUYERS_DAILY_SEND_LIMIT`, `INVESTORS_DAILY_SEND_LIMIT`, `LENDERS_DAILY_SEND_LIMIT`
-  Trailing 24-hour automatic-email attempt caps for each lane. Every live attempt is reserved before the provider call in a shared database ledger, and each ledger is seeded/reconciled from that lane's recent `sent_at` records. Provider failures and ambiguous outcomes remain counted; overlapping cron and standalone invocations cannot spend the same remaining slot.
 - `OUTREACH_DELIVERY_MIN_SAMPLE`, `OUTREACH_MAX_BAD_DELIVERY_RATE`
   Minimum telemetry evidence and maximum bad-delivery rate for automatic sending.
 - `OUTREACH_CANARY_ENABLED`

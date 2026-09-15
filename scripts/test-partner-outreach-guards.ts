@@ -12,6 +12,7 @@ import {
   INVESTOR_OUTREACH_TEMPLATE_VERSION,
 } from '../lib/investors/outreach'
 import type { InvestorOutreachMessageRecord, InvestorProfileRecord } from '../lib/investors/types'
+import { allocateDailyStrategyOutput } from '../lib/outreach/dailyStrategyOutputCore'
 
 const lender = {
   id: '10000000-0000-4000-8000-000000000001',
@@ -102,12 +103,36 @@ for (const source of [buyerAutomationSource, lenderAutomationSource, investorSer
   assert.match(source, /operationalFailureCount/)
   assert.match(source, /ok: operationalFailureCount === 0/)
 }
-assert.match(investorAutomationSource, /const errorCount = results\.filter\(\(item\) => Boolean\(item\.error\)\)\.length/)
+assert.match(investorAutomationSource, /const errorCount = results\.filter\(\(item\) => item\.status === 'failed'\)\.length/)
+assert.match(investorAutomationSource, /const skippedCount = results\.filter\(\(item\) => item\.status === 'skipped'\)\.length/)
 assert.match(investorAutomationSource, /status: ok \? 'completed' : 'failed'/)
 assert.match(investorAutomationSource, /const ok = stages\.every\(\(stage\) => stage\.ok !== false\)/)
 for (const source of [partnerRouteSource, buyerRouteSource, investorPipelineRouteSource, investorSendRouteSource]) {
   assert.doesNotMatch(source, /status: [^\n]*207/)
   assert.match(source, /status: [^\n]*\? 200 : 500/)
 }
+
+const partnerPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-15T17:00:00.000Z'))
+const partnerTargets = [partnerPlan.byKey.buyers, partnerPlan.byKey.lenders, partnerPlan.byKey.investors]
+assert.ok(partnerTargets.every((target) => target === 43 || target === 44))
+assert.equal(
+  partnerTargets.reduce((sum, target) => sum + target, 0),
+  partnerPlan.groupTotals.partner
+)
+for (const source of [buyerAutomationSource, lenderAutomationSource, investorAutomationSource]) {
+  assert.match(source, /allocateDailyStrategyOutput/)
+  assert.match(source, /dailyLaneTarget/)
+}
+assert.match(buyerAutomationSource, /const dailyLimit = buyerDailyOutputTarget\(\)/)
+assert.match(lenderAutomationSource, /const dailyLimit = lenderDailyOutputTarget\(\)/)
+assert.match(investorAutomationSource, /runDailyInvestorSend\(sendLimit/)
+assert.doesNotMatch(
+  investorServiceSource,
+  /INVESTORS_DAILY_SEND_LIMIT/,
+  'legacy investor caps must not override the canonical 23-lane allocation'
+)
+assert.match(partnerRouteSource, /canonicalSendAllocations/)
+assert.match(partnerRouteSource, /evaluateOutreachThroughputGovernor/)
+assert.doesNotMatch(partnerRouteSource, /PARTNER_PIPELINE_SEND_LIMIT/)
 
 console.log('partner-outreach-guards: ok')

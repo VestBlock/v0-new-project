@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
+import { evaluateOutreachV2Lead } from '@/lib/leads/outreachV2'
 import { getLeadRevenueFitIssue, getRevenueCampaignPriority } from '@/lib/leads/revenueCampaigns'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
 import type {
@@ -14,7 +15,14 @@ import type {
   TargetMarketRecord,
 } from '@/lib/leads/types'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
+import { assessHunterSendVerificationCache } from '@/lib/outreach/hunterSendVerificationCore'
 import { hasActionableReplyEvidence, isMessageGenerationProtected } from '@/lib/outreach/messageState'
+import {
+  chicagoBusinessDate,
+  DAILY_STRATEGY_OUTPUT_LANES,
+  getDailyStrategyOutputLane,
+  type DailyStrategyOutputLaneKey,
+} from '@/lib/outreach/dailyStrategyOutputCore'
 
 type ScrapeRunCreate = {
   sourceKey: string
@@ -699,14 +707,58 @@ export async function claimOutreachMessageForSend(messageId: string) {
   return (data || null) as OutreachMessageRecord | null
 }
 
+export async function restoreOutreachMessageAfterDeliveryDeferral(
+  messageId: string,
+  claimedUpdatedAt: string,
+  sendError?: string | null
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('outreach_messages')
+    .update({
+      status: 'approved',
+      send_provider: null,
+      send_error: sendError || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as OutreachMessageRecord | null
+}
+
 export async function claimLeadFollowup(leadId: string, expectedNextFollowUpAt: string | null | undefined) {
-  if (!expectedNextFollowUpAt) return false
+  if (!expectedNextFollowUpAt) return null
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('leads')
     .update({ next_follow_up_at: null, updated_at: new Date().toISOString() })
     .eq('id', leadId)
     .eq('next_follow_up_at', expectedNextFollowUpAt)
+    .select('id,updated_at')
+    .maybeSingle()
+
+  if (error) throw error
+  return data || null
+}
+
+export async function restoreLeadFollowupAfterDeliveryDeferral(
+  leadId: string,
+  claimedUpdatedAt: string,
+  nextFollowUpAt: string
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('leads')
+    .update({ next_follow_up_at: nextFollowUpAt, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
+    .eq('updated_at', claimedUpdatedAt)
+    .is('next_follow_up_at', null)
     .select('id')
     .maybeSingle()
 
@@ -869,32 +921,41 @@ export async function listApprovedEmailOutreach(limit = 50) {
   )
 }
 
-export async function listEmailOutreachForSendQueue(limit = 75) {
+export async function listEmailOutreachForSendQueue(
+  limit = 75,
+  options: {
+    laneTargets?: Partial<Record<DailyStrategyOutputLaneKey, number>>
+    candidatesPerSlot?: number
+  } = {}
+) {
   const admin = createAdminClient()
   const allowSecondaryCampaigns = allowSecondaryRevenueSendQueue()
-  const fetchLimit = Math.min(Math.max(limit * 50, 250), 2000)
-  const [approvedResult, reviewResult] = await Promise.all([
-    admin
-      .from('outreach_messages')
-      .select('*, leads(*)')
-      .eq('channel', 'email')
-      .eq('status', 'approved')
-      .is('sent_at', null)
-      .order('approved_at', { ascending: true, nullsFirst: false })
-      .limit(fetchLimit),
-    admin
-      .from('outreach_messages')
-      .select('*, leads(*)')
-      .eq('channel', 'email')
-      .in('status', ['queued', 'needs_review'])
-      .is('sent_at', null)
-      .order('last_generated_at', { ascending: false, nullsFirst: false })
-      .limit(fetchLimit),
+  const scanLimit = Math.min(Math.max(limit * 100, 2_000), 10_000)
+  const pageSize = 1_000
+  const select = '*, leads(*, strategy_lead_memberships(strategy_key,created_at))'
+  const fetchCandidates = async (statuses: string[], orderColumn: string, ascending: boolean) => {
+    const rows: unknown[] = []
+    for (let offset = 0; offset < scanLimit; offset += pageSize) {
+      let query = admin
+        .from('outreach_messages')
+        .select(select)
+        .eq('channel', 'email')
+        .is('sent_at', null)
+        .order(orderColumn, { ascending, nullsFirst: false })
+        .range(offset, Math.min(scanLimit, offset + pageSize) - 1)
+      query = statuses.length === 1 ? query.eq('status', statuses[0]) : query.in('status', statuses)
+      const { data: page, error } = await query
+      if (error) throw error
+      rows.push(...(page || []))
+      if (!page || page.length < pageSize) break
+    }
+    return rows
+  }
+  const [approvedRows, reviewRows] = await Promise.all([
+    fetchCandidates(['approved'], 'approved_at', true),
+    fetchCandidates(['queued', 'needs_review'], 'last_generated_at', false),
   ])
-
-  if (approvedResult.error) throw approvedResult.error
-  if (reviewResult.error) throw reviewResult.error
-  const data = [...(approvedResult.data || []), ...(reviewResult.data || [])]
+  const data = [...approvedRows, ...reviewRows]
   const { data: contactedPropertyRows, error: contactedPropertyError } = await admin
     .from('command_center_outbound_enrollments')
     .select('property_address')
@@ -918,6 +979,14 @@ export async function listEmailOutreachForSendQueue(limit = 75) {
       !shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
     ) return false
 
+    if (lead?.email) {
+      const hunterCache = assessHunterSendVerificationCache({
+        metadata: lead.metadata_json,
+        email: lead.email,
+      })
+      if (hunterCache.fresh && !hunterCache.sendable) return false
+    }
+
     const enrolledKey = enrolledPropertyKey(lead?.property_address)
     return !enrolledKey || !contactedProperties.has(enrolledKey)
   })
@@ -933,7 +1002,76 @@ export async function listEmailOutreachForSendQueue(limit = 75) {
     if (propertyKey) seenSellerProperties.add(propertyKey)
     return true
   })
-  return deduped.slice(0, limit)
+  if (!options.laneTargets) return deduped.slice(0, limit)
+
+  const { data: reservations, error: reservationError } = await admin
+    .from('outreach_attempt_reservations')
+    .select('strategy_key')
+    .eq('business_date', chicagoBusinessDate())
+    .neq('state', 'cancelled')
+    .limit(1_000)
+  if (reservationError) throw reservationError
+  const usedByLane = new Map<string, number>()
+  for (const reservation of reservations || []) {
+    const key = String(reservation.strategy_key || '')
+    usedByLane.set(key, (usedByLane.get(key) || 0) + 1)
+  }
+
+  const remainingByLane = new Map<DailyStrategyOutputLaneKey, number>()
+  for (const lane of DAILY_STRATEGY_OUTPUT_LANES) {
+    remainingByLane.set(
+      lane.key,
+      Math.max(0, Number(options.laneTargets[lane.key] || 0) - (usedByLane.get(lane.key) || 0))
+    )
+  }
+
+  const strategyForRow = (row: OutreachMessageRecord & { leads: LeadRecord | null }) => {
+    const lead = row.leads as (LeadRecord & {
+      strategy_lead_memberships?: Array<{ strategy_key?: string | null; created_at?: string | null }>
+    }) | null
+    const memberships = [...(lead?.strategy_lead_memberships || [])].sort(
+      (left, right) => Date.parse(String(right.created_at || '')) - Date.parse(String(left.created_at || ''))
+    )
+    const candidates = [
+      ...memberships.map((membership) => membership.strategy_key),
+      lead?.market_segment,
+      evaluateOutreachV2Lead(lead, row.subject || '').segmentKey,
+    ]
+    for (const candidate of candidates) {
+      const lane = getDailyStrategyOutputLane(String(candidate || ''))
+      if (lane && lane.group !== 'partner') return lane.key
+    }
+    return null
+  }
+
+  const candidatesPerSlot = Math.min(25, Math.max(1, Math.floor(options.candidatesPerSlot || 10)))
+  const buckets = new Map<DailyStrategyOutputLaneKey, Array<OutreachMessageRecord & { leads: LeadRecord | null }>>()
+  for (const row of deduped) {
+    const key = strategyForRow(row)
+    if (!key) continue
+    const remaining = remainingByLane.get(key) || 0
+    if (remaining < 1) continue
+    const bucket = buckets.get(key) || []
+    if (bucket.length >= remaining * candidatesPerSlot) continue
+    bucket.push(row)
+    buckets.set(key, bucket)
+  }
+
+  const balanced: Array<OutreachMessageRecord & { leads: LeadRecord | null }> = []
+  while (balanced.length < limit) {
+    let progressed = false
+    for (const lane of DAILY_STRATEGY_OUTPUT_LANES) {
+      if (lane.group === 'partner') continue
+      const bucket = buckets.get(lane.key)
+      const row = bucket?.shift()
+      if (!row) continue
+      balanced.push(row)
+      progressed = true
+      if (balanced.length >= limit) break
+    }
+    if (!progressed) break
+  }
+  return balanced
 }
 
 export async function listLeadsNeedingFollowup(limit = 100) {
@@ -1003,7 +1141,7 @@ export async function listLeadEmailFollowupsDue(
       .order('sent_at', { ascending: false }),
     admin
       .from('outreach_send_events')
-      .select('lead_id,status,metadata_json')
+      .select('lead_id,status,recipient,metadata_json')
       .in('lead_id', leadIds)
       .in('status', ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'complained', 'suppressed']),
     candidateEmails.length
@@ -1021,10 +1159,13 @@ export async function listLeadEmailFollowupsDue(
   for (const message of (messages || []) as OutreachMessageRecord[]) {
     if (!initialMessageByLead.has(message.lead_id)) initialMessageByLead.set(message.lead_id, message)
   }
-  const completedFollowupLeadIds = new Set(
+  const completedFollowupRecipientKeys = new Set(
     (sendEvents || [])
-      .filter((event) => Number((event.metadata_json as Record<string, unknown> | null)?.sequenceStep || 0) >= 2)
-      .map((event) => String(event.lead_id))
+      .filter((event) => (
+        Number((event.metadata_json as Record<string, unknown> | null)?.sequenceStep || 0) >= 2 &&
+        Boolean(normalizeEmailAddress(event.recipient))
+      ))
+      .map((event) => `${String(event.lead_id)}:${normalizeEmailAddress(event.recipient)}`)
   )
 
   // A reply is recipient-level evidence. Suppress every lead sharing that
@@ -1041,8 +1182,11 @@ export async function listLeadEmailFollowupsDue(
 
   return candidateLeads
     .filter((lead) => {
-      if (!initialMessageByLead.has(lead.id) || completedFollowupLeadIds.has(lead.id)) return false
       const recipient = normalizeEmailAddress(lead.email)
+      if (
+        !initialMessageByLead.has(lead.id) ||
+        completedFollowupRecipientKeys.has(`${lead.id}:${recipient}`)
+      ) return false
       if (!recipient || repliedEmails.has(recipient) || seenRecipients.has(recipient)) return false
       const propertyKey = sellerPropertyKey(lead)
       if (propertyKey && seenProperties.has(propertyKey)) return false

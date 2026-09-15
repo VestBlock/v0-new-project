@@ -1,6 +1,12 @@
 import { safeUrl, normalizePhone } from '@/lib/leads/utils'
 import { BUYER_CATEGORY_TO_TYPE, DEFAULT_BUYER_DISCOVERY_NICHES } from '@/lib/buyers/constants'
 import type { BuyerCategory, BuyerDiscoveryInput, NormalizedBuyerInput } from '@/lib/buyers/types'
+import {
+  paidSourcePolicySkipError,
+  runPaidSourceAttempt,
+  unwrapPaidSourceAttempt,
+} from '@/lib/leads/paidSourceBudget'
+import { isGooglePlacesApproved } from '@/lib/leads/sourceCostGovernor'
 
 function classifyCategoryFromNiche(niche: string): BuyerCategory {
   const lower = niche.toLowerCase()
@@ -117,12 +123,20 @@ out tags center ${Math.max(10, input.limitPerNiche * Math.max(1, input.niches.le
   })
 }
 
-async function discoverWithGoogle(input: BuyerDiscoveryInput) {
+function buyerGoogleAttemptKey(input: BuyerDiscoveryInput, niches: string[]) {
+  const nicheKey = [...niches]
+    .map((niche) => niche.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join('|')
+  return `partner:buyers:google:${input.city.trim().toLowerCase()}-${input.state.trim().toLowerCase()}:${nicheKey}`
+}
+
+async function fetchBuyersFromGoogle(input: BuyerDiscoveryInput, niches: string[]) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY
   if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY is not configured.')
 
   const normalizedBuyers: NormalizedBuyerInput[] = []
-  const niches = input.niches.length ? input.niches : [...DEFAULT_BUYER_DISCOVERY_NICHES]
 
   for (const niche of niches) {
     const query = `${niche} in ${input.city}, ${input.state}`
@@ -191,11 +205,31 @@ async function discoverWithGoogle(input: BuyerDiscoveryInput) {
   return normalizedBuyers
 }
 
+async function discoverWithGoogle(input: BuyerDiscoveryInput) {
+  const niches = input.niches.length ? input.niches : [...DEFAULT_BUYER_DISCOVERY_NICHES]
+  if (!isGooglePlacesApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'google_places',
+      units: niches.length,
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const attempt = await runPaidSourceAttempt({
+    provider: 'google_places',
+    attemptKey: buyerGoogleAttemptKey(input, niches),
+    units: niches.length,
+    execute: (reservation) =>
+      fetchBuyersFromGoogle(input, niches.slice(0, reservation.reservedUnits)),
+  })
+  return unwrapPaidSourceAttempt(attempt)
+}
+
 export async function discoverBuyersForMarket(input: BuyerDiscoveryInput) {
   if (input.provider === 'openstreetmap') return discoverWithOpenStreetMap(input)
   if (input.provider === 'google') return discoverWithGoogle(input)
 
-  const googleConfigured = Boolean(process.env.GOOGLE_PLACES_API_KEY)
+  const googleConfigured = isGooglePlacesApproved()
   const preferFree = process.env.BUYER_DISCOVERY_PREFER_FREE === 'true'
 
   if (preferFree) {

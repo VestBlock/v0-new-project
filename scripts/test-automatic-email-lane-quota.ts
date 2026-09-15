@@ -197,14 +197,14 @@ const laneChecks = [
     scope: "scope: 'buyer'",
     claim: 'claimBuyerOutreachMessageForSend(row.id, row.updated_at)',
     reserve: 'reserveAutomaticEmailLaneAttempt({',
-    send: 'sendBuyerOutreachEmail({ buyer, message: claimed })',
+    send: 'sendBuyerOutreachEmail({',
   },
   {
     file: 'lib/investors/service.ts',
     scope: "scope: 'investor'",
     claim: 'claimInvestorOutreachMessageForSend(row.id, row.updated_at)',
     reserve: 'reserveAutomaticEmailLaneAttempt({',
-    send: 'sendInvestorOutreachEmail({ investor, message: claimed })',
+    send: 'sendInvestorOutreachEmail({',
   },
   {
     file: 'lib/lenders/automation.ts',

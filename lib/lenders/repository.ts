@@ -5,7 +5,12 @@ import {
   FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
   isMessageGenerationProtected,
 } from '@/lib/outreach/messageState'
-import { isVerifiedLenderCanaryCandidate } from '@/lib/lenders/canary'
+import {
+  isLenderCanaryPreCandidate,
+  withHunterCanaryVerificationEvidence,
+  type HunterCanaryVerificationEvidence,
+} from '@/lib/lenders/canary'
+import { buildHunterSendVerificationCache } from '@/lib/outreach/hunterSendVerificationCore'
 import type {
   BorrowerMatchInput,
   LenderContactRecord,
@@ -204,6 +209,29 @@ export async function updateLenderRecordIfVersion(input: {
   const { data, error } = await query.select('*').maybeSingle()
   if (error) throw error
   return data ? (data as LenderRecord) : null
+}
+
+export async function cacheLenderHunterCanaryVerification(input: {
+  lender: LenderRecord
+  evidence: HunterCanaryVerificationEvidence
+}) {
+  const hunterSendVerification = buildHunterSendVerificationCache({
+    email: input.lender.contact_email || '',
+    status: input.evidence.status,
+    checkedAt: input.evidence.checkedAt,
+  })
+  const updated = await updateLenderRecordIfVersion({
+    lenderId: input.lender.id,
+    expectedUpdatedAt: input.lender.updated_at,
+    expectedContactEmail: input.lender.contact_email,
+    updates: {
+      metadata_json: {
+        ...withHunterCanaryVerificationEvidence(input.lender.metadata_json, input.evidence),
+        hunterSendVerification,
+      },
+    },
+  })
+  return Boolean(updated)
 }
 
 export async function claimLenderForHunterEnrichment(input: {
@@ -650,8 +678,8 @@ export async function listApprovedLenderEmailOutreach(limit = 30) {
   return (data || []) as Array<LenderOutreachMessageRecord & { lenders: LenderRecord | null }>
 }
 
-export async function listVerifiedLenderCanaryOutreach(limit = 5) {
-  const cappedLimit = Math.min(5, Math.max(1, limit))
+export async function listLenderCanaryPreCandidates(limit = 20) {
+  const cappedLimit = Math.min(25, Math.max(1, limit))
   const candidates = await listApprovedLenderEmailOutreach(Math.max(cappedLimit * 20, 100))
   const lenderIds = Array.from(new Set(candidates.map((row) => row.lenders?.id).filter(Boolean))) as string[]
   const emails = Array.from(
@@ -681,7 +709,7 @@ export async function listVerifiedLenderCanaryOutreach(limit = 5) {
     const lender = row.lenders
     const recipient = String(lender?.contact_email || '').trim().toLowerCase()
     if (!lender || !recipient || seenRecipients.has(recipient)) return false
-    const eligible = isVerifiedLenderCanaryCandidate({
+    const eligible = isLenderCanaryPreCandidate({
       lender,
       channel: row.channel,
       hasPriorInitialSend: priorInitialSendIds.has(lender.id),
@@ -691,6 +719,9 @@ export async function listVerifiedLenderCanaryOutreach(limit = 5) {
     return eligible
   }).slice(0, cappedLimit)
 }
+
+/** @deprecated Use listLenderCanaryPreCandidates; Hunter domain-search proof is only a pre-candidate signal. */
+export const listVerifiedLenderCanaryOutreach = listLenderCanaryPreCandidates
 
 export async function listLenderOutreachForAutoApproval(limit = 30) {
   const admin = createAdminClient()

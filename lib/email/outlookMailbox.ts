@@ -1,20 +1,28 @@
 import 'server-only'
 
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { updateBuyerRecord, upsertBuyer } from '@/lib/buyers/repository'
 import type { BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { recordOutreachThroughputProviderOutcome } from '@/lib/outreach/throughputGovernor'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import {
   correlateOutlookInbound,
   evaluateOutlookInboundIntegrity,
+  requireOutlookThroughputProjectionUpdated,
   selectCorrelatedLead,
   shouldProcessMailboxSideEffects,
   type MailboxClassification,
   type OutlookInboundMessage,
   type OutlookOutboundEvidence,
 } from '@/lib/email/outlookMailboxIntegrity'
+import {
+  buildOutlookMailboxInitialUrl,
+  validateOutlookMailboxContinuationUrl,
+} from '@/lib/email/outlookMailboxPaginationCore'
 
 const OUTBOUND_SEND_STATUSES = ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied']
 const EVIDENCE_PAGE_SIZE = 500
@@ -269,7 +277,7 @@ async function loadOutboundSendEventRows(
   for (let offset = 0; ; offset += EVIDENCE_PAGE_SIZE) {
     const { data, error } = await admin
       .from('outreach_send_events')
-      .select('lead_id,outreach_message_id,recipient,metadata_json,created_at,status')
+      .select('lead_id,outreach_message_id,recipient,provider,metadata_json,created_at,status')
       .eq('channel', 'email')
       .in('status', OUTBOUND_SEND_STATUSES)
       .in('recipient', senderEmails)
@@ -317,8 +325,28 @@ async function updateMailboxJob(input: {
   lastStatus: string
   error?: string | null
   metrics?: Record<string, unknown>
+  claimToken?: string | null
 }) {
   const admin = createAdminClient()
+  const nextRunAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+  if (input.claimToken) {
+    const { data, error } = await admin.rpc('finalize_outlook_mailbox_sync', {
+      p_job_key: 'reply-memory-sync',
+      p_claim_token: input.claimToken,
+      p_status: input.status,
+      p_last_status: input.lastStatus,
+      p_error: input.error || null,
+      p_metrics: input.metrics || {},
+      p_replace_metrics: input.metrics !== undefined,
+      p_next_run_at: nextRunAt,
+    })
+    if (error) throw error
+    const result = (data || {}) as { updated?: boolean; reason?: string | null }
+    if (!result.updated) {
+      throw new Error(`Reply-memory job lease ownership was lost: ${result.reason || 'unknown_reason'}`)
+    }
+    return
+  }
   const { data, error } = await admin
     .from('command_center_jobs')
     .update({
@@ -326,14 +354,98 @@ async function updateMailboxJob(input: {
       last_status: input.lastStatus,
       last_error: input.error || null,
       last_run_at: new Date().toISOString(),
-      next_run_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      metrics_json: input.metrics || {},
+      next_run_at: nextRunAt,
+      ...(input.metrics !== undefined ? { metrics_json: input.metrics } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('job_key', 'reply-memory-sync')
     .select('job_key')
   if (error) throw error
   if (!data?.length) throw new Error('Reply-memory job status row was not updated.')
+}
+
+type MailboxSyncCursorState = {
+  continuationUrl: string | null
+  highWatermark: string | null
+  windowStartedAt: string | null
+}
+
+function validMailboxCursorTimestamp(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp) || timestamp > Date.now() + 5 * 60_000) return null
+  return new Date(timestamp).toISOString()
+}
+
+function mailboxSyncCursorStateFromMetrics(
+  metricsValue: unknown,
+  mailbox: string
+): MailboxSyncCursorState {
+  const metrics = (metricsValue || {}) as Record<string, unknown>
+  const rawContinuation = metrics.continuationUrl
+  const continuationUrl = rawContinuation == null || rawContinuation === ''
+    ? null
+    : validateOutlookMailboxContinuationUrl(rawContinuation, mailbox)
+  // Invalid persisted URLs are ignored rather than followed. The next safe
+  // completed run overwrites the corrupt value while retaining a validated
+  // high-watermark starting point.
+  return {
+    continuationUrl,
+    highWatermark: validMailboxCursorTimestamp(metrics.highWatermark),
+    windowStartedAt: validMailboxCursorTimestamp(metrics.windowStartedAt),
+  }
+}
+
+async function loadMailboxSyncCursorState(
+  admin: ReturnType<typeof createAdminClient>,
+  mailbox: string
+): Promise<MailboxSyncCursorState> {
+  const { data, error } = await admin
+    .from('command_center_jobs')
+    .select('metrics_json')
+    .eq('job_key', 'reply-memory-sync')
+    .maybeSingle()
+  if (error) throw error
+  return mailboxSyncCursorStateFromMetrics(data?.metrics_json, mailbox)
+}
+
+async function claimMailboxSyncLease(input: {
+  admin: ReturnType<typeof createAdminClient>
+  mailbox: string
+  claimToken: string
+}) {
+  const { data, error } = await input.admin.rpc('claim_outlook_mailbox_sync', {
+    p_job_key: 'reply-memory-sync',
+    p_claim_token: input.claimToken,
+    p_lease_seconds: 600,
+  })
+  if (error) throw error
+  const result = (data || {}) as {
+    claimed?: boolean
+    reason?: string | null
+    metrics?: Record<string, unknown>
+  }
+  return {
+    ...result,
+    cursorState: mailboxSyncCursorStateFromMetrics(result.metrics, input.mailbox),
+  }
+}
+
+async function claimMailboxSideEffects(input: {
+  admin: ReturnType<typeof createAdminClient>
+  mailbox: string
+  messageId: string
+}) {
+  const claimToken = randomUUID()
+  const { data, error } = await input.admin.rpc('claim_outlook_mailbox_side_effects', {
+    p_mailbox: input.mailbox,
+    p_message_id: input.messageId,
+    p_claim_token: claimToken,
+    p_lease_seconds: 600,
+  })
+  if (error) throw error
+  const result = (data || {}) as { claimed?: boolean; reason?: string | null }
+  return { ...result, claimToken }
 }
 
 async function requireAdminTask(input: Parameters<typeof createAdminTask>[0]) {
@@ -530,32 +642,101 @@ export async function syncOutlookMailbox(options: {
     return { ok: false, connected: false, ...status, fetched: 0, stored: 0, classifications: {} }
   }
 
+  let syncLeaseClaimed = false
+  let syncClaimToken: string | null = null
   try {
+    const admin = createAdminClient()
+    const proposedSyncClaimToken = randomUUID()
+    syncClaimToken = proposedSyncClaimToken
+    const cursorState = options.dryRun
+      ? await loadMailboxSyncCursorState(admin, config.mailbox)
+      : await (async () => {
+          const claim = await claimMailboxSyncLease({
+            admin,
+            mailbox: config.mailbox,
+            claimToken: proposedSyncClaimToken,
+          })
+          if (!claim.claimed) {
+            if (claim.reason === 'mailbox_sync_claim_active') return null
+            throw new Error(`Mailbox sync could not be claimed: ${claim.reason || 'unknown_reason'}`)
+          }
+          syncLeaseClaimed = true
+          return claim.cursorState
+        })()
+    if (!cursorState) {
+      return {
+        ok: false,
+        connected: true,
+        ...status,
+        error: 'mailbox_sync_claim_active',
+        fetched: 0,
+        stored: 0,
+        classifications: {},
+      }
+    }
     const accessToken = await getMicrosoftAccessToken()
-    const since = new Date(Date.now() - (options.sinceHours || 72) * 60 * 60 * 1000).toISOString()
-    const limit = Math.min(Math.max(options.limit || 40, 1), 50)
-    const params = new URLSearchParams({
-      '$select': 'id,conversationId,internetMessageId,subject,bodyPreview,receivedDateTime,from,toRecipients,isRead,categories,webLink',
-      '$filter': `receivedDateTime ge ${since}`,
-      '$orderby': 'receivedDateTime desc',
-      '$top': String(limit),
+    const overlapMinutes = 15
+    const since = cursorState.highWatermark
+      ? new Date(Date.parse(cursorState.highWatermark) - overlapMinutes * 60_000).toISOString()
+      : new Date(Date.now() - (options.sinceHours || 72) * 60 * 60 * 1000).toISOString()
+    const limit = Math.min(Math.max(options.limit || 100, 1), 250)
+    const savedContinuationUrl = cursorState.continuationUrl
+    const windowStartedAt = savedContinuationUrl && cursorState.windowStartedAt
+      ? cursorState.windowStartedAt
+      : new Date().toISOString()
+    let pageUrl = savedContinuationUrl || buildOutlookMailboxInitialUrl({
+      mailbox: config.mailbox,
+      since,
+      pageSize: Math.min(50, limit),
     })
-    const response = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.mailbox)}/mailFolders/inbox/messages?${params}`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) }
-    )
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      throw new Error(typeof data?.error?.message === 'string' ? data.error.message : `Microsoft Graph failed with ${response.status}.`)
+    const runStartPageUrl = pageUrl
+    const seenPageUrls = new Set<string>()
+    const baseMessages: GraphMessage[] = []
+    let pagesFetched = 0
+    let continuationUrl: string | null = null
+
+    while (pageUrl && baseMessages.length < limit) {
+      const validatedPageUrl = validateOutlookMailboxContinuationUrl(pageUrl, config.mailbox)
+      if (!validatedPageUrl) throw new Error('Microsoft Graph mailbox continuation URL failed validation.')
+      if (seenPageUrls.has(validatedPageUrl)) {
+        throw new Error('Microsoft Graph mailbox pagination repeated the same continuation URL.')
+      }
+      seenPageUrls.add(validatedPageUrl)
+
+      const response = await fetch(validatedPageUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(20_000),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.error?.message === 'string'
+            ? data.error.message
+            : `Microsoft Graph failed with ${response.status}.`
+        )
+      }
+
+      const pageMessages = (Array.isArray(data.value) ? data.value : []) as GraphMessage[]
+      // Consume the entire Graph page. A continuation points after the whole
+      // page, so slicing a final partial page would permanently skip its tail.
+      baseMessages.push(...pageMessages)
+      pagesFetched += 1
+      const rawNextLink = data?.['@odata.nextLink']
+      continuationUrl = rawNextLink == null
+        ? null
+        : validateOutlookMailboxContinuationUrl(rawNextLink, config.mailbox)
+      if (rawNextLink != null && !continuationUrl) {
+        throw new Error('Microsoft Graph returned an invalid mailbox continuation URL.')
+      }
+      pageUrl = continuationUrl || ''
     }
 
-    const baseMessages = (Array.isArray(data.value) ? data.value : []) as GraphMessage[]
+    const backlogPending = Boolean(continuationUrl)
     const messages = await hydrateMessageHeaders({
       accessToken,
       mailbox: config.mailbox,
       messages: baseMessages,
     })
-    const admin = createAdminClient()
     const senderEmails = Array.from(new Set(
       messages
         .map((message) => cleanText(message.from?.emailAddress?.address).toLowerCase())
@@ -601,6 +782,20 @@ export async function syncOutlookMailbox(options: {
         strategyKey: typeof row.strategy_key === 'string' ? row.strategy_key : null,
           recipient: cleanText(typeof row.recipient === 'string' ? row.recipient : null).toLowerCase() || null,
         outboundMessageId: typeof row.last_message_id === 'string' ? row.last_message_id : null,
+        providerMessageId:
+          typeof metadata.providerMessageId === 'string'
+            ? metadata.providerMessageId
+            : typeof metadata.provider_message_id === 'string'
+              ? metadata.provider_message_id
+              : null,
+        provider:
+          typeof metadata.provider === 'string'
+            ? metadata.provider
+            : typeof metadata.sendProvider === 'string'
+              ? metadata.sendProvider
+              : typeof metadata.send_provider === 'string'
+                ? metadata.send_provider
+                : null,
         occurredAt: metadataTimestamp(metadata, row.created_at),
         metadata,
       }}),
@@ -612,6 +807,22 @@ export async function syncOutlookMailbox(options: {
         strategyKey: null,
           recipient: cleanText(typeof row.recipient === 'string' ? row.recipient : null).toLowerCase() || null,
         outboundMessageId: typeof row.outreach_message_id === 'string' ? row.outreach_message_id : null,
+        providerMessageId:
+          typeof metadata.providerMessageId === 'string'
+            ? metadata.providerMessageId
+            : typeof metadata.provider_message_id === 'string'
+              ? metadata.provider_message_id
+              : null,
+        provider:
+          typeof row.provider === 'string'
+            ? row.provider
+            : typeof metadata.provider === 'string'
+              ? metadata.provider
+              : typeof metadata.sendProvider === 'string'
+                ? metadata.sendProvider
+                : typeof metadata.send_provider === 'string'
+                  ? metadata.send_provider
+                  : null,
         occurredAt: metadataTimestamp(metadata, row.created_at),
         metadata,
       }}),
@@ -711,7 +922,9 @@ export async function syncOutlookMailbox(options: {
         market: null,
         received_at: message.receivedDateTime || new Date().toISOString(),
         classification,
-        next_step: nextStepFor(classification),
+        next_step: integrity.manualReviewRequired
+          ? 'Review sender authentication and thread evidence manually; no CRM or suppression changes were applied.'
+          : nextStepFor(classification),
         reply_summary: preview || 'No message preview was returned by Outlook.',
         metadata_json: {
           ...existingMetadata,
@@ -730,7 +943,12 @@ export async function syncOutlookMailbox(options: {
           actionableReply: integrity.actionableReply,
           suppressionAuthorized: integrity.allowSuppression,
           correlationType: outboundCorrelation.matchType || null,
+          correlationStateChangeAuthorized: integrity.stateChangeAuthorized,
+          manualReviewRequired: integrity.manualReviewRequired,
+          senderAuthentication: integrity.senderAuthentication,
           correlatedOutboundMessageId: outboundCorrelation.outboundMessageId || null,
+          correlatedOutboundProvider: outboundCorrelation.provider || null,
+          correlatedProviderMessageId: outboundCorrelation.providerMessageId || null,
           correlatedOutboundOccurredAt: outboundCorrelation.occurredAt || null,
         },
       }
@@ -742,23 +960,47 @@ export async function syncOutlookMailbox(options: {
     let newMessages = 0
     let movedSpam = 0
     let spamMoveFailures = 0
+    let sideEffectClaimsDeferred = 0
     if (!options.dryRun && rows.length) {
       const existingMessageIds = new Set((existingRows || []).map((row) => String(row.message_id)))
       const newMessageIds = new Set(messageIds.filter((messageId) => !existingMessageIds.has(messageId)))
       newMessages = newMessageIds.size
 
-      const { data: saved, error } = await admin
+      // Existing records are immutable inbound evidence. Avoid overwriting a
+      // concurrent worker's processing claim with metadata read before that
+      // claim; only insert messages that were not present at query time.
+      const newRows = rows.filter((row) => newMessageIds.has(row.message_id))
+      const { data: saved, error } = newRows.length
+        ? await admin
         .from('command_center_reply_memory')
-        .upsert(rows, { onConflict: 'mailbox,message_id' })
+        .upsert(newRows, {
+          onConflict: 'mailbox,message_id',
+          ignoreDuplicates: true,
+        })
         .select('id')
+        : { data: [], error: null }
       if (error) throw error
       stored = saved?.length || 0
 
       for (const action of actions.filter((candidate) => candidate.pending)) {
         const { row, buyer, lead, lender, investor } = action
+        const claim = await claimMailboxSideEffects({
+          admin,
+          mailbox: config.mailbox,
+          messageId: row.message_id,
+        })
+        if (!claim.claimed) {
+          if (claim.reason === 'mailbox_side_effects_already_completed') continue
+          if (claim.reason === 'mailbox_side_effects_claim_active') {
+            sideEffectClaimsDeferred += 1
+            continue
+          }
+          throw new Error(`Mailbox side effects could not be claimed: ${claim.reason || 'unknown_reason'}`)
+        }
         const email = row.from_email
         const actionableReply = row.metadata_json.actionableReply === true
         const suppressionAuthorized = row.metadata_json.suppressionAuthorized === true
+        let throughputReplyTracking: Record<string, unknown> = { attempted: false }
 
         if (actionableReply && row.classification === 'partner_reply' && email) {
           if (buyer?.id) {
@@ -950,9 +1192,51 @@ export async function syncOutlookMailbox(options: {
           })
         }
 
+        const correlatedProviderMessageId = row.metadata_json.correlatedProviderMessageId
+        const correlatedOutboundProvider = row.metadata_json.correlatedOutboundProvider
+        if (
+          (actionableReply || suppressionAuthorized) &&
+          typeof correlatedProviderMessageId === 'string' &&
+          correlatedProviderMessageId.trim()
+        ) {
+          try {
+            if (
+              typeof correlatedOutboundProvider !== 'string' ||
+              !correlatedOutboundProvider.trim()
+            ) {
+              throw new Error('A correlated provider message is missing its outbound provider.')
+            }
+            const result = await recordOutreachThroughputProviderOutcome({
+              provider: correlatedOutboundProvider.trim().toLowerCase(),
+              providerMessageId: correlatedProviderMessageId,
+              state: suppressionAuthorized ? 'suppressed' : 'replied',
+              metadata: {
+                mailbox: config.mailbox,
+                replyMessageId: row.message_id,
+                receivedAt: row.received_at,
+                suppressionAuthorized,
+              },
+            })
+            requireOutlookThroughputProjectionUpdated(result)
+            throughputReplyTracking = { attempted: true, ok: true, result }
+          } catch (error) {
+            throughputReplyTracking = {
+              attempted: true,
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            }
+            console.error('[outlook-mailbox] throughput reply reconciliation failed', error)
+            // Suppression/reply mutations above are idempotent. Leave the
+            // mailbox side-effect marker incomplete so this authoritative
+            // throughput outcome is retried on the next ingestion pass.
+            throw error
+          }
+        }
+
         const completedAt = new Date().toISOString()
         const completedMetadata = {
           ...row.metadata_json,
+          throughputReplyTracking,
           mailboxSideEffects: { status: 'completed', completedAt, version: 1 },
         }
         const { data: completedRows, error: completionError } = await admin
@@ -960,6 +1244,9 @@ export async function syncOutlookMailbox(options: {
           .update({ metadata_json: completedMetadata, updated_at: completedAt })
           .eq('mailbox', config.mailbox)
           .eq('message_id', row.message_id)
+          .contains('metadata_json', {
+            mailboxSideEffects: { status: 'processing', claimToken: claim.claimToken },
+          })
           .select('id')
         if (completionError) throw completionError
         if (!completedRows?.length) throw new Error('Mailbox side-effect completion marker was not saved.')
@@ -980,18 +1267,45 @@ export async function syncOutlookMailbox(options: {
           }
         }
       }
+    }
+
+    const ingestionPending = backlogPending || sideEffectClaimsDeferred > 0
+    // If a message claim was observed in-flight, replay from the beginning of
+    // this run after the lease instead of advancing beyond that message.
+    const persistedContinuationUrl = sideEffectClaimsDeferred > 0
+      ? runStartPageUrl
+      : continuationUrl
+    const syncMetrics = {
+      fetched: messages.length,
+      pagesFetched,
+      resumedContinuation: Boolean(savedContinuationUrl),
+      backlogPending,
+      highWatermark: ingestionPending ? cursorState.highWatermark : windowStartedAt,
+      ...(ingestionPending ? { windowStartedAt } : {}),
+      sideEffectClaimsDeferred,
+      ...(persistedContinuationUrl ? { continuationUrl: persistedContinuationUrl } : {}),
+      stored,
+      newMessages,
+      classifications,
+      autoCleanSpam: config.autoCleanSpam,
+      movedSpam,
+      spamMoveFailures,
+    }
+    if (!options.dryRun) {
       await updateMailboxJob({
-        status: 'active',
-        lastStatus: 'completed',
-        metrics: {
-          fetched: messages.length,
-          stored,
-          newMessages,
-          classifications,
-          autoCleanSpam: config.autoCleanSpam,
-          movedSpam,
-          spamMoveFailures,
-        },
+        status: ingestionPending ? 'blocked' : 'active',
+        lastStatus: backlogPending
+          ? 'backlog_pending'
+          : sideEffectClaimsDeferred > 0
+            ? 'side_effects_pending'
+            : 'completed',
+        error: backlogPending
+          ? `Mailbox reply ingestion has more than ${limit} messages pending; outbound remains paused until the saved continuation is drained.`
+          : sideEffectClaimsDeferred > 0
+            ? `${sideEffectClaimsDeferred} mailbox message(s) are being processed by another run; outbound remains paused until completion is confirmed.`
+            : null,
+        metrics: syncMetrics,
+        claimToken: syncClaimToken,
       })
       await logEvent({
         eventType: 'admin_action',
@@ -999,19 +1313,14 @@ export async function syncOutlookMailbox(options: {
         entityId: config.mailbox,
         metadata: {
           action: 'outlook_reply_memory_sync',
-          fetched: messages.length,
-          stored,
-          newMessages,
-          classifications,
-          autoCleanSpam: config.autoCleanSpam,
-          movedSpam,
-          spamMoveFailures,
+          ...syncMetrics,
+          continuationUrl: persistedContinuationUrl ? '[persisted]' : null,
         },
       })
     }
 
     return {
-      ok: true,
+      ok: !ingestionPending,
       connected: true,
       ...status,
       fetched: messages.length,
@@ -1020,11 +1329,20 @@ export async function syncOutlookMailbox(options: {
       classifications,
       movedSpam,
       spamMoveFailures,
+      pagesFetched,
+      resumedContinuation: Boolean(savedContinuationUrl),
+      backlogPending,
+      sideEffectClaimsDeferred,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (!options.dryRun) {
-      await updateMailboxJob({ status: 'failed', lastStatus: 'failed', error: message }).catch(() => null)
+    if (!options.dryRun && syncLeaseClaimed) {
+      await updateMailboxJob({
+        status: 'failed',
+        lastStatus: 'failed',
+        error: message,
+        claimToken: syncClaimToken,
+      }).catch(() => null)
     }
     return { ok: false, connected: false, ...status, error: message, fetched: 0, stored: 0, classifications: {} }
   }

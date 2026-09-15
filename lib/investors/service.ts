@@ -37,7 +37,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
-import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { isPaidSourceBudgetSkipError } from '@/lib/leads/paidSourceBudget'
+import { getOperationalReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { evaluateInvestorAutoApproval } from '@/lib/investors/automationCore'
 import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
 import { reserveInvestorHunterDailyLookup, type InvestorHunterLookupReservation } from '@/lib/investors/hunterBudget'
@@ -46,6 +47,17 @@ import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preferenc
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import { reserveAutomaticEmailLaneAttempt } from '@/lib/outreach/laneAttemptQuota'
+import {
+  DEFAULT_DAILY_STRATEGY_OUTPUT_TARGET,
+  allocateDailyStrategyOutput,
+  configuredDailyStrategyOutputTarget,
+} from '@/lib/outreach/dailyStrategyOutputCore'
+import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
+import {
+  hashHunterVerificationEmail,
+  hunterVerificationReplacementScanLimit,
+  shouldQuarantineHunterVerificationStatus,
+} from '@/lib/outreach/hunterSendVerificationCore'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -94,6 +106,7 @@ type InvestorHunterEnrichmentWorkerDependencies = {
   lookupContact: (input: {
     website?: string | null
     contactName?: string | null
+    budgetReservationId: string
   }) => Promise<HunterContactLookupResult>
   saveResult: typeof saveInvestorHunterEnrichmentResult
   recordEnrichedEvent: (input: {
@@ -274,6 +287,7 @@ export async function processInvestorHunterEnrichmentRecord(
     lookup = await dependencies.lookupContact({
       website: claimed.website,
       contactName: claimed.person_name || null,
+      budgetReservationId: reservation.reservationId!,
     })
     const acceptedCandidate = selectVerifiedInvestorHunterCandidate(lookup.candidates)
 
@@ -479,7 +493,7 @@ export async function discoverAndIngestInvestorsForMarket(input: {
     return saved
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
-      status: 'failed',
+      status: isPaidSourceBudgetSkipError(error) ? 'completed' : 'failed',
       errorMessage: error instanceof Error ? error.message : String(error),
     })
     throw error
@@ -683,14 +697,18 @@ export async function runDailyInvestorOutreach(limit = 50) {
   }
 }
 
-export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boolean } = {}) {
+export async function runDailyInvestorSend(limit?: number, options: { dryRun?: boolean } = {}) {
   const autoSendRequested = ['1', 'true', 'yes', 'on'].includes(String(process.env.INVESTOR_AUTO_SEND_ENABLED || '').toLowerCase())
+  const outboundProvider = getConfiguredOutboundProvider()
   const deliveryCircuitBreaker = autoSendRequested
-    ? await getDeliveryCircuitBreaker({ provider: getConfiguredOutboundProvider(), allowControlledTrial: true })
+    ? await getDeliveryCircuitBreaker({ provider: outboundProvider, allowControlledTrial: true })
     : null
-  const replyCapture = getReplyCaptureReadiness()
+  const replyCapture = await getOperationalReplyCaptureReadiness()
   const mailingAddressConfigured = Boolean(getCommercialOutreachMailingAddress())
-  const dailyLimit = envInt('INVESTORS_DAILY_SEND_LIMIT', 20)
+  const configuredOutputTarget = configuredDailyStrategyOutputTarget()
+  const dailyLimit = allocateDailyStrategyOutput(
+    Math.min(DEFAULT_DAILY_STRATEGY_OUTPUT_TARGET, configuredOutputTarget)
+  ).byKey.investors
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { count: sentLast24h, error: sentCountError } = await createAdminClient()
     .from('investor_outreach_messages')
@@ -699,6 +717,7 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
     .gte('sent_at', since)
   if (sentCountError) throw sentCountError
   const remainingDailyCapacity = Math.max(0, dailyLimit - (sentLast24h || 0))
+  const requestedLimit = limit ?? dailyLimit
   const autoSend =
     autoSendRequested &&
     deliveryCircuitBreaker?.allowed === true &&
@@ -708,7 +727,7 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
   const effectiveLimit = Math.max(
     0,
     Math.min(
-      limit,
+      requestedLimit,
       remainingDailyCapacity,
       deliveryCircuitBreaker?.maxBatchSize ?? Number.POSITIVE_INFINITY
     )
@@ -720,11 +739,13 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
     !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
     remainingDailyCapacity <= 0 ? 'daily_send_limit_reached' : null,
   ].filter((reason): reason is string => Boolean(reason))
+  const providerFailureStopThreshold = envInt('OUTREACH_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
+  let providerFailureCount = 0
   const run = await startInvestorAutomationRun({
     runType: 'outreach_send',
     sourceKey: 'investor_outreach_messages',
     requestParams: {
-      limit,
+      requestedLimit,
       dryRun: options.dryRun || false,
       autoSend,
       dailyLimit,
@@ -734,12 +755,18 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
   })
 
   try {
-    const approved = effectiveLimit > 0 ? await listApprovedInvestorEmailOutreach(effectiveLimit) : []
+    const approved = effectiveLimit > 0
+      ? await listApprovedInvestorEmailOutreach(hunterVerificationReplacementScanLimit(effectiveLimit))
+      : []
     const minimumScore = envInt('INVESTOR_AUTO_APPROVE_MIN_SCORE', 45)
     const results: Array<{ investorId: string; name: string; status: string; reason?: string }> = []
+    let providerAttemptCount = 0
+    let hunterVerificationAttempts = 0
+    let hunterVerificationBlocked = 0
 
     for (const row of approved) {
-      const investor = row.investor_profiles as InvestorProfileRecord | null
+      if (providerAttemptCount >= effectiveLimit) break
+      let investor = row.investor_profiles as InvestorProfileRecord | null
       if (!investor?.id) continue
 
       const approvalDecision = evaluateInvestorAutoApproval({
@@ -817,6 +844,53 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         continue
       }
 
+      const hunterPreflight = await preflightPartnerHunterSendVerification({
+        scope: 'investor',
+        entity: investor,
+        messageId: row.id,
+        strategyKey: 'investors',
+        provider: outboundProvider,
+        isFollowup: row.step_number > 1,
+        deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
+        allowNetwork: hunterVerificationAttempts < effectiveLimit,
+      })
+      if (hunterPreflight.creditReserved) hunterVerificationAttempts += 1
+      if (hunterPreflight.cache) {
+        investor = {
+          ...investor,
+          metadata_json: {
+            ...(investor.metadata_json || {}),
+            hunterSendVerification: hunterPreflight.cache,
+          },
+        }
+      }
+      if (!hunterPreflight.allowed) {
+        hunterVerificationBlocked += 1
+        if (
+          hunterPreflight.deferredScope === 'record' &&
+          shouldQuarantineHunterVerificationStatus(hunterPreflight.status)
+        ) {
+          await downgradeInvestorOutreachMessageIfApproved(row.id, {
+            send_error: `hunter_verification:${hunterPreflight.status}`,
+            metadata_json: {
+              ...(row.metadata_json || {}),
+              hunterSendVerificationBlocked: hunterPreflight.cache || {
+                status: hunterPreflight.status,
+                reason: hunterPreflight.reason,
+              },
+            },
+          }).catch(() => null)
+        }
+        results.push({
+          investorId: investor.id,
+          name: investor.display_name,
+          status: 'hunter_preflight_blocked',
+          reason: hunterPreflight.reason,
+        })
+        if (hunterPreflight.deferredScope !== 'record') break
+        continue
+      }
+
       const claimed = await claimInvestorOutreachMessageForSend(row.id, row.updated_at)
       if (!claimed) {
         results.push({ investorId: investor.id, name: investor.display_name, status: 'duplicate_claim_blocked' })
@@ -860,7 +934,25 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
         break
       }
 
-      const sent = await sendInvestorOutreachEmail({ investor, message: claimed })
+      providerAttemptCount += 1
+      const sent = await sendInvestorOutreachEmail({
+        investor,
+        message: claimed,
+        deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
+      })
+      if (!sent.ok && sent.deferred) {
+        const restored = await restoreInvestorOutreachMessageAfterQuotaDenial(
+          claimed.id,
+          claimed.updated_at
+        ).catch(() => null)
+        results.push({
+          investorId: investor.id,
+          name: investor.display_name,
+          status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
+        })
+        if (!restored || sent.deferredScope !== 'record') break
+        continue
+      }
       if (!sent.ok) {
         await updateInvestorOutreachMessage(row.id, {
           status: 'failed',
@@ -884,8 +976,12 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
           metadata: { reason: sent.error || 'send_failed', messageId: row.id, provider: sent.provider },
         }).catch(() => null)
         results.push({ investorId: investor.id, name: investor.display_name, status: 'failed' })
+        providerFailureCount += 1
+        if (providerFailureCount >= providerFailureStopThreshold) break
         continue
       }
+
+      providerFailureCount = 0
 
       const now = new Date().toISOString()
       await updateInvestorOutreachMessage(row.id, {
@@ -899,6 +995,7 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
           providerAcceptedAt: now,
           idempotencyKey: sent.idempotencyKey || null,
           correlationId: sent.correlationId || null,
+          acceptedRecipientHash: hashHunterVerificationEmail(investor.contact_email || ''),
         },
       })
       await updateInvestorRecord(investor.id, {
@@ -966,6 +1063,9 @@ export async function runDailyInvestorSend(limit = 20, options: { dryRun?: boole
       remainingDailyCapacity,
       sendBlockedReasons,
       effectiveLimit,
+      providerAttemptCount,
+      hunterVerificationAttempts,
+      hunterVerificationBlocked,
     }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {

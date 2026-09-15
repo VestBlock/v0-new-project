@@ -1,6 +1,8 @@
 import { Resend } from 'resend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
+import type { ResendOutreachTag } from '@/lib/outreach/deliveryIdentity';
+import { getOutboundSenderForProvider } from '@/lib/outreach/provider-preference';
 
 type EmailEventType =
   | 'admin_credit_report_uploaded'
@@ -39,6 +41,7 @@ type SendEmailInput = {
   providerPreference?: 'resend' | 'google';
   idempotencyKey?: string;
   correlationId?: string;
+  resendTags?: ResendOutreachTag[];
   disableProviderFallback?: boolean;
 };
 
@@ -52,23 +55,11 @@ const ROUTINE_ADMIN_NOTICE_EVENTS = new Set<EmailEventType>([
 ]);
 
 function getGoogleFromEmail() {
-  return (
-    process.env.OUTREACH_FROM_EMAIL ||
-    process.env.GOOGLE_WORKSPACE_SENDER ||
-    process.env.FROM_EMAIL ||
-    process.env.RESEND_EMAIL ||
-    'acquisitions@vestblock.io'
-  );
+  return getOutboundSenderForProvider('gmail');
 }
 
 function getResendFromEmail() {
-  return (
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.RESEND_EMAIL ||
-    process.env.OUTREACH_FROM_EMAIL ||
-    process.env.FROM_EMAIL ||
-    'acquisitions@vestblock.io'
-  );
+  return getOutboundSenderForProvider('resend');
 }
 
 function getReplyToEmail() {
@@ -402,6 +393,7 @@ export async function sendEmail(input: SendEmailInput) {
         html: input.html,
         replyTo: getReplyToEmail(),
         headers: input.correlationId ? { 'X-VestBlock-Correlation-ID': input.correlationId } : undefined,
+        tags: input.resendTags,
       },
       input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
     );
@@ -440,7 +432,13 @@ export async function sendEmail(input: SendEmailInput) {
       entityType: 'email',
       metadata: { subject: input.subject, eventType: input.eventType, message },
     });
-    return { ok: false, error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message, provider: 'resend' };
+    return {
+      ok: false,
+      deferred: true,
+      ambiguous: true,
+      error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message,
+      provider: 'resend',
+    };
   }
 }
 

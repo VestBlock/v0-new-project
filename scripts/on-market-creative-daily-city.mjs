@@ -6,13 +6,14 @@
  *
  * Usage:
  *   node --env-file=.env.local scripts/on-market-creative-daily-city.mjs
- *   node --env-file=.env.local scripts/on-market-creative-daily-city.mjs --send
+ *   pnpm run outreach:dispatch:live
  *   node --env-file=.env.local scripts/on-market-creative-daily-city.mjs --city="Cleveland, OH"
  */
 
 import fs from "node:fs"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -182,6 +183,7 @@ function renderMarkdown(report) {
 }
 
 function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "on-market-creative-daily-city" })
   fs.mkdirSync(OPERATING_DIR, { recursive: true })
   const state = readJson(STATE_FILE, {})
   const market = pickMarket(state)

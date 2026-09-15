@@ -4,22 +4,32 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import {
   getOutboundProviderAvailability,
+  getOutboundSenderForProvider,
   getPreferredOutboundProvider,
 } from '@/lib/outreach/provider-preference'
-import { buildOutboundSendIdentity, type OutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import {
+  buildOutboundSendIdentity,
+  buildResendOutreachTags,
+  type OutboundSendIdentity,
+} from '@/lib/outreach/deliveryIdentity'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import type { DeliveryCircuitBreaker } from '@/lib/leads/deliveryHealthCore'
+import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
 
 type SendLenderEmailInput = {
   lender: LenderRecord
   message: LenderOutreachMessageRecord
   identity?: OutboundSendIdentity
   deliveryMode?: 'standard' | 'recovery_canary'
+  deliveryCircuitBreaker?: DeliveryCircuitBreaker
 }
 
 type SendLenderEmailResult = {
   ok: boolean
+  deferred?: boolean
+  deferredScope?: 'record' | 'lane' | 'global' | 'infrastructure'
   provider: 'gmail' | 'resend' | 'none'
   providerMessageId?: string | null
   idempotencyKey?: string
@@ -30,17 +40,11 @@ type SendLenderEmailResult = {
 const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
 
 function getSender() {
-  return (
-    process.env.OUTREACH_FROM_EMAIL ||
-    process.env.FROM_EMAIL ||
-    process.env.RESEND_EMAIL ||
-    process.env.GOOGLE_WORKSPACE_SENDER ||
-    DEFAULT_OUTREACH_SENDER
-  )
+  return getOutboundSenderForProvider('gmail')
 }
 
 function getResendSender() {
-  return process.env.OUTREACH_FROM_EMAIL || process.env.FROM_EMAIL || process.env.RESEND_EMAIL || DEFAULT_OUTREACH_SENDER
+  return getOutboundSenderForProvider('resend')
 }
 
 function getReplyToEmail() {
@@ -159,6 +163,7 @@ async function sendWithResend(input: SendLenderEmailInput): Promise<SendLenderEm
       text: buildOutreachBody(input.message),
       replyTo: getReplyToEmail(),
       headers: input.identity ? { 'X-VestBlock-Correlation-ID': input.identity.correlationId } : undefined,
+      tags: input.identity ? buildResendOutreachTags(input.identity) : undefined,
     },
     input.identity ? { idempotencyKey: input.identity.idempotencyKey } : undefined
   )
@@ -183,19 +188,21 @@ async function sendWithResend(input: SendLenderEmailInput): Promise<SendLenderEm
 }
 
 export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Promise<SendLenderEmailResult> {
+  const isFollowup = input.message.channel === 'email_followup'
   input = {
     ...input,
     identity: buildOutboundSendIdentity({
       scope: 'lender',
       entityId: input.lender.id,
       messageId: input.message.id,
-      sequenceStep: input.message.channel === 'email_followup' ? 2 : 1,
+      sequenceStep: isFollowup ? 2 : 1,
     }),
   }
   const replyCapture = getReplyCaptureReadiness()
   if (!replyCapture.ready) {
     return {
       ok: false,
+      deferred: true,
       provider: 'none',
       error: replyCapture.reason || 'Reply capture is disconnected.',
       idempotencyKey: input.identity?.idempotencyKey,
@@ -205,6 +212,7 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
   if (!getCommercialOutreachMailingAddress()) {
     return {
       ok: false,
+      deferred: true,
       provider: 'none',
       idempotencyKey: input.identity?.idempotencyKey,
       correlationId: input.identity?.correlationId,
@@ -224,6 +232,7 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
   if (provider === 'none') {
     return {
       ok: false,
+      deferred: true,
       provider,
       error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
       idempotencyKey: input.identity?.idempotencyKey,
@@ -247,15 +256,42 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
         correlationId: input.identity?.correlationId,
       }
     }
+    const hunterPreflight = await preflightPartnerHunterSendVerification({
+      scope: 'lender',
+      entity: input.lender,
+      messageId: input.message.id,
+      strategyKey: 'lenders',
+      provider,
+      isFollowup,
+      deliveryCircuitBreaker: input.deliveryCircuitBreaker,
+    })
+    if (!hunterPreflight.allowed) {
+      return {
+        ok: false,
+        deferred: true,
+        deferredScope: hunterPreflight.deferredScope || 'record',
+        provider: 'none',
+        error: `Lender outreach blocked before send: fresh Hunter status=valid verification is required (${hunterPreflight.reason}).`,
+        idempotencyKey: input.identity?.idempotencyKey,
+        correlationId: input.identity?.correlationId,
+      }
+    }
     deliveryAttempt = await acquireGuardedDeliveryAttempt({
       provider,
+      breaker: input.deliveryCircuitBreaker,
       scope: 'lender',
       messageId: input.message.id,
+      idempotencyKey: input.identity!.idempotencyKey,
+      strategyKey: 'lenders',
+      recipientEmail: input.lender.contact_email!,
+      senderEmail: getOutboundSenderForProvider(provider),
+      attemptKind: isFollowup ? 'follow_up' : 'first_touch',
       recoveryCanary: input.deliveryMode === 'recovery_canary',
     })
   } catch (error) {
     return {
       ok: false,
+      deferred: true,
       provider: 'none',
       error: `Lender outreach safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
       idempotencyKey: input.identity?.idempotencyKey,
@@ -263,8 +299,16 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
     }
   }
   if (!deliveryAttempt.allowed) {
+    const reason = String(deliveryAttempt.reason || '')
+    const deferredScope = /outreach_(?:recipient_24h_cooldown|attempt_already_reserved|reserved_attempt_requires_reconciliation|attempt_identity_conflict)/.test(reason)
+      ? 'record'
+      : /outreach_(?:strategy_daily_limit_exhausted|strategy_not_scheduled_today)/.test(reason)
+        ? 'lane'
+        : 'global'
     return {
       ok: false,
+      deferred: true,
+      deferredScope,
       provider: 'none',
       error: `Lender outreach blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
       idempotencyKey: input.identity?.idempotencyKey,
@@ -273,6 +317,7 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
   }
 
   let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
+  let providerMessageId: string | null | undefined
   try {
     const result = provider === 'resend'
       ? await sendWithResend(input)
@@ -284,9 +329,20 @@ export async function sendLenderOutreachEmail(input: SendLenderEmailInput): Prom
           correlationId: input.identity?.correlationId,
         }))
     outcome = result.ok ? 'accepted' : 'failed'
+    providerMessageId = 'providerMessageId' in result ? result.providerMessageId : null
     return result
+  } catch (error) {
+    return {
+      ok: false,
+      deferred: true,
+      deferredScope: 'infrastructure',
+      provider,
+      error: `Provider response was ambiguous; retry will retain the same idempotency key: ${error instanceof Error ? error.message : String(error)}`,
+      idempotencyKey: input.identity?.idempotencyKey,
+      correlationId: input.identity?.correlationId,
+    }
   } finally {
-    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome).catch((error) => {
+    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome, providerMessageId).catch((error) => {
       console.error('[outreach] failed to release global lender delivery permit', error)
     })
   }

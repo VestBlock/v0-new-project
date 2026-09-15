@@ -266,6 +266,7 @@ export async function enrichAndScoreBuyer(
         hunterResult = await enrichContactFromHunter({
           website: claimed.website,
           contactName: claimed.contact_name || null,
+          budgetReservationId: hunterReservation.reservationId!,
         })
       }
     } else {

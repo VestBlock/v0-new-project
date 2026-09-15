@@ -14,6 +14,7 @@ import {
 } from '../lib/admin/strategyLeadProvenance'
 import { validateOutreachMessageQuality } from '../lib/leads/revenueCampaigns'
 import type { LeadRecord } from '../lib/leads/types'
+import { allocateDailyStrategyOutput } from '../lib/outreach/dailyStrategyOutputCore'
 
 function lead(overrides: Partial<LeadRecord>): LeadRecord {
   return {
@@ -44,6 +45,21 @@ function lane(key: string) {
   assert.ok(found, `Missing strategy lane ${key}`)
   return found
 }
+
+const enabledSellerLanes = STRATEGY_EXECUTION_LANES.filter((item) => item.enabled)
+const canonicalOutputPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-15T18:00:00.000Z'))
+const canonicalSellerAllocations = canonicalOutputPlan.allocations.filter((allocation) => allocation.group === 'seller')
+
+assert.equal(enabledSellerLanes.length, 16, 'Every default strategy-engine run must be able to cover all 16 enabled seller lanes')
+assert.deepEqual(
+  enabledSellerLanes.map((item) => item.key).sort(),
+  canonicalSellerAllocations.map((item) => item.key).sort(),
+  'The strategy-engine catalog must stay aligned with the canonical daily seller allocation'
+)
+assert.ok(
+  canonicalSellerAllocations.every((allocation) => allocation.target === 43 || allocation.target === 44),
+  'A 1,000-output day must allocate either 43 or 44 drafts to each enabled seller lane'
+)
 
 assert.deepEqual(
   STRATEGY_MARKET_STATE_SEED_OPTIONS,
@@ -190,7 +206,13 @@ const taxCode = lead({
   source: 'dealmachine_contacts_export',
   pain_signal: 'Tax delinquent with an active code violation and boarded structure.',
 })
-assert.equal(qualifyLeadForStrategy(taxCode, lane('tax-code-stack'), 'dealmachine').eligible, true)
+const taxCodeQualification = qualifyLeadForStrategy(taxCode, lane('tax-code-stack'), 'dealmachine')
+assert.equal(taxCodeQualification.eligible, true)
+assert.equal(
+  taxCodeQualification.reviewOnly,
+  true,
+  'Tax/code-stack contacts require evidence review and must never enter automatic sending'
+)
 assert.equal(
   qualifyLeadForStrategy(taxCode, lane('tax-code-stack'), 'homeharvest').eligible,
   false,

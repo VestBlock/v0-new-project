@@ -23,11 +23,15 @@
     },
     {
       "path": "/api/cron/seller-followup?limit=30&excludeDealMachine=false",
-      "schedule": "30 21 * * *"
+      "schedule": "30 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron/outreach-dispatch",
+      "schedule": "*/15 13-23 * * 1-5"
     },
     {
       "path": "/api/cron/partner-network-pipeline",
-      "schedule": "15 15 * * *"
+      "schedule": "15 15,18,21 * * 1-5"
     },
     {
       "path": "/api/cron/buffer-publisher?send=true",
@@ -55,7 +59,7 @@
     },
     {
       "path": "/api/cron/mailbox-sync",
-      "schedule": "7 * * * *"
+      "schedule": "7,22,37,52 * * * *"
     },
     {
       "path": "/api/cron/attom-enrichment?limit=10&mode=smart",

@@ -206,7 +206,7 @@ assert.match(repositorySource, /query\.eq\('contact_email', input\.expectedConta
 assert.match(repositorySource, /query\.contains\('metadata_json'/)
 
 const automationSource = readFileSync(resolve(process.cwd(), 'lib/lenders/automation.ts'), 'utf8')
-assert.match(automationSource, /envInt\('LENDERS_PIPELINE_SCORE_LIMIT_CAP', 30\)/)
+assert.match(automationSource, /const scoringLimit = dailyLaneTarget/)
 assert.match(automationSource, /runDailyLenderScoring\(scoringLimit\)/)
 assert.match(automationSource, /if \(!result\.ok\)/)
 

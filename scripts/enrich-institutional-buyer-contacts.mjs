@@ -3,6 +3,22 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+const LEGACY_HUNTER_INSTITUTIONAL_ENRICHMENT_QUARANTINE_CODE =
+  'legacy_hunter_institutional_enrichment_quarantined'
+
+function quarantineLegacyInstitutionalBuyerHunterEnrichment() {
+  const error = new Error(
+    `[${LEGACY_HUNTER_INSTITUTIONAL_ENRICHMENT_QUARANTINE_CODE}] This retired script cannot read local contact files or call Hunter outside VestBlock's shared paid-source and verification budgets. Use the governed buyer pipeline instead.`
+  )
+  error.code = LEGACY_HUNTER_INSTITUTIONAL_ENRICHMENT_QUARANTINE_CODE
+  throw error
+}
+
+// This call intentionally precedes argument parsing, file access, secret lookup,
+// and provider requests. Retain the implementation below only as migration
+// context until its governed replacement has absorbed every output consumer.
+quarantineLegacyInstitutionalBuyerHunterEnrichment()
+
 const args = process.argv.slice(2)
 
 function getArg(name, fallback = '') {

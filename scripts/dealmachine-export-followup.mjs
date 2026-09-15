@@ -3,6 +3,7 @@ import path from "node:path"
 import { Resend } from "resend"
 
 import { getEmailQualityIssue, normalizeEmailAddress } from "./shared-email-quality.mjs"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -262,6 +263,7 @@ async function sendWithResend(resend, draft) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "dealmachine-export-followup" })
   if (!mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
 
@@ -382,7 +384,7 @@ async function main() {
   console.log(`Draft review:      ${draftsTxt}`)
 
   if (!SEND || !selected.length) {
-    console.log(SEND ? "No follow-up emails selected." : "Dry run only. Re-run with --send to deliver the selected follow-up batch.")
+    console.log(SEND ? "No follow-up emails selected." : "Dry run only. Deliver approved follow-ups with pnpm run outreach:dispatch:live.")
     return
   }
 

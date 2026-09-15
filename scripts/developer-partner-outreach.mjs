@@ -2,18 +2,19 @@
  * VestBlock developer / builder partner outreach generator.
  *
  * Dry run by default. Creates review artifacts and a send-ready subset.
- * Use --send only after reviewing the generated copy.
+ * Live delivery is quarantined; use the platform review queue and governed dispatcher.
  *
  * Examples:
  *   node --env-file=.env.local scripts/developer-partner-outreach.mjs --csv="/path/to/vestblock_developers_master.csv"
  *   node --env-file=.env.local scripts/developer-partner-outreach.mjs --csv="/path/to/vestblock_developers_master.csv" --market="Cleveland"
- *   node --env-file=.env.local scripts/developer-partner-outreach.mjs --csv="/path/to/vestblock_developers_master.csv" --send --limit=20
+ *   pnpm run outreach:dispatch:live
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { Resend } from 'resend'
 import { formatScriptError, getEmailQualityIssue, isUsableContactEmail, normalizeEmailAddress } from './shared-email-quality.mjs'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const SEND = args.includes('--send')
@@ -365,6 +366,7 @@ async function sendWithResend(resend, draft) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: 'developer-partner-outreach' })
   if (!CSV_PATH) {
     throw new Error('Pass --csv=/absolute/path/to/vestblock_developers_master.csv')
   }

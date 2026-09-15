@@ -9,7 +9,7 @@ import { sendLeadOutreachSentAlertEmail } from '@/lib/email/sendEmail'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { updateOutreachMessageSchema } from '@/lib/leads/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { claimOutreachMessageForSend, getLeadById, insertOutreachSendEvent, listSuppressions, updateLeadRecord, updateOutreachMessage } from '@/lib/leads/repository'
+import { claimOutreachMessageForSend, getLeadById, insertOutreachSendEvent, listSuppressions, restoreOutreachMessageAfterDeliveryDeferral, updateLeadRecord, updateOutreachMessage } from '@/lib/leads/repository'
 import { sendLeadOutreachEmail } from '@/lib/leads/outbound'
 import { logEvent } from '@/lib/system/logEvent'
 import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
@@ -176,6 +176,24 @@ export async function PATCH(
       })
 
       if (!sendResult.ok) {
+        if (sendResult.deferred) {
+          const restored = await restoreOutreachMessageAfterDeliveryDeferral(
+            message.id,
+            claimed.updated_at,
+            sendResult.error || 'Delivery deferred by the outreach governor.'
+          )
+          await Promise.all([
+            restored ? updateLeadRecord(id, { outreach_status: 'approved' }) : Promise.resolve(),
+          ])
+          return NextResponse.json(
+            {
+              error: restored
+                ? sendResult.error || 'Delivery is temporarily deferred.'
+                : 'Delivery was deferred, but the claimed message changed before it could be restored.',
+            },
+            { status: 409 }
+          )
+        }
         await Promise.all([
           updateOutreachMessage(message.id, {
             status: 'failed',

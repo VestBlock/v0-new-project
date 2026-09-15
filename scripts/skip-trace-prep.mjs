@@ -95,7 +95,7 @@ function main() {
   console.log("  4. Only run skip tracing if explicitly approved; otherwise use Contacts export from an existing DealMachine list")
   console.log("  5. Export → Contacts → save to: data/dm-exports/<market>-YYYY-MM-DD.csv")
   console.log("  6. Run: npm run distress:dealmachine:ingest-export")
-  console.log("  7. Then send: npm run distress:dealmachine:export-outreach -- --send")
+  console.log("  7. Then dispatch approved platform records: pnpm run outreach:dispatch:live")
 }
 
 main()

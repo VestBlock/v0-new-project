@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 
 import { loadSentLedgerSummary } from '../lib/leads/outreach-v4/sent-ledger.mjs'
 import { getEmailDeliverabilityIssue, getEmailQualityIssue, normalizeEmailAddress } from './shared-email-quality.mjs'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const REQUIRED_OPTOUT = 'reply no and i will not follow up'
 
@@ -295,6 +296,7 @@ async function sendApprovedEmail(draft) {
 async function main() {
   const date = getArgValue('--date', new Date().toISOString().slice(0, 10))
   const send = hasFlag('--send')
+  quarantineLegacyDirectLiveSend({ requested: send, entry: 'send-buyer-criteria-drafts' })
   const liveSendConfirm = getArgValue('--confirm-live-send', getEnv('BUYER_CRITERIA_LIVE_SEND_CONFIRM'))
   const lane = slugify(getArgValue('--lane', 'buyer_criteria')).replace(/-/g, '_')
   const limit = intArg('--limit', 15, 25)

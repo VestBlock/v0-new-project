@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Resend } from 'resend'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 
@@ -447,6 +448,7 @@ function loadSuppressedEmails(filePath) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: 'landbank-reo-relationship-campaign' })
   if (!fs.existsSync(CSV_PATH)) {
     console.error(`Target CSV not found: ${CSV_PATH}`)
     process.exit(1)

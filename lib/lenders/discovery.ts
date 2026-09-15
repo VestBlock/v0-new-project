@@ -1,6 +1,12 @@
 import { safeUrl, normalizePhone } from '@/lib/leads/utils'
 import { DEFAULT_LENDER_DISCOVERY_NICHES } from '@/lib/lenders/constants'
 import type { LenderCategory, LenderDiscoveryInput, NormalizedLenderInput } from '@/lib/lenders/types'
+import {
+  paidSourcePolicySkipError,
+  runPaidSourceAttempt,
+  unwrapPaidSourceAttempt,
+} from '@/lib/leads/paidSourceBudget'
+import { isGooglePlacesApproved } from '@/lib/leads/sourceCostGovernor'
 
 function classifyCategoryFromNiche(niche: string, detected: LenderCategory[]): LenderCategory {
   const lower = niche.toLowerCase()
@@ -38,14 +44,22 @@ function classifyLenderType(category: LenderCategory) {
   return 'business' as const
 }
 
-export async function discoverLendersForMarket(input: LenderDiscoveryInput) {
+function lenderGoogleAttemptKey(input: LenderDiscoveryInput, niches: string[]) {
+  const nicheKey = [...niches]
+    .map((niche) => niche.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join('|')
+  return `partner:lenders:google:${input.city.trim().toLowerCase()}-${input.state.trim().toLowerCase()}:${nicheKey}`
+}
+
+async function fetchLendersFromGoogle(input: LenderDiscoveryInput, niches: string[]) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY
   if (!apiKey) {
     throw new Error('GOOGLE_PLACES_API_KEY is required for lender discovery.')
   }
 
   const normalizedLenders: NormalizedLenderInput[] = []
-  const niches = input.niches.length ? input.niches : [...DEFAULT_LENDER_DISCOVERY_NICHES]
 
   for (const niche of niches) {
     const query = `${niche} in ${input.city}, ${input.state}`
@@ -120,4 +134,24 @@ export async function discoverLendersForMarket(input: LenderDiscoveryInput) {
   }
 
   return normalizedLenders
+}
+
+export async function discoverLendersForMarket(input: LenderDiscoveryInput) {
+  const niches = input.niches.length ? input.niches : [...DEFAULT_LENDER_DISCOVERY_NICHES]
+  if (!isGooglePlacesApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'google_places',
+      units: niches.length,
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const attempt = await runPaidSourceAttempt({
+    provider: 'google_places',
+    attemptKey: lenderGoogleAttemptKey(input, niches),
+    units: niches.length,
+    execute: (reservation) =>
+      fetchLendersFromGoogle(input, niches.slice(0, reservation.reservedUnits)),
+  })
+  return unwrapPaidSourceAttempt(attempt)
 }

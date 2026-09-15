@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const ROOT = process.cwd()
 const args = process.argv.slice(2)
@@ -117,6 +118,7 @@ async function runCycle(config) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: flag('send'), entry: 'dealmachine-export-autoloop' })
   const loop = flag('loop')
   const iterations = intOption('iterations', loop ? Number.MAX_SAFE_INTEGER : 1, 1, Number.MAX_SAFE_INTEGER)
   const sleepSeconds = intOption('sleep-seconds', 86_400, 3_600, 86_400)

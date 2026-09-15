@@ -3,6 +3,7 @@ import { analyzeWebsiteWeakness } from '@/lib/leads/website-analysis'
 import { normalizePhone, safeUrl } from '@/lib/leads/utils'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { assertOutscraperApproved } from '@/lib/leads/sourceCostGovernor'
+import { buildOutscraperPaidWorkPlan } from '@/lib/leads/paidSourceBudgetCore'
 
 type SearchOutscraperGoogleMapsInput = {
   city: string
@@ -114,8 +115,18 @@ export async function searchOutscraperGoogleMaps(input: SearchOutscraperGoogleMa
   }
 
   const normalizedLeads: NormalizedLeadInput[] = []
+  const workPlan = buildOutscraperPaidWorkPlan({
+    niches: input.niches,
+    limitPerNiche: input.limitPerNiche,
+  })
+  if (workPlan.estimatedBillableUnits <= 0) {
+    throw new Error('Outscraper request has no work inside the enforced query/result limits.')
+  }
   const region = input.region || (input.state?.length === 2 ? 'us' : null)
-  const queries = input.niches.map((niche) => `${niche} ${input.city}${input.state ? ` ${input.state}` : ''} usa`)
+  const queries = workPlan.niches.map((niche) => `${niche} ${input.city}${input.state ? ` ${input.state}` : ''} usa`)
+  const requestTimeoutMs = Number.isFinite(input.requestTimeoutMs)
+    ? Math.min(30_000, Math.max(2_000, Math.floor(Number(input.requestTimeoutMs))))
+    : 25_000
   const response = await fetch(`${OUTSCRAPER_API_BASE_URL}/google-maps-search`, {
     method: 'POST',
     headers: {
@@ -124,12 +135,12 @@ export async function searchOutscraperGoogleMaps(input: SearchOutscraperGoogleMa
     },
     body: JSON.stringify({
       query: queries,
-      limit: input.limitPerNiche,
+      limit: workPlan.limitPerNiche,
       language: input.language || 'en',
       region,
       async: false,
     }),
-    signal: AbortSignal.timeout(input.requestTimeoutMs || 25000),
+    signal: AbortSignal.timeout(requestTimeoutMs),
   })
 
   if (!response.ok) {
@@ -138,7 +149,10 @@ export async function searchOutscraperGoogleMaps(input: SearchOutscraperGoogleMa
   }
 
   const data = await response.json()
-  const rows = normalizeOutscraperRows(data, input.niches, queries)
+  const rows = normalizeOutscraperRows(data, workPlan.niches, queries).slice(
+    0,
+    workPlan.resultUnits
+  )
 
   for (const { record, niche, query } of rows) {
     const website = safeUrl(

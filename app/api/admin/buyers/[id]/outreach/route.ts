@@ -6,12 +6,13 @@ import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { updateBuyerOutreachMessageSchema } from '@/lib/buyers/schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { claimBuyerOutreachMessageForSend, getBuyerById, insertBuyerRelationshipEvent, updateBuyerOutreachMessage, updateBuyerPerformance, updateBuyerRecord } from '@/lib/buyers/repository'
+import { claimBuyerOutreachMessageForSend, getBuyerById, insertBuyerRelationshipEvent, restoreBuyerOutreachMessageAfterQuotaDenial, updateBuyerOutreachMessage, updateBuyerPerformance, updateBuyerRecord } from '@/lib/buyers/repository'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { logEvent } from '@/lib/system/logEvent'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 import { canApproveOutreachMessage } from '@/lib/outreach/messageState'
+import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await requireLeadAdmin(request)
@@ -111,6 +112,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       })
 
       if (!sendResult.ok) {
+        if (sendResult.deferred) {
+          const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
+            message.id,
+            claimed.updated_at
+          )
+          if (restored) await updateBuyerRecord(id, { outreach_status: 'approved' })
+          return NextResponse.json(
+            {
+              error: restored
+                ? sendResult.error || 'Delivery is temporarily deferred.'
+                : 'Delivery was deferred, but the claimed message changed before it could be restored.',
+            },
+            { status: 409 }
+          )
+        }
         await updateBuyerOutreachMessage(message.id, {
           status: 'failed',
           send_provider: sendResult.provider,
@@ -135,6 +151,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           providerMessageId: sendResult.providerMessageId || null,
           idempotencyKey: sendResult.idempotencyKey || null,
           correlationId: sendResult.correlationId || null,
+          acceptedRecipientHash: hashHunterVerificationEmail(buyer.contact_email || ''),
         },
       })
       await updateBuyerRecord(id, {

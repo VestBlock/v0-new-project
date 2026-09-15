@@ -44,6 +44,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { isPaidSourceBudgetSkipError } from '@/lib/leads/paidSourceBudget'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
@@ -240,7 +241,7 @@ export async function discoverAndIngestLendersForMarket(input: {
     return saved
   } catch (error) {
     await finishLenderOutreachRun(run.id, {
-      status: 'failed',
+      status: isPaidSourceBudgetSkipError(error) ? 'partial' : 'failed',
       errorMessage: error instanceof Error ? error.message : String(error),
     })
     throw error
@@ -322,6 +323,7 @@ export async function enrichAndScoreLender(
         hunterResult = await enrichContactFromHunter({
           website: claimed.website,
           contactName: claimed.contact_name || null,
+          budgetReservationId: hunterReservation.reservationId!,
         })
       }
     } else {

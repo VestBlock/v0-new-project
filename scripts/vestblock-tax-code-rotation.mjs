@@ -163,15 +163,7 @@ function buildPlan() {
         exportReports: exportState?.exportReports || [],
         listIds: exportState?.listIds || [],
         sendCommand: exportCsv
-          ? [
-              "node --env-file=.env.local scripts/dealmachine-export-outreach.mjs",
-              "--strategy=tax-code-stack",
-              `--market=${key}`,
-              `--export-csv=${path.relative(process.cwd(), exportCsv)}`,
-              stackState?.stackFile ? `--queue-csv=${stackState.stackFile}` : "",
-              `--limit=${DAILY_CAP}`,
-              "--send",
-            ].filter(Boolean).join(" ")
+          ? `pnpm run outreach:dispatch:live -- --limit=${Math.min(50, DAILY_CAP)} --legacy-entry=tax-code-stack-rotation`
           : "",
         ingestCommand: "pnpm run distress:dealmachine:ingest-export:apply -- --file=/path/to/dealmachine-contacts.csv --split-by-market",
       }

@@ -19,11 +19,20 @@ import {
   finishInvestorAutomationRun,
   startInvestorAutomationRun,
 } from '@/lib/investors/repository'
+import {
+  allocateDailyStrategyOutput,
+  configuredDailyStrategyOutputTarget,
+} from '@/lib/outreach/dailyStrategyOutputCore'
 import { logEvent } from '@/lib/system/logEvent'
+import { isPaidSourceBudgetSkipError } from '@/lib/leads/paidSourceBudget'
 
 function envInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function investorDailyOutputTarget(now = new Date()) {
+  return allocateDailyStrategyOutput(configuredDailyStrategyOutputTarget(), now).byKey.investors
 }
 
 function escapeHtml(value: string) {
@@ -73,7 +82,12 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
     const limitPerNiche = isBuilderMode
       ? envInt('INVESTORS_DAILY_BUILDER_LIMIT_PER_NICHE', 2)
       : envInt('INVESTORS_DAILY_LIMIT_PER_NICHE', 3)
-    const results: Array<{ market: string; count: number; error?: string | null }> = []
+    const results: Array<{
+      market: string
+      count: number
+      status: 'completed' | 'skipped' | 'failed'
+      detail?: string | null
+    }> = []
     const markets =
       (mode === 'builders' ? [...BUILDER_PARTNER_MARKETS] : DEFAULT_INVESTOR_DISCOVERY_MARKETS).slice(
         0,
@@ -96,21 +110,36 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
               niches,
               limitPerNiche,
             })
-        results.push({ market: `${market.city}, ${market.state}`, count: investors.length })
+        results.push({
+          market: `${market.city}, ${market.state}`,
+          count: investors.length,
+          status: 'completed',
+        })
       } catch (error) {
         const message = error instanceof Error ? error.message.slice(0, 240) : 'Discovery failed.'
-        results.push({ market: `${market.city}, ${market.state}`, count: 0, error: message })
+        results.push({
+          market: `${market.city}, ${market.state}`,
+          count: 0,
+          status: isPaidSourceBudgetSkipError(error) ? 'skipped' : 'failed',
+          detail: message,
+        })
       }
     }
 
     const count = results.reduce((sum, item) => sum + item.count, 0)
-    const errorCount = results.filter((item) => Boolean(item.error)).length
+    const errorCount = results.filter((item) => item.status === 'failed').length
+    const skippedCount = results.filter((item) => item.status === 'skipped').length
     const ok = errorCount === 0
-    const partial = errorCount > 0 && errorCount < results.length
+    const partial = skippedCount > 0 || (errorCount > 0 && errorCount < results.length)
     await finishInvestorAutomationRun(run.id, {
       status: ok ? 'completed' : 'failed',
       resultCount: count,
-      errorMessage: ok ? null : `${errorCount} of ${results.length} investor discovery market(s) failed.`,
+      errorMessage:
+        errorCount > 0
+          ? `${errorCount} of ${results.length} investor discovery market(s) failed.`
+          : skippedCount > 0
+            ? `${skippedCount} of ${results.length} investor discovery market(s) skipped by the paid-source guard.`
+            : null,
     })
 
     if (!options.dryRun) {
@@ -118,8 +147,8 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
         mode === 'builders' ? 'VestBlock builder discovery report' : 'VestBlock investor discovery report',
         mode === 'builders' ? 'Builder discovery summary' : 'Investor discovery summary',
         results.map((item) =>
-          item.error
-            ? `${item.market}: discovery blocked — ${item.error}`
+          item.status !== 'completed'
+            ? `${item.market}: discovery ${item.status} — ${item.detail}`
             : `${item.market}: ${item.count} ${mode === 'builders' ? 'builder / construction prospects' : 'investor prospects'}`
         )
       )
@@ -129,6 +158,7 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
       ok,
       partial,
       errorCount,
+      skippedCount,
       mode,
       count,
       results,
@@ -151,6 +181,8 @@ export async function runDailyInvestorPipeline(
     sendExecutor?: <T>(task: () => Promise<T>) => Promise<T>
   } = {}
 ) {
+  const dailyLaneTarget = investorDailyOutputTarget()
+  const sendLimit = Math.min(options.sendLimit ?? dailyLaneTarget, dailyLaneTarget)
   const run = await startInvestorAutomationRun({
     runType: 'pipeline',
     sourceKey: 'investor_relationship_engine',
@@ -169,7 +201,7 @@ export async function runDailyInvestorPipeline(
           errorCount: 0,
           results: [],
         }
-      : await runDailyInvestorHunterEnrichment().catch(async () => {
+      : await runDailyInvestorHunterEnrichment(dailyLaneTarget).catch(async () => {
           const message = 'Investor Hunter enrichment stage failed unexpectedly.'
           await logEvent({
             eventType: 'admin_action',
@@ -188,12 +220,12 @@ export async function runDailyInvestorPipeline(
             error: message,
           }
         })
-    const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(envInt('INVESTORS_DAILY_SCORE_LIMIT', 120))
-    const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(envInt('INVESTORS_DAILY_OUTREACH_LIMIT', 50))
-    const followup = await runDailyInvestorFollowup(envInt('INVESTORS_DAILY_FOLLOWUP_LIMIT', 30), { dryRun: options.dryRun })
-    const approval = await runDailyInvestorApproval(envInt('INVESTORS_DAILY_APPROVAL_LIMIT', 25), { dryRun: options.dryRun })
+    const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(dailyLaneTarget)
+    const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(dailyLaneTarget)
+    const followup = await runDailyInvestorFollowup(dailyLaneTarget, { dryRun: options.dryRun })
+    const approval = await runDailyInvestorApproval(dailyLaneTarget, { dryRun: options.dryRun })
     const executeSend = () =>
-      runDailyInvestorSend(options.sendLimit ?? envInt('INVESTORS_DAILY_SEND_LIMIT', 20), { dryRun: options.dryRun })
+      runDailyInvestorSend(sendLimit, { dryRun: options.dryRun })
     const send = options.sendExecutor ? await options.sendExecutor(executeSend) : await executeSend()
     const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
 
@@ -207,7 +239,7 @@ export async function runDailyInvestorPipeline(
         ? null
         : 'Investor pipeline completed with one or more failed stages. Inspect the stage results before retrying.',
     })
-    return { ok, partial: !ok, discovery, enrichment, scoring, outreach, followup, approval, send, performance }
+    return { ok, partial: !ok, dailyLaneTarget, discovery, enrichment, scoring, outreach, followup, approval, send, performance }
   } catch (error) {
     await finishInvestorAutomationRun(run.id, {
       status: 'failed',

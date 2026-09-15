@@ -1,4 +1,12 @@
 export type DeliveryCircuitBreaker = {
+  /** Database time captured immediately before the provider evidence snapshot began. */
+  evaluatedAt?: string
+  /**
+   * Monotonic database watermark captured at the same boundary as evaluatedAt.
+   * Ramp promotions fail closed when delivery evidence changes after this value
+   * was captured; conservative holds and downshifts do not depend on it.
+   */
+  evidenceWatermark?: number | null
   allowed: boolean
   broadSendingAllowed: boolean
   recoveryCanaryAllowed: boolean
@@ -19,6 +27,7 @@ export type DeliveryCircuitBreaker = {
   globalFailed: number
   globalFailureRate: number
   providerGlobalHealthBlocked: boolean
+  terminalCompleteness: number | null
 }
 
 type DeliveryEvidenceRow = {
@@ -26,28 +35,33 @@ type DeliveryEvidenceRow = {
   delivery_status: string
 }
 
-const TERMINAL_DELIVERY_STATUSES = new Set([
-  'delivered',
-  'opened',
-  'clicked',
-  'bounced',
-  'complained',
-  'suppressed',
-  'failed',
-])
+const TERMINAL_DELIVERY_PRECEDENCE: Record<string, number> = {
+  delivered: 10,
+  opened: 20,
+  clicked: 30,
+  failed: 70,
+  bounced: 80,
+  suppressed: 90,
+  complained: 100,
+}
 
 export function providerHasDeliveryTelemetry(provider: string) {
   return String(provider || '').trim().toLowerCase() === 'resend'
 }
 
-function latestTerminalStatuses(rows: DeliveryEvidenceRow[]) {
-  const latestByMessage = new Map<string, string>()
+function worstTerminalStatuses(rows: DeliveryEvidenceRow[]) {
+  const worstByMessage = new Map<string, string>()
   for (const row of rows) {
-    if (!latestByMessage.has(row.provider_message_id)) {
-      latestByMessage.set(row.provider_message_id, row.delivery_status)
-    }
+    const nextPrecedence = TERMINAL_DELIVERY_PRECEDENCE[row.delivery_status]
+    if (nextPrecedence === undefined) continue
+
+    const current = worstByMessage.get(row.provider_message_id)
+    const currentPrecedence = current === undefined
+      ? Number.NEGATIVE_INFINITY
+      : TERMINAL_DELIVERY_PRECEDENCE[current]
+    if (nextPrecedence > currentPrecedence) worstByMessage.set(row.provider_message_id, row.delivery_status)
   }
-  return Array.from(latestByMessage.values()).filter((status) => TERMINAL_DELIVERY_STATUSES.has(status))
+  return Array.from(worstByMessage.values())
 }
 
 export function evaluateDeliveryCircuitBreaker(
@@ -65,8 +79,8 @@ export function evaluateDeliveryCircuitBreaker(
     globalMinimumSample?: number
   }
 ): DeliveryCircuitBreaker {
-  const terminal = latestTerminalStatuses(rows)
-  const globalTerminal = latestTerminalStatuses(options.globalRows || rows)
+  const terminal = worstTerminalStatuses(rows)
+  const globalTerminal = worstTerminalStatuses(options.globalRows || rows)
   const count = (status: string) => terminal.filter((value) => value === status).length
   const delivered = terminal.filter((status) => ['delivered', 'opened', 'clicked'].includes(status)).length
   const bounced = count('bounced')
@@ -138,5 +152,6 @@ export function evaluateDeliveryCircuitBreaker(
     globalFailed,
     globalFailureRate,
     providerGlobalHealthBlocked,
+    terminalCompleteness: null,
   }
 }

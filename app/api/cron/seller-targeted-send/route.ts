@@ -11,6 +11,7 @@ import {
   getLeadById,
   claimOutreachMessageForSend,
   insertOutreachSendEvent,
+  restoreOutreachMessageAfterDeliveryDeferral,
   updateLeadRecord,
   updateOutreachMessage,
 } from '@/lib/leads/repository'
@@ -131,6 +132,27 @@ export async function GET(request: Request) {
     const attribution = await getStrategyDeliveryAttribution(leadId).catch(() => null)
     const sendResult = await sendLeadOutreachEmail({ lead, message: claimed, sequenceStep: 1 })
     if (!sendResult.ok) {
+      if (sendResult.deferred) {
+        const restored = await restoreOutreachMessageAfterDeliveryDeferral(
+          message.id,
+          claimed.updated_at,
+          sendResult.error || 'Delivery deferred by the outreach governor.'
+        )
+        await Promise.all([
+          restored ? updateLeadRecord(leadId, { outreach_status: 'approved' }) : Promise.resolve(),
+        ])
+        return NextResponse.json(
+          {
+            success: false,
+            deferred: true,
+            restored: Boolean(restored),
+            error: restored
+              ? sendResult.error || 'Delivery is temporarily deferred.'
+              : 'Delivery was deferred, but the claimed message changed before it could be restored.',
+          },
+          { status: 409 }
+        )
+      }
       await updateOutreachMessage(message.id, {
         status: 'failed',
         send_provider: sendResult.provider,

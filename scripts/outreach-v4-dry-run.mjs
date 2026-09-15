@@ -95,6 +95,11 @@ async function main() {
   const distressedMarketCount = intArg('--distressed-markets', 2, 6)
   const perMarketLimit = intArg('--per-market-limit', 2, 8)
   const realSource = hasFlag('--real-source')
+  if (realSource) {
+    throw new Error(
+      'paid_real_source_dry_run_quarantined: Outreach V4 dry-run cannot launch paid source providers. Use the governed production discovery paths, which reserve the atomic Chicago-day source budget before every provider request.'
+    )
+  }
   const realSourceVerticalList = listArg('--real-source-verticals', ['ai_receptionist', 'no_website', 'weak_website'])
   const realSourceVerticals = new Set(realSourceVerticalList)
   const realSourceOnly = hasFlag('--real-source-only')
@@ -105,6 +110,11 @@ async function main() {
   const websiteAuditLimit = intArg('--website-audit-limit', 4, 25)
   const targetSends = intArg('--target', Number.parseInt(process.env.OUTREACH_V4_DAILY_TARGET || '50', 10), 100)
   const enrichMissingEmail = hasFlag('--enrich-missing-email')
+  if (enrichMissingEmail) {
+    throw new Error(
+      'legacy_hunter_domain_enrichment_quarantined: Outreach V4 dry-run cannot spend Hunter search credits. Use the governed production enrichment paths, which reserve a bounded daily lookup budget.'
+    )
+  }
   const enrichmentLimit = intArg('--enrichment-limit', 25, 100)
   const enrichmentTimeoutMs = intArg('--enrichment-timeout-ms', 12000, 30000)
   const artifactDir = path.join(process.cwd(), 'artifacts', 'outreach-v4', date)

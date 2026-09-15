@@ -2,21 +2,23 @@ import 'server-only'
 
 import type { WebhookEventPayload } from 'resend'
 
-import { buildResendDeliveryIdentityMetadata } from '@/lib/email/resendDeliveryCore'
+import {
+  buildResendDeliveryIdentityMetadata,
+  deliveryProjectionAllowedCurrentStatuses,
+  parseResendOutreachIdentityTags,
+  selectResendDeliveryProjection,
+  type ResendOutreachIdentityTags,
+  type ResendProjectionStatus,
+} from '@/lib/email/resendDeliveryCore'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { suppressAndCancelPendingOutreach } from '@/lib/outreach/suppression'
+import {
+  recordOutreachThroughputOutcome,
+  recordOutreachThroughputProviderOutcome,
+  type OutreachThroughputOutcome,
+} from '@/lib/outreach/throughputGovernor'
 
-export type ProviderDeliveryStatus =
-  | 'queued'
-  | 'accepted'
-  | 'delivered'
-  | 'delivery_delayed'
-  | 'bounced'
-  | 'complained'
-  | 'suppressed'
-  | 'failed'
-  | 'opened'
-  | 'clicked'
+export type ProviderDeliveryStatus = ResendProjectionStatus
 
 const EMAIL_EVENT_STATUS: Record<ProviderDeliveryStatus, string> = {
   queued: 'queued',
@@ -79,7 +81,17 @@ function getFailureReason(event: WebhookEventPayload) {
   return null
 }
 
-async function findOutreachEvent(providerMessageId: string) {
+function throughputOutcome(status: ProviderDeliveryStatus): OutreachThroughputOutcome {
+  if (status === 'queued') return 'reserved'
+  if (status === 'accepted' || status === 'delivery_delayed') return 'accepted'
+  if (status === 'delivered' || status === 'opened' || status === 'clicked') return 'delivered'
+  return status
+}
+
+async function findOutreachEvent(
+  providerMessageId: string,
+  webhookTags?: ResendOutreachIdentityTags | null
+) {
   const admin = createAdminClient()
   const candidates = [
     { resendId: providerMessageId },
@@ -100,10 +112,37 @@ async function findOutreachEvent(providerMessageId: string) {
     if (data) return data
   }
 
+  if (webhookTags?.recordType === 'lead_outreach') {
+    const { data, error } = await admin
+      .from('outreach_messages')
+      .select('id,lead_id,subject,metadata_json')
+      .eq('id', webhookTags.messageId)
+      .eq('lead_id', webhookTags.entityId)
+      .maybeSingle()
+    if (error) throw error
+    if (data) {
+      return {
+        id: data.id,
+        lead_id: data.lead_id,
+        outreach_message_id: data.id,
+        recipient: null,
+        subject: data.subject,
+        metadata_json: {
+          ...(data.metadata_json || {}),
+          idempotencyKey: webhookTags.idempotencyKey,
+          correlationId: webhookTags.correlationId,
+        },
+      }
+    }
+  }
+
   return null
 }
 
-async function findPartnerOutreachRecord(providerMessageId: string) {
+async function findPartnerOutreachRecord(
+  providerMessageId: string,
+  webhookTags?: ResendOutreachIdentityTags | null
+) {
   const admin = createAdminClient()
   const sources = [
     {
@@ -146,10 +185,39 @@ async function findPartnerOutreachRecord(providerMessageId: string) {
       }
     }
   }
+
+  const taggedSource = sources.find((source) => source.recordType === webhookTags?.recordType)
+  if (taggedSource && webhookTags) {
+    const { data, error } = await admin
+      .from(taggedSource.table)
+      .select(`id,${taggedSource.entityIdColumn},metadata_json`)
+      .eq('id', webhookTags.messageId)
+      .eq(taggedSource.entityIdColumn, webhookTags.entityId)
+      .maybeSingle()
+    if (error) throw error
+    if (data) {
+      const row = data as unknown as Record<string, unknown>
+      return {
+        id: String(row.id || ''),
+        recordType: taggedSource.recordType,
+        messageTable: taggedSource.table,
+        entityTable: taggedSource.entityTable,
+        entityId: String(row[taggedSource.entityIdColumn] || ''),
+        metadata_json: {
+          ...((row.metadata_json || {}) as Record<string, unknown>),
+          idempotencyKey: webhookTags.idempotencyKey,
+          correlationId: webhookTags.correlationId,
+        },
+      }
+    }
+  }
   return null
 }
 
-async function findBuyerPacketSend(providerMessageId: string) {
+async function findBuyerPacketSend(
+  providerMessageId: string,
+  webhookTags?: ResendOutreachIdentityTags | null
+) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('property_buyer_packet_sends')
@@ -159,7 +227,50 @@ async function findBuyerPacketSend(providerMessageId: string) {
     .limit(1)
     .maybeSingle()
   if (error) throw error
-  return data
+  if (data || webhookTags?.recordType !== 'buyer_packet_outreach') return data
+
+  const [prefix, packetId, buyerId] = webhookTags.messageId.split(':')
+  if (prefix !== 'buyer-packet' || !packetId || !buyerId) return null
+  const { data: taggedPacketSend, error: taggedPacketError } = await admin
+    .from('property_buyer_packet_sends')
+    .select('id,buyer_packet_id,buyer_id,buyer_email,status,metadata_json')
+    .eq('buyer_packet_id', packetId)
+    .eq('buyer_id', buyerId)
+    .limit(1)
+    .maybeSingle()
+  if (taggedPacketError) throw taggedPacketError
+  return taggedPacketSend
+}
+
+async function findThroughputAttemptSender(
+  providerMessageId: string,
+  webhookTags?: ResendOutreachIdentityTags | null
+) {
+  const admin = createAdminClient()
+  const query = admin
+    .from('outreach_attempt_reservations')
+    .select('sender_email')
+    .eq('provider', 'resend')
+    .eq('provider_message_id', providerMessageId)
+    .limit(1)
+    .maybeSingle()
+  const { data: initialData, error } = await query
+  let data = initialData
+  if (error) throw error
+  if (!data?.sender_email && webhookTags?.idempotencyKey) {
+    const fallback = await admin
+      .from('outreach_attempt_reservations')
+      .select('sender_email')
+      .eq('provider', 'resend')
+      .eq('idempotency_key', webhookTags.idempotencyKey)
+      .limit(1)
+      .maybeSingle()
+    if (fallback.error) throw fallback.error
+    data = fallback.data
+  }
+  return typeof data?.sender_email === 'string'
+    ? data.sender_email.trim().toLowerCase() || null
+    : null
 }
 
 function buyerPacketDeliveryStatus(status: ProviderDeliveryStatus) {
@@ -177,6 +288,7 @@ async function recordBuyerPacketDelivery(input: {
 }) {
   const admin = createAdminClient()
   const nextStatus = buyerPacketDeliveryStatus(input.status)
+  const allowedCurrentStatuses = deliveryProjectionAllowedCurrentStatuses(input.status)
   const updates: Record<string, unknown> = {
     status: nextStatus,
     send_error: input.reason,
@@ -194,6 +306,7 @@ async function recordBuyerPacketDelivery(input: {
     .from('property_buyer_packet_sends')
     .update(updates)
     .eq('id', input.packetSend.id)
+    .in('status', allowedCurrentStatuses)
   if (sendError) throw sendError
 
   const { data: packetSends, error: sendsError } = await admin
@@ -242,17 +355,20 @@ async function recordBuyerPacketDelivery(input: {
         .from('buyers')
         .update(buyerUpdates)
         .eq('id', input.packetSend.buyer_id)
+        .or(`outreach_status.is.null,outreach_status.in.(${allowedCurrentStatuses.join(',')})`)
       if (buyerError) throw buyerError
     }
   }
 
-  await admin
+  const { error: enrollmentError } = await admin
     .from('command_center_outbound_enrollments')
     .update({
       status: input.status === 'delivery_delayed' ? 'accepted' : input.status,
       updated_at: new Date().toISOString(),
     })
     .eq('last_message_id', `buyer-packet:${input.packetSend.buyer_packet_id}:${input.packetSend.buyer_id}`)
+    .in('status', allowedCurrentStatuses)
+  if (enrollmentError) throw enrollmentError
 
   return {
     packetId: input.packetSend.buyer_packet_id,
@@ -270,6 +386,7 @@ async function recordPartnerOutreachDelivery(input: {
 }) {
   const admin = createAdminClient()
   const failureStatus = ['bounced', 'complained', 'suppressed', 'failed'].includes(input.status)
+  const allowedCurrentStatuses = deliveryProjectionAllowedCurrentStatuses(input.status)
   const { error: messageError } = await admin
     .from(input.match.messageTable)
     .update({
@@ -284,6 +401,7 @@ async function recordPartnerOutreachDelivery(input: {
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.match.id)
+    .in('status', allowedCurrentStatuses)
   if (messageError) throw messageError
 
   if (failureStatus && input.match.entityId) {
@@ -296,6 +414,7 @@ async function recordPartnerOutreachDelivery(input: {
         updated_at: new Date().toISOString(),
       })
       .eq('id', input.match.entityId)
+      .or(`outreach_status.is.null,outreach_status.in.(${allowedCurrentStatuses.join(',')})`)
     if (entityError) throw entityError
   }
 
@@ -318,6 +437,8 @@ export async function recordResendDeliveryEvent(input: {
 
   const admin = createAdminClient()
   const providerMessageId = event.data.email_id
+  const rawWebhookTags = 'tags' in event.data ? event.data.tags : undefined
+  const webhookTags = parseResendOutreachIdentityTags(rawWebhookTags)
   const recipient = event.data.to?.[0]?.trim().toLowerCase() || null
   const subject = event.data.subject || null
   const reason = getFailureReason(event)
@@ -327,17 +448,20 @@ export async function recordResendDeliveryEvent(input: {
     bounce: event.type === 'email.bounced' ? event.data.bounce : null,
     failed: event.type === 'email.failed' ? event.data.failed : null,
     suppressed: event.type === 'email.suppressed' ? event.data.suppressed : null,
+    webhookTags: rawWebhookTags || null,
   }
 
-  const [outreachEvent, buyerPacketSend, partnerOutreach] = await Promise.all([
-    findOutreachEvent(providerMessageId),
-    findBuyerPacketSend(providerMessageId),
-    findPartnerOutreachRecord(providerMessageId),
+  const [outreachEvent, buyerPacketSend, partnerOutreach, senderEmail] = await Promise.all([
+    findOutreachEvent(providerMessageId, webhookTags),
+    findBuyerPacketSend(providerMessageId, webhookTags),
+    findPartnerOutreachRecord(providerMessageId, webhookTags),
+    findThroughputAttemptSender(providerMessageId, webhookTags),
   ])
   const outboundIdentity = buildResendDeliveryIdentityMetadata({
     leadOutreach: outreachEvent,
     partnerOutreach,
     buyerPacketSend,
+    webhookTags,
   })
 
   const { data: inserted, error: insertError } = await admin
@@ -347,12 +471,17 @@ export async function recordResendDeliveryEvent(input: {
         provider: 'resend',
         provider_event_id: providerEventId,
         provider_message_id: providerMessageId,
+        sender_email: senderEmail,
         event_type: event.type,
         delivery_status: status,
         recipient,
         subject,
         reason,
-        metadata_json: { ...metadata, ...outboundIdentity },
+        metadata_json: {
+          ...metadata,
+          ...outboundIdentity,
+          ...(senderEmail ? { outboundSenderEmail: senderEmail } : {}),
+        },
         occurred_at: event.created_at,
       },
       { onConflict: 'provider,provider_event_id', ignoreDuplicates: true }
@@ -361,7 +490,75 @@ export async function recordResendDeliveryEvent(input: {
     .maybeSingle()
 
   if (insertError) throw insertError
-  if (!inserted?.id) return { recorded: false, reason: 'duplicate' as const }
+  const duplicateEvent = !inserted?.id
+  const { data: providerEvents, error: providerEventsError } = await admin
+    .from('provider_delivery_events')
+    .select('provider_event_id,delivery_status,reason,occurred_at,created_at')
+    .eq('provider', 'resend')
+    .eq('provider_message_id', providerMessageId)
+    .order('occurred_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (providerEventsError) throw providerEventsError
+  const latestProviderEvent = selectResendDeliveryProjection(
+    (providerEvents || []) as Array<{
+      provider_event_id: string
+      delivery_status: ProviderDeliveryStatus
+      reason?: string | null
+      occurred_at: string
+      created_at?: string | null
+    }>
+  )
+  if (!latestProviderEvent) throw new Error('Resend delivery projection evidence was not found after insert.')
+  const projectedStatus = latestProviderEvent.delivery_status
+  const projectedReason = latestProviderEvent.reason || null
+  const projectedOccurredAt = latestProviderEvent.occurred_at
+  const projectedProviderEventId = latestProviderEvent.provider_event_id
+  const allowedCurrentStatuses = deliveryProjectionAllowedCurrentStatuses(projectedStatus)
+  const recordThroughputBestEffort = async () => {
+    try {
+      const providerResult = await recordOutreachThroughputProviderOutcome({
+        provider: 'resend',
+        providerMessageId,
+        state: throughputOutcome(status),
+        metadata: {
+          providerEventId,
+          providerEventType: event.type,
+          occurredAt: event.created_at,
+        },
+      })
+      if (
+        providerResult &&
+        typeof providerResult === 'object' &&
+        'updated' in providerResult &&
+        providerResult.updated === true
+      ) return providerResult
+      if (!webhookTags?.idempotencyKey) return providerResult
+
+      const { data: taggedReservation, error: taggedReservationError } = await admin
+        .from('outreach_attempt_reservations')
+        .select('id')
+        .eq('provider', 'resend')
+        .eq('idempotency_key', webhookTags.idempotencyKey)
+        .maybeSingle()
+      if (taggedReservationError) throw taggedReservationError
+      if (!taggedReservation?.id) return providerResult
+      return await recordOutreachThroughputOutcome({
+        reservationId: taggedReservation.id,
+        state: throughputOutcome(status),
+        providerMessageId,
+        metadata: {
+          providerEventId,
+          providerEventType: event.type,
+          occurredAt: event.created_at,
+          matchedBy: 'resend_webhook_idempotency_tag',
+        },
+      })
+    } catch (error) {
+      console.error('[resend-webhook] throughput outcome reconciliation failed', error)
+      return { updated: false, reason: 'throughput_outcome_reconciliation_failed' }
+    }
+  }
 
   const effectiveRecipient = recipient || outreachEvent?.recipient || buyerPacketSend?.buyer_email || null
   if (['bounced', 'complained', 'suppressed', 'failed'].includes(status)) {
@@ -371,90 +568,99 @@ export async function recordResendDeliveryEvent(input: {
     })
   }
 
-  await admin
+  const { error: emailEventError } = await admin
     .from('email_events')
     .update({
-      status: EMAIL_EVENT_STATUS[status],
-      error_message: reason,
+      status: EMAIL_EVENT_STATUS[projectedStatus],
+      error_message: projectedReason,
     })
     .eq('provider_message_id', providerMessageId)
+    .in('status', allowedCurrentStatuses)
+  if (emailEventError) throw emailEventError
 
   const buyerPacket = buyerPacketSend
-    ? await recordBuyerPacketDelivery({
+      ? await recordBuyerPacketDelivery({
         packetSend: buyerPacketSend,
-        status,
-        reason,
-        occurredAt: event.created_at,
-        providerEventId,
+        status: projectedStatus,
+        reason: projectedReason,
+        occurredAt: projectedOccurredAt,
+        providerEventId: projectedProviderEventId,
         providerMessageId,
       })
     : null
 
   const partnerDelivery = partnerOutreach
-    ? await recordPartnerOutreachDelivery({
+      ? await recordPartnerOutreachDelivery({
         match: partnerOutreach,
-        status,
-        reason,
-        occurredAt: event.created_at,
-        providerEventId,
+        status: projectedStatus,
+        reason: projectedReason,
+        occurredAt: projectedOccurredAt,
+        providerEventId: projectedProviderEventId,
       })
     : null
 
   if (!outreachEvent?.lead_id) {
+    const throughputTracking = await recordThroughputBestEffort()
     return {
       recorded: true,
+      duplicateEvent,
       matched: Boolean(buyerPacket || partnerDelivery),
       status,
+      projectedStatus,
       providerMessageId,
       buyerPacket,
       partnerDelivery,
+      throughputTracking,
     }
   }
 
-  const { error: eventError } = await admin.from('outreach_send_events').insert({
-    lead_id: outreachEvent.lead_id,
-    outreach_message_id: outreachEvent.outreach_message_id || null,
-    channel: 'email',
-    provider: 'resend',
-    status,
-    recipient: recipient || outreachEvent.recipient || null,
-    subject: subject || outreachEvent.subject || null,
-    error_message: reason,
-    metadata_json: {
-      ...outboundIdentity,
-      providerEventId,
-      providerMessageId,
-      eventType: event.type,
-      occurredAt: event.created_at,
-    },
-  })
+  const { error: eventError } = await admin.from('outreach_send_events').upsert({
+      lead_id: outreachEvent.lead_id,
+      outreach_message_id: outreachEvent.outreach_message_id || null,
+      channel: 'email',
+      provider: 'resend',
+      provider_event_id: providerEventId,
+      status,
+      recipient: recipient || outreachEvent.recipient || null,
+      subject: subject || outreachEvent.subject || null,
+      error_message: reason,
+      metadata_json: {
+        ...outboundIdentity,
+        providerEventId,
+        providerMessageId,
+        eventType: event.type,
+        occurredAt: event.created_at,
+      },
+    }, { onConflict: 'provider,provider_event_id', ignoreDuplicates: true })
   if (eventError) throw eventError
 
   const leadUpdates: Record<string, unknown> = {
-    delivery_status: LEAD_DELIVERY_STATUS[status],
+    delivery_status: LEAD_DELIVERY_STATUS[projectedStatus],
   }
 
-  if (['bounced', 'complained', 'suppressed', 'failed'].includes(status)) {
+  if (['bounced', 'complained', 'suppressed', 'failed'].includes(projectedStatus)) {
     leadUpdates.email_valid = false
-    leadUpdates.suppression_reason = reason || `Resend reported ${status}.`
-    leadUpdates.outreach_status = status === 'complained' ? 'do_not_contact' : 'failed'
+    leadUpdates.suppression_reason = projectedReason || `Resend reported ${projectedStatus}.`
+    leadUpdates.outreach_status = projectedStatus === 'complained' ? 'do_not_contact' : 'failed'
   }
 
   const { error: leadError } = await admin
     .from('leads')
     .update(leadUpdates)
     .eq('id', outreachEvent.lead_id)
+    .or(`delivery_status.is.null,delivery_status.in.(${allowedCurrentStatuses.join(',')})`)
   if (leadError) throw leadError
 
-  const membershipStatus = status === 'delivery_delayed' ? 'accepted' : status
+  const membershipStatus = projectedStatus === 'delivery_delayed' ? 'accepted' : projectedStatus
   const { data: memberships, error: membershipError } = await admin
     .from('strategy_lead_memberships')
     .update({
       status: membershipStatus,
-      last_outcome_at: event.created_at,
+      last_outcome_at: projectedOccurredAt,
       updated_at: new Date().toISOString(),
     })
     .eq('lead_id', outreachEvent.lead_id)
+    .in('status', allowedCurrentStatuses)
     .select('campaign_run_id')
   if (membershipError) throw membershipError
 
@@ -466,6 +672,7 @@ export async function recordResendDeliveryEvent(input: {
     })
     .eq('lead_id', outreachEvent.lead_id)
     .eq('channel', 'email')
+    .in('status', allowedCurrentStatuses)
   if (enrollmentError) throw enrollmentError
 
   const campaignRunIds = Array.from(
@@ -500,13 +707,18 @@ export async function recordResendDeliveryEvent(input: {
     if (runError) throw runError
   }
 
+  const throughputTracking = await recordThroughputBestEffort()
+
   return {
     recorded: true,
+    duplicateEvent,
     matched: true,
     status,
+    projectedStatus,
     providerMessageId,
     leadId: outreachEvent.lead_id,
     buyerPacket,
     partnerDelivery,
+    throughputTracking,
   }
 }

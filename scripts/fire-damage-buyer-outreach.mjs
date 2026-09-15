@@ -1,17 +1,18 @@
 /**
  * VestBlock — fire-damage / structural rehab buyer outreach.
  *
- * Dry-run by default. Sends only when --send is passed.
+ * Preview/staging only. Live delivery runs through the platform governor.
  *
  * Examples:
  *   node --env-file=.env.local scripts/fire-damage-buyer-outreach.mjs
- *   node --env-file=.env.local scripts/fire-damage-buyer-outreach.mjs --send --limit=3
+ *   pnpm run outreach:dispatch:live
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { Resend } from 'resend'
 import { getEmailQualityIssue, normalizeEmailAddress } from './shared-email-quality.mjs'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const SEND = args.includes('--send')
@@ -152,6 +153,7 @@ async function sendWithResend(resend, draft) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: 'fire-damage-buyer-outreach' })
   if (!fs.existsSync(CSV_PATH)) throw new Error(`CSV not found: ${CSV_PATH}`)
 
   const rows = parseCsv(fs.readFileSync(CSV_PATH, 'utf8'))
@@ -237,7 +239,7 @@ async function main() {
   console.log(`Artifacts:    ${outDir}`)
 
   if (!SEND) {
-    console.log('\nDry run complete. Review artifacts, then rerun with --send.')
+    console.log('\nDry run complete. Review/import approved records, then use pnpm run outreach:dispatch:live.')
     return
   }
   if (!process.env.RESEND_API_KEY || !FROM_EMAIL) throw new Error('Missing RESEND_API_KEY or FROM_EMAIL for live send.')

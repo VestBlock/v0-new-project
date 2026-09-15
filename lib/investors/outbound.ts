@@ -4,12 +4,15 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import {
   getOutboundProviderAvailability,
+  getOutboundSenderForProvider,
   getPreferredOutboundProvider,
 } from '@/lib/outreach/provider-preference'
-import { buildOutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import { buildOutboundSendIdentity, buildResendOutreachTags } from '@/lib/outreach/deliveryIdentity'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import type { DeliveryCircuitBreaker } from '@/lib/leads/deliveryHealthCore'
+import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
 
 type InvestorOutreachMessage = {
   id: string
@@ -49,17 +52,21 @@ function renderInvestorEmail(message: InvestorOutreachMessage, mailingAddress: s
 export async function sendInvestorOutreachEmail(input: {
   investor: InvestorProfileRecord
   message: InvestorOutreachMessage
+  deliveryCircuitBreaker?: DeliveryCircuitBreaker
 }) {
+  const sequenceStep = Number((input.message as { step_number?: number }).step_number || 1)
+  const isFollowup = sequenceStep > 1
   const identity = buildOutboundSendIdentity({
     scope: 'investor',
     entityId: input.investor.id,
     messageId: input.message.id,
-    sequenceStep: Number((input.message as { step_number?: number }).step_number || 1),
+    sequenceStep,
   })
   const replyCapture = getReplyCaptureReadiness()
   if (!replyCapture.ready) {
     return {
       ok: false,
+      deferred: true,
       skipped: true,
       provider: 'none' as const,
       providerMessageId: null,
@@ -73,6 +80,7 @@ export async function sendInvestorOutreachEmail(input: {
   if (!mailingAddress) {
     return {
       ok: false,
+      deferred: true,
       skipped: true,
       provider: 'none' as const,
       providerMessageId: null,
@@ -99,6 +107,7 @@ export async function sendInvestorOutreachEmail(input: {
   if (provider === 'none') {
     return {
       ok: false,
+      deferred: true,
       skipped: true,
       provider,
       providerMessageId: null,
@@ -126,14 +135,43 @@ export async function sendInvestorOutreachEmail(input: {
         error: `Investor outreach blocked before send: ${recipientGuard.reason}.`,
       }
     }
+    const hunterPreflight = await preflightPartnerHunterSendVerification({
+      scope: 'investor',
+      entity: input.investor,
+      messageId: input.message.id,
+      strategyKey: 'investors',
+      provider,
+      isFollowup,
+      deliveryCircuitBreaker: input.deliveryCircuitBreaker,
+    })
+    if (!hunterPreflight.allowed) {
+      return {
+        ok: false,
+        deferred: true,
+        deferredScope: hunterPreflight.deferredScope || 'record',
+        skipped: true,
+        provider: 'none' as const,
+        providerMessageId: null,
+        idempotencyKey: identity.idempotencyKey,
+        correlationId: identity.correlationId,
+        error: `Investor outreach blocked before send: fresh Hunter status=valid verification is required (${hunterPreflight.reason}).`,
+      }
+    }
     deliveryAttempt = await acquireGuardedDeliveryAttempt({
       provider,
+      breaker: input.deliveryCircuitBreaker,
       scope: 'investor',
       messageId: input.message.id,
+      idempotencyKey: identity.idempotencyKey,
+      strategyKey: 'investors',
+      recipientEmail: to!,
+      senderEmail: getOutboundSenderForProvider(provider),
+      attemptKind: isFollowup ? 'follow_up' : 'first_touch',
     })
   } catch (error) {
     return {
       ok: false,
+      deferred: true,
       skipped: true,
       provider: 'none' as const,
       providerMessageId: null,
@@ -143,8 +181,16 @@ export async function sendInvestorOutreachEmail(input: {
     }
   }
   if (!deliveryAttempt.allowed) {
+    const reason = String(deliveryAttempt.reason || '')
+    const deferredScope = /outreach_(?:recipient_24h_cooldown|attempt_already_reserved|reserved_attempt_requires_reconciliation|attempt_identity_conflict)/.test(reason)
+      ? 'record'
+      : /outreach_(?:strategy_daily_limit_exhausted|strategy_not_scheduled_today)/.test(reason)
+        ? 'lane'
+        : 'global'
     return {
       ok: false,
+      deferred: true,
+      deferredScope,
       skipped: true,
       provider: 'none' as const,
       providerMessageId: null,
@@ -155,6 +201,7 @@ export async function sendInvestorOutreachEmail(input: {
   }
 
   let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
+  let providerMessageId: string | null | undefined
   try {
     const result = await sendEmail({
       to,
@@ -164,11 +211,15 @@ export async function sendInvestorOutreachEmail(input: {
       providerPreference: provider === 'resend' ? 'resend' : 'google',
       idempotencyKey: identity.idempotencyKey,
       correlationId: identity.correlationId,
+      resendTags: buildResendOutreachTags(identity),
       disableProviderFallback: true,
     })
-    outcome = result.ok ? 'accepted' : 'failed'
+    outcome = result.ok ? 'accepted' : result.deferred ? 'not_sent' : 'failed'
+    providerMessageId = result.id || null
     return {
       ok: Boolean(result.ok),
+      deferred: Boolean(result.deferred),
+      deferredScope: result.deferred ? 'infrastructure' as const : undefined,
       skipped: Boolean(result.skipped),
       provider: result.provider || ('none' as const),
       providerMessageId: result.id || null,
@@ -177,7 +228,7 @@ export async function sendInvestorOutreachEmail(input: {
       error: result.error || null,
     }
   } finally {
-    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome).catch((error) => {
+    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome, providerMessageId).catch((error) => {
       console.error('[outreach] failed to release global investor delivery permit', error)
     })
   }

@@ -9,6 +9,7 @@ import { requireLeadAdmin } from '@/lib/leads/admin-auth'
 import { commandCenterDataIntegrityHoldResponse, isCommandCenterDataIntegrityHold } from '@/lib/admin/command-center-data-integrity'
 import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { logEvent } from '@/lib/system/logEvent'
+import { configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
 
 const outboundSprintSchema = z.object({
   target: z.coerce.number().int().min(1).max(500).optional(),
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const dailyTarget = envInt('LEADS_TARGET_EMAILS_PER_DAY', envInt('LEADS_DAILY_SEND_LIMIT', 500))
+  const dailyTarget = configuredDailyStrategyOutputTarget()
   const maxPerRun = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(dailyTarget, 500))
   const target = Math.min(parsed.data.target || maxPerRun, maxPerRun)
   const budgetMs = envMs('LEADS_COMMAND_CENTER_OUTBOUND_BUDGET_MS', 90000)

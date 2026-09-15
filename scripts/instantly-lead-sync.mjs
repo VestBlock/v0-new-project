@@ -3,18 +3,19 @@
 /**
  * VestBlock -> Instantly lead sync.
  *
- * Preview by default. Use --push to create/update Instantly lead lists or campaigns.
+ * Preview by default. Use --push to create/update inert Instantly lead lists.
+ * Direct imports into campaigns are quarantined from the governed send path.
  *
  * Examples:
  *   node --env-file=.env.local scripts/instantly-lead-sync.mjs --doctor
  *   node --env-file=.env.local scripts/instantly-lead-sync.mjs --input=artifacts/outscraper/2026-06-16/fire-damage-builders/file.csv --lane=fire-damage-builders
  *   node --env-file=.env.local scripts/instantly-lead-sync.mjs --push --input=... --lane=fire-damage-builders --list-name="VB Fire Damage Buyers - KC"
- *   node --env-file=.env.local scripts/instantly-lead-sync.mjs --push --input=... --lane=buyer-developers --campaign-id=...
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const API_BASE_URL = String(process.env.INSTANTLY_API_BASE_URL || 'https://api.instantly.ai').replace(/\/+$/, '')
@@ -350,6 +351,10 @@ async function main() {
   const verify = hasFlag('--verify')
   const listName = getArg('--list-name', `VestBlock ${lane} ${today()}`)
   const campaignId = getArg('--campaign-id')
+  quarantineLegacyDirectLiveSend({
+    requested: push && Boolean(campaignId),
+    entry: 'instantly-lead-sync campaign import',
+  })
   const rows = parseCsv(fs.readFileSync(inputPath, 'utf8'))
   const { accepted, rejected } = uniqueValidLeads(rows, { lane, sourceFile: inputPath })
   const limited = accepted.slice(0, limit)
@@ -394,7 +399,7 @@ async function main() {
     previewCsvPath,
     summaryPath,
     notes: push
-      ? 'Leads were pushed into Instantly. Campaign activation should still be controlled after sender/deliverability review.'
+      ? 'Leads were pushed into an inert Instantly list. Direct campaign delivery remains quarantined.'
       : 'Preview only. Re-run with --push after reviewing the CSV and Instantly sender setup.',
   }
   writeJson(summaryPath, summary)

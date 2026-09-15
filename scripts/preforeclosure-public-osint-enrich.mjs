@@ -32,7 +32,6 @@ const TIMEOUT_MS = getArg("timeout-ms") ? Math.max(3000, Math.min(30000, Number.
 const PRE_DIR = path.join(process.cwd(), "data", "preforeclosure-county")
 const ENRICHED_DIR = path.join(PRE_DIR, "osint-enriched")
 const REPORT_DIR = path.join(process.cwd(), "tmp", "outreach")
-const HUNTER_API_BASE = "https://api.hunter.io/v2"
 
 function normalizeText(value) {
   return String(value || "").trim()
@@ -371,37 +370,13 @@ function scoreEmail(email, website) {
   return score
 }
 
-async function hunterDomainSearch(domain) {
-  const apiKey = normalizeText(process.env.HUNTER_API_KEY)
-  if (!apiKey) return { status: "skipped", reason: "missing_HUNTER_API_KEY", candidates: [] }
-  const params = new URLSearchParams({ api_key: apiKey, domain, limit: "10" })
-  try {
-    const response = await fetch(`${HUNTER_API_BASE}/domain-search?${params.toString()}`, {
-      headers: {
-        accept: "application/json",
-        "user-agent": "VestBlock Public OSINT/1.0 (+https://vestblock.io)",
-      },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) return { status: "error", reason: `hunter_http_${response.status}`, candidates: [] }
-    const candidates = (payload?.data?.emails || [])
-      .map((item) => {
-        const email = normalizeEmail(item.value)
-        if (!isUsableEmail(email)) return null
-        return {
-          email,
-          confidence: Number(item.confidence || 0),
-          verificationStatus: item.verification?.status || "",
-          fullName: [item.first_name, item.last_name].filter(Boolean).join(" ").trim(),
-          score: Math.max(1, Math.min(20, Math.round(Number(item.confidence || 0) / 5))) + (/^(info|contact|hello|team|office|sales|admin|acquisitions)@/i.test(email) ? 8 : 0),
-        }
-      })
-      .filter(Boolean)
-      .sort((left, right) => right.score - left.score)
-    return { status: candidates.length ? "found" : "not_found", reason: candidates.length ? `hunter_found_${candidates.length}` : "hunter_no_usable_email", candidates }
-  } catch (error) {
-    return { status: "error", reason: error instanceof Error ? error.message : "hunter_failed", candidates: [] }
+async function hunterDomainSearch(_domain) {
+  // Preserve the public-web enrichment lane without allowing this legacy CLI
+  // to consume credits outside the production Hunter lookup budget.
+  return {
+    status: "skipped",
+    reason: "legacy_hunter_domain_search_quarantined",
+    candidates: [],
   }
 }
 

@@ -2,6 +2,21 @@ import { normalizePhone, safeUrl } from '@/lib/leads/utils'
 import { searchOutscraperGoogleMaps } from '@/lib/leads/connectors/outscraper-google-maps'
 import { searchApifyYelp } from '@/lib/leads/connectors/apify-yelp'
 import {
+  isPaidSourceBudgetSkipError,
+  paidSourcePolicySkipError,
+  runPaidSourceAttempt,
+  unwrapPaidSourceAttempt,
+} from '@/lib/leads/paidSourceBudget'
+import {
+  buildApifyYelpPaidWorkPlan,
+  buildOutscraperPaidWorkPlan,
+} from '@/lib/leads/paidSourceBudgetCore'
+import {
+  isApifyApproved,
+  isGooglePlacesApproved,
+  isOutscraperApproved,
+} from '@/lib/leads/sourceCostGovernor'
+import {
   phaseOneMarkets,
   type InvestorSourceType,
   type InvestorType,
@@ -104,6 +119,18 @@ function normalizeMarketSet(input: { city: string; state: string; metroArea?: st
   )
 }
 
+function investorPaidSourceAttemptKey(
+  provider: 'google' | 'outscraper' | 'apify',
+  input: { city: string; state: string; niches: string[] }
+) {
+  const nicheKey = [...input.niches]
+    .map((niche) => niche.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join('|')
+  return `partner:investors:${provider}:${input.city.trim().toLowerCase()}-${input.state.trim().toLowerCase()}:${nicheKey}`
+}
+
 function isGooglePlacesPermissionIssue(error: unknown) {
   if (!(error instanceof Error)) return false
   const value = error.message.toLowerCase()
@@ -121,7 +148,7 @@ function shouldTryDirectoryFallback(error: unknown) {
   )
 }
 
-async function discoverInvestorsViaGooglePlaces(input: {
+async function fetchInvestorsViaGooglePlaces(input: {
   city: string
   state: string
   metroArea?: string | null
@@ -241,7 +268,35 @@ async function discoverInvestorsViaGooglePlaces(input: {
   return normalized
 }
 
-async function discoverInvestorsViaOutscraper(input: {
+async function discoverInvestorsViaGooglePlaces(input: {
+  city: string
+  state: string
+  metroArea?: string | null
+  niches: string[]
+  limitPerNiche: number
+}) {
+  if (!isGooglePlacesApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'google_places',
+      units: input.niches.length,
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const attempt = await runPaidSourceAttempt({
+    provider: 'google_places',
+    attemptKey: investorPaidSourceAttemptKey('google', input),
+    units: input.niches.length,
+    execute: (reservation) =>
+      fetchInvestorsViaGooglePlaces({
+        ...input,
+        niches: input.niches.slice(0, reservation.reservedUnits),
+      }),
+  })
+  return unwrapPaidSourceAttempt(attempt)
+}
+
+async function fetchInvestorsViaOutscraper(input: {
   city: string
   state: string
   metroArea?: string | null
@@ -353,7 +408,45 @@ async function discoverInvestorsViaOutscraper(input: {
   return normalized
 }
 
-async function discoverInvestorsViaApifyYelp(input: {
+async function discoverInvestorsViaOutscraper(input: {
+  city: string
+  state: string
+  metroArea?: string | null
+  niches: string[]
+  limitPerNiche: number
+}) {
+  if (!isOutscraperApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'outscraper',
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const requestedWorkPlan = buildOutscraperPaidWorkPlan({
+    niches: input.niches,
+    limitPerNiche: input.limitPerNiche,
+  })
+  const attempt = await runPaidSourceAttempt({
+    provider: 'outscraper',
+    attemptKey: investorPaidSourceAttemptKey('outscraper', input),
+    units: requestedWorkPlan.estimatedBillableUnits,
+    execute: (reservation) => {
+      const reservedWorkPlan = buildOutscraperPaidWorkPlan({
+        niches: requestedWorkPlan.niches,
+        limitPerNiche: requestedWorkPlan.limitPerNiche,
+        unitBudget: reservation.reservedUnits,
+      })
+      return fetchInvestorsViaOutscraper({
+        ...input,
+        niches: reservedWorkPlan.niches,
+        limitPerNiche: reservedWorkPlan.limitPerNiche,
+      })
+    },
+  })
+  return unwrapPaidSourceAttempt(attempt)
+}
+
+async function fetchInvestorsViaApifyYelp(input: {
   city: string
   state: string
   metroArea?: string | null
@@ -456,6 +549,45 @@ async function discoverInvestorsViaApifyYelp(input: {
   return normalized
 }
 
+async function discoverInvestorsViaApifyYelp(input: {
+  city: string
+  state: string
+  metroArea?: string | null
+  niches: string[]
+  limitPerNiche: number
+}) {
+  if (!isApifyApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'apify',
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const requestedWorkPlan = buildApifyYelpPaidWorkPlan({
+    niches: input.niches,
+    limitPerNiche: input.limitPerNiche,
+  })
+  const attempt = await runPaidSourceAttempt({
+    provider: 'apify',
+    attemptKey: investorPaidSourceAttemptKey('apify', input),
+    units: requestedWorkPlan.estimatedBillableUnits,
+    minimumUnits: 2,
+    execute: (reservation) => {
+      const reservedWorkPlan = buildApifyYelpPaidWorkPlan({
+        niches: requestedWorkPlan.niches,
+        limitPerNiche: requestedWorkPlan.limitPerNiche,
+        unitBudget: reservation.reservedUnits,
+      })
+      return fetchInvestorsViaApifyYelp({
+        ...input,
+        niches: reservedWorkPlan.niches,
+        limitPerNiche: reservedWorkPlan.limitPerNiche,
+      })
+    },
+  })
+  return unwrapPaidSourceAttempt(attempt)
+}
+
 export async function discoverInvestorsForMarket(input: {
   city: string
   state: string
@@ -473,26 +605,34 @@ export async function discoverInvestorsForMarket(input: {
     limitPerNiche,
   }
 
+  let googleError: unknown = null
   try {
     return await discoverInvestorsViaGooglePlaces(request)
   } catch (error) {
-    const canFallback = Boolean(process.env.OUTSCRAPER_API_KEY || process.env.APIFY_TOKEN)
-    if (!canFallback || !isGooglePlacesPermissionIssue(error)) {
+    googleError = error
+    const canFallback = isOutscraperApproved() || isApifyApproved()
+    if (
+      !canFallback ||
+      (!isPaidSourceBudgetSkipError(error) && !isGooglePlacesPermissionIssue(error))
+    ) {
       throw error
     }
   }
 
   try {
-    if (process.env.OUTSCRAPER_API_KEY) {
+    if (isOutscraperApproved()) {
       return await discoverInvestorsViaOutscraper(request)
     }
   } catch (error) {
-    if (!process.env.APIFY_TOKEN || !shouldTryDirectoryFallback(error)) {
+    if (
+      !isApifyApproved() ||
+      (!isPaidSourceBudgetSkipError(error) && !shouldTryDirectoryFallback(error))
+    ) {
       throw error
     }
   }
 
-  if (process.env.APIFY_TOKEN) {
+  if (isApifyApproved()) {
     if (process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production') {
       throw new Error(
         'Builder directory fallback is blocked in production: Google Places text search lacks permission, Outscraper credits are unavailable, and the Apify fallback is too slow for the current function timeout. Restore Google Places access or Outscraper credits, or run a manual builder discovery session.'
@@ -501,7 +641,11 @@ export async function discoverInvestorsForMarket(input: {
     return discoverInvestorsViaApifyYelp(request)
   }
 
-  throw new Error('Investor discovery fallback requires either OUTSCRAPER_API_KEY credits or APIFY_TOKEN.')
+  if (googleError) throw googleError
+  throw paidSourcePolicySkipError({
+    provider: 'outscraper',
+    reason: 'paid_source_not_approved',
+  })
 }
 
 export const DEFAULT_BUILDER_DISCOVERY_NICHES = [...BUILDER_PARTNER_DISCOVERY_NICHES]

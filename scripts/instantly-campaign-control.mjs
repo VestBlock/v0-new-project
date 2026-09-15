@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Inspect or configure an Instantly campaign without exposing API keys.
+ * Inspect or pause an Instantly campaign without exposing API keys.
+ * Configuration and activation are quarantined because Instantly delivery is
+ * outside the central VestBlock throughput governor.
  *
  * Examples:
  *   node --env-file=.env.local scripts/instantly-campaign-control.mjs --campaign-id=...
- *   node --env-file=.env.local scripts/instantly-campaign-control.mjs --campaign-id=... --sender=acquisitions@vestblock.io --daily-limit=10 --apply
- *   node --env-file=.env.local scripts/instantly-campaign-control.mjs --campaign-id=... --activate
  *   node --env-file=.env.local scripts/instantly-campaign-control.mjs --campaign-id=... --pause
  */
 
 import { execFileSync } from 'node:child_process'
+import { quarantineLegacyDirectLiveSend } from './lib/legacy-outreach-quarantine.mjs'
 
 const args = process.argv.slice(2)
 const API_BASE_URL = String(process.env.INSTANTLY_API_BASE_URL || 'https://api.instantly.ai').replace(/\/+$/, '')
@@ -108,6 +109,10 @@ async function main() {
   const pause = hasFlag('--pause')
 
   if (activate && pause) throw new Error('Use only one of --activate or --pause.')
+  quarantineLegacyDirectLiveSend({
+    requested: activate || apply,
+    entry: 'instantly-campaign-control activation/configuration',
+  })
 
   const patch = {
     daily_limit: dailyLimit,

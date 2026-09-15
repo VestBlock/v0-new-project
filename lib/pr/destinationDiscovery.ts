@@ -1,5 +1,11 @@
 import { withTimeout } from '@/lib/utils/async'
 import type { PrTargetRecord } from '@/lib/pr/types'
+import {
+  paidSourcePolicySkipError,
+  runPaidSourceAttempt,
+  unwrapPaidSourceAttempt,
+} from '@/lib/leads/paidSourceBudget'
+import { isGooglePlacesApproved } from '@/lib/leads/sourceCostGovernor'
 
 type DestinationDiscoveryResult = {
   destination: string | null
@@ -222,7 +228,7 @@ async function searchGooglePlaces(query: string) {
   }))
 }
 
-async function discoverViaGooglePlaces(target: PrTargetRecord) {
+async function searchPlacesQueries(target: PrTargetRecord, queries: string[]) {
   let best:
     | {
         candidate: PlacesCandidate
@@ -231,7 +237,7 @@ async function discoverViaGooglePlaces(target: PrTargetRecord) {
       }
     | null = null
 
-  for (const query of buildPlacesQueries(target)) {
+  for (const query of queries) {
     const candidates = await searchGooglePlaces(query).catch(() => [])
     for (const candidate of candidates) {
       const score = scorePlacesCandidate(target, candidate)
@@ -249,6 +255,27 @@ async function discoverViaGooglePlaces(target: PrTargetRecord) {
     audienceUrl: best.candidate.websiteUrl,
     sourceQuery: best.query,
   }
+}
+
+async function discoverViaGooglePlaces(target: PrTargetRecord) {
+  const queries = buildPlacesQueries(target)
+  if (queries.length === 0) return null
+  if (!isGooglePlacesApproved()) {
+    throw paidSourcePolicySkipError({
+      provider: 'google_places',
+      units: queries.length,
+      reason: 'paid_source_not_approved',
+    })
+  }
+
+  const attempt = await runPaidSourceAttempt({
+    provider: 'google_places',
+    attemptKey: `pr:destination:google:${target.id}`,
+    units: queries.length,
+    execute: (reservation) =>
+      searchPlacesQueries(target, queries.slice(0, reservation.reservedUnits)),
+  })
+  return unwrapPaidSourceAttempt(attempt)
 }
 
 function extractFirstEmail(html: string) {

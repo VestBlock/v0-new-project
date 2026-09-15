@@ -239,7 +239,19 @@ export async function enrichContactFromHunter(input: {
   website?: string | null
   contactName?: string | null
   preferGenericInbox?: boolean
+  budgetReservationId: string
 }) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.budgetReservationId)) {
+    return {
+      status: 'skipped',
+      domain: extractDomain(input.website),
+      organization: null,
+      pattern: null,
+      note: 'Hunter domain search requires an approved daily-budget reservation.',
+      primaryCandidate: null,
+      candidates: [],
+    } satisfies HunterContactLookupResult
+  }
   const domain = extractDomain(input.website)
   if (!domain) {
     return {

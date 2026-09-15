@@ -21,7 +21,7 @@ import { saveOutreachMessages, updateLeadRecord } from '@/lib/leads/repository'
 import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import type { LeadRecord } from '@/lib/leads/types'
-import { verifyEmailWithHunter, type HunterEmailVerification } from '@/lib/outreach/hunterEmailVerification'
+import { allocateDailyStrategyOutput, configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
 import { getReplyCaptureReadiness, type ReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -230,28 +230,6 @@ function emptySourceAcquisition(dryRun: boolean, blocker?: string): StrategySour
     blockers: blocker ? [blocker] : [],
     adapterReadiness: [],
   }
-}
-
-async function verifySelectedRecipients(selected: Candidate[]) {
-  const verifyLimit = Math.min(selected.length, envInt('STRATEGY_ENGINE_HUNTER_VERIFY_LIMIT', 25))
-  const queue = selected.slice(0, verifyLimit)
-  const results = new Map<string, HunterEmailVerification>()
-  let cursor = 0
-  const workerCount = Math.min(5, queue.length)
-
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (cursor < queue.length) {
-        const candidate = queue[cursor]
-        cursor += 1
-        const email = String(candidate?.lead.email || '').trim()
-        if (!candidate || !email) continue
-        results.set(candidate.lead.id, await verifyEmailWithHunter(email))
-      }
-    })
-  )
-
-  return results
 }
 
 async function loadSellerCandidates(limit: number) {
@@ -529,6 +507,7 @@ async function createStrategyRun(input: {
   lane: StrategyLane
   state: StrategyMarketStateRow
   candidates: Candidate[]
+  draftLimit: number
   dryRun: boolean
 }) {
   const admin = createAdminClient()
@@ -539,7 +518,7 @@ async function createStrategyRun(input: {
     status: input.dryRun ? 'dry_run' : input.candidates.length ? 'running' : 'awaiting_contacts',
     source_provider: input.state.source_provider,
     market: input.state.market,
-    target_email_count: Math.min(input.candidates.length, envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', 25)),
+    target_email_count: Math.min(input.candidates.length, input.draftLimit),
     target_sms_count: 0,
     lead_count: input.candidates.length,
     qualified_count: input.candidates.length,
@@ -616,8 +595,8 @@ async function executeLane(input: {
   lane: StrategyLane
   pool: Candidate[]
   assigned: AssignedContacts
+  draftLimit: number
   dryRun: boolean
-  deliveryAllowed: boolean
 }): Promise<LaneRunResult> {
   const candidates = input.pool.filter((candidate) => {
     const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
@@ -629,9 +608,9 @@ async function executeLane(input: {
     lane: input.lane,
     state: input.state,
     candidates,
+    draftLimit: input.draftLimit,
     dryRun: input.dryRun,
   })
-  const draftLimit = envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', 25)
 
   if (input.dryRun || !candidates.length) {
     const message = candidates.length
@@ -659,22 +638,11 @@ async function executeLane(input: {
   const admin = createAdminClient()
   let draftsCreated = 0
   let reviewOnly = 0
-  const selected = candidates.slice(0, draftLimit)
-  const verificationByLeadId = await verifySelectedRecipients(selected)
+  const selected = candidates.slice(0, input.draftLimit)
 
   for (const candidate of selected) {
     const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
-    const verification = verificationByLeadId.get(candidate.lead.id) || {
-      configured: Boolean(process.env.HUNTER_API_KEY),
-      status: 'unverified' as const,
-      score: null,
-      smtpCheck: null,
-      acceptAll: null,
-      approvalSafe: false,
-      hardInvalid: false,
-      reason: 'Recipient was not verified in this execution.',
-    }
-    const effectiveReviewOnly = candidate.reviewOnly || !verification.approvalSafe
+    const effectiveReviewOnly = candidate.reviewOnly
     const { data: membership, error: membershipError } = await admin
       .from('strategy_lead_memberships')
       .insert({
@@ -686,12 +654,13 @@ async function executeLane(input: {
         recipient_key: recipientKey,
         qualification_score: candidate.score,
         qualification_reasons: candidate.reasons,
-        email_verification_status: verification.status,
-        status: verification.hardInvalid ? 'rejected' : 'qualified',
+        email_verification_status: 'unverified',
+        status: 'qualified',
         metadata_json: {
           reviewOnly: effectiveReviewOnly,
+          qualificationReviewOnly: candidate.reviewOnly,
           matchedStrategyKeys: candidate.matchedStrategyKeys,
-          hunterVerification: verification,
+          hunterSendVerificationRequired: true,
         },
       })
       .select('id')
@@ -699,21 +668,6 @@ async function executeLane(input: {
     if (membershipError) {
       if (membershipError.code === '23505') continue
       throw membershipError
-    }
-
-    if (verification.hardInvalid) {
-      const existingMetadata = candidate.lead.metadata_json || {}
-      await updateLeadRecord(candidate.lead.id, {
-        email_valid: false,
-        metadata_json: {
-          ...existingMetadata,
-          hunterEmailVerification: verification,
-          hunterEmailVerifiedAt: new Date().toISOString(),
-        },
-      })
-      input.assigned.leadIds.add(candidate.lead.id)
-      input.assigned.recipientKeys.add(recipientKey)
-      continue
     }
 
     const draft = buildStrategyEmailDraft(input.lane.key, candidate.lead)
@@ -740,7 +694,6 @@ async function executeLane(input: {
     const existingFlags = candidate.lead.automation_flags_json || {}
     const existingMetadata = candidate.lead.metadata_json || {}
     await updateLeadRecord(candidate.lead.id, {
-      ...(verification.approvalSafe ? { email_valid: true } : {}),
       lead_score: Math.min(100, Math.max(Number(candidate.lead.lead_score || 0), candidate.score)),
       niche: `strategy_${input.lane.key}`,
       market_segment: input.lane.key,
@@ -753,7 +706,9 @@ async function executeLane(input: {
           sourceProvider: input.state.source_provider,
           campaignRunId: run.id,
           reviewOnly: effectiveReviewOnly,
-          autoApprovalAllowed: input.deliveryAllowed && !effectiveReviewOnly && verification.approvalSafe,
+          qualificationReviewOnly: candidate.reviewOnly,
+          hunterSendVerificationRequired: true,
+          autoApprovalAllowed: !effectiveReviewOnly,
           assignedAt: new Date().toISOString(),
         },
       },
@@ -764,8 +719,7 @@ async function executeLane(input: {
         strategyQualificationScore: candidate.score,
         strategyQualificationReasons: candidate.reasons,
         strategyStackMatches: candidate.matchedStrategyKeys,
-        hunterEmailVerification: verification,
-        hunterEmailVerifiedAt: new Date().toISOString(),
+        hunterSendVerificationRequired: true,
       },
     })
 
@@ -775,9 +729,10 @@ async function executeLane(input: {
         status: 'needs_review',
         metadata_json: {
           reviewOnly: effectiveReviewOnly,
+          qualificationReviewOnly: candidate.reviewOnly,
           outreachMessageId: emailMessage.id,
           matchedStrategyKeys: candidate.matchedStrategyKeys,
-          hunterVerification: verification,
+          hunterSendVerificationRequired: true,
         },
         updated_at: new Date().toISOString(),
       })
@@ -799,8 +754,7 @@ async function executeLane(input: {
         qualificationReasons: candidate.reasons,
         matchedStrategyKeys: candidate.matchedStrategyKeys,
         reviewOnly: effectiveReviewOnly,
-        hunterVerification: verification,
-        verifiedExecution: true,
+        hunterSendVerificationRequired: true,
       },
     })
 
@@ -1101,7 +1055,12 @@ export async function runStrategyExecutionEngine(options: {
   sourceProviders?: StrategySourceProvider[]
 } = {}): Promise<StrategyExecutionResult> {
   const dryRun = options.dryRun !== false
-  const date = reportDate()
+  const executionStartedAt = new Date()
+  const date = reportDate(executionStartedAt)
+  const dailyOutputPlan = allocateDailyStrategyOutput(
+    configuredDailyStrategyOutputTarget(),
+    executionStartedAt
+  )
   const blockers: string[] = []
   const requestedSourceProviders = Array.from(new Set(
     options.sourceProviders?.length
@@ -1196,21 +1155,28 @@ export async function runStrategyExecutionEngine(options: {
   const marketsSeeded = await seedMarketStates(pools, sourceProviderSet)
   const states = (await loadMarketStates())
     .filter((state) => sourceProviderSet.has(state.source_provider))
-  const targets = chooseTargets(states, pools, options.maxLaneRuns || envInt('STRATEGY_ENGINE_LANES_PER_RUN', 6))
+  const enabledLaneCount = STRATEGY_EXECUTION_LANES.filter((lane) => lane.enabled).length
+  const targets = chooseTargets(
+    states,
+    pools,
+    options.maxLaneRuns || envInt('STRATEGY_ENGINE_LANES_PER_RUN', enabledLaneCount)
+  )
   const laneRuns: LaneRunResult[] = []
 
   for (const state of targets) {
     const lane = STRATEGY_EXECUTION_LANES.find((item) => item.key === state.strategy_key)
     if (!lane) continue
     const pool = pools.get(poolKey(lane.key, state.market, state.source_provider)) || []
+    const canonicalDraftTarget = dailyOutputPlan.allocations.find((allocation) => allocation.key === lane.key)?.target
+    if (!canonicalDraftTarget) continue
     laneRuns.push(await executeLane({
       date,
       state,
       lane,
       pool,
       assigned,
+      draftLimit: envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', canonicalDraftTarget),
       dryRun,
-      deliveryAllowed: deliveryEvidence.allowed && outboundReadiness.ready && replyCaptureReadiness.ready,
     }))
   }
 

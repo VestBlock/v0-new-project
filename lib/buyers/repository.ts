@@ -689,6 +689,89 @@ export async function upsertBuyerPacketSend(input: {
   return data as BuyerPacketSendRecord
 }
 
+export async function claimBuyerPacketSend(input: {
+  buyerPacketId: string
+  buyerId: string
+  buyerMatchId?: string | null
+  buyerEmail: string
+  subject: string
+  claimToken: string
+  metadata?: Record<string, unknown>
+  leaseSeconds?: number
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('claim_buyer_packet_send', {
+    p_buyer_packet_id: input.buyerPacketId,
+    p_buyer_id: input.buyerId,
+    p_buyer_match_id: input.buyerMatchId || null,
+    p_buyer_email: input.buyerEmail,
+    p_subject: input.subject,
+    p_claim_token: input.claimToken,
+    p_metadata: input.metadata || {},
+    p_lease_seconds: Math.min(1_800, Math.max(60, Math.floor(input.leaseSeconds || 600))),
+  })
+  if (error) throw error
+  const result = (data || {}) as {
+    claimed?: boolean
+    reason?: string | null
+    claimExpiresAt?: string | null
+    send?: BuyerPacketSendRecord | null
+  }
+  return {
+    claimed: result.claimed === true && Boolean(result.send?.id),
+    reason: result.reason || null,
+    claimExpiresAt: result.claimExpiresAt || null,
+    send: result.send || null,
+  }
+}
+
+export async function finalizeQueuedBuyerPacketSend(
+  id: string,
+  claimToken: string,
+  updates: {
+    status: BuyerPacketSendRecord['status']
+    sendProvider?: string | null
+    providerMessageId?: string | null
+    sentAt?: string | null
+    sendError?: string | null
+    metadata?: Record<string, unknown>
+  }
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('property_buyer_packet_sends')
+    .update({
+      status: updates.status,
+      send_provider: updates.sendProvider || null,
+      provider_message_id: updates.providerMessageId || null,
+      sent_at: updates.sentAt || null,
+      send_error: updates.sendError || null,
+      metadata_json: updates.metadata || {},
+      send_claim_token: null,
+      send_claim_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'queued')
+    .eq('send_claim_token', claimToken)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+
+  // A fast provider webhook may already have advanced this row. In that case
+  // the projection is authoritative and the post-send write must not regress it.
+  if (!data) {
+    const { data: current, error: currentError } = await admin
+      .from('property_buyer_packet_sends')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (currentError) throw currentError
+    return current as BuyerPacketSendRecord
+  }
+  return data as BuyerPacketSendRecord
+}
+
 export async function updateBuyerMatchStatus(
   matchId: string,
   updates: Pick<Partial<BuyerMatchRecord>, 'status' | 'metadata_json'> & Record<string, unknown>

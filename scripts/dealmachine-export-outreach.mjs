@@ -2,18 +2,19 @@
  * DealMachine export outreach for VestBlock.
  *
  * Builds owner outreach directly from DealMachine Contacts exports, optionally
- * enriching rows with a local ranked queue when one exists. Sends email through
- * Resend and writes a DNC-aware phone queue for Messages.
+ * enriching rows with a local ranked queue when one exists. This legacy tool is
+ * preview/staging-only; live delivery now runs through outreach:dispatch:live.
  *
  * Usage:
  *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs
- *   node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=philadelphia-pa --export-csv=data/dm-exports/philadelphia-pa-2026-06-08.csv --limit=150 --send
+ *   pnpm run outreach:dispatch:live
  */
 
 import { Resend } from "resend"
 import { createClient } from "@supabase/supabase-js"
 import fs from "node:fs"
 import path from "node:path"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -2448,6 +2449,7 @@ async function syncCommandCenterSend(admin, draft, result) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "dealmachine-export-outreach" })
   if (SEND && !env("RESEND_API_KEY")) throw new Error("Missing RESEND_API_KEY.")
   if (SEND && !mailingAddress()) throw new Error("Missing OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS.")
   const commandCenterAdmin = SEND && SYNC_COMMAND_CENTER ? supabaseAdmin() : null
@@ -2661,7 +2663,7 @@ async function main() {
   console.log(`CC sync:        ${SEND && SYNC_COMMAND_CENTER ? "enabled" : "disabled"}`)
 
   if (!SEND || !selectedDrafts.length) {
-    console.log(SEND ? "No selected drafts to send." : "Dry run only. Re-run with --send to deliver through Resend.")
+    console.log(SEND ? "No selected drafts to send." : "Dry run only. Deliver approved platform records with pnpm run outreach:dispatch:live.")
     return
   }
 

@@ -403,7 +403,7 @@ function writeOutputs(results) {
       "Then start outreach with the explicit export CSV so VestBlock's send logs dedupe recipients:",
       "",
       "```bash",
-      "node --env-file=.env.local scripts/dealmachine-export-outreach.mjs --market=<city-state> --strategy=<strategy-key> --export-csv=/path/to/dealmachine-contacts.csv --send",
+      "pnpm run outreach:dispatch:live",
       "```",
       "",
     ].join("\n")

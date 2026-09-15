@@ -57,7 +57,7 @@ export const STRATEGY_EXECUTION_LANES: StrategyLane[] = [
     sourceProviders: ['dealmachine', 'public_records', 'property_intelligence'],
     markets: ['Milwaukee, WI', 'Cleveland, OH', 'Detroit, MI', 'Toledo, OH', 'Kansas City, MO', 'Wichita, KS'],
     minimumScore: 70,
-    reviewOnly: false,
+    reviewOnly: true,
     lowball: false,
     enabled: true,
     minMarketPool: 1,

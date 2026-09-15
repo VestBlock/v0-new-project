@@ -8,7 +8,12 @@ import {
   staleJobRecoveryPatch,
   type CommandCenterJobRow,
 } from '../lib/admin/jobLifecycleCore'
-import { buildResendDeliveryIdentityMetadata } from '../lib/email/resendDeliveryCore'
+import {
+  buildResendDeliveryIdentityMetadata,
+  deliveryProjectionAllowedCurrentStatuses,
+  parseResendOutreachIdentityTags,
+  selectResendDeliveryProjection,
+} from '../lib/email/resendDeliveryCore'
 import {
   deliveryBreakerAllowsLenderCanary,
   evaluateLenderRecoveryCanaryReadiness,
@@ -21,7 +26,7 @@ import {
   dealMachineAcquisitionPersistenceStatus,
 } from '../lib/n8n/dealMachineSourceAcquisitionCore'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '../lib/outreach/commercialCompliance'
-import { buildOutboundSendIdentity } from '../lib/outreach/deliveryIdentity'
+import { buildOutboundSendIdentity, buildResendOutreachTags } from '../lib/outreach/deliveryIdentity'
 import {
   deliveryModeRequiresBudget,
   normalizeDeliveryBudget,
@@ -32,7 +37,12 @@ import {
   partnerPipelineRotationOffset,
 } from '../lib/outreach/partnerPipelineCore'
 import { evaluateOutreachRecipientSnapshot } from '../lib/outreach/suppressionCore'
-import { getConfiguredOutboundProvider } from '../lib/outreach/provider-preference'
+import {
+  getConfiguredOutboundProvider,
+  getConfiguredOutboundSender,
+  getOutboundProviderAvailability,
+  getOutboundSenderForProvider,
+} from '../lib/outreach/provider-preference'
 import {
   canAutoApproveFollowupMessage,
   canClaimMessageForSend,
@@ -59,6 +69,12 @@ assert.equal(
   dealMachineAcquisitionHttpStatus({ ok: false, deferred: false, outcome: 'partial' }),
   502
 )
+assert.equal(deliveryProjectionAllowedCurrentStatuses('delivered').includes('bounced'), false)
+assert.equal(deliveryProjectionAllowedCurrentStatuses('delivered').includes('complained'), false)
+assert.equal(deliveryProjectionAllowedCurrentStatuses('delivered').includes('replied'), false)
+assert.equal(deliveryProjectionAllowedCurrentStatuses('bounced').includes('delivered'), true)
+assert.equal(deliveryProjectionAllowedCurrentStatuses('bounced').includes('complained'), false)
+assert.equal(deliveryProjectionAllowedCurrentStatuses('complained').includes('bounced'), true)
 assert.equal(dealMachineAcquisitionPersistenceStatus('partial'), 'failed')
 assert.equal(dealMachineAcquisitionPersistenceStatus('blocked'), 'blocked')
 assert.equal(
@@ -201,6 +217,29 @@ assert.deepEqual(identityA, identityB)
 assert.notEqual(identityA.idempotencyKey, identityFirstTouch.idempotencyKey)
 assert.match(identityA.idempotencyKey, /^vestblock-[a-f0-9]{64}$/)
 assert.match(identityA.correlationId, /^vbo_[a-f0-9]{32}$/)
+const webhookIdentityTags = parseResendOutreachIdentityTags(
+  Object.fromEntries(buildResendOutreachTags(identityA).map((tag) => [tag.name, tag.value]))
+)
+assert.deepEqual(webhookIdentityTags, {
+  scope: 'lender',
+  entityId: 'l-1',
+  messageId: 'm-1',
+  correlationId: identityA.correlationId,
+  idempotencyKey: identityA.idempotencyKey,
+  sequenceStep: 2,
+  recordType: 'lender_outreach',
+})
+assert.deepEqual(
+  buildResendDeliveryIdentityMetadata({ webhookTags: webhookIdentityTags }),
+  {
+    idempotencyKey: identityA.idempotencyKey,
+    correlationId: identityA.correlationId,
+    outreachRecordType: 'lender_outreach',
+    outreachRecordId: 'm-1',
+    outreachScope: 'lender',
+    outreachEntityId: 'l-1',
+  }
+)
 
 assert.equal(OUTREACH_DELIVERY_BUDGET_LIMIT, 5)
 assert.equal(deliveryModeRequiresBudget('controlled_trial'), true)
@@ -304,6 +343,21 @@ assert.equal(
   }),
   'resend'
 )
+const conflictingSenderEnv = {
+  RESEND_API_KEY: 'resend-key',
+  RESEND_FROM_EMAIL: 'resend-sender@example.com',
+  RESEND_EMAIL: 'legacy-resend@example.com',
+  OUTREACH_FROM_EMAIL: 'gmail-sender@example.com',
+  FROM_EMAIL: 'fallback@example.com',
+  GOOGLE_WORKSPACE_SENDER: 'workspace-sender@example.com',
+}
+assert.equal(getOutboundSenderForProvider('resend', conflictingSenderEnv), 'resend-sender@example.com')
+assert.equal(getOutboundSenderForProvider('gmail', conflictingSenderEnv), 'gmail-sender@example.com')
+assert.equal(getConfiguredOutboundSender(conflictingSenderEnv), 'resend-sender@example.com')
+assert.equal(getOutboundProviderAvailability({
+  RESEND_API_KEY: 'resend-key',
+  RESEND_FROM_EMAIL: 'resend-only@example.com',
+}).resend, true)
 
 assert.equal(
   evaluateOutreachRecipientSnapshot({
@@ -381,6 +435,22 @@ assert.equal(healthy.recoveryCanaryAllowed, false)
 assert.equal(providerHasDeliveryTelemetry('resend'), true)
 assert.equal(providerHasDeliveryTelemetry('gmail'), false)
 
+const laterEngagementCannotHideEarlierComplaint = evaluateDeliveryCircuitBreaker(
+  [
+    { provider_message_id: 'complained-then-opened', delivery_status: 'opened' },
+    { provider_message_id: 'complained-then-opened', delivery_status: 'complained' },
+    ...Array.from({ length: 19 }, (_, index) => ({
+      provider_message_id: `complaint-regression-ok-${index}`,
+      delivery_status: 'delivered',
+    })),
+  ],
+  breakerOptions
+)
+assert.equal(laterEngagementCannotHideEarlierComplaint.complained, 1)
+assert.equal(laterEngagementCannotHideEarlierComplaint.delivered, 19)
+assert.equal(laterEngagementCannotHideEarlierComplaint.allowed, false)
+assert.match(laterEngagementCannotHideEarlierComplaint.reason || '', /complaint_evidence/)
+
 const providerGlobalFailure = evaluateDeliveryCircuitBreaker(
   Array.from({ length: 20 }, (_, index) => ({ provider_message_id: `outreach-ok-${index}`, delivery_status: 'delivered' })),
   {
@@ -454,6 +524,38 @@ assert.deepEqual(buyerPacketIdentity, {
   outreachRecordType: 'buyer_packet_outreach',
   outreachRecordId: 'packet-send-1',
 })
+assert.equal(
+  selectResendDeliveryProjection([
+    {
+      provider_event_id: 'delivered-newer',
+      delivery_status: 'delivered',
+      occurred_at: '2026-09-14T12:00:00.000Z',
+    },
+    {
+      provider_event_id: 'sent-older',
+      delivery_status: 'accepted',
+      occurred_at: '2026-09-14T11:59:00.000Z',
+    },
+  ])?.provider_event_id,
+  'delivered-newer',
+  'an older sent event must not regress a delivered projection'
+)
+assert.equal(
+  selectResendDeliveryProjection([
+    {
+      provider_event_id: 'complaint-newer',
+      delivery_status: 'complained',
+      occurred_at: '2026-09-14T12:00:00.000Z',
+    },
+    {
+      provider_event_id: 'delivered-retry',
+      delivery_status: 'delivered',
+      occurred_at: '2026-09-14T11:59:00.000Z',
+    },
+  ])?.provider_event_id,
+  'complaint-newer',
+  'a late delivered retry must not erase complaint evidence'
+)
 const outreachScopedPacketComplaint = [
   ...Array.from({ length: 20 }, (_, index) => ({
     provider_message_id: `packet-delivered-${index}`,
@@ -616,7 +718,7 @@ assert.match(
 )
 assert.match(
   source('lib/lenders/automation.ts'),
-  /Math\.min\(limit, deliveryCircuitBreaker\?\.maxBatchSize/
+  /Math\.min\(limit \?\? dailyLimit, deliveryCircuitBreaker\?\.maxBatchSize/
 )
 assert.match(
   source('lib/lenders/automation.ts'),
@@ -652,7 +754,33 @@ for (const outboundPath of [
   assert.match(outboundSource, /acquireGuardedDeliveryAttempt/)
   assert.match(outboundSource, /releaseGuardedDeliveryAttempt/)
   assert.match(outboundSource, /getOutreachRecipientGuard/)
+  assert.match(outboundSource, /strategyKey[:,]/)
+  assert.match(outboundSource, /idempotencyKey:/)
+  assert.match(outboundSource, /recipientEmail:/)
 }
+const deliveryGateSource = source('lib/outreach/deliveryGate.ts')
+assert.match(deliveryGateSource, /reserveOutreachThroughputAttempt/)
+assert.match(deliveryGateSource, /recordOutreachThroughputOutcome/)
+assert.match(deliveryGateSource, /state: outcome === 'accepted' \? 'accepted' : 'failed'/)
+assert.match(deliveryGateSource, /breaker\?: DeliveryCircuitBreaker/)
+assert.match(deliveryGateSource, /const breaker = input\.breaker \?\?/)
+
+for (const batchPath of [
+  'lib/leads/dailyAutomation.ts',
+  'lib/buyers/automation.ts',
+  'lib/lenders/automation.ts',
+  'lib/investors/service.ts',
+]) {
+  assert.match(
+    source(batchPath),
+    /send(?:Lead|Buyer|Lender|Investor)OutreachEmail\(\{[\s\S]*?deliveryCircuitBreaker(?:[:,])/,
+    `${batchPath} reuses its batch delivery-breaker snapshot`
+  )
+}
+assert.match(
+  source('lib/lenders/automation.ts'),
+  /allowRecoveryCanary: canary[\s\S]*?sendLenderOutreachEmail\(\{[\s\S]*?deliveryCircuitBreaker:/
+)
 
 for (const claimPath of [
   'lib/leads/dailyAutomation.ts',
@@ -666,6 +794,25 @@ for (const claimPath of [
 ]) {
   assert.match(source(claimPath), /getOutreachRecipientGuard/)
 }
+
+for (const deferredClaimPath of [
+  'lib/leads/dailyAutomation.ts',
+  'app/api/admin/leads/[id]/outreach/route.ts',
+  'app/api/cron/seller-targeted-send/route.ts',
+]) {
+  const deferredClaimSource = source(deferredClaimPath)
+  assert.match(deferredClaimSource, /sendResult\.deferred/)
+  assert.match(deferredClaimSource, /restoreOutreachMessageAfterDeliveryDeferral/)
+}
+assert.match(source('lib/leads/dailyAutomation.ts'), /restoreLeadFollowupAfterDeliveryDeferral/)
+assert.match(
+  source('lib/leads/repository.ts'),
+  /restoreOutreachMessageAfterDeliveryDeferral[\s\S]*\.eq\('status', 'queued'\)[\s\S]*\.eq\('updated_at', claimedUpdatedAt\)[\s\S]*\.is\('sent_at', null\)/
+)
+assert.match(
+  source('lib/leads/repository.ts'),
+  /restoreLeadFollowupAfterDeliveryDeferral[\s\S]*\.eq\('updated_at', claimedUpdatedAt\)[\s\S]*\.is\('next_follow_up_at', null\)/
+)
 
 for (const repositoryPath of [
   'lib/buyers/repository.ts',
@@ -695,6 +842,49 @@ assert.match(budgetSource, /attemptMarkers/)
 const resendDeliverySource = source('lib/email/resendDelivery.ts')
 assert.match(resendDeliverySource, /suppressAndCancelPendingOutreach/)
 assert.match(resendDeliverySource, /recordPartnerOutreachDelivery/)
+assert.match(resendDeliverySource, /recordOutreachThroughputProviderOutcome/)
+assert.match(resendDeliverySource, /duplicateEvent = !inserted\?\.id/)
+assert.match(resendDeliverySource, /recordThroughputBestEffort/)
+assert.match(resendDeliverySource, /deliveryProjectionAllowedCurrentStatuses/)
+assert.match(resendDeliverySource, /findThroughputAttemptSender/)
+assert.match(resendDeliverySource, /sender_email: senderEmail/)
+assert.doesNotMatch(resendDeliverySource, /if \(!inserted\?\.id\) return/)
+const deliveryHealthSource = source('lib/leads/deliveryHealth.ts')
+assert.match(deliveryHealthSource, /getConfiguredOutboundSender/)
+assert.match(deliveryHealthSource, /\.eq\('sender_email', senderEmail\)/)
+assert.match(deliveryHealthSource, /globalAttemptResult/)
+for (const senderBoundPath of [
+  'lib/leads/outbound.ts',
+  'lib/buyers/outbound.ts',
+  'lib/lenders/outbound.ts',
+  'lib/investors/outbound.ts',
+]) {
+  assert.match(source(senderBoundPath), /senderEmail: getOutboundSenderForProvider\(provider\)/)
+}
+assert.match(source('lib/email/sendEmail.ts'), /getOutboundSenderForProvider\('resend'\)/)
+assert.match(
+  source('lib/email/outlookMailbox.ts'),
+  /state: suppressionAuthorized \? 'suppressed' : 'replied'/
+)
+assert.match(source('app/api/cron/outreach-dispatch/route.ts'), /runLeadThroughputSprint/)
+assert.match(source('app/api/cron/outreach-dispatch/route.ts'), /OUTREACH_DISPATCH_CRON_SEND/)
+assert.match(source('lib/leads/outbound.ts'), /deferredScope\?: 'record' \| 'lane' \| 'global' \| 'infrastructure'/)
+assert.match(source('lib/leads/outbound.ts'), /deferredScope: laneLocal \? 'lane' : 'global'/)
+assert.match(source('lib/leads/dailyAutomation.ts'), /sendResult\.deferredScope !== 'lane'/)
+
+const throughputMigrationSource = source(
+  'supabase/migrations/20260915141718_create_outreach_throughput_governor.sql'
+)
+assert.match(throughputMigrationSource, /v_reuse_cancelled BOOLEAN := FALSE/)
+assert.match(throughputMigrationSource, /v_existing\.state <> 'cancelled'/)
+assert.match(throughputMigrationSource, /reopenedCancelledReservationAt/)
+assert.match(throughputMigrationSource, /out_of_order_or_terminal_outcome/)
+assert.match(throughputMigrationSource, /outreach_recipient_24h_cooldown/)
+assert.match(throughputMigrationSource, /outreach_send_events_provider_event_unique/)
+assert.match(throughputMigrationSource, /INTERVAL '23 hours'/)
+assert.match(throughputMigrationSource, /ADD COLUMN IF NOT EXISTS sender_email TEXT/)
+assert.match(throughputMigrationSource, /idx_provider_delivery_events_sender_time/)
+assert.match(source('lib/outreach/throughputGovernor.ts'), /reconcileStaleOutreachReservations/)
 
 for (const approvalRoute of [
   'app/api/admin/leads/[id]/outreach/route.ts',
@@ -704,7 +894,8 @@ for (const approvalRoute of [
   assert.match(source(approvalRoute), /canApproveOutreachMessage/)
 }
 assert.doesNotMatch(source('app/api/admin/leads/bulk/route.ts'), /\.in\('status', \['needs_review', 'queued'\]\)/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /allocatePartnerPipelineSendCap/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /allocateDailyStrategyOutput/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /evaluateOutreachThroughputGovernor/)
 assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /Promise\.allSettled/)
 assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /serializePartnerSend/)
 for (const pipelinePath of [
@@ -716,7 +907,7 @@ for (const pipelinePath of [
   assert.match(pipelineSource, /sendExecutor/)
   assert.match(pipelineSource, /options\.sendExecutor/)
 }
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /deliveryCircuitBreaker\.mode === 'controlled_trial'/)
+assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /mode: deliveryCircuitBreaker\.mode/)
 assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /LENDERS_PIPELINE_CRON_SEND/)
 assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /INVESTORS_PIPELINE_CRON_SEND/)
 assert.doesNotMatch(

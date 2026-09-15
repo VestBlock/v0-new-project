@@ -1,19 +1,20 @@
 /**
  * VestBlock — CSV outreach via Resend.
  *
- * DRY RUN BY DEFAULT. Nothing sends unless you pass --send.
+ * DRY RUN BY DEFAULT. Direct live delivery is quarantined; use the governed dispatcher.
  *   node --env-file=.env.local scripts/send-csv-buyer-outreach.mjs --csv=data/partnership-targets-enriched.csv
- *   node --env-file=.env.local scripts/send-csv-buyer-outreach.mjs --csv=data/partnership-targets-enriched.csv --send --bcc=vestblockio@gmail.com
+ *   pnpm run outreach:dispatch:live
  *   ...optional: --limit=10  --only=lender,reia  --throttle=1500  --no-skip-sent
  *
  * Reads a CSV (market, company_name, buyer_type, contact_title, email, website, notes...),
  * segments by buyer_type, writes review files to tmp/outreach/, dedupes against prior
- * sends, and (with --send) delivers throttled via Resend with a CAN-SPAM-aware footer.
+ * sends, and preserves its retired Resend implementation only for historical reference.
  */
 
 import { Resend } from "resend"
 import fs from "node:fs"
 import path from "node:path"
+import { quarantineLegacyDirectLiveSend } from "./lib/legacy-outreach-quarantine.mjs"
 
 const args = process.argv.slice(2)
 const SEND = args.includes("--send")
@@ -99,6 +100,7 @@ function loadAlreadyContacted(outDir) {
 }
 
 async function main() {
+  quarantineLegacyDirectLiveSend({ requested: SEND, entry: "send-csv-buyer-outreach" })
   if (!fs.existsSync(CSV_PATH)) { console.error(`CSV not found: ${CSV_PATH}`); process.exit(1) }
   const rows = parseCsv(fs.readFileSync(CSV_PATH, "utf8"))
   const h = rows[0].map((x) => x.trim().toLowerCase())
@@ -140,7 +142,7 @@ async function main() {
   console.log(`By segment:     ${JSON.stringify(bySeg)}`)
 
   if (!SEND) {
-    console.log(`\nDRY RUN complete. Review tmp/outreach/csv-outreach-${stamp}.txt, then re-run with --send.`)
+    console.log(`\nDRY RUN complete. Review tmp/outreach/csv-outreach-${stamp}.txt, then use pnpm run outreach:dispatch:live.`)
     return
   }
   if (!process.env.RESEND_API_KEY || !process.env.FROM_EMAIL) { console.error("\nMissing RESEND_API_KEY or FROM_EMAIL."); process.exit(1) }
