@@ -12,6 +12,7 @@ import {
   type PaidSourceProvider,
 } from '@/lib/leads/paidSourceBudgetCore'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { formatPersistedOperationalError } from '@/lib/system/errorMessage'
 
 const MAX_RESERVATION_RETRIES = 12
 
@@ -450,7 +451,7 @@ export function paidSourceReservationDetail(reservation: PaidSourceAttemptReserv
 }
 
 export function paidSourceFailureDetail(result: Extract<PaidSourceAttemptResult<unknown>, { status: 'failed' }>) {
-  const message = result.error instanceof Error ? result.error.message : String(result.error)
+  const message = formatPersistedOperationalError(result.error, 'Provider operation failed.')
   return result.reservation?.allowed
     ? `${paidSourceReservationDetail(result.reservation)} The provider request failed or had an unknown outcome, so the reservation remains counted. ${message}`
     : `Paid-source budget reservation failed closed before any provider request. ${message}`

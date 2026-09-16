@@ -109,7 +109,7 @@ assert.equal(
     hint: 'Update mutable fields only.',
     code: '23514',
   }),
-  'Historical binding is immutable. | A conflict update attempted to rewrite canonical identity. | Update mutable fields only. | 23514'
+  'Historical binding is immutable. (code: 23514)'
 )
 assert.equal(
   formatStructuredError({}, 'Strategy source orchestration failed.'),

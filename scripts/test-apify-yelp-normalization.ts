@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import {
   APIFY_YELP_LEAD_TYPE,
+  matchApifyYelpNiche,
   normalizeApifyYelpDatasetItem,
 } from '@/lib/leads/connectors/apify-yelp'
 
@@ -100,6 +101,221 @@ assert.equal(
   normalizeApifyYelpDatasetItem({ address: 123 }, { city: 'Milwaukee' }),
   null,
   'invalid dataset items remain quarantined instead of throwing'
+)
+
+assert.equal(
+  matchApifyYelpNiche(currentActorItem, ['sign installation companies', 'pizza restaurants']),
+  'pizza restaurants',
+  'current actor categories should select the relevant niche instead of the first requested niche'
+)
+
+assert.equal(
+  matchApifyYelpNiche(legacyItem, ['event production companies', 'auto repair shops']),
+  'auto repair shops',
+  'legacy object categories should remain eligible for exact-token niche matching'
+)
+
+const validSignBusiness = normalizeApifyYelpDatasetItem({
+  bizId: 'valid-sign-business',
+  name: 'Acme Signs & Lighting',
+  directUrl: 'https://www.yelp.com/biz/acme-signs-and-lighting',
+  categories: ['Signmaking'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(validSignBusiness, ['sign installation companies']),
+  'sign installation companies',
+  'a direct sign-industry token should remain eligible even when Yelp uses Signmaking'
+)
+
+const misleadingSignRestaurant = normalizeApifyYelpDatasetItem({
+  bizId: 'misleading-sign-restaurant',
+  name: 'The Sign Restaurant',
+  categories: ['Restaurants'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(misleadingSignRestaurant, ['sign installation companies']),
+  null,
+  'a business-name token cannot override an unrelated populated Yelp category'
+)
+
+const exactNameGenericCategoryCases = [
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Northstar Residential Remodeling',
+      categories: ['General Contractors'],
+    }, { city: 'Milwaukee' }),
+    niche: 'residential remodeling companies',
+  },
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Acme Business Funding Brokers',
+      categories: ['Financial Services'],
+    }, { city: 'Milwaukee' }),
+    niche: 'business funding brokers',
+  },
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Acme Sign Installation',
+      categories: ['Local Services'],
+    }, { city: 'Milwaukee' }),
+    niche: 'sign installation companies',
+  },
+] as const
+
+for (const example of exactNameGenericCategoryCases) {
+  assert.equal(
+    matchApifyYelpNiche(example.record, [example.niche]),
+    example.niche,
+    `a complete multi-token business-name match should survive a generic Yelp category: ${example.niche}`
+  )
+}
+
+const residentialCleaner = normalizeApifyYelpDatasetItem({
+  bizId: 'residential-cleaner',
+  name: 'Northstar Home Cleaning',
+  categories: ['Home Cleaning'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(residentialCleaner, ['commercial cleaning companies']),
+  null,
+  'an unmatched commercial qualifier must not admit a residential cleaning record'
+)
+
+const commercialCleaner = normalizeApifyYelpDatasetItem({
+  bizId: 'commercial-cleaner',
+  name: 'Northstar Commercial Cleaning',
+  categories: ['Home Cleaning'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(commercialCleaner, ['commercial cleaning companies']),
+  'commercial cleaning companies',
+  'a qualifier supported by the business identity and a category-supported niche token remains eligible'
+)
+
+const propertyManager = normalizeApifyYelpDatasetItem({
+  bizId: 'property-manager',
+  name: 'Northstar Property Management',
+  categories: ['Property Management'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(propertyManager, ['boutique property management companies']),
+  'boutique property management companies',
+  'a soft positioning adjective must not starve an otherwise specific two-token match'
+)
+assert.equal(
+  matchApifyYelpNiche(propertyManager, ['small property management companies']),
+  'small property management companies',
+  'small is a ranking term rather than a mandatory segment qualifier'
+)
+
+const qualifiedNicheNearMisses = [
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Public Insurance Agency',
+      categories: ['Insurance'],
+    }, { city: 'Milwaukee' }),
+    niche: 'public adjusters and insurance claim consultants',
+  },
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Metro Commercial General Contractor',
+      categories: ['General Contractors'],
+    }, { city: 'Milwaukee' }),
+    niche: 'commercial renovation contractors',
+  },
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Hard Rock Mortgage Broker',
+      categories: ['Mortgage Brokers'],
+    }, { city: 'Milwaukee' }),
+    niche: 'hard money brokers',
+  },
+  {
+    record: normalizeApifyYelpDatasetItem({
+      name: 'Low Cost Security',
+      categories: ['Security Systems'],
+    }, { city: 'Milwaukee' }),
+    niche: 'low voltage and security integration contractors',
+  },
+] as const
+
+for (const example of qualifiedNicheNearMisses) {
+  assert.equal(
+    matchApifyYelpNiche(example.record, [example.niche]),
+    null,
+    `hard-qualified niche must prove its anchor term: ${example.niche}`
+  )
+}
+
+const publicAdjuster = normalizeApifyYelpDatasetItem({
+  name: 'Metro Public Adjusters',
+  categories: ['Public Adjusters'],
+}, { city: 'Milwaukee' })
+
+assert.equal(
+  matchApifyYelpNiche(publicAdjuster, ['public adjusters and insurance claim consultants']),
+  'public adjusters and insurance claim consultants',
+  'a hard-qualified niche remains eligible when both qualifier and anchor are supported'
+)
+
+const irrelevantEventPlanner = normalizeApifyYelpDatasetItem({
+  bizId: 'irrelevant-event-planner',
+  name: 'Signature Design Events',
+  directUrl: 'https://www.yelp.com/biz/signature-design-events',
+  categories: ['Event Planning & Services'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(irrelevantEventPlanner, ['sign installation companies']),
+  null,
+  'sign must not match as a substring of signature or design'
+)
+assert.equal(
+  matchApifyYelpNiche(irrelevantEventPlanner, ['event production companies']),
+  null,
+  'one ambiguous word must not relabel event planning as event production'
+)
+
+const insuranceAgency = normalizeApifyYelpDatasetItem({
+  bizId: 'insurance-agency',
+  name: 'Northstar Insurance Agency',
+  categories: ['Insurance'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(insuranceAgency, ['public adjusters and insurance claim consultants']),
+  null,
+  'one industry word must not satisfy a longer compound niche'
+)
+
+const validEventProducer = normalizeApifyYelpDatasetItem({
+  bizId: 'valid-event-producer',
+  name: 'Northstar Event Production',
+  directUrl: 'https://www.yelp.com/biz/northstar-event-production',
+  categories: ['Event Production'],
+}, { city: 'Milwaukee', state: 'WI' })
+
+assert.equal(
+  matchApifyYelpNiche(validEventProducer, ['event production companies']),
+  'event production companies',
+  'two exact industry tokens should preserve valid multi-word matches'
+)
+
+assert.equal(
+  matchApifyYelpNiche(
+    normalizeApifyYelpDatasetItem({
+      name: 'Northstar Event Planning',
+      categories: ['Event Planning'],
+    }, { city: 'Milwaukee' }),
+    ['sign installation companies', 'commercial cleaning companies']
+  ),
+  null,
+  'an unmatched actor result must fail closed instead of inheriting the first niche'
 )
 
 console.log('Apify Yelp normalization tests passed.')

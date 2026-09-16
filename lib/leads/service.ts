@@ -3,6 +3,7 @@ import { getLeadEmailAutopilotDecision } from '@/lib/leads/autopilot'
 import { getLeadOutboundPauseReason, isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
 import { logEvent } from '@/lib/system/logEvent'
+import { formatPersistedOperationalError } from '@/lib/system/errorMessage'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { generateLeadOutreach } from '@/lib/leads/outreach'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
@@ -380,7 +381,7 @@ export async function ingestNormalizedLeads(
 
     return createdLeads
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = formatPersistedOperationalError(error, 'Lead ingestion failed.')
     await finishScrapeRun(scrapeRun.id, {
       status: 'failed',
       errorMessage: message,

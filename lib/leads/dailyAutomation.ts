@@ -62,6 +62,7 @@ import { enrichLeadContactEmail, enrichNormalizedLeadContact, generateAndStoreOu
 import type { LeadRecord, OutreachMessageRecord, TargetMarketRecord } from '@/lib/leads/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
+import { formatPersistedOperationalError } from '@/lib/system/errorMessage'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
 import { getOperationalReplyCaptureReadiness, getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
@@ -1276,7 +1277,7 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
           count: 0,
           status: 'failed',
           detail: appendPaidSourceReservationDetail(
-            error instanceof Error ? error.message : String(error),
+            formatPersistedOperationalError(error, 'Apify Yelp processing failed.'),
             paidReservation
           ),
         })
