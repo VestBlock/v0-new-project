@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 
-import { normalizeApifyYelpDatasetItem } from '@/lib/leads/connectors/apify-yelp'
+import {
+  APIFY_YELP_LEAD_TYPE,
+  normalizeApifyYelpDatasetItem,
+} from '@/lib/leads/connectors/apify-yelp'
+
+assert.equal(
+  APIFY_YELP_LEAD_TYPE,
+  'lead_intelligence',
+  'Apify records must use a lead type accepted by the production database contract'
+)
 
 const currentActorItem = normalizeApifyYelpDatasetItem({
   name: 'Prince Street Pizza',

@@ -15,6 +15,11 @@ type SearchApifyYelpInput = {
   timeoutSecs?: number
 }
 
+// Keep the source-specific identity in `source`; the production `leads`
+// table intentionally accepts the generic lead-intelligence type for
+// third-party directory discovery.
+export const APIFY_YELP_LEAD_TYPE = 'lead_intelligence' as const
+
 const yelpCategorySchema = z.union([
   z.string(),
   z.record(z.string(), z.unknown()),
@@ -330,7 +335,7 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
     const searchString = `${matchedNiche} ${input.city}${input.state ? ` ${input.state}` : ''}`.trim()
 
     normalizedLeads.push({
-      leadType: 'directory_business',
+      leadType: APIFY_YELP_LEAD_TYPE,
       source: 'apify_yelp_businesses',
       sourceUrl: record.sourceUrl,
       category,
