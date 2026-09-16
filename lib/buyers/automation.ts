@@ -12,6 +12,7 @@ import {
   finishBuyerOutreachRun,
   listApprovedBuyerEmailOutreach,
   listBuyerOutreachForAutoApproval,
+  quarantineBuyerOutreachMessageAfterRecordDeferral,
   restoreBuyerOutreachMessageAfterQuotaDenial,
   updateBuyerOutreachMessage,
   updateBuyerPerformance,
@@ -29,6 +30,10 @@ import {
 } from '@/lib/buyers/service'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
+import {
+  classifyPartnerOutreachSendResult,
+  isPartnerSendOperationalFailureStatus,
+} from '@/lib/outreach/partnerSendLoopCore'
 import { getOperationalReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
@@ -163,7 +168,7 @@ export async function runDailyBuyerSend(
   const approved = effectiveLimit > 0
     ? await listApprovedBuyerEmailOutreach(hunterVerificationReplacementScanLimit(effectiveLimit))
     : []
-  const results: Array<{ buyerId: string; name: string; status: string }> = []
+  const results: Array<{ buyerId: string; name: string; status: string; reason?: string }> = []
   const providerFailureStopThreshold = envInt('OUTREACH_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
   let providerFailureCount = 0
   let providerAttemptCount = 0
@@ -238,13 +243,41 @@ export async function runDailyBuyerSend(
       continue
     }
 
-    providerAttemptCount += 1
     const sent = await sendBuyerOutreachEmail({
       buyer,
       message: claimed,
       invocationId,
     })
+    const disposition = classifyPartnerOutreachSendResult(sent)
+    if (disposition.providerAttempted) providerAttemptCount += 1
     if (!sent.ok && sent.deferred) {
+      if (disposition.quarantineRecord) {
+        const checkedAt = new Date().toISOString()
+        const quarantined = await quarantineBuyerOutreachMessageAfterRecordDeferral(
+          claimed.id,
+          claimed.updated_at,
+          {
+            send_error: sent.error || 'record_delivery_deferred',
+            metadata_json: {
+              ...(claimed.metadata_json || {}),
+              automaticSendDeferral: {
+                scope: 'record',
+                provider: sent.provider,
+                reason: sent.error || 'record_delivery_deferred',
+                checkedAt,
+              },
+            },
+          }
+        ).catch(() => null)
+        results.push({
+          buyerId: buyer.id,
+          name: buyer.name,
+          status: quarantined ? 'record_delivery_quarantined' : 'record_delivery_quarantine_failed',
+          reason: sent.error || 'record_delivery_deferred',
+        })
+        if (!quarantined) break
+        continue
+      }
       const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
         claimed.id,
         claimed.updated_at
@@ -254,7 +287,7 @@ export async function runDailyBuyerSend(
         name: buyer.name,
         status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
       })
-      if (!restored || sent.deferredScope !== 'record') break
+      if (!restored || disposition.stopReplacementScan) break
       continue
     }
     if (sent.reconciliationRequired && !sent.ok) {
@@ -370,8 +403,7 @@ export async function runDailyBuyerSend(
   }
 
   const operationalFailureCount = results.filter((result) =>
-    result.status === 'failed' ||
-    (result.status.startsWith('automatic_email_') && result.status !== 'automatic_email_daily_attempt_quota_exhausted')
+    isPartnerSendOperationalFailureStatus(result.status)
   ).length
 
   return {

@@ -29,7 +29,6 @@ import {
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 import { isAutonomousEmailQueueLeadAllowed } from '@/lib/outreach/verifiedBusinessColdEmail'
 import {
-  chicagoBusinessDate,
   DAILY_STRATEGY_OUTPUT_LANES,
   getDailyStrategyOutputLane,
   type DailyStrategyOutputLaneKey,
@@ -961,7 +960,7 @@ export async function listApprovedEmailOutreach(limit = 50) {
 export async function listEmailOutreachForSendQueue(
   limit = 75,
   options: {
-    laneTargets?: Partial<Record<DailyStrategyOutputLaneKey, number>>
+    remainingByLane?: Readonly<Record<string, number>>
     candidatesPerSlot?: number
   } = {}
 ) {
@@ -1045,26 +1044,14 @@ export async function listEmailOutreachForSendQueue(
       sellerProperty: (row) => sellerPropertyKey(row.leads),
     }
   )
-  if (!options.laneTargets) return deduped.slice(0, limit)
-
-  const { data: reservations, error: reservationError } = await admin
-    .from('outreach_attempt_reservations')
-    .select('strategy_key')
-    .eq('business_date', chicagoBusinessDate())
-    .neq('state', 'cancelled')
-    .limit(1_000)
-  if (reservationError) throw reservationError
-  const usedByLane = new Map<string, number>()
-  for (const reservation of reservations || []) {
-    const key = String(reservation.strategy_key || '')
-    usedByLane.set(key, (usedByLane.get(key) || 0) + 1)
-  }
+  if (!options.remainingByLane) return deduped.slice(0, limit)
 
   const remainingByLane = new Map<DailyStrategyOutputLaneKey, number>()
   for (const lane of DAILY_STRATEGY_OUTPUT_LANES) {
+    const remaining = Number(options.remainingByLane[lane.key] || 0)
     remainingByLane.set(
       lane.key,
-      Math.max(0, Number(options.laneTargets[lane.key] || 0) - (usedByLane.get(lane.key) || 0))
+      Number.isFinite(remaining) ? Math.max(0, Math.floor(remaining)) : 0
     )
   }
 

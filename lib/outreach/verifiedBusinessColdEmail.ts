@@ -53,6 +53,14 @@ export type VerifiedBusinessColdEmailAdmission =
       recipientEmail: string
     }
 
+export function classifyVerifiedBusinessColdEmailAdmissionScope(
+  reason: Exclude<VerifiedBusinessColdEmailAdmissionReason, 'approved'>
+): 'record' | 'lane' {
+  return reason === 'seller_lane_rejected' || reason === 'unsupported_lane'
+    ? 'lane'
+    : 'record'
+}
+
 function httpUrl(value: unknown) {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return null

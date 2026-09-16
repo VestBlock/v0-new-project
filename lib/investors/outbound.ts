@@ -4,7 +4,9 @@ import { buildOutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
 import type { DeliveryPurpose } from '@/lib/outreach/deliveryPurposeCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
+import { classifyHunterVerificationFailureScope } from '@/lib/outreach/hunterSendVerificationCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type InvestorOutreachMessage = {
   id: string
@@ -84,6 +86,22 @@ export async function sendInvestorOutreachEmail(input: {
   const purpose = input.deliveryPurpose || 'cold_outreach'
   let investor = input.investor
   if (purpose === 'cold_outreach') {
+    const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
+      metadataJson: investor.metadata_json,
+      recipientEmail: investor.contact_email,
+      website: investor.website,
+    })
+    if (!businessContactEvidence) {
+      return {
+        ...base,
+        ok: false,
+        deferred: true,
+        deferredScope: 'record' as const,
+        skipped: true,
+        provider: 'none' as const,
+        error: 'Verified B2B cold email admission failed (business_contact_evidence_required).',
+      }
+    }
     const hunter = await ensureFreshHunterSendVerificationForEntity({
       scope: 'investor',
       entity: { id: investor.id, email: investor.contact_email, metadata_json: investor.metadata_json },
@@ -96,7 +114,7 @@ export async function sendInvestorOutreachEmail(input: {
         ...base,
         ok: false,
         deferred: true,
-        deferredScope: hunter.reason.includes('budget') ? 'global' as const : 'record' as const,
+        deferredScope: classifyHunterVerificationFailureScope(hunter.reason),
         skipped: true,
         provider: 'none' as const,
         error: `Verified B2B Outlook admission requires fresh Hunter status=valid (${hunter.reason}).`,

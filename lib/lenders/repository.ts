@@ -490,6 +490,30 @@ export async function restoreLenderOutreachMessageAfterQuotaDenial(
   return (data || null) as LenderOutreachMessageRecord | null
 }
 
+export async function quarantineLenderOutreachMessageAfterRecordDeferral(
+  messageId: string,
+  claimedUpdatedAt: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('lender_outreach_messages')
+    .update({
+      ...updates,
+      status: 'archived',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as LenderOutreachMessageRecord | null
+}
+
 export async function downgradeLenderOutreachMessageIfApproved(
   messageId: string,
   updates: Record<string, unknown>

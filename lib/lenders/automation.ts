@@ -16,6 +16,7 @@ import {
   listApprovedLenderEmailOutreach,
   listLenderOutreachForAutoApproval,
   listLenderCanaryPreCandidates,
+  quarantineLenderOutreachMessageAfterRecordDeferral,
   restoreLenderOutreachMessageAfterQuotaDenial,
   updateLenderOutreachMessage,
   updateLenderPerformance,
@@ -44,6 +45,10 @@ import {
   preflightLenderRecoveryCanaryEmail,
 } from '@/lib/lenders/canary'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import {
+  classifyPartnerOutreachSendResult,
+  isPartnerSendOperationalFailureStatus,
+} from '@/lib/outreach/partnerSendLoopCore'
 import {
   allocateDailyStrategyOutput,
   configuredDailyStrategyOutputTarget,
@@ -229,7 +234,7 @@ export async function runDailyLenderSend(
         !replyCaptureGateOpen ? 'reply_capture_not_configured' : null,
         !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
       ].filter((reason): reason is string => Boolean(reason))
-  const results: Array<{ lenderId: string; name: string; status: string }> = []
+  const results: Array<{ lenderId: string; name: string; status: string; reason?: string }> = []
   let freshHunterVerifiedCandidateCount = 0
   let canaryProviderAttemptCount = 0
   let providerAttemptCount = 0
@@ -357,15 +362,46 @@ export async function runDailyLenderSend(
       continue
     }
 
-    if (canary) canaryProviderAttemptCount += 1
-    else providerAttemptCount += 1
     const sent = await sendLenderOutreachEmail({
       lender,
       message: claimed,
       deliveryMode: canary ? 'recovery_canary' : 'standard',
       invocationId,
     })
+    const disposition = classifyPartnerOutreachSendResult(sent)
+    if (disposition.providerAttempted) {
+      if (canary) canaryProviderAttemptCount += 1
+      else providerAttemptCount += 1
+    }
     if (!sent.ok && sent.deferred) {
+      if (disposition.quarantineRecord) {
+        const checkedAt = new Date().toISOString()
+        const quarantined = await quarantineLenderOutreachMessageAfterRecordDeferral(
+          claimed.id,
+          claimed.updated_at,
+          {
+            send_error: sent.error || 'record_delivery_deferred',
+            metadata_json: {
+              ...(claimed.metadata_json || {}),
+              automaticSendDeferral: {
+                scope: 'record',
+                provider: sent.provider,
+                reason: sent.error || 'record_delivery_deferred',
+                checkedAt,
+                canary,
+              },
+            },
+          }
+        ).catch(() => null)
+        results.push({
+          lenderId: lender.id,
+          name: lender.name,
+          status: quarantined ? 'record_delivery_quarantined' : 'record_delivery_quarantine_failed',
+          reason: sent.error || 'record_delivery_deferred',
+        })
+        if (!quarantined) break
+        continue
+      }
       const restored = await restoreLenderOutreachMessageAfterQuotaDenial(
         claimed.id,
         claimed.updated_at
@@ -375,7 +411,7 @@ export async function runDailyLenderSend(
         name: lender.name,
         status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
       })
-      if (!restored || sent.deferredScope !== 'record') break
+      if (!restored || disposition.stopReplacementScan) break
       continue
     }
     if (sent.reconciliationRequired && !sent.ok) {
@@ -493,8 +529,7 @@ export async function runDailyLenderSend(
   }
 
   const operationalFailureCount = results.filter((result) =>
-    result.status === 'failed' ||
-    (result.status.startsWith('automatic_email_') && result.status !== 'automatic_email_daily_attempt_quota_exhausted')
+    isPartnerSendOperationalFailureStatus(result.status)
   ).length
 
   return {

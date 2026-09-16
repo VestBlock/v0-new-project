@@ -25,6 +25,7 @@ import {
   listInvestorsForScoring,
   listInvestorsNeedingFollowup,
   listInvestorsNeedingOutreach,
+  quarantineInvestorOutreachMessageAfterRecordDeferral,
   restoreInvestorOutreachMessageAfterQuotaDenial,
   startInvestorAutomationRun,
   saveInvestorHunterEnrichmentResult,
@@ -44,6 +45,10 @@ import { INVESTOR_OUTREACH_TEMPLATE_VERSION } from '@/lib/investors/outreach'
 import { reserveInvestorHunterDailyLookup, type InvestorHunterLookupReservation } from '@/lib/investors/hunterBudget'
 import { INVESTOR_HUNTER_BUDGET_HARD_LIMIT } from '@/lib/investors/hunterBudgetCore'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
+import {
+  classifyPartnerOutreachSendResult,
+  isPartnerSendOperationalFailureStatus,
+} from '@/lib/outreach/partnerSendLoopCore'
 import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import {
   DEFAULT_DAILY_STRATEGY_OUTPUT_TARGET,
@@ -830,13 +835,41 @@ export async function runDailyInvestorSend(
         continue
       }
 
-      providerAttemptCount += 1
       const sent = await sendInvestorOutreachEmail({
         investor,
         message: claimed,
         invocationId,
       })
+      const disposition = classifyPartnerOutreachSendResult(sent)
+      if (disposition.providerAttempted) providerAttemptCount += 1
       if (!sent.ok && sent.deferred) {
+        if (disposition.quarantineRecord) {
+          const checkedAt = new Date().toISOString()
+          const quarantined = await quarantineInvestorOutreachMessageAfterRecordDeferral(
+            claimed.id,
+            claimed.updated_at,
+            {
+              send_error: sent.error || 'record_delivery_deferred',
+              metadata_json: {
+                ...(claimed.metadata_json || {}),
+                automaticSendDeferral: {
+                  scope: 'record',
+                  provider: sent.provider,
+                  reason: sent.error || 'record_delivery_deferred',
+                  checkedAt,
+                },
+              },
+            }
+          ).catch(() => null)
+          results.push({
+            investorId: investor.id,
+            name: investor.display_name,
+            status: quarantined ? 'record_delivery_quarantined' : 'record_delivery_quarantine_failed',
+            reason: sent.error || 'record_delivery_deferred',
+          })
+          if (!quarantined) break
+          continue
+        }
         const restored = await restoreInvestorOutreachMessageAfterQuotaDenial(
           claimed.id,
           claimed.updated_at
@@ -846,7 +879,7 @@ export async function runDailyInvestorSend(
           name: investor.display_name,
           status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
         })
-        if (!restored || sent.deferredScope !== 'record') break
+        if (!restored || disposition.stopReplacementScan) break
         continue
       }
       if (sent.reconciliationRequired && !sent.ok) {
@@ -967,8 +1000,7 @@ export async function runDailyInvestorSend(
     }
 
     const operationalFailureCount = results.filter((result) =>
-      result.status === 'failed' ||
-      (result.status.startsWith('automatic_email_') && result.status !== 'automatic_email_daily_attempt_quota_exhausted')
+      isPartnerSendOperationalFailureStatus(result.status)
     ).length
     await finishInvestorAutomationRun(run.id, {
       status: operationalFailureCount === 0 ? 'completed' : 'failed',

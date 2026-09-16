@@ -1218,6 +1218,30 @@ export async function restoreInvestorOutreachMessageAfterQuotaDenial(
   return (data || null) as InvestorOutreachMessageRecord | null
 }
 
+export async function quarantineInvestorOutreachMessageAfterRecordDeferral(
+  messageId: string,
+  claimedUpdatedAt: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('investor_outreach_messages')
+    .update({
+      ...updates,
+      status: 'archived',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as InvestorOutreachMessageRecord | null
+}
+
 export async function downgradeInvestorOutreachMessageIfApproved(
   messageId: string,
   updates: Record<string, unknown>

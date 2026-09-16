@@ -4,7 +4,9 @@ import { buildOutboundSendIdentity, type OutboundSendIdentity } from '@/lib/outr
 import type { DeliveryPurpose } from '@/lib/outreach/deliveryPurposeCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
+import { classifyHunterVerificationFailureScope } from '@/lib/outreach/hunterSendVerificationCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type SendLenderEmailInput = {
   lender: LenderRecord
@@ -85,6 +87,23 @@ export async function sendLenderOutreachEmail(
   const purpose = input.deliveryPurpose || 'cold_outreach'
   let lender = input.lender
   if (purpose === 'cold_outreach') {
+    const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
+      source: lender.source,
+      metadataJson: lender.metadata_json,
+      contactInfo: lender.contact_info,
+      recipientEmail: lender.contact_email,
+      website: lender.website,
+    })
+    if (!businessContactEvidence) {
+      return {
+        ...base,
+        ok: false,
+        deferred: true,
+        deferredScope: 'record',
+        provider: 'none',
+        error: 'Verified B2B cold email admission failed (business_contact_evidence_required).',
+      }
+    }
     const hunter = await ensureFreshHunterSendVerificationForEntity({
       scope: 'lender',
       entity: { id: lender.id, email: lender.contact_email, metadata_json: lender.metadata_json },
@@ -97,7 +116,7 @@ export async function sendLenderOutreachEmail(
         ...base,
         ok: false,
         deferred: true,
-        deferredScope: hunter.reason.includes('budget') ? 'global' : 'record',
+        deferredScope: classifyHunterVerificationFailureScope(hunter.reason),
         provider: 'none',
         error: `Verified B2B Outlook admission requires fresh Hunter status=valid (${hunter.reason}).`,
       }

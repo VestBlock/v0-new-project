@@ -63,14 +63,24 @@ import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCo
 import { getOperationalReplyCaptureReadiness, getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
-import { allocateDailyStrategyOutput, configuredDailyStrategyOutputTarget, DAILY_STRATEGY_OUTPUT_LANES, getDailyStrategyOutputLane } from '@/lib/outreach/dailyStrategyOutputCore'
+import { configuredDailyStrategyOutputTarget, DAILY_STRATEGY_OUTPUT_LANES, getDailyStrategyOutputLane } from '@/lib/outreach/dailyStrategyOutputCore'
 import { ensureFreshHunterSendVerification } from '@/lib/outreach/hunterSendVerification'
 import {
   classifyHunterVerificationFailureScope,
   deriveHunterSendVerificationLimits,
+  hunterVerificationReplacementScanLimit,
 } from '@/lib/outreach/hunterSendVerificationCore'
+import { readOutreachDispatchCapacity } from '@/lib/outreach/outreachDispatchCapacity'
+import {
+  buildOutlookDispatchAllocationPlan,
+  resolveLeadOutlookSendLimit,
+} from '@/lib/outreach/outreachDispatchCapacityCore'
 import { isControlledTrialAllowanceFilled } from '@/lib/outreach/outreachDispatchCore'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
+import {
+  OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP,
+  OUTLOOK_COLD_B2B_INVOCATION_CAP,
+} from '@/lib/outreach/outlookColdBudgetCore'
 import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type MarketConfig = {
@@ -1718,29 +1728,23 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
   const providerFailureStopThreshold = envInt('LEADS_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
   const outboundReadiness = getOutboundProviderReadiness()
   const replyCaptureReadiness = await getOperationalReplyCaptureReadiness()
-  const productionPlan = allocateDailyStrategyOutput(dailyTarget)
-  const leadEmailLaneTargets = Object.fromEntries(
-    productionPlan.allocations.map((allocation) => [
-      allocation.key,
-      allocation.group === 'business' || allocation.key === 'listing_agents'
-        ? allocation.target
-        : 0,
-    ])
-  ) as typeof productionPlan.byKey
-  // The database-backed Outlook budget enforces 25/day globally; a single
-  // scheduler invocation may request no more than two cold sends.
-  const outlookInvocationCapacity = 2
-  const sendLimit = Math.max(0, Math.min(uncappedSendLimit, outlookInvocationCapacity))
+  // Keep the rolling daily budget distinct from the per-invocation provider
+  // burst. The database reservation remains authoritative under concurrency.
+  const outlookDailyCapacity = outboundReadiness.outlook
+    ? OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP
+    : 0
+  const outlookCapacityNow = new Date()
+  const outlookAllocationPlan = buildOutlookDispatchAllocationPlan(
+    outlookCapacityNow,
+    outboundReadiness.outlook
+  )
   const throughputDecision = {
     stage: outboundReadiness.outlook ? 'prove_25' as const : 'hold' as const,
-    stageCap: outlookInvocationCapacity,
+    stageCap: outlookDailyCapacity,
     requestedDailyTarget: dailyTarget,
-    effectiveDailyCap: outlookInvocationCapacity,
+    effectiveDailyCap: outlookDailyCapacity,
     reason: outboundReadiness.outlook ? 'outlook_guarded_ready' : 'outlook_graph_not_configured',
-    allocationPlan: {
-      ...productionPlan,
-      byKey: leadEmailLaneTargets,
-    },
+    allocationPlan: outlookAllocationPlan,
   }
   const stagingGate = {
     allowed: outboundReadiness.outlook,
@@ -1749,7 +1753,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     reason: outboundReadiness.outlook ? null : 'outlook_graph_not_configured',
     mode: outboundReadiness.outlook ? 'healthy' : 'unavailable',
     provider: 'outlook',
-    maxBatchSize: outlookInvocationCapacity,
+    maxBatchSize: OUTLOOK_COLD_B2B_INVOCATION_CAP,
     windowDays: 1,
     threshold: 0,
     sampleSize: 0,
@@ -1765,27 +1769,40 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     providerGlobalHealthBlocked: false,
     terminalCompleteness: null,
   } as const
-  const throughputCapacity = {
-    globalAttemptCount: 0,
-    globalRemaining: outlookInvocationCapacity,
-    remainingByLane: leadEmailLaneTargets,
-    leadLaneRemaining: outlookInvocationCapacity,
-    partnerLaneRemaining: 0,
-  }
+  const throughputCapacity = outboundReadiness.outlook
+    ? await readOutreachDispatchCapacity(throughputDecision, outlookCapacityNow)
+    : {
+        globalAttemptCount: 0,
+        globalRemaining: 0,
+        remainingByLane: {},
+        leadLaneRemaining: 0,
+        partnerLaneRemaining: 0,
+      }
+  const sendLimit = resolveLeadOutlookSendLimit({
+    requestedSendLimit: uncappedSendLimit,
+    capacity: throughputCapacity,
+  })
+  const hunterReplacementScanLimit = Math.min(
+    OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP,
+    hunterVerificationReplacementScanLimit(sendLimit, queueMultiplier)
+  )
   const hunterVerificationLimits = deriveHunterSendVerificationLimits({
-    effectiveDailyCap: outlookInvocationCapacity,
+    effectiveDailyCap: throughputDecision.effectiveDailyCap,
     requestedSendLimit: sendLimit,
     globalRemaining: throughputCapacity.globalRemaining,
     leadLaneRemaining: throughputCapacity.leadLaneRemaining,
     configuredDailyLimit: envNonNegativeInt(
       'LEADS_HUNTER_DAILY_VERIFY_LIMIT',
-      outlookInvocationCapacity
+      OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP
     ),
-    configuredPerRunLimit: envNonNegativeInt('LEADS_HUNTER_VERIFY_LIMIT_PER_RUN', sendLimit),
+    configuredPerRunLimit: envNonNegativeInt(
+      'LEADS_HUNTER_VERIFY_LIMIT_PER_RUN',
+      hunterReplacementScanLimit
+    ),
   })
   const queue = sendLimit > 0
     ? await listEmailOutreachForSendQueue(sendLimit * queueMultiplier, {
-        laneTargets: leadEmailLaneTargets,
+        remainingByLane: throughputCapacity.remainingByLane,
         candidatesPerSlot: queueMultiplier,
       })
     : []
@@ -2572,7 +2589,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     `Auto-send enabled: ${autoSendEnabled ? 'Yes' : 'No'}`,
     `Reply capture ready: ${replyCaptureReadiness.ready ? 'Yes' : 'No'}${replyCaptureReadiness.reason ? ` (${replyCaptureReadiness.reason})` : ''}`,
     `Outlook Graph configured: ${outboundReadiness.outlook ? 'Yes' : 'No'}`,
-    `Outlook invocation cap: ${outlookInvocationCapacity}`,
+    `Outlook invocation cap: ${OUTLOOK_COLD_B2B_INVOCATION_CAP}`,
     `Mailing address configured: ${outboundReadiness.mailingAddressConfigured ? 'Yes' : 'No'}`,
     'Cold B2B provider: outlook',
   ]

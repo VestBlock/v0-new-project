@@ -6,6 +6,7 @@ import {
 } from '../lib/outreach/hunterSendVerificationCore'
 import {
   assessVerifiedBusinessColdEmailAdmission,
+  classifyVerifiedBusinessColdEmailAdmissionScope,
   deriveRecipientBoundBusinessContactEvidence,
   isAutonomousEmailQueueLeadAllowed,
 } from '../lib/outreach/verifiedBusinessColdEmail'
@@ -31,6 +32,26 @@ const hunterEvidence = buildHunterSendVerificationCache({
   status: 'valid',
   checkedAt: now.toISOString(),
 })
+
+for (const reason of [
+  'recipient_email_invalid',
+  'hunter_verification_missing',
+  'hunter_verification_invalid',
+  'hunter_verification_not_fresh',
+  'hunter_verification_not_valid',
+  'business_contact_evidence_required',
+  'business_contact_evidence_invalid',
+  'business_contact_evidence_recipient_mismatch',
+  'business_contact_evidence_not_fresh',
+] as const) {
+  assert.equal(
+    classifyVerifiedBusinessColdEmailAdmissionScope(reason),
+    'record',
+    `${reason} is specific to one candidate and must not stop replacement scanning`
+  )
+}
+assert.equal(classifyVerifiedBusinessColdEmailAdmissionScope('seller_lane_rejected'), 'lane')
+assert.equal(classifyVerifiedBusinessColdEmailAdmissionScope('unsupported_lane'), 'lane')
 
 const canonicalEvidence = deriveRecipientBoundBusinessContactEvidence({
   contactInfo: publicContactInfo,

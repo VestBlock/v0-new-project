@@ -3,7 +3,14 @@ export type OutreachMessageState = {
   sent_at?: string | null
 }
 
-const GENERATION_PROTECTED_STATUSES = new Set(['approved', 'queued', 'sent', 'accepted', 'delivered'])
+const GENERATION_PROTECTED_STATUSES = new Set([
+  'approved',
+  'queued',
+  'sent',
+  'accepted',
+  'delivered',
+  'archived',
+])
 
 export const FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES = ['draft', 'needs_review'] as const
 

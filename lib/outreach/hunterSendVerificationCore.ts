@@ -160,7 +160,7 @@ export function shouldQuarantineHunterVerificationStatus(status: unknown) {
 
 export function classifyHunterVerificationFailureScope(reason: unknown): HunterVerificationFailureScope {
   const normalized = String(reason || '').trim().toLowerCase()
-  if (/daily_budget_exhausted|budget_contention/.test(normalized)) return 'global'
+  if (/daily_budget_exhausted|budget_contention|budget_blocked/.test(normalized)) return 'global'
   if (
     /budget_(?:unavailable|state_invalid|date_invalid|date_future)|api_key_missing|request_failed|timeout|http_|cache_write_failed|safety_unavailable|email_(?:missing|mismatch)|invalid_timestamp/.test(normalized)
   ) return 'infrastructure'

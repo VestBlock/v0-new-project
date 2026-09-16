@@ -428,6 +428,30 @@ export async function restoreBuyerOutreachMessageAfterQuotaDenial(
   return (data || null) as BuyerOutreachMessageRecord | null
 }
 
+export async function quarantineBuyerOutreachMessageAfterRecordDeferral(
+  messageId: string,
+  claimedUpdatedAt: string,
+  updates: Record<string, unknown>
+) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('buyer_outreach_messages')
+    .update({
+      ...updates,
+      status: 'archived',
+      approved_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', messageId)
+    .eq('status', 'queued')
+    .eq('updated_at', claimedUpdatedAt)
+    .is('sent_at', null)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return (data || null) as BuyerOutreachMessageRecord | null
+}
+
 export async function downgradeBuyerOutreachMessageIfApproved(
   messageId: string,
   updates: Record<string, unknown>

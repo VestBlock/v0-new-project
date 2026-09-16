@@ -26,6 +26,7 @@ import { getEmailQualityIssue, normalizeEmailAddress } from '@/lib/outreach/emai
 import type { HunterSendVerificationCache } from '@/lib/outreach/hunterSendVerificationCore'
 import {
   assessVerifiedBusinessColdEmailAdmission,
+  classifyVerifiedBusinessColdEmailAdmissionScope,
   deriveRecipientBoundBusinessContactEvidence,
 } from '@/lib/outreach/verifiedBusinessColdEmail'
 import {
@@ -245,7 +246,7 @@ export async function sendGuardedOutlookEmail(
         reason: `Verified B2B cold email admission failed (${coldAdmission.reason}).`,
         policyReason: coldAdmission.reason,
         correlationId: identity.correlationId,
-        deferredScope: coldAdmission.reason.startsWith('hunter_') ? 'record' : 'lane',
+        deferredScope: classifyVerifiedBusinessColdEmailAdmissionScope(coldAdmission.reason),
       })
     }
   }
