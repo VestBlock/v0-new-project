@@ -132,11 +132,11 @@ function allocateVerifiedCanaryOutput(target: number, now?: Date): DailyStrategy
 /**
  * Converts delivery evidence into a conservative daily send ceiling, then
  * distributes normal throughput evenly across every canonical strategy lane.
- * Controlled trials and explicitly requested recovery canaries reserve their
- * five-message allowance for the verified lender path. Concentrating the
- * sender-health test prevents human-review seller lanes, or an empty rotating
- * lane, from starving the evidence needed to progress. Normal ramp stages keep
- * the even canonical-lane allocation. This function is intentionally side-effect free
+ * Every five-message recovery stage reserves its allowance for the verified
+ * lender path. Concentrating the sender-health test prevents prohibited cold
+ * seller-email lanes, or an empty rotating lane, from starving the evidence
+ * needed to progress. Normal ramp stages keep the even canonical-lane
+ * allocation. This function is intentionally side-effect free
  * so every sender can use the same decision before an atomic reservation.
  */
 export function evaluateOutreachThroughputGovernor(
@@ -213,9 +213,7 @@ export function evaluateOutreachThroughputGovernor(
 
   const stageCap = OUTREACH_THROUGHPUT_STAGE_CAPS[stage]
   const effectiveDailyCap = Math.min(requestedDailyTarget, stageCap)
-  const verifiedCanaryStage =
-    stage === 'recovery' &&
-    (input.mode === 'controlled_trial' || explicitRecoveryCanary)
+  const verifiedCanaryStage = stage === 'recovery'
   const allocationPlan = verifiedCanaryStage
     ? allocateVerifiedCanaryOutput(effectiveDailyCap, input.now)
     : allocateDailyStrategyOutput(effectiveDailyCap, input.now)

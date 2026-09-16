@@ -57,8 +57,18 @@ for (const expected of healthyThresholds) {
     result.allocationPlan.allocations.reduce((sum, lane) => sum + lane.target, 0),
     expected.cap
   )
-  const laneTargets = result.allocationPlan.allocations.map((lane) => lane.target)
-  assert.ok(Math.max(...laneTargets) - Math.min(...laneTargets) <= 1)
+  if (expected.stage === 'recovery') {
+    assert.equal(result.allocationPlan.byKey.lenders, 5)
+    assert.deepEqual(result.allocationPlan.groupTotals, { seller: 0, business: 0, partner: 5 })
+    assert.ok(
+      result.allocationPlan.allocations
+        .filter((lane) => lane.key !== 'lenders')
+        .every((lane) => lane.target === 0)
+    )
+  } else {
+    const laneTargets = result.allocationPlan.allocations.map((lane) => lane.target)
+    assert.ok(Math.max(...laneTargets) - Math.min(...laneTargets) <= 1)
+  }
 }
 
 const healthyToday = decision()
