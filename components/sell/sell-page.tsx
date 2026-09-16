@@ -525,9 +525,13 @@ export function SellPage({ market }: SellPageProps) {
                             <Label htmlFor="smsMarketingConsent" className="block cursor-pointer text-sm leading-6 text-slate-200">
                               {SELLER_SMS_CONSENT_DISCLOSURE}
                             </Label>
-                            <p className="text-xs leading-5 text-muted-foreground">
-                              Optional. Review the <a className="underline underline-offset-4 hover:text-white" href="/terms">Terms</a> and <a className="underline underline-offset-4 hover:text-white" href="/privacy">Privacy Policy</a>.
-                            </p>
+                            <div className="text-xs leading-5 text-muted-foreground">
+                              <span className="block">Optional. Review the applicable legal terms:</span>
+                              <span className="mt-1 flex flex-wrap items-center gap-x-3">
+                                <a className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white" href="/terms">Terms</a>
+                                <a className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white" href="/privacy">Privacy Policy</a>
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -984,14 +988,14 @@ export function SellPage({ market }: SellPageProps) {
               <div className="flex flex-col sm:flex-row items-center gap-6 text-muted-foreground">
                 <a
                   href="#lead-form"
-                  className="flex items-center gap-2 hover:text-cyan-500 transition-colors"
+                  className="flex min-h-11 items-center gap-2 hover:text-cyan-500 transition-colors"
                 >
                   <Home className="h-4 w-4" />
                   Submit property details
                 </a>
                 <a
                   href="tel:414-687-6923"
-                  className="flex items-center gap-2 hover:text-cyan-500 transition-colors"
+                  className="flex min-h-11 items-center gap-2 hover:text-cyan-500 transition-colors"
                 >
                   <Phone className="h-4 w-4" />
                   (414) 687-6923
@@ -999,10 +1003,10 @@ export function SellPage({ market }: SellPageProps) {
               </div>
 
               <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                <a className="transition-colors hover:text-white" href="/privacy">Privacy</a>
-                <a className="transition-colors hover:text-white" href="/security">Security</a>
-                <a className="transition-colors hover:text-white" href="/terms">Terms</a>
-                <a className="transition-colors hover:text-white" href="/accessibility">Accessibility</a>
+                <a className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/privacy">Privacy</a>
+                <a className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/security">Security</a>
+                <a className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/terms">Terms</a>
+                <a className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/accessibility">Accessibility</a>
               </nav>
 
               <p className="text-sm text-muted-foreground">
