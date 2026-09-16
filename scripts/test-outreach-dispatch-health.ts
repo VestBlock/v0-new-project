@@ -270,6 +270,11 @@ assert.match(
   /leadOpsAlertEmail && !options\.dryRun && !options\.suppressDigest/,
   'frequent refill runs must honor the cron digest suppression flag'
 )
+assert.match(
+  leadAutomation,
+  /evidence\?\.source === 'verified_listing_feed_agent_contact'[\s\S]*'recipient_bound_listing_agent'/,
+  'an expected listing-site/brokerage-domain mismatch may only be overridden by fresh exact-recipient listing-agent evidence'
+)
 
 const leadRepository = readFileSync(
   resolve(process.cwd(), 'lib/leads/repository.ts'),
@@ -282,6 +287,11 @@ assert.match(
   leadRepository,
   /fetchCandidates\(\['approved'\], 'approved_at', false\)/,
   'the bounded approved scan must prefer recent rows so a 10,000-row legacy backlog cannot hide new approvals'
+)
+assert.match(
+  leadRepository,
+  /isAutonomousEmailQueueLeadAllowed\(lead\)/,
+  'seller rows without fresh exact-recipient listing-agent evidence must not enter the autonomous send queue'
 )
 
 console.log('outreach-dispatch-health: ok')

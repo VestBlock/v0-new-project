@@ -27,6 +27,7 @@ import {
   type StrategyLeadMembershipShape,
 } from '@/lib/outreach/strategyMembershipShape'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
+import { isAutonomousEmailQueueLeadAllowed } from '@/lib/outreach/verifiedBusinessColdEmail'
 import {
   chicagoBusinessDate,
   DAILY_STRATEGY_OUTPUT_LANES,
@@ -1012,11 +1013,14 @@ export async function listEmailOutreachForSendQueue(
   const eligible = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter((row) => {
     const lead = row.leads
     if (
-      lead?.delivery_status === 'sent' ||
+      !lead ||
+      lead.delivery_status === 'sent' ||
       lead?.outreach_status === 'sent' ||
       !isCurrentVestblockOutboundLead(lead) ||
       !shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
     ) return false
+
+    if (!isAutonomousEmailQueueLeadAllowed(lead)) return false
 
     if (lead?.email) {
       const hunterCache = assessHunterSendVerificationCache({

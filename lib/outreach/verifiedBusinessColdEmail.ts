@@ -245,6 +245,32 @@ export function deriveRecipientBoundBusinessContactEvidence(input: {
   return null
 }
 
+export function isAutonomousEmailQueueLeadAllowed(lead: {
+  source?: string | null
+  category?: string | null
+  lead_type?: string | null
+  email?: string | null
+  website?: string | null
+  contact_info?: Record<string, unknown> | null
+  metadata_json?: Record<string, unknown> | null
+}, now: Date = new Date()) {
+  const isSellerEntity =
+    String(lead.category || '').trim().toLowerCase() === 'seller_lead' ||
+    String(lead.lead_type || '').trim().toLowerCase() === 'sell_house'
+  if (!isSellerEntity) return true
+  if (!isListingAgentIntermediaryLead(lead)) return false
+
+  const evidence = deriveRecipientBoundBusinessContactEvidence({
+    source: lead.source,
+    metadataJson: lead.metadata_json,
+    contactInfo: lead.contact_info,
+    recipientEmail: lead.email,
+    website: lead.website,
+    now,
+  })
+  return evidence?.source === 'verified_listing_feed_agent_contact'
+}
+
 export function assessVerifiedBusinessColdEmailAdmission(input: {
   strategyKey: DailyStrategyOutputLaneKey | string
   recipientEmail: string

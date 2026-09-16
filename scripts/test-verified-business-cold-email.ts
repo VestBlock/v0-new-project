@@ -7,6 +7,7 @@ import {
 import {
   assessVerifiedBusinessColdEmailAdmission,
   deriveRecipientBoundBusinessContactEvidence,
+  isAutonomousEmailQueueLeadAllowed,
 } from '../lib/outreach/verifiedBusinessColdEmail'
 import { isListingAgentIntermediaryLead } from '../lib/outreach/listingAgentCore'
 
@@ -123,6 +124,77 @@ assert.equal(
 )
 assert.ok(listingAgentEvidence, 'a current listing-feed agent contact is admissible business evidence')
 assert.equal(listingAgentEvidence.source, 'verified_listing_feed_agent_contact')
+const listingAgentQueueLead = {
+  source: 'homeharvest_stale_listing',
+  category: 'seller_lead',
+  lead_type: 'sell_house',
+  email: recipientEmail,
+  website: 'https://realtor.com/realestateandhomes-detail/example',
+  metadata_json: {
+    strategyPrimary: 'active-stale-creative',
+    strategySourceFamilies: ['homeharvest'],
+    sourceObservedAt: now.toISOString(),
+    listingUrl: 'https://listing.example.test/property/123',
+    listingAgentEmailHash,
+  },
+  contact_info: { contactRole: 'listing_agent', publicBusinessContact: true },
+}
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed(listingAgentQueueLead, now),
+  true,
+  'a fresh exact-recipient listing agent may enter the guarded email queue'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({
+    ...listingAgentQueueLead,
+    metadata_json: { ...listingAgentQueueLead.metadata_json, listingAgentEmailHash: 'a'.repeat(64) },
+  }, now),
+  false,
+  'a recipient hash mismatch must fail before queue admission'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({
+    ...listingAgentQueueLead,
+    metadata_json: { ...listingAgentQueueLead.metadata_json, sourceObservedAt: '2026-07-01T00:00:00.000Z' },
+  }, now),
+  false,
+  'stale listing evidence must fail before queue admission'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({ ...listingAgentQueueLead, source: 'csv_import' }, now),
+  false,
+  'lookalike listing metadata from another source must fail before queue admission'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({
+    source: 'homeharvest_stale_listing',
+    category: 'seller_lead',
+    lead_type: 'sell_house',
+    email: recipientEmail,
+  }, now),
+  false,
+  'legacy or ambiguous HomeHarvest seller rows must not enter autonomous email'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({
+    source: 'dealmachine_api',
+    category: 'seller_lead',
+    lead_type: 'sell_house',
+    email: 'owner@example.test',
+  }, now),
+  false,
+  'direct-owner seller records must not enter autonomous cold email'
+)
+assert.equal(
+  isAutonomousEmailQueueLeadAllowed({
+    source: 'hunter_business_discovery',
+    category: 'business_lead',
+    lead_type: 'business',
+    email: 'ops@example-business.test',
+  }, now),
+  true,
+  'ordinary B2B leads remain subject to the existing business-contact guards'
+)
 assert.equal(
   assessVerifiedBusinessColdEmailAdmission({
     strategyKey: 'listing_agents',

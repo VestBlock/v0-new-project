@@ -71,6 +71,7 @@ import {
 } from '@/lib/outreach/hunterSendVerificationCore'
 import { isControlledTrialAllowanceFilled } from '@/lib/outreach/outreachDispatchCore'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
+import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type MarketConfig = {
   id?: string
@@ -508,8 +509,21 @@ function getVerifiedPublicEmailCandidate(lead: LeadRecord) {
   )
 }
 
-function shouldAllowMismatchedPublicEmail(lead: LeadRecord, decisionReason: string | null) {
-  return decisionReason === 'mismatched_domain' && Boolean(getVerifiedPublicEmailCandidate(lead))
+function getMismatchedEmailTrustOverride(lead: LeadRecord, decisionReason: string | null) {
+  if (decisionReason !== 'mismatched_domain') return null
+  if (getVerifiedPublicEmailCandidate(lead)) return 'verified_public_email_candidate' as const
+
+  if (!isListingAgentIntermediaryLead(lead)) return null
+  const evidence = deriveRecipientBoundBusinessContactEvidence({
+    source: lead.source,
+    metadataJson: lead.metadata_json,
+    contactInfo: lead.contact_info,
+    recipientEmail: lead.email,
+    website: lead.website,
+  })
+  return evidence?.source === 'verified_listing_feed_agent_contact'
+    ? 'recipient_bound_listing_agent'
+    : null
 }
 
 function dailyStrategyLaneForLead(lead: LeadRecord | null | undefined, subject = '') {
@@ -1928,7 +1942,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     let currentRow = row
     let currentLead = lead
     let decision = getLeadEmailAutopilotDecision(currentLead, suppressions)
-    let allowVerifiedPublicEmail = shouldAllowMismatchedPublicEmail(currentLead, decision.reason)
+    let emailTrustOverride = getMismatchedEmailTrustOverride(currentLead, decision.reason)
 
     if (
       !options.dryRun &&
@@ -1939,11 +1953,11 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
       if (enrichment?.updated) {
         currentLead = enrichment.lead
         decision = getLeadEmailAutopilotDecision(currentLead, suppressions)
-        allowVerifiedPublicEmail = shouldAllowMismatchedPublicEmail(currentLead, decision.reason)
+        emailTrustOverride = getMismatchedEmailTrustOverride(currentLead, decision.reason)
         enrichedInQueueCount += 1
       }
     }
-    const effectiveEligible = decision.eligible || allowVerifiedPublicEmail
+    const effectiveEligible = decision.eligible || Boolean(emailTrustOverride)
 
     let qualityIssue = validateOutreachMessageQuality({ lead: currentLead, message: currentRow })
     if (qualityIssue === 'missing_opt_out_note') {
@@ -2162,8 +2176,8 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
                   ? 'strategy_review_required'
                   : currentRow.status !== 'approved'
                     ? decision.reason || 'manual_review_required'
-                  : allowVerifiedPublicEmail
-                    ? 'verified_public_email_pending_send'
+                  : emailTrustOverride
+                    ? `${emailTrustOverride}_pending_send`
                     : decision.reason || 'manual_review_required'
 
       skipReasonCounts.set(reason, (skipReasonCounts.get(reason) || 0) + 1)
@@ -2259,9 +2273,9 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
       subject: currentRow.subject,
       idempotencyKey: `${sendIdentity.idempotencyKey}:queued`,
       correlationId: sendIdentity.correlationId,
-      metadata: allowVerifiedPublicEmail
+      metadata: emailTrustOverride
         ? {
-            allowedReason: 'verified_public_email_candidate',
+            allowedReason: emailTrustOverride,
             originalGuardrail: decision.reason,
             ...outboundIdentityMetadata(sendIdentity),
             campaignRunId: attribution?.campaign_run_id || null,

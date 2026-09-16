@@ -29,7 +29,7 @@ payload = {
         "VESTBLOCK_ROOT": root,
         "ON_MARKET_CREATIVE_SEND": send_mode,
     },
-    "StartCalendarInterval": {"Hour": 9, "Minute": 15},
+    "StartCalendarInterval": {"Hour": 8, "Minute": 0},
     "RunAtLoad": False,
     "StandardOutPath": f"{log_dir}/on-market-creative-daily.launchd.out.log",
     "StandardErrorPath": f"{log_dir}/on-market-creative-daily.launchd.err.log",
