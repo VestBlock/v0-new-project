@@ -15,21 +15,37 @@ type SearchApifyYelpInput = {
   timeoutSecs?: number
 }
 
+const yelpCategorySchema = z.union([
+  z.string(),
+  z.record(z.string(), z.unknown()),
+])
+
+const yelpAddressSchema = z.union([
+  z.string(),
+  z.record(z.string(), z.unknown()),
+])
+
+const numberLikeSchema = z.union([z.number(), z.string()])
+
 const yelpItemSchema = z.object({
   id: z.string().optional().nullable(),
+  bizId: z.string().optional().nullable(),
   name: z.string().optional().nullable(),
   url: z.string().optional().nullable(),
+  directUrl: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
-  address: z.string().optional().nullable(),
+  address: yelpAddressSchema.optional().nullable(),
   city: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   zip: z.string().optional().nullable(),
   postalCode: z.string().optional().nullable(),
   website: z.string().optional().nullable(),
-  rating: z.number().optional().nullable(),
-  reviewCount: z.number().optional().nullable(),
-  categories: z.array(z.union([z.string(), z.object({ title: z.string().optional().nullable() })])).optional().nullable(),
+  rating: numberLikeSchema.optional().nullable(),
+  aggregatedRating: numberLikeSchema.optional().nullable(),
+  reviewCount: numberLikeSchema.optional().nullable(),
+  categories: z.array(yelpCategorySchema).optional().nullable(),
   price: z.string().optional().nullable(),
+  priceRange: z.string().optional().nullable(),
 })
 
 const runSchema = z.object({
@@ -111,11 +127,60 @@ function pickCategory(categories: z.infer<typeof yelpItemSchema>['categories']) 
   if (!Array.isArray(categories)) return null
   for (const category of categories) {
     if (typeof category === 'string' && category.trim()) return category.trim()
-    if (category && typeof category === 'object' && typeof category.title === 'string' && category.title.trim()) {
-      return category.title.trim()
+    if (category && typeof category === 'object') {
+      if (typeof category.title === 'string' && category.title.trim()) return category.title.trim()
+      if (typeof category.alias === 'string' && category.alias.trim()) return category.alias.trim()
     }
   }
   return null
+}
+
+function trimmedString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = trimmedString(value)
+    if (normalized) return normalized
+  }
+  return null
+}
+
+function finiteNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string' || !value.trim()) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizeStructuredAddress(
+  address: z.infer<typeof yelpAddressSchema> | null | undefined,
+  fallbackCity: string,
+  fallbackState?: string
+) {
+  if (typeof address === 'string') {
+    return {
+      addressLine: trimmedString(address),
+      city: fallbackCity,
+      state: trimmedString(fallbackState),
+      zip: null,
+    }
+  }
+
+  const structured = address && typeof address === 'object' ? address : {}
+  const addressLine = [
+    firstString(structured.addressLine1, structured.streetAddress, structured.address1, structured.line1),
+    firstString(structured.addressLine2, structured.address2, structured.line2),
+    firstString(structured.addressLine3, structured.address3, structured.line3),
+  ].filter((value): value is string => Boolean(value)).join(', ') || null
+
+  return {
+    addressLine,
+    city: firstString(structured.city, structured.addressLocality) || fallbackCity,
+    state: firstString(structured.regionCode, structured.addressRegion, structured.state) || trimmedString(fallbackState),
+    zip: firstString(structured.postalCode, structured.zipCode, structured.zip),
+  }
 }
 
 function extractExternalId(urlValue: string | null | undefined, fallbackId: string | null | undefined) {
@@ -127,6 +192,63 @@ function extractExternalId(urlValue: string | null | undefined, fallbackId: stri
     return segments.length >= 2 && segments[0] === 'biz' ? segments[1] : null
   } catch {
     return null
+  }
+}
+
+export function normalizeApifyYelpDatasetItem(
+  item: unknown,
+  fallback: { city: string; state?: string }
+) {
+  const parsed = yelpItemSchema.safeParse(item)
+  if (!parsed.success) return null
+
+  const record = parsed.data
+  const directoryUrl = firstString(record.directUrl, record.url)
+  const address = normalizeStructuredAddress(record.address, fallback.city, fallback.state)
+  const structuredAddress = record.address && typeof record.address === 'object'
+    ? record.address
+    : null
+  const city = firstString(
+    structuredAddress?.city,
+    structuredAddress?.addressLocality,
+    record.city,
+    address.city
+  ) || fallback.city
+  const state = firstString(
+    structuredAddress?.regionCode,
+    structuredAddress?.addressRegion,
+    structuredAddress?.state,
+    record.state,
+    address.state
+  )
+  const zip = firstString(
+    structuredAddress?.postalCode,
+    structuredAddress?.zipCode,
+    structuredAddress?.zip,
+    record.zip,
+    record.postalCode,
+    address.zip
+  )
+
+  return {
+    businessName: trimmedString(record.name),
+    sourceUrl: safeUrl(directoryUrl),
+    // The directory listing identifies the source record, but it is not the
+    // business's own website. Keeping these fields separate prevents contact
+    // enrichment and recipient-evidence checks from ever treating a Yelp-owned
+    // address as the local business's canonical public site.
+    website: safeUrl(record.website),
+    externalId: extractExternalId(directoryUrl, firstString(record.bizId, record.id)),
+    phone: normalizePhone(record.phone),
+    addressLine: address.addressLine,
+    city,
+    state,
+    zip,
+    rating: finiteNumber(record.aggregatedRating ?? record.rating),
+    reviewCount: finiteNumber(record.reviewCount),
+    price: firstString(record.priceRange, record.price),
+    businessType: pickCategory(record.categories),
+    categories: record.categories ?? [],
   }
 }
 
@@ -188,14 +310,13 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
   const items = (await fetchDatasetItems(datasetId)).slice(0, workPlan.resultUnits)
 
   for (const item of items) {
-    const parsed = yelpItemSchema.safeParse(item)
-    if (!parsed.success) continue
+    const record = normalizeApifyYelpDatasetItem(item, { city: input.city, state: input.state })
+    if (!record) continue
 
-    const record = parsed.data
-    const website = safeUrl(record.website || record.url)
+    const website = record.website
     const websiteReport = await analyzeWebsiteWeakness(website)
-    const categoryLabel = pickCategory(record.categories)?.toLowerCase() || ''
-    const businessLabel = `${record.name || ''} ${categoryLabel}`.toLowerCase()
+    const categoryLabel = record.businessType?.toLowerCase() || ''
+    const businessLabel = `${record.businessName || ''} ${categoryLabel}`.toLowerCase()
     const matchedNiche =
       workPlan.niches.find((niche) =>
         niche
@@ -206,29 +327,24 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
     const lowerNiche = matchedNiche.toLowerCase()
     const weakSignals = websiteReport.weakSignals
     const category = inferCategory(lowerNiche, weakSignals, websiteReport.hasOnlineBooking, websiteReport.hasChat)
-    const externalId = extractExternalId(record.url, record.id)
-    const addressLine = record.address?.trim() || null
-    const city = record.city?.trim() || input.city
-    const state = record.state?.trim() || input.state || null
-    const zip = record.zip?.trim() || record.postalCode?.trim() || null
     const searchString = `${matchedNiche} ${input.city}${input.state ? ` ${input.state}` : ''}`.trim()
 
     normalizedLeads.push({
       leadType: 'directory_business',
       source: 'apify_yelp_businesses',
-      sourceUrl: safeUrl(record.url),
+      sourceUrl: record.sourceUrl,
       category,
-      externalId,
+      externalId: record.externalId,
       name: null,
-      businessName: record.name?.trim() || null,
-      propertyAddress: [addressLine, city, state, zip].filter(Boolean).join(', ') || null,
-      mailingAddress: [addressLine, city, state, zip].filter(Boolean).join(', ') || null,
-      phone: normalizePhone(record.phone),
+      businessName: record.businessName,
+      propertyAddress: [record.addressLine, record.city, record.state, record.zip].filter(Boolean).join(', ') || null,
+      mailingAddress: [record.addressLine, record.city, record.state, record.zip].filter(Boolean).join(', ') || null,
+      phone: record.phone,
       email: null,
       website,
-      city,
-      state,
-      zip,
+      city: record.city,
+      state: record.state,
+      zip: record.zip,
       languageSignal: /spanish|immigration/.test(lowerNiche) ? 'spanish' : 'english',
       painSignal:
         weakSignals.length > 0 ? weakSignals.join('; ') : `Potential ${matchedNiche} Yelp lead in ${input.city}`,
@@ -236,7 +352,7 @@ export async function searchApifyYelp(input: SearchApifyYelpInput) {
         rating: record.rating ?? null,
         reviewCount: record.reviewCount ?? null,
         price: record.price ?? null,
-        businessType: pickCategory(record.categories),
+        businessType: record.businessType,
         sourceDirectory: 'yelp',
       },
       formData: {
