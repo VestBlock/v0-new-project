@@ -6,7 +6,7 @@
 #   launchctl unload ~/Library/LaunchAgents/io.vestblock.distress-stack.plist   # to stop
 
 set -euo pipefail
-PROJECT_DIR="${VESTBLOCK_DIR:-/Users/mrsanders/Downloads/Codex Folder}"
+PROJECT_DIR="${VESTBLOCK_DIR:-/Users/mrsanders/VestBlockProduction}"
 LABEL="io.vestblock.distress-stack"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 NODE_BIN="$(command -v node || echo /usr/local/bin/node)"

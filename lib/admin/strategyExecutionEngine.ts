@@ -1159,6 +1159,15 @@ export async function runStrategyExecutionEngine(options: {
         nextAfter: dealMachineCursor,
         wrapped: false,
         creditsReserved: 0,
+        creditUsage: {
+          used: 0,
+          properties: 0,
+          people: 0,
+          deduplicated: 0,
+          discovery: { used: 0, properties: 0, people: 0, deduplicated: 0 },
+          contactEnrichment: { used: 0, properties: 0, people: 0, deduplicated: 0 },
+        },
+        contactEnriched: 0,
         strategyRuns: [],
         leads: [],
       }

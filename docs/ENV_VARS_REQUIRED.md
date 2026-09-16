@@ -107,8 +107,16 @@
   Full official v2 secret (`dm_sk_live_*`) or OAuth access token (`dm_at_live_*`). Prefix-only values are rejected before any API request.
 - `DEALMACHINE_DAILY_CREDIT_BUDGET`
   Maximum credits reserved by the daily acquisition run. Defaults to `250`.
+- `DEALMACHINE_AUTOMATION_DAILY_CREDIT_CAP`
+  Optional autonomous override for the daily DealMachine cap. The scheduler partitions it across deterministic Central-time slots.
 - `DEALMACHINE_DAILY_ROWS_PER_STRATEGY`
   Requested rows per standard strategy. Defaults to `10`; the conditional-cash lane is separately capped below 5% of total acquisition.
+- `DEALMACHINE_CONTACT_REVEAL_ROWS_PER_STRATEGY`
+  Maximum top-ranked non-candidate properties per strategy to re-query for owner contacts after contact-free property discovery. Defaults to `3`.
+- `DEALMACHINE_CONTACT_CREDIT_RESERVATION_PER_PROPERTY`
+  Conservative local credit reservation for each exact-ID owner-contact lookup. Defaults to `3` and is capped at `10`.
+- `N8N_DEALMACHINE_SOURCE_LEASE_MINUTES`
+  Lease for an in-flight source slot before a crashed `received` event may be reclaimed. Defaults to `15` and is capped at `120`.
 - `DEALMACHINE_SOURCE_ENABLED`
   Enables DealMachine acquisition inside the broader strategy engine. The dedicated daily v2 cron only requires a valid key.
 - `DEALMACHINE_SYNC_ENABLED`

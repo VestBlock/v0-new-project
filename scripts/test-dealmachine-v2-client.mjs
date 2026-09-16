@@ -77,6 +77,13 @@ await client.searchRecords('properties', {
 })
 assert.equal(calls.at(-1).url, `${DEALMACHINE_V2_BASE_URL}/properties/search`)
 
+await client.getProperty('prop/exact id', { contact_audience: 'owners' })
+assert.equal(
+  calls.at(-1).url,
+  `${DEALMACHINE_V2_BASE_URL}/properties/prop%2Fexact%20id?contact_audience=owners`,
+  'Exact contact reveal must URL-encode and look up only the discovered property ID.'
+)
+
 assert.throws(
   () => client.searchRecords('contacts', {}),
   /Unsupported DealMachine search source type: contacts/

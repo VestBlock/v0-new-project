@@ -66,28 +66,29 @@ assert.deepEqual(
   'The strategy-engine catalog must stay aligned with the canonical daily seller allocation'
 )
 assert.ok(
-  canonicalSellerAllocations.every((allocation) => allocation.target === 41 || allocation.target === 42),
-  'A 1,000-output day must allocate either 41 or 42 drafts to each enabled seller lane'
+  canonicalSellerAllocations.every((allocation) => allocation.target === 50),
+  'A 1,000-output day must allocate 800 seller slots, or 50 to each enabled seller lane'
 )
 
-const rotatedOutputPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-16T18:00:00.000Z'))
+const rotatingOutputPlan = allocateDailyStrategyOutput(999, new Date('2026-09-15T18:00:00.000Z'))
+const rotatedOutputPlan = allocateDailyStrategyOutput(999, new Date('2026-09-16T18:00:00.000Z'))
 assert.notDeepEqual(
-  rotatedOutputPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
-  canonicalOutputPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
-  'The sixteen 42-draft lanes must rotate on the next Chicago business date'
+  rotatedOutputPlan.allocations.filter((allocation) => allocation.group === 'seller' && allocation.target === 49).map((allocation) => allocation.key),
+  rotatingOutputPlan.allocations.filter((allocation) => allocation.group === 'seller' && allocation.target === 49).map((allocation) => allocation.key),
+  'The seller remainder must rotate on the next Chicago business date'
 )
-const fullRotationBonusCounts = new Map<string, number>()
-for (let dayOffset = 0; dayOffset < canonicalOutputPlan.laneCount; dayOffset += 1) {
-  const plan = allocateDailyStrategyOutput(1_000, new Date(Date.UTC(2026, 8, 15 + dayOffset, 18)))
+const fullRotationLowCounts = new Map<string, number>()
+for (let dayOffset = 0; dayOffset < canonicalSellerAllocations.length; dayOffset += 1) {
+  const plan = allocateDailyStrategyOutput(999, new Date(Date.UTC(2026, 8, 15 + dayOffset, 18)))
   for (const allocation of plan.allocations) {
-    if (allocation.target === 42) {
-      fullRotationBonusCounts.set(allocation.key, (fullRotationBonusCounts.get(allocation.key) || 0) + 1)
+    if (allocation.group === 'seller' && allocation.target === 49) {
+      fullRotationLowCounts.set(allocation.key, (fullRotationLowCounts.get(allocation.key) || 0) + 1)
     }
   }
 }
 assert.ok(
-  canonicalOutputPlan.allocations.every((allocation) => fullRotationBonusCounts.get(allocation.key) === 16),
-  'Every lane must receive the 42nd slot exactly sixteen times during a complete 24-day rotation'
+  canonicalSellerAllocations.every((allocation) => fullRotationLowCounts.get(allocation.key) === 1),
+  'Every seller lane must rotate through the single lower slot during a complete seller-lane cycle'
 )
 
 const cappedLane = canonicalOutputPlan.allocations.find((allocation) => allocation.key === 'builder-infill-teardown')

@@ -63,6 +63,7 @@ export async function pushSourceBatchInChunks({
   let offset = 0
   let totalRows = null
   let imported = 0
+  let merged = 0
   let deduped = 0
   let signalsCreated = 0
   let rowsReceived = 0
@@ -101,6 +102,7 @@ export async function pushSourceBatchInChunks({
 
     rowsReceived += numberValue(result.rowsReceived)
     imported += numberValue(result.imported)
+    merged += numberValue(result.merged)
     deduped += numberValue(result.deduped)
     signalsCreated += numberValue(result.signalsCreated)
     scoreCounts.high += numberValue(result.scoreCounts?.high)
@@ -112,6 +114,7 @@ export async function pushSourceBatchInChunks({
       offset,
       rowsReceived: numberValue(result.rowsReceived),
       imported: numberValue(result.imported),
+      merged: numberValue(result.merged),
       deduped: numberValue(result.deduped),
       duplicate: result.duplicate === true,
     })
@@ -128,6 +131,9 @@ export async function pushSourceBatchInChunks({
     totalRows,
     rowsReceived,
     imported,
+    merged,
+    newlyDiscovered: imported,
+    corroborated: merged,
     deduped,
     signalsCreated,
     scoreCounts,

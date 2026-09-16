@@ -29,6 +29,7 @@ export type DealMachineV2Client = {
   exportRecords(sourceType: 'properties' | 'people', body: Record<string, unknown>): Promise<any>
   countProperties(body: Record<string, unknown>): Promise<any>
   searchProperties(body: Record<string, unknown>): Promise<any>
+  getProperty(propertyId: string, query?: Record<string, unknown>): Promise<any>
   estimatePropertySearch(body: Record<string, unknown>): Promise<any>
   exportProperties(body: Record<string, unknown>): Promise<any>
   countPeople(body: Record<string, unknown>): Promise<any>

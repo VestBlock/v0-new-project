@@ -16,8 +16,13 @@ import {
   mergeDealMachineCatalogMetadata,
 } from '@/lib/dealmachine/v2-strategy-catalog.mjs'
 import {
+  addDealMachineCreditBreakdowns,
   advanceDealMachineCursor,
+  dealMachineContactRevealLimit,
   decideDealMachineSearchBudget,
+  emptyDealMachineCreditBreakdown,
+  readDealMachineCreditBreakdown,
+  type DealMachineCreditBreakdown,
 } from '@/lib/dealmachine/budget'
 import {
   extractDealMachinePhoneRecords,
@@ -40,13 +45,23 @@ export type DealMachineSyncResult = {
   nextAfter: number
   wrapped: boolean
   creditsReserved: number
+  creditUsage: DealMachineCreditBreakdown & {
+    discovery: DealMachineCreditBreakdown
+    contactEnrichment: DealMachineCreditBreakdown
+  }
+  contactEnriched: number
   strategyRuns: Array<{
     strategyKey: string
     market: string
     lowball: boolean
     requestedRows: number
     estimatedCredits: number
+    discoveryEstimatedCredits: number
+    contactEstimatedCredits: number
+    creditUsage: DealMachineCreditBreakdown
     fetched: number
+    contactEnriched: number
+    contactStatus: 'not_requested' | 'skipped_candidate' | 'skipped_budget' | 'enriched' | 'failed'
     status: string
     error: string | null
   }>
@@ -238,6 +253,8 @@ function estimatedPageCredits(payload: RawRecord) {
 
 function remainingCredits(payload: RawRecord) {
   const candidates = [
+    payload?.total_available,
+    payload?.data?.total_available,
     payload?.remaining,
     payload?.data?.remaining,
     payload?.credits?.remaining,
@@ -257,6 +274,8 @@ export async function syncDealMachineLeadSource(options: {
   maxCredits?: number
   includeLowball?: boolean
   maxLowballShare?: number
+  contactRowsPerStrategy?: number
+  contactCreditReservationPerProperty?: number
 } = {}): Promise<DealMachineSyncResult> {
   const key = dealMachineApiKey()
   const startAfter = Math.max(0, Math.floor(options.startAfter || 0))
@@ -275,6 +294,12 @@ export async function syncDealMachineLeadSource(options: {
       nextAfter: startAfter,
       wrapped: false,
       creditsReserved: 0,
+      creditUsage: {
+        ...emptyDealMachineCreditBreakdown(),
+        discovery: emptyDealMachineCreditBreakdown(),
+        contactEnrichment: emptyDealMachineCreditBreakdown(),
+      },
+      contactEnriched: 0,
       strategyRuns: [],
       leads: [],
     }
@@ -287,6 +312,20 @@ export async function syncDealMachineLeadSource(options: {
   const pageSize = Math.min(100, Math.max(1, options.pageSize || envInt('DEALMACHINE_SYNC_PAGE_SIZE', 25)))
   const maxPlans = Math.min(17, Math.max(1, options.maxPages || 3))
   const maxCredits = Math.max(1, options.maxCredits || envInt('DEALMACHINE_SYNC_MAX_CREDITS', 75))
+  const contactRowsPerStrategy = Math.min(
+    pageSize,
+    Math.max(0, Math.floor(options.contactRowsPerStrategy ?? envInt('DEALMACHINE_CONTACT_REVEAL_ROWS_PER_STRATEGY', 3)))
+  )
+  const contactCreditReservationPerProperty = Math.min(
+    10,
+    Math.max(
+      2,
+      Math.floor(
+        options.contactCreditReservationPerProperty ??
+          envInt('DEALMACHINE_CONTACT_CREDIT_RESERVATION_PER_PROPERTY', 3)
+      )
+    )
+  )
   const includeLowball = Boolean(options.includeLowball)
   const maxLowballShare = Math.max(0, Math.min(0.05, Number(options.maxLowballShare ?? 0.05)))
   const plans = buildDailyStrategyPlans({
@@ -301,6 +340,9 @@ export async function syncDealMachineLeadSource(options: {
   const blockers: string[] = []
   const strategyRuns: DealMachineSyncResult['strategyRuns'] = []
   let creditsReserved = 0
+  let discoveryCredits = emptyDealMachineCreditBreakdown()
+  let contactEnrichmentCredits = emptyDealMachineCreditBreakdown()
+  let contactEnriched = 0
   const selectedNonLowballCount = selectedPlans.filter((plan) => !plan.lowball).length
   const nonLowballCapacity = selectedNonLowballCount * pageSize
   const lowballPageSize = Math.max(
@@ -328,7 +370,12 @@ export async function syncDealMachineLeadSource(options: {
         lowball: Boolean(plan.lowball),
         requestedRows,
         estimatedCredits: 0,
+        discoveryEstimatedCredits: 0,
+        contactEstimatedCredits: 0,
+        creditUsage: emptyDealMachineCreditBreakdown(),
         fetched: 0,
+        contactEnriched: 0,
+        contactStatus: plan.candidateOnly ? 'skipped_candidate' : 'not_requested',
         status: 'planning',
         error: null,
       }
@@ -338,10 +385,18 @@ export async function syncDealMachineLeadSource(options: {
         const fields = DEALMACHINE_STRATEGY_FIELDS.filter((field) => availablePropertyFields.has(field))
         hydrated.searchBody.fields = fields
         hydrated.exportBody.fields = fields
+        if (hydrated.searchSourceType !== 'properties') {
+          strategyRun.status = 'failed'
+          strategyRun.error = 'Autonomous discovery requires a property-anchored, contact-free DealMachine query.'
+          blockers.push(`${plan.key}/${plan.market}: ${strategyRun.error}`)
+          advancedPlanCount += 1
+          continue
+        }
         const requestBody = { ...hydrated.searchBody, page: 1, per_page: requestedRows }
         const estimate = await client.estimateRecordSearch(hydrated.searchSourceType, requestBody)
         const cost = estimatedPageCredits(estimate)
         strategyRun.estimatedCredits = cost
+        strategyRun.discoveryEstimatedCredits = cost
         const budgetDecision = decideDealMachineSearchBudget({
           estimatedCost: cost,
           creditsReserved,
@@ -379,11 +434,71 @@ export async function syncDealMachineLeadSource(options: {
         }
 
         const payload = await client.searchRecords(hydrated.searchSourceType, requestBody)
-        creditsReserved += Number(payload?.credits?.used || cost)
+        const discoveryUsage = readDealMachineCreditBreakdown(payload, cost)
+        creditsReserved += discoveryUsage.used
+        discoveryCredits = addDealMachineCreditBreakdowns(discoveryCredits, discoveryUsage)
+        strategyRun.creditUsage = addDealMachineCreditBreakdowns(strategyRun.creditUsage, discoveryUsage)
         const rows = Array.isArray(payload?.data) ? payload.data : []
         strategyRun.fetched = rows.length
         strategyRun.status = 'searched'
-        for (const raw of rows) rawRows.push({ raw, plan: hydrated })
+        const enrichedByPropertyId = new Map<string, RawRecord>()
+        const revealRows = dealMachineContactRevealLimit({
+          requestedRows: rows.length,
+          configuredRows: contactRowsPerStrategy,
+          candidateOnly: Boolean(plan.candidateOnly),
+          sourceType: hydrated.searchSourceType,
+        })
+        if (revealRows > 0) {
+          try {
+            for (const raw of rows.slice(0, revealRows)) {
+              const propertyId = String(raw?.dm_property_id || raw?.property_id || '').trim()
+              if (!propertyId) continue
+              const contactCost = contactCreditReservationPerProperty
+              const contactBudgetDecision = decideDealMachineSearchBudget({
+                estimatedCost: contactCost,
+                creditsReserved,
+                maxCredits,
+                creditBalance,
+              })
+              if (contactBudgetDecision !== 'search') {
+                strategyRun.contactStatus = 'skipped_budget'
+                break
+              }
+              strategyRun.contactEstimatedCredits += contactCost
+              strategyRun.estimatedCredits += contactCost
+              const contactPayload = await client.getProperty(propertyId, {
+                contact_audience: 'owners',
+              })
+              const contactUsage = readDealMachineCreditBreakdown(contactPayload, contactCost)
+              creditsReserved += contactUsage.used
+              contactEnrichmentCredits = addDealMachineCreditBreakdowns(contactEnrichmentCredits, contactUsage)
+              strategyRun.creditUsage = addDealMachineCreditBreakdowns(strategyRun.creditUsage, contactUsage)
+              const enriched = contactPayload?.data && typeof contactPayload.data === 'object'
+                ? contactPayload.data as RawRecord
+                : null
+              const returnedPropertyId = String(enriched?.dm_property_id || enriched?.property_id || '').trim()
+              if (enriched && returnedPropertyId === propertyId) {
+                enrichedByPropertyId.set(propertyId, enriched)
+              }
+              strategyRun.contactStatus = 'enriched'
+            }
+            strategyRun.contactEnriched = enrichedByPropertyId.size
+            contactEnriched += enrichedByPropertyId.size
+          } catch (error) {
+            const message = formatDealMachineThrownError(error)
+            strategyRun.contactStatus = 'failed'
+            strategyRun.error = `Contact enrichment failed: ${message}`
+            blockers.push(`${plan.key}/${plan.market} contact enrichment: ${message}`)
+          }
+        }
+        for (const raw of rows) {
+          const propertyId = String(raw?.dm_property_id || raw?.property_id || '').trim()
+          const enriched = enrichedByPropertyId.get(propertyId)
+          rawRows.push({
+            raw: enriched ? { ...raw, ...enriched, contacts: enriched.contacts } : raw,
+            plan: hydrated,
+          })
+        }
         advancedPlanCount += 1
       } catch (error) {
         const message = formatDealMachineThrownError(error)
@@ -424,6 +539,12 @@ export async function syncDealMachineLeadSource(options: {
       nextAfter,
       wrapped,
       creditsReserved,
+      creditUsage: {
+        ...addDealMachineCreditBreakdowns(discoveryCredits, contactEnrichmentCredits),
+        discovery: discoveryCredits,
+        contactEnrichment: contactEnrichmentCredits,
+      },
+      contactEnriched,
       strategyRuns,
       leads: ingested,
     }
@@ -442,6 +563,12 @@ export async function syncDealMachineLeadSource(options: {
       nextAfter: startAfter,
       wrapped: false,
       creditsReserved,
+      creditUsage: {
+        ...addDealMachineCreditBreakdowns(discoveryCredits, contactEnrichmentCredits),
+        discovery: discoveryCredits,
+        contactEnrichment: contactEnrichmentCredits,
+      },
+      contactEnriched,
       strategyRuns,
       leads: [],
     }

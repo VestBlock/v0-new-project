@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import { syncDealMachineLeadSource, type DealMachineSyncResult } from '@/lib/dealmachine/api'
 import { hasDealMachineCredentials } from '@/lib/dealmachine/v2-client.mjs'
@@ -8,6 +8,8 @@ import {
   classifyDealMachineAcquisitionOutcome,
   dealMachineCreditsUsedByEvents,
   dealMachineAcquisitionPersistenceStatus,
+  dealMachineDailySlotCreditCap,
+  dealMachineReceivedSlotLeaseExpired,
   dealMachineRunCreditCap,
   shouldPersistDealMachineCursor,
   type DealMachineAcquisitionOutcome,
@@ -17,9 +19,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 type SourceEventRow = {
   id: string
   status: string | null
+  payload_hash: string
   rows_received: number | null
   rows_ingested: number | null
   payload_json: Record<string, unknown> | null
+  updated_at: string | null
 }
 
 export type N8nDealMachineAcquisitionResult = {
@@ -35,12 +39,16 @@ export type N8nDealMachineAcquisitionResult = {
     remainingBeforeRun: number
     runCap: number
     usedThisRun: number
+    propertyRecords: number
+    peopleRecords: number
+    deduplicated: number
   }
   source: {
     fetched: number
     ingested: number
     contactable: number
     contactless: number
+    contactEnriched: number
     strategiesAttempted: number
     strategiesCompleted: number
     strategiesFailed: number
@@ -112,6 +120,10 @@ function numericValue(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
+function sourcePayloadHash(payload: Record<string, unknown>) {
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex')
+}
+
 function compactResult(input: {
   ok: boolean
   duplicate?: boolean
@@ -145,12 +157,16 @@ function compactResult(input: {
       remainingBeforeRun: Math.max(0, input.dailyCap - input.usedBeforeRun),
       runCap: input.runCap,
       usedThisRun: source?.creditsReserved || 0,
+      propertyRecords: source?.creditUsage?.properties || 0,
+      peopleRecords: source?.creditUsage?.people || 0,
+      deduplicated: source?.creditUsage?.deduplicated || 0,
     },
     source: {
       fetched: source?.fetched || 0,
       ingested: source?.ingested || 0,
       contactable: source?.contactable || 0,
       contactless: source?.contactless || 0,
+      contactEnriched: source?.contactEnriched || 0,
       strategiesAttempted: source?.strategyRuns.length || 0,
       strategiesCompleted: source?.strategyRuns.filter((run) => run.status === 'searched').length || 0,
       strategiesFailed: source?.strategyRuns.filter((run) => run.status === 'failed').length || 0,
@@ -197,22 +213,19 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
   const date = reportDate(now)
   const slotHours = envInt('N8N_DEALMACHINE_SOURCE_SLOT_HOURS', 4, 24)
   const slot = Math.floor(centralHour(now) / slotHours)
+  const slotCount = Math.ceil(24 / slotHours)
   const externalEventId = `n8n-v2-source-acquisition:${date}:${slot}`
   const dailyCap = envInt(
     'DEALMACHINE_AUTOMATION_DAILY_CREDIT_CAP',
     envInt('DEALMACHINE_DAILY_CREDIT_BUDGET', 250, 5_000),
     5_000
   )
-  // DealMachine estimates a useful owner/property query at roughly 60 credits.
-  // A 100-credit slot normally fits a second query after the first search's
-  // deduplicated actual charge is known, while the daily cap below still keeps
-  // total spend bounded.
-  const minimumViableRunCap = envInt('DEALMACHINE_AUTOMATION_MIN_RUN_CREDITS', 100, dailyCap)
-  const defaultRunCap = Math.min(
-    dailyCap,
-    Math.max(minimumViableRunCap, Math.floor(dailyCap / Math.max(1, Math.floor(24 / slotHours))))
+  const slotCreditCap = dealMachineDailySlotCreditCap({ dailyCap, slot, slotCount })
+  const configuredRunCap = Math.min(
+    slotCreditCap,
+    envInt('N8N_DEALMACHINE_SOURCE_CREDIT_CAP_PER_RUN', slotCreditCap, dailyCap)
   )
-  const configuredRunCap = envInt('N8N_DEALMACHINE_SOURCE_CREDIT_CAP_PER_RUN', defaultRunCap, dailyCap)
+  const leaseMs = envInt('N8N_DEALMACHINE_SOURCE_LEASE_MINUTES', 15, 120) * 60_000
 
   if (!hasDealMachineCredentials()) {
     return compactResult({ ok: false, date, slot, dailyCap, usedBeforeRun: 0, runCap: 0, blocker: 'DEALMACHINE_API_KEY is not configured with a full official v2 secret.' })
@@ -221,66 +234,143 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
   const admin = createAdminClient()
   const existing = await admin
     .from('strategy_source_events')
-    .select('id,status,rows_received,rows_ingested,payload_json')
+    .select('id,status,payload_hash,rows_received,rows_ingested,payload_json,updated_at')
     .eq('provider', 'dealmachine')
     .eq('external_event_id', externalEventId)
     .maybeSingle<SourceEventRow>()
   if (existing.error) throw existing.error
+  let reclaimableEvent: SourceEventRow | null = null
   if (existing.data) {
     const payload = existing.data.payload_json || {}
-    const previous = payload.result as DealMachineSyncResult | undefined
-    return compactResult({
-      ok: String(existing.data.status || '') === 'completed' || payload.deferred === true,
-      duplicate: true,
-      deferred: payload.deferred === true,
-      date,
-      slot,
-      dailyCap,
-      usedBeforeRun: numericValue(payload.usedBeforeRun),
-      runCap: numericValue(payload.runCap),
-      blocker: typeof payload.blocker === 'string' ? payload.blocker : null,
-      result: previous,
+    const leaseExpired = dealMachineReceivedSlotLeaseExpired({
+      status: existing.data.status,
+      updatedAt: existing.data.updated_at,
+      payload,
+      now: new Date(),
+      leaseMs,
     })
+    if (existing.data.status === 'received' && leaseExpired) {
+      reclaimableEvent = existing.data
+    } else {
+      const previous = payload.result as DealMachineSyncResult | undefined
+      const activeLease = existing.data.status === 'received'
+      return compactResult({
+        ok: activeLease || String(existing.data.status || '') === 'completed' || payload.deferred === true,
+        duplicate: true,
+        deferred: activeLease || payload.deferred === true,
+        date,
+        slot,
+        dailyCap,
+        usedBeforeRun: numericValue(payload.usedBeforeRun),
+        runCap: numericValue(payload.runCap),
+        blocker: activeLease
+          ? 'This DealMachine source slot already has an active lease; a retry will reclaim it automatically if the lease expires.'
+          : typeof payload.blocker === 'string' ? payload.blocker : null,
+        result: previous,
+      })
+    }
   }
 
   const bounds = dayBounds(date)
   const today = await admin
     .from('strategy_source_events')
-    .select('id,status,rows_received,rows_ingested,payload_json')
+    .select('id,status,payload_hash,rows_received,rows_ingested,payload_json,updated_at')
     .eq('provider', 'dealmachine')
     .gte('occurred_at', bounds.start)
     .lt('occurred_at', bounds.end)
   if (today.error) throw today.error
-  const usedBeforeRun = dealMachineCreditsUsedByEvents((today.data as SourceEventRow[] | null) || [])
+  const accountingRows = ((today.data as SourceEventRow[] | null) || [])
+    .filter((row) => row.id !== reclaimableEvent?.id)
+  const usedBeforeRun = dealMachineCreditsUsedByEvents(accountingRows, { now: new Date(), leaseMs })
   const runCap = dealMachineRunCreditCap({ dailyCap, configuredRunCap, usedBeforeRun })
   const receivedAt = new Date().toISOString()
-  const receivedPayload = { trigger: 'n8n', date, slot, dailyCap, usedBeforeRun, runCap, startedAt: receivedAt }
-  const { error: insertError } = await admin.from('strategy_source_events').insert({
-    provider: 'dealmachine',
-    external_event_id: externalEventId,
-    event_type: 'n8n_official_v2_source_acquisition',
-    status: 'received',
-    payload_hash: createHash('sha256').update(JSON.stringify(receivedPayload)).digest('hex'),
-    payload_json: receivedPayload,
-    rows_received: 0,
-    rows_ingested: 0,
-    occurred_at: receivedAt,
-    updated_at: receivedAt,
-  })
-  if (insertError?.code === '23505') return runN8nDealMachineSourceAcquisition(now)
-  if (insertError) throw insertError
+  const leaseAttempt = numericValue(reclaimableEvent?.payload_json?.leaseAttempt) + 1
+  const receivedPayload = {
+    trigger: 'n8n',
+    date,
+    slot,
+    slotCount,
+    slotCreditCap,
+    dailyCap,
+    usedBeforeRun,
+    runCap,
+    // Count this reservation until the completed payload replaces it with the
+    // provider's authoritative actual credit ledger.
+    reservedCredits: runCap,
+    leaseId: randomUUID(),
+    leaseAttempt,
+    leaseExpiresAt: new Date(Date.parse(receivedAt) + leaseMs).toISOString(),
+    startedAt: receivedAt,
+  }
+  const receivedPayloadHash = sourcePayloadHash(receivedPayload)
+  let claimedEventId: string
+  if (reclaimableEvent) {
+    const reclaimed = await admin.from('strategy_source_events').update({
+      status: 'received',
+      payload_hash: receivedPayloadHash,
+      payload_json: receivedPayload,
+      rows_received: 0,
+      rows_ingested: 0,
+      error_message: null,
+      occurred_at: receivedAt,
+      processed_at: null,
+      updated_at: receivedAt,
+    })
+      .eq('id', reclaimableEvent.id)
+      .eq('status', 'received')
+      .eq('payload_hash', reclaimableEvent.payload_hash)
+      .select('id')
+      .maybeSingle<{ id: string }>()
+    if (reclaimed.error) throw reclaimed.error
+    if (!reclaimed.data) return runN8nDealMachineSourceAcquisition(now)
+    claimedEventId = reclaimed.data.id
+  } else {
+    const inserted = await admin.from('strategy_source_events').insert({
+      provider: 'dealmachine',
+      external_event_id: externalEventId,
+      event_type: 'n8n_official_v2_source_acquisition',
+      status: 'received',
+      payload_hash: receivedPayloadHash,
+      payload_json: receivedPayload,
+      rows_received: 0,
+      rows_ingested: 0,
+      occurred_at: receivedAt,
+      updated_at: receivedAt,
+    }).select('id').single<{ id: string }>()
+    if (inserted.error?.code === '23505') return runN8nDealMachineSourceAcquisition(now)
+    if (inserted.error) throw inserted.error
+    claimedEventId = inserted.data.id
+  }
 
   if (runCap < 1) {
     const blocker = 'Daily DealMachine credit cap has been reached; the next source slot will resume after the Central-time reset.'
     const payload = { ...receivedPayload, deferred: true, blocker, completedAt: new Date().toISOString() }
-    const { error } = await admin.from('strategy_source_events').update({
+    const completion = await admin.from('strategy_source_events').update({
       status: 'completed',
-      payload_hash: createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
+      payload_hash: sourcePayloadHash(payload),
       payload_json: payload,
       processed_at: payload.completedAt,
       updated_at: payload.completedAt,
-    }).eq('provider', 'dealmachine').eq('external_event_id', externalEventId)
-    if (error) throw error
+    })
+      .eq('id', claimedEventId)
+      .eq('status', 'received')
+      .eq('payload_hash', receivedPayloadHash)
+      .select('id')
+      .maybeSingle<{ id: string }>()
+    if (completion.error) throw completion.error
+    if (!completion.data) {
+      return compactResult({
+        ok: true,
+        duplicate: true,
+        deferred: true,
+        date,
+        slot,
+        dailyCap,
+        usedBeforeRun,
+        runCap,
+        blocker: 'The DealMachine slot lease was superseded before deferred completion could be recorded.',
+      })
+    }
     return compactResult({ ok: true, deferred: true, date, slot, dailyCap, usedBeforeRun, runCap, blocker })
   }
 
@@ -290,6 +380,7 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     maxPages: envInt('N8N_DEALMACHINE_SOURCE_STRATEGIES_PER_RUN', 4, 17),
     pageSize: envInt('DEALMACHINE_DAILY_ROWS_PER_STRATEGY', 10, 50),
     maxCredits: runCap,
+    contactRowsPerStrategy: envInt('DEALMACHINE_CONTACT_REVEAL_ROWS_PER_STRATEGY', 3, 25),
     startAfter: cursor,
     // Lowball remains a manual-review experiment and must not consume the
     // autonomous paid-source budget.
@@ -309,6 +400,8 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
       contactless: result.contactless,
       ingested: result.ingested,
       creditsReserved: result.creditsReserved,
+      creditUsage: result.creditUsage,
+      contactEnriched: result.contactEnriched,
       nextAfter: result.nextAfter,
       strategyRuns: result.strategyRuns,
     },
@@ -316,17 +409,36 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     outcome: classifyDealMachineAcquisitionOutcome(result),
   }
   const outcome = classifyDealMachineAcquisitionOutcome(result)
-  const { error: completionError } = await admin.from('strategy_source_events').update({
+  const completion = await admin.from('strategy_source_events').update({
     status: dealMachineAcquisitionPersistenceStatus(outcome),
     rows_received: result.fetched,
     rows_ingested: result.ingested,
     error_message: result.blockedReason,
-    payload_hash: createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
+    payload_hash: sourcePayloadHash(payload),
     payload_json: payload,
     processed_at: completedAt,
     updated_at: completedAt,
-  }).eq('provider', 'dealmachine').eq('external_event_id', externalEventId)
-  if (completionError) throw completionError
+  })
+    .eq('id', claimedEventId)
+    .eq('status', 'received')
+    .eq('payload_hash', receivedPayloadHash)
+    .select('id')
+    .maybeSingle<{ id: string }>()
+  if (completion.error) throw completion.error
+  if (!completion.data) {
+    return compactResult({
+      ok: true,
+      duplicate: true,
+      deferred: true,
+      date,
+      slot,
+      dailyCap,
+      usedBeforeRun,
+      runCap,
+      result,
+      blocker: 'The DealMachine slot lease was superseded before completion could be recorded; cursor advancement was withheld.',
+    })
+  }
   if (shouldPersistDealMachineCursor({
     cursorBefore: cursor,
     nextAfter: result.nextAfter,

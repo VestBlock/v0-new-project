@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import {
   buildSanitizedLenderHunterMetadata,
   isLenderHunterEnrichmentEligible,
+  selectLegacyVerifiedLenderHunterCandidate,
   selectVerifiedLenderHunterCandidate,
   summarizeLenderScoringOutcomes,
   type LenderScoringOutcome,
@@ -88,6 +89,67 @@ const candidates: HunterContactCandidate[] = [
 ]
 const selected = selectVerifiedLenderHunterCandidate(candidates)
 assert.equal(selected?.email, 'owner@trustedlender.com')
+
+const recoveredLegacy = selectLegacyVerifiedLenderHunterCandidate({
+  metadata: {
+    hunterContactEnrichment: {
+      status: 'found',
+      checkedAt: '2026-09-14T11:00:00.000Z',
+      candidates,
+    },
+  },
+  website: 'https://trustedlender.com',
+  contactName: 'Jordan Reed',
+  currentEmail: null,
+  now,
+})
+assert.equal(recoveredLegacy?.email, 'owner@trustedlender.com')
+assert.equal(selectLegacyVerifiedLenderHunterCandidate({
+  metadata: { hunterContactEnrichment: { status: 'found', checkedAt: now.toISOString(), candidates } },
+  website: 'https://trustedlender.com',
+  contactName: 'Someone Else',
+  currentEmail: null,
+  now,
+}), null, 'legacy evidence must match the named contact before replacing a recipient')
+
+const namedMismatchCandidates: HunterContactCandidate[] = [{
+  email: 'jrunnels@hurstlending.com',
+  fullName: 'Joel Runnels',
+  position: 'Loan Officer',
+  department: 'Lending',
+  seniority: 'senior',
+  confidence: 99,
+  verificationStatus: 'valid',
+  score: 45,
+  sourceUrls: [],
+}]
+assert.equal(selectLegacyVerifiedLenderHunterCandidate({
+  metadata: {
+    hunterContactEnrichment: {
+      status: 'found',
+      checkedAt: now.toISOString(),
+      candidates: namedMismatchCandidates,
+    },
+  },
+  website: 'https://hurstlending.com',
+  contactName: 'Joel Runnels',
+  currentEmail: 'jhurst@hurstlending.com',
+  now,
+})?.email, 'jrunnels@hurstlending.com', 'exact named-contact evidence may repair a mismatched company-domain recipient')
+assert.equal(selectLegacyVerifiedLenderHunterCandidate({
+  metadata: { hunterContactEnrichment: { status: 'found', checkedAt: now.toISOString(), candidates } },
+  website: 'https://trustedlender.com',
+  contactName: 'Jordan Reed',
+  currentEmail: 'applications@trustedlender.com',
+  now,
+}), null, 'role-address legacy evidence must not overwrite an already usable address')
+assert.equal(selectLegacyVerifiedLenderHunterCandidate({
+  metadata: { hunterContactEnrichment: { status: 'found', checkedAt: now.toISOString(), candidates: namedMismatchCandidates } },
+  website: 'https://hurstlending.com',
+  contactName: 'Joel Runnels',
+  currentEmail: 'joel@otherlender.com',
+  now,
+}), null, 'legacy recovery must not replace a usable recipient from a different domain')
 
 const sanitized = buildSanitizedLenderHunterMetadata({
   status: 'found',

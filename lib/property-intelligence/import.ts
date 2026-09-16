@@ -43,36 +43,46 @@ function get(row: Record<string, unknown>, aliases: string[]) {
   return null
 }
 
-function splitCsvLine(line: string) {
-  const cells: string[] = []
+export function parseCsv(text: string) {
+  const parsedRows: string[][] = []
+  let cells: string[] = []
   let value = ''
   let quoted = false
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
-    const next = line[index + 1]
-    if (char === '"' && quoted && next === '"') {
-      value += '"'
-      index += 1
-    } else if (char === '"') {
-      quoted = !quoted
+  const content = text.replace(/^\uFEFF/, '')
+
+  const finishRow = () => {
+    cells.push(value.trim())
+    if (cells.some((cell) => cell.length > 0)) parsedRows.push(cells)
+    cells = []
+    value = ''
+  }
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index]
+    const next = content[index + 1]
+    if (char === '"') {
+      if (quoted && next === '"') {
+        value += '"'
+        index += 1
+      } else {
+        quoted = !quoted
+      }
     } else if (char === ',' && !quoted) {
-      cells.push(value)
+      cells.push(value.trim())
       value = ''
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index += 1
+      finishRow()
     } else {
       value += char
     }
   }
-  cells.push(value)
-  return cells.map((cell) => cell.trim())
-}
 
-export function parseCsv(text: string) {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim())
-  const headers = splitCsvLine(lines[0] || '')
-  return lines.slice(1).map((line) => {
-    const cells = splitCsvLine(line)
+  if (value.length || cells.length) finishRow()
+  const headers = parsedRows[0] || []
+  return parsedRows.slice(1).map((rowCells) => {
     return headers.reduce<Record<string, unknown>>((row, header, index) => {
-      row[header] = cells[index] ?? ''
+      row[header] = rowCells[index] ?? ''
       return row
     }, {})
   })

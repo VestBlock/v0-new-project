@@ -38,10 +38,6 @@
       "schedule": "0 15 * * *"
     },
     {
-      "path": "/api/cron/video-content-pilot",
-      "schedule": "20 14 * * *"
-    },
-    {
       "path": "/api/cron/buffer-reconcile",
       "schedule": "30 18 * * *"
     },
@@ -60,10 +56,6 @@
     {
       "path": "/api/cron/mailbox-sync",
       "schedule": "7,22,37,52 * * * *"
-    },
-    {
-      "path": "/api/cron/attom-enrichment?limit=10&mode=smart",
-      "schedule": "30 12 * * *"
     },
     {
       "path": "/api/cron/improvement-review",

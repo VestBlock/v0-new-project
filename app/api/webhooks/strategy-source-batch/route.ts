@@ -260,6 +260,10 @@ export async function POST(request: Request) {
       .from('strategy_source_events')
       .update({
         status: 'completed',
+        // `rows_ingested` is the durable new-record metric used by production
+        // scorecards. Corroboration of an existing property is reported
+        // separately in payload_json.result.merged and must not inflate daily
+        // sourcing throughput.
         rows_ingested: result.imported,
         processed_at: new Date().toISOString(),
         payload_json: {

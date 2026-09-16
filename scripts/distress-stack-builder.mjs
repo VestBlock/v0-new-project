@@ -186,7 +186,8 @@ async function runDetroit(cfg) {
         address: addr, city: cfg.cityName, area: `District ${d}`,
         violation: "Unpaid blight ticket (absentee owner)",
         violation_date: String(v[cfg.blight.dateField] || "").slice(0, 10),
-        tax_delinquent_hit: "YES",
+        stack_match: "YES",
+        tax_delinquent_hit: "",
         delinquent_amount: "",
         delinquent_parcel: "",
         foreclosure_flag: "",
@@ -527,12 +528,12 @@ async function main() {
 async function writeOutputs(leads, queueLine) {
   // 6) write outputs — full list + the "both signal" hit list
   const stamp = new Date().toISOString().slice(0, 10)
-  const cols = ["address", "city", "area", "violation", "violation_date", "tax_delinquent_hit", "delinquent_amount", "delinquent_parcel", "foreclosure_flag", "delinquent_owner"]
+  const cols = ["address", "city", "area", "violation", "violation_date", "stack_match", "tax_delinquent_hit", "delinquent_amount", "delinquent_parcel", "foreclosure_flag", "delinquent_owner"]
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`
   const toCsv = (rows) => [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n")
   const allPath = path.join(OUT_DIR, `${MARKET}-${stamp}.csv`)
   fs.writeFileSync(allPath, toCsv(leads))
-  const hits = leads.filter((l) => l.tax_delinquent_hit === "YES")
+  const hits = leads.filter((l) => l.stack_match === "YES" || l.tax_delinquent_hit === "YES")
   const hitsPath = path.join(OUT_DIR, `${MARKET}-${stamp}-BOTH-SIGNALS.csv`)
   fs.writeFileSync(hitsPath, toCsv(hits))
 

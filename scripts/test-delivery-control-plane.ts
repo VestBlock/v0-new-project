@@ -25,6 +25,8 @@ import {
   dealMachineCreditsUsedByEvents,
   dealMachineAcquisitionHttpStatus,
   dealMachineAcquisitionPersistenceStatus,
+  dealMachineDailySlotCreditCap,
+  dealMachineReceivedSlotLeaseExpired,
   dealMachineRunCreditCap,
   dealMachineSourceEventCredits,
   shouldPersistDealMachineCursor,
@@ -134,6 +136,50 @@ assert.equal(
   dealMachineSourceEventCredits({ payload_json: { creditsReserved: 12 } }),
   12,
   'legacy top-level credit ledgers must remain countable'
+)
+assert.equal(
+  dealMachineSourceEventCredits({ status: 'received', payload_json: { reservedCredits: 84 } }),
+  84,
+  'An admitted in-flight slot must count its full reservation until actual usage replaces it.'
+)
+const leaseNow = new Date('2026-09-16T18:30:00.000Z')
+assert.equal(dealMachineReceivedSlotLeaseExpired({
+  status: 'received',
+  payload: { leaseExpiresAt: '2026-09-16T18:31:00.000Z' },
+  now: leaseNow,
+  leaseMs: 15 * 60_000,
+}), false)
+assert.equal(dealMachineReceivedSlotLeaseExpired({
+  status: 'received',
+  payload: { leaseExpiresAt: '2026-09-16T18:29:59.000Z' },
+  now: leaseNow,
+  leaseMs: 15 * 60_000,
+}), true)
+assert.equal(dealMachineReceivedSlotLeaseExpired({
+  status: 'completed',
+  payload: { leaseExpiresAt: '2026-09-16T18:00:00.000Z' },
+  now: leaseNow,
+  leaseMs: 15 * 60_000,
+}), false, 'Terminal events are actual ledgers, not expiring reservations.')
+assert.equal(dealMachineSourceEventCredits({
+  status: 'received',
+  updated_at: '2026-09-16T18:00:00.000Z',
+  payload_json: { reservedCredits: 84, startedAt: '2026-09-16T18:00:00.000Z' },
+}, { now: leaseNow, leaseMs: 15 * 60_000 }), 0, 'Expired crash reservations must stop consuming the daily cap.')
+assert.equal(dealMachineSourceEventCredits({
+  status: 'received',
+  updated_at: '2026-09-16T18:25:00.000Z',
+  payload_json: { reservedCredits: 84, startedAt: '2026-09-16T18:25:00.000Z' },
+}, { now: leaseNow, leaseMs: 15 * 60_000 }), 84, 'An active lease must retain its full reservation.')
+assert.deepEqual(
+  Array.from({ length: 6 }, (_, slot) => dealMachineDailySlotCreditCap({ dailyCap: 500, slot, slotCount: 6 })),
+  [84, 84, 83, 83, 83, 83],
+  'Deterministic slot entitlements must add up to, and never exceed, the daily cap.'
+)
+assert.equal(
+  Array.from({ length: 6 }, (_, slot) => dealMachineDailySlotCreditCap({ dailyCap: 500, slot, slotCount: 6 }))
+    .reduce((sum, value) => sum + value, 0),
+  500
 )
 const runId = 'run-test-001'
 const runningPayload = buildRevenueLoopJobPayload({
@@ -690,6 +736,17 @@ const dailyLoopSource = source('lib/admin/dailyOperatingLoop.ts')
 assert.match(dailyLoopSource, /finally\s*{/)
 assert.match(dailyLoopSource, /recordRevenueLoopJob\(\{[\s\S]*final:\s*true/)
 assert.doesNotMatch(dailyLoopSource, /revenue_operations_control/)
+
+const dealMachineAcquisitionSource = source('lib/n8n/dealMachineSourceAcquisition.ts')
+assert.match(dealMachineAcquisitionSource, /leaseExpiresAt/)
+assert.match(dealMachineAcquisitionSource, /reclaimableEvent/)
+assert.match(dealMachineAcquisitionSource, /\.eq\('payload_hash', reclaimableEvent\.payload_hash\)/)
+assert.match(dealMachineAcquisitionSource, /\.eq\('payload_hash', receivedPayloadHash\)/)
+assert.match(
+  dealMachineAcquisitionSource,
+  /cursor advancement was withheld/,
+  'A worker that loses its lease must not advance the shared strategy cursor.'
+)
 
 for (const repositoryPath of [
   'lib/leads/repository.ts',

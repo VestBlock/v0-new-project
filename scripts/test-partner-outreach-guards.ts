@@ -13,6 +13,78 @@ import {
 } from '../lib/investors/outreach'
 import type { InvestorOutreachMessageRecord, InvestorProfileRecord } from '../lib/investors/types'
 import { allocateDailyStrategyOutput } from '../lib/outreach/dailyStrategyOutputCore'
+import { evaluateBuyerAutoApproval, isBuyerAcquisitionEntity } from '../lib/buyers/automationCore'
+
+assert.equal(isBuyerAcquisitionEntity({
+  name: 'Example Acquisitions LLC',
+  source: 'outscraper_google_maps_businesses',
+  category: 'local_cash_buyer',
+  metadata_json: { lane: 'buyer-network' },
+}), true)
+for (const lane of [
+  'land-developers',
+  'investor-network',
+  'acquisition-manager-network',
+  'property-manager-network',
+  'wholesaler-network',
+  'buyer-developer',
+  'fire-damage-builders',
+]) {
+  assert.equal(isBuyerAcquisitionEntity({
+    name: 'Verified Property Operator LLC',
+    source: 'outscraper_google_maps_businesses',
+    category: 'local_cash_buyer',
+    metadata_json: { lane },
+  }), true, `${lane} must remain an affirmative buyer-acquisition lane`)
+}
+for (const buyer of [
+  {
+    name: 'Direct Buyer Signup LLC',
+    source: 'public_buyer_signup',
+    category: 'fix_and_flip_buyer',
+    metadata_json: { publicSignup: { submittedAt: '2026-09-16T12:00:00.000Z' } },
+  },
+  {
+    name: 'Metro Property Investors',
+    source: 'google_places_buyers',
+    category: 'local_cash_buyer',
+    metadata_json: { discoveryQuery: 'cash home buyer in Toledo, OH' },
+  },
+  {
+    name: 'Portfolio Holdings LLC',
+    source: 'dealmachine_portfolio_owner_scan',
+    category: 'landlord_buyer',
+    metadata_json: { buyerLane: 'portfolio_landlord_buyer_criteria' },
+  },
+]) {
+  assert.equal(isBuyerAcquisitionEntity(buyer), true, `${buyer.source} must remain a recognized buyer source`)
+}
+assert.equal(isBuyerAcquisitionEntity({
+  name: 'Unclassified Business LLC',
+  source: 'outscraper_google_maps_businesses',
+  category: 'local_cash_buyer',
+  metadata_json: {},
+}), false, 'generic business discovery is not affirmative buyer provenance')
+assert.equal(isBuyerAcquisitionEntity({
+  name: 'Example Mortgage Corporation Loan Officer',
+  source: 'outscraper_google_maps_businesses',
+  category: 'local_cash_buyer',
+  metadata_json: { lane: 'lender-network' },
+}), false, 'lender-network records must never receive buyer acquisition copy')
+for (const name of [
+  'Community Bank',
+  'Neighborhood Credit Union',
+  'Example Hard Money',
+  'Trusted Home Loans',
+  'Regional Mortgage Lending',
+]) {
+  assert.equal(isBuyerAcquisitionEntity({
+    name,
+    source: 'google_places_buyers',
+    category: 'local_cash_buyer',
+    metadata_json: { discoveryQuery: 'cash home buyer in Toledo, OH' },
+  }), false, `${name} must be rejected despite buyer-shaped provenance`)
+}
 
 const lender = {
   id: '10000000-0000-4000-8000-000000000001',
@@ -114,7 +186,7 @@ for (const source of [partnerRouteSource, buyerRouteSource, investorPipelineRout
 
 const partnerPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-15T17:00:00.000Z'))
 const partnerTargets = [partnerPlan.byKey.buyers, partnerPlan.byKey.lenders, partnerPlan.byKey.investors]
-assert.ok(partnerTargets.every((target) => target === 41 || target === 42))
+assert.ok(partnerTargets.every((target) => target === 25))
 assert.equal(
   partnerTargets.reduce((sum, target) => sum + target, 0) + partnerPlan.byKey.listing_agents,
   partnerPlan.groupTotals.partner

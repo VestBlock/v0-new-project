@@ -68,16 +68,17 @@ const defaultTargets = defaultPlan.allocations.map((allocation) => allocation.ta
 
 assert.equal(defaultPlan.target, 1_000)
 assert.equal(defaultTargets.reduce((sum, target) => sum + target, 0), 1_000)
-assert.equal(defaultTargets.filter((target) => target === 42).length, 16)
-assert.equal(defaultTargets.filter((target) => target === 41).length, 8)
-assert.ok(Math.max(...defaultTargets) - Math.min(...defaultTargets) <= 1)
+assert.deepEqual(defaultPlan.groupTotals, { seller: 800, business: 100, partner: 100 })
+assert.ok(defaultPlan.allocations.filter((lane) => lane.group === 'seller').every((lane) => lane.target === 50))
+assert.ok(defaultPlan.allocations.filter((lane) => lane.group !== 'seller').every((lane) => lane.target === 25))
 assert.deepEqual(defaultPlan.allocations.map((allocation) => allocation.key), expectedKeys, 'Allocation output order must stay canonical')
 
-const nextPlan = allocateDailyStrategyOutput(1_000, nextDay)
+const rotatingPlan = allocateDailyStrategyOutput(999, firstDay)
+const nextPlan = allocateDailyStrategyOutput(999, nextDay)
 assert.notEqual(nextPlan.rotationOffset, defaultPlan.rotationOffset)
 assert.notDeepEqual(
-  nextPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
-  defaultPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
+  nextPlan.allocations.filter((allocation) => allocation.group === 'seller' && allocation.target === 49).map((allocation) => allocation.key),
+  rotatingPlan.allocations.filter((allocation) => allocation.group === 'seller' && allocation.target === 49).map((allocation) => allocation.key),
   'The remainder lanes must rotate on the next Chicago business date'
 )
 
@@ -91,6 +92,7 @@ assert.equal(smallTargets.reduce((sum, target) => sum + target, 0), 5)
 assert.equal(smallTargets.filter((target) => target === 1).length, 5)
 assert.equal(smallTargets.filter((target) => target === 0).length, 19)
 assert.ok(Math.max(...smallTargets) - Math.min(...smallTargets) <= 1)
+assert.equal(smallPlan.groupTotals.seller, 4)
 
 const zeroPlan = allocateDailyStrategyOutput(0, firstDay)
 assert.equal(zeroPlan.allocations.reduce((sum, allocation) => sum + allocation.target, 0), 0)

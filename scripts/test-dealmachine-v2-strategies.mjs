@@ -146,7 +146,7 @@ const propertyPlan = {
 const propertyOnly = await hydrateStrategyPlan(routingClient, propertyPlan, catalogMetadata)
 assert.equal(propertyOnly.searchSourceType, 'properties')
 assert.equal(propertyOnly.searchBody.anchor, 'properties')
-assert.equal(propertyOnly.searchBody.contact_audience, 'owners')
+assert.equal(propertyOnly.searchBody.contact_audience, 'none')
 assert.equal('property_match' in propertyOnly.searchBody, false)
 assert.deepEqual(propertyOnly.searchBody.filters, [{ filter_id: 'property_only_filter', value: true }])
 
@@ -157,7 +157,7 @@ const portfolioPlan = buildDailyStrategyPlans({
 const portfolio = await hydrateStrategyPlan(routingClient, portfolioPlan, catalogMetadata)
 assert.equal(portfolio.searchSourceType, 'properties')
 assert.equal(portfolio.searchBody.anchor, 'properties')
-assert.equal(portfolio.searchBody.contact_audience, 'owners')
+assert.equal(portfolio.searchBody.contact_audience, 'none')
 assert.equal('property_match' in portfolio.searchBody, false)
 assert.deepEqual(portfolio.peopleOnlyFilterIds, [])
 assert.deepEqual(portfolio.propertyFilterIds, ['has_absentee_owners', 'estimated_value'])
@@ -172,7 +172,7 @@ const smallMultifamilyPlan = buildDailyStrategyPlans({
 const smallMultifamily = await hydrateStrategyPlan(routingClient, smallMultifamilyPlan, catalogMetadata)
 assert.equal(smallMultifamily.searchSourceType, 'properties')
 assert.equal(smallMultifamily.searchBody.anchor, 'properties')
-assert.equal(smallMultifamily.searchBody.contact_audience, 'owners')
+assert.equal(smallMultifamily.searchBody.contact_audience, 'none')
 assert.equal('property_match' in smallMultifamily.searchBody, false)
 assert.deepEqual(smallMultifamily.peopleOnlyFilterIds, [])
 assert.deepEqual(smallMultifamily.propertyFilterIds, ['property_type', 'num_units', 'estimated_value'])
@@ -244,5 +244,20 @@ assert.match(
   'Autonomous DealMachine acquisition must not spend credits on the disabled lowball lane.'
 )
 assert.match(autonomousAcquisitionSource, /maxLowballShare:\s*0/)
+assert.match(
+  productionSource,
+  /candidateOnly:\s*Boolean\(plan\.candidateOnly\)/,
+  'Candidate-only strategies must be withheld from paid contact reveal.'
+)
+assert.match(
+  productionSource,
+  /client\.getProperty\(propertyId/,
+  'Contact reveal must look up only exact property IDs admitted by discovery.'
+)
+assert.doesNotMatch(
+  productionSource,
+  /searchRecords\('properties',\s*contact/,
+  'Contact reveal must not issue a second broad paid property search.'
+)
 
 console.log('DealMachine v2 strategy tests passed.')

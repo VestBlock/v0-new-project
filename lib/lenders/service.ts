@@ -93,6 +93,83 @@ export function selectVerifiedLenderHunterCandidate(candidates: HunterContactCan
     .sort((left, right) => right.score - left.score || right.confidence - left.confidence)[0] || null
 }
 
+function normalizedPersonName(value: unknown) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ')
+}
+
+function emailDomain(value: string | null | undefined) {
+  const email = String(value || '').trim().toLowerCase()
+  return email.includes('@') ? email.split('@').at(-1) || null : null
+}
+
+function emailLocalPartMatchesPerson(value: string | null | undefined, personName: string | null | undefined) {
+  const localPart = String(value || '').trim().toLowerCase().split('@')[0]?.replace(/[^a-z0-9]+/g, '') || ''
+  const nameParts = normalizedPersonName(personName).split(' ').filter(Boolean)
+  if (!localPart || nameParts.length < 2) return false
+  const first = nameParts[0]
+  const last = nameParts.at(-1) || ''
+  if (!first || !last) return false
+
+  return new Set([
+    `${first}${last}`,
+    `${first[0]}${last}`,
+    `${first}${last[0]}`,
+    `${last}${first[0]}`,
+    last,
+    ...(first.length >= 4 ? [first] : []),
+  ]).has(localPart)
+}
+
+export function selectLegacyVerifiedLenderHunterCandidate(input: {
+  metadata?: Record<string, unknown> | null
+  website?: string | null
+  contactName?: string | null
+  currentEmail?: string | null
+  now?: Date
+}) {
+  const raw = input.metadata?.hunterContactEnrichment
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const state = raw as Record<string, unknown>
+  if (state.status !== 'found' || !Array.isArray(state.candidates)) return null
+  const checkedAtMs = Date.parse(String(state.checkedAt || ''))
+  const now = input.now || new Date()
+  if (!Number.isFinite(checkedAtMs) || checkedAtMs > now.getTime() + 5 * 60 * 1_000) return null
+  if (checkedAtMs < now.getTime() - 30 * 24 * 60 * 60 * 1_000) return null
+  const websiteDomain = companyWebsiteDomain(input.website)
+  const contactName = normalizedPersonName(input.contactName)
+  if (!websiteDomain || !contactName) return null
+
+  const candidates = state.candidates.filter((value): value is HunterContactCandidate => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const candidate = value as Partial<HunterContactCandidate>
+    const email = String(candidate.email || '').trim().toLowerCase()
+    const domain = email.includes('@') ? email.split('@').at(-1) : ''
+    return domain === websiteDomain && normalizedPersonName(candidate.fullName) === contactName
+  })
+  const selected = selectVerifiedLenderHunterCandidate(candidates)
+  const currentEmail = isUsableContactEmail(input.currentEmail)
+    ? String(input.currentEmail).trim().toLowerCase()
+    : null
+  if (!selected || !currentEmail) return selected
+
+  const selectedEmail = selected.email.trim().toLowerCase()
+  if (selectedEmail === currentEmail) return selected
+
+  // Legacy candidate arrays predate recipient-bound Hunter evidence. They may
+  // repair a named-contact mismatch, but only when both addresses are on the
+  // lender's company domain and the verified candidate address itself matches
+  // that exact person's name. If the current address already matches the named
+  // contact, changing it would be an unsafe preference swap rather than a repair.
+  if (
+    emailDomain(currentEmail) !== websiteDomain ||
+    emailDomain(selectedEmail) !== websiteDomain ||
+    !emailLocalPartMatchesPerson(selectedEmail, input.contactName) ||
+    emailLocalPartMatchesPerson(currentEmail, input.contactName)
+  ) return null
+
+  return selected
+}
+
 function safeHunterMetadataText(value?: string | null, maximumLength = 160) {
   return value?.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maximumLength) || null
 }
@@ -346,6 +423,17 @@ export async function enrichAndScoreLender(
   }
 
   const verifiedHunterContact = selectVerifiedLenderHunterCandidate(hunterResult?.candidates || [])
+  const recoveredLegacyHunterContact = hunterResult
+    ? null
+    : selectLegacyVerifiedLenderHunterCandidate({
+        metadata: writeBase.metadata_json,
+        website: writeBase.website,
+        contactName: writeBase.contact_name,
+        currentEmail: isUsableContactEmail(writeBase.contact_email)
+          ? writeBase.contact_email
+          : publicContactEmail,
+      })
+  const acceptedHunterContact = verifiedHunterContact || recoveredLegacyHunterContact
   const checkedAt = new Date().toISOString()
   const hunterMetadata = hunterResult
     ? buildSanitizedLenderHunterMetadata({
@@ -370,10 +458,21 @@ export async function enrichAndScoreLender(
           budgetReason: hunterReservation?.reason || 'lender_hunter_lookup_not_reserved',
           candidate: null,
         })
-      : (writeBase.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined)
-  const effectiveContactEmail = isUsableContactEmail(writeBase.contact_email)
-    ? writeBase.contact_email
-    : publicContactEmail || verifiedHunterContact?.email || null
+      : recoveredLegacyHunterContact
+        ? buildSanitizedLenderHunterMetadata({
+            status: 'found',
+            domain: companyWebsiteDomain(writeBase.website),
+            checkedAt: String((writeBase.metadata_json?.hunterContactEnrichment as Record<string, unknown>)?.checkedAt || checkedAt),
+            candidate: recoveredLegacyHunterContact,
+            topCandidateConfidence: recoveredLegacyHunterContact.confidence,
+            topCandidateVerificationStatus: recoveredLegacyHunterContact.verificationStatus,
+          })
+        : (writeBase.metadata_json?.hunterContactEnrichment as Record<string, unknown> | undefined)
+  const effectiveContactEmail = acceptedHunterContact?.email || (
+    isUsableContactEmail(writeBase.contact_email)
+      ? writeBase.contact_email
+      : publicContactEmail || null
+  )
   const updatedByVersion = await updateLenderRecordIfVersion({
     lenderId: writeBase.id,
     expectedUpdatedAt: writeBase.updated_at,
@@ -382,7 +481,7 @@ export async function enrichAndScoreLender(
     updates: {
       contact_email: effectiveContactEmail,
       contact_phone: writeBase.contact_phone || siteAnalysis.contactPhone || null,
-      contact_name: writeBase.contact_name || verifiedHunterContact?.fullName || null,
+      contact_name: writeBase.contact_name || acceptedHunterContact?.fullName || null,
       startup_allowed: writeBase.startup_allowed || siteAnalysis.startupAllowed,
       investor_allowed: writeBase.investor_allowed || siteAnalysis.investorAllowed,
       owner_occupied_allowed: writeBase.owner_occupied_allowed || siteAnalysis.ownerOccupiedAllowed,
@@ -420,8 +519,8 @@ export async function enrichAndScoreLender(
   const failed = reservationFailed || hunterLookupFailed || hunterPersistenceFailed
   const status = failed
     ? 'error'
-    : verifiedHunterContact &&
-        scored.contact_email?.toLowerCase() === verifiedHunterContact.email.toLowerCase()
+    : acceptedHunterContact &&
+        scored.contact_email?.toLowerCase() === acceptedHunterContact.email.toLowerCase()
       ? 'enriched'
       : hunterResult?.status === 'found'
         ? 'candidate_rejected'

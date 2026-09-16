@@ -76,9 +76,9 @@ assert.equal(sourceBatchProcessingState({ status: 'failed', updated_at: '2026-09
 
 const requestBodies = []
 const perChunk = new Map([
-  [0, { imported: 80, deduped: 20, signalsCreated: 40, scoreCounts: { high: 10, medium: 30, low: 40 } }],
-  [100, { imported: 90, deduped: 10, signalsCreated: 45, scoreCounts: { high: 20, medium: 30, low: 40 }, duplicate: true }],
-  [200, { imported: 5, deduped: 0, signalsCreated: 3, scoreCounts: { high: 1, medium: 2, low: 2 } }],
+  [0, { imported: 80, merged: 20, deduped: 20, signalsCreated: 40, scoreCounts: { high: 10, medium: 30, low: 40 } }],
+  [100, { imported: 90, merged: 10, deduped: 10, signalsCreated: 45, scoreCounts: { high: 20, medium: 30, low: 40 }, duplicate: true }],
+  [200, { imported: 5, merged: 0, deduped: 0, signalsCreated: 3, scoreCounts: { high: 1, medium: 2, low: 2 } }],
 ])
 const jsonResponse = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -125,6 +125,9 @@ assert.equal(aggregate.chunksCompleted, 3)
 assert.equal(aggregate.totalRows, 205)
 assert.equal(aggregate.rowsReceived, 205)
 assert.equal(aggregate.imported, 175)
+assert.equal(aggregate.newlyDiscovered, 175)
+assert.equal(aggregate.merged, 30)
+assert.equal(aggregate.corroborated, 30)
 assert.equal(aggregate.deduped, 30)
 assert.equal(aggregate.signalsCreated, 88)
 assert.deepEqual(aggregate.scoreCounts, { high: 31, medium: 62, low: 82 })
@@ -163,6 +166,7 @@ assert.match(routeSource, /slice\(chunk\.offset, chunk\.endOffset\)/)
 assert.match(routeSource, /sourceBatchChunkContractIssue/)
 assert.match(routeSource, /\.eq\('updated_at', existing\.updated_at\)/)
 assert.match(routeSource, /createError\?\.code === '23505'/)
+assert.match(routeSource, /rows_ingested:\s*result\.imported[,\s]/, 'durable ingestion metrics must count only new property records')
 assert.match(repositorySource, /import_status: 'failed'/)
 assert.match(repositorySource, /records_created: imported/)
 assert.match(repositorySource, /records_deduped: deduped/)

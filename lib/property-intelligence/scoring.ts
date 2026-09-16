@@ -1,8 +1,9 @@
-import type {
-  DealScoreRecord,
-  NormalizedPropertyInput,
-  PropertySignalRecord,
-  PropertySignalType,
+import {
+  propertySignalTypes,
+  type DealScoreRecord,
+  type NormalizedPropertyInput,
+  type PropertySignalRecord,
+  type PropertySignalType,
 } from '@/lib/property-intelligence/types'
 
 const LLC_PATTERN = /\b(llc|l\.l\.c\.|inc|corp|corporation|company|co\.|holdings|trust|properties|partners|ventures|investments|capital)\b/i
@@ -13,6 +14,29 @@ const TAX_PATTERN = /\b(tax delinquent|delinquent|back taxes|tax sale|certificat
 const CODE_PATTERN = /\b(code violation|nuisance|condemned|unsafe|demolition|vacant building)\b/i
 const CITY_OWNED_PATTERN = /\b(city of|county of|land bank|redevelopment authority|municipal|public works)\b/i
 const OZ_PATTERN = /\b(opportunity zone|qoz|qualified opportunity)\b/i
+
+const SIGNAL_LABELS: Record<PropertySignalType, string> = {
+  vacant_lot: 'Potential vacant lot',
+  tax_delinquent: 'Tax delinquency signal',
+  city_owned: 'City/public-owned signal',
+  code_violation: 'Code violation signal',
+  probate: 'Probate or inherited-property signal',
+  foreclosure: 'Foreclosure signal',
+  preforeclosure: 'Foreclosure or pre-foreclosure signal',
+  opportunity_zone: 'Opportunity zone signal',
+  absentee_owner: 'Absentee owner signal',
+  llc_owner: 'Entity or LLC owner signal',
+  out_of_state_owner: 'Out-of-state owner signal',
+  low_assessed_value: 'Low assessed value',
+  high_land_to_building_ratio: 'High land-to-building value ratio',
+  high_equity: 'High equity signal',
+  low_equity: 'Low equity signal',
+  free_and_clear: 'Free-and-clear signal',
+  active_mortgage: 'Active mortgage signal',
+  recent_sale: 'Recent sale signal',
+  long_term_owner: 'Long-term owner signal',
+  corporate_owner: 'Corporate owner signal',
+}
 
 function clean(value: unknown) {
   return String(value ?? '').trim()
@@ -36,6 +60,21 @@ function includesAnyRaw(input: NormalizedPropertyInput, pattern: RegExp) {
     ...Object.entries(input.rawFields || {}).map(([key, value]) => `${key}: ${clean(value)}`),
   ].map(clean).join(' | ')
   return pattern.test(haystack)
+}
+
+function explicitSignalTypes(input: NormalizedPropertyInput) {
+  const allowed = new Set<string>(propertySignalTypes)
+  const result = new Set<PropertySignalType>()
+  for (const [key, value] of Object.entries(input.rawFields || {})) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    if (!['signal_types', 'property_signal_types', 'vestblock_signal_types'].includes(normalizedKey)) continue
+    const values = Array.isArray(value) ? value : String(value || '').split(/[|,;\s]+/)
+    for (const candidate of values) {
+      const normalized = String(candidate || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+      if (allowed.has(normalized)) result.add(normalized as PropertySignalType)
+    }
+  }
+  return [...result]
 }
 
 function rawNumber(input: NormalizedPropertyInput, aliases: string[]) {
@@ -81,6 +120,7 @@ export function detectVacantLot(input: NormalizedPropertyInput) {
 export function detectSignals(input: NormalizedPropertyInput): PropertySignalRecord[] {
   const signals: PropertySignalRecord[] = []
   const add = (signal_type: PropertySignalType, signal_label: string, confidence_score = 70, signal_value?: string | null) => {
+    if (signals.some((signal) => signal.signal_type === signal_type)) return
     signals.push({
       signal_type,
       signal_label,
@@ -90,6 +130,11 @@ export function detectSignals(input: NormalizedPropertyInput): PropertySignalRec
       source_url: input.sourceUrl || null,
       raw_fields: input.rawFields,
     })
+  }
+
+  const explicitConfidence = Math.max(1, Math.min(100, Number(input.confidenceLevel || 70)))
+  for (const signalType of explicitSignalTypes(input)) {
+    add(signalType, SIGNAL_LABELS[signalType], explicitConfidence, 'Explicit source classification')
   }
 
   const vacant = detectVacantLot(input)

@@ -66,19 +66,22 @@ for (const expected of healthyThresholds) {
         .every((lane) => lane.target === 0)
     )
   } else {
-    const laneTargets = result.allocationPlan.allocations.map((lane) => lane.target)
-    assert.ok(Math.max(...laneTargets) - Math.min(...laneTargets) <= 1)
+    assert.ok(result.allocationPlan.groupTotals.seller >= Math.floor(expected.cap * 0.8))
+    for (const group of ['seller', 'business', 'partner'] as const) {
+      const laneTargets = result.allocationPlan.allocations.filter((lane) => lane.group === group).map((lane) => lane.target)
+      assert.ok(Math.max(...laneTargets) - Math.min(...laneTargets) <= 1)
+    }
   }
 }
 
-const healthyToday = decision()
-const healthyNextDay = decision({ now: new Date('2026-09-16T17:00:00.000Z') })
+const rotatingToday = decision({ requestedDailyTarget: 999 })
+const rotatingNextDay = decision({ requestedDailyTarget: 999, now: new Date('2026-09-16T17:00:00.000Z') })
 assert.notDeepEqual(
-  healthyToday.allocationPlan.allocations
-    .filter((lane) => lane.target > healthyToday.allocationPlan.baseAllocation)
+  rotatingToday.allocationPlan.allocations
+    .filter((lane) => lane.group === 'seller' && lane.target === 49)
     .map((lane) => lane.key),
-  healthyNextDay.allocationPlan.allocations
-    .filter((lane) => lane.target > healthyNextDay.allocationPlan.baseAllocation)
+  rotatingNextDay.allocationPlan.allocations
+    .filter((lane) => lane.group === 'seller' && lane.target === 49)
     .map((lane) => lane.key),
   'healthy remainder slots should keep rotating between business dates'
 )

@@ -1099,7 +1099,7 @@ export function CommandCenterOutreachPanel({
             <p>
               {dataIntegrityHold
                 ? "Data-integrity hold is active. Automatic sends are paused until live source reads recover."
-                : `Auto-send ${outboundControl.autoSendEnabled ? "on" : "off"} · mailing address ${outboundControl.mailingAddressConfigured ? "set" : "missing"} · output allocation ${outboundControl.laneBaseAllocation} each plus ${outboundControl.laneRemainder} rotating extras`}
+                : `Auto-send ${outboundControl.autoSendEnabled ? "on" : "off"} · mailing address ${outboundControl.mailingAddressConfigured ? "set" : "missing"} · weighted output: seller ${outboundControl.laneBudgets.filter((lane) => lane.group === "seller").reduce((sum, lane) => sum + lane.target, 0)}, business ${outboundControl.laneBudgets.filter((lane) => lane.group === "business").reduce((sum, lane) => sum + lane.target, 0)}, partner ${outboundControl.laneBudgets.filter((lane) => lane.group === "partner").reduce((sum, lane) => sum + lane.target, 0)}`}
             </p>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-slate-950/45 px-3 py-2">

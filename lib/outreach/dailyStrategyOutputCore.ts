@@ -21,6 +21,11 @@ export function configuredDailyStrategyOutputTarget(
 
 export const DAILY_STRATEGY_OUTPUT_GROUPS = ['seller', 'business', 'partner'] as const
 export type DailyStrategyOutputGroup = (typeof DAILY_STRATEGY_OUTPUT_GROUPS)[number]
+export const DAILY_STRATEGY_OUTPUT_GROUP_WEIGHTS: Record<DailyStrategyOutputGroup, number> = {
+  seller: 8,
+  business: 1,
+  partner: 1,
+}
 
 export const DAILY_STRATEGY_OUTPUT_LANES = [
   { key: 'preforeclosure-equity', label: 'Preforeclosure creative options', group: 'seller' },
@@ -112,6 +117,12 @@ export function dailyStrategyOutputRotationOffset(now = new Date()) {
   return ((businessDay % DAILY_STRATEGY_OUTPUT_LANES.length) + DAILY_STRATEGY_OUTPUT_LANES.length) % DAILY_STRATEGY_OUTPUT_LANES.length
 }
 
+function dailyRotationOffsetForCount(now: Date, count: number) {
+  const { year, month, day } = chicagoDateParts(now)
+  const businessDay = Math.floor(Date.UTC(year, month - 1, day) / MILLISECONDS_PER_DAY)
+  return ((businessDay % count) + count) % count
+}
+
 export function getDailyStrategyOutputLane(key: string) {
   return DAILY_STRATEGY_OUTPUT_LANES.find((lane) => lane.key === key) || null
 }
@@ -130,19 +141,54 @@ export function allocateDailyStrategyOutput(
 ): DailyStrategyOutputPlan {
   const safeTarget = Number.isFinite(target) ? Math.max(0, Math.floor(target)) : DEFAULT_DAILY_STRATEGY_OUTPUT_TARGET
   const laneCount = DAILY_STRATEGY_OUTPUT_LANES.length
+  // Keep these legacy summary fields for API compatibility. Actual lane
+  // targets below are weighted by business priority, then balanced inside each
+  // group with a daily rotating remainder.
   const baseAllocation = Math.floor(safeTarget / laneCount)
   const remainder = safeTarget % laneCount
   const rotationOffset = dailyStrategyOutputRotationOffset(now)
-  const remainderLaneIndexes = new Set<number>()
-
-  for (let index = 0; index < remainder; index += 1) {
-    remainderLaneIndexes.add((rotationOffset + index) % laneCount)
+  const totalWeight = Object.values(DAILY_STRATEGY_OUTPUT_GROUP_WEIGHTS).reduce((sum, value) => sum + value, 0)
+  const rawGroupTargets = DAILY_STRATEGY_OUTPUT_GROUPS.map((group) => ({
+    group,
+    raw: safeTarget * DAILY_STRATEGY_OUTPUT_GROUP_WEIGHTS[group] / totalWeight,
+  }))
+  const groupTargets: DailyStrategyOutputGroupTotals = { seller: 0, business: 0, partner: 0 }
+  let assigned = 0
+  for (const item of rawGroupTargets) {
+    groupTargets[item.group] = Math.floor(item.raw)
+    assigned += groupTargets[item.group]
+  }
+  const tiedRotation = dailyRotationOffsetForCount(now, DAILY_STRATEGY_OUTPUT_GROUPS.length)
+  const fractionalPriority = [...rawGroupTargets].sort((left, right) => {
+    const fractionDifference = (right.raw - Math.floor(right.raw)) - (left.raw - Math.floor(left.raw))
+    if (Math.abs(fractionDifference) > Number.EPSILON) return fractionDifference
+    const leftIndex = (DAILY_STRATEGY_OUTPUT_GROUPS.indexOf(left.group) - tiedRotation + DAILY_STRATEGY_OUTPUT_GROUPS.length) % DAILY_STRATEGY_OUTPUT_GROUPS.length
+    const rightIndex = (DAILY_STRATEGY_OUTPUT_GROUPS.indexOf(right.group) - tiedRotation + DAILY_STRATEGY_OUTPUT_GROUPS.length) % DAILY_STRATEGY_OUTPUT_GROUPS.length
+    return leftIndex - rightIndex
+  })
+  for (let index = 0; index < safeTarget - assigned; index += 1) {
+    groupTargets[fractionalPriority[index % fractionalPriority.length].group] += 1
   }
 
-  const allocations = DAILY_STRATEGY_OUTPUT_LANES.map((lane, index) => ({
-    ...lane,
-    target: baseAllocation + (remainderLaneIndexes.has(index) ? 1 : 0),
-  }))
+  const groupLanes = Object.fromEntries(
+    DAILY_STRATEGY_OUTPUT_GROUPS.map((group) => [
+      group,
+      DAILY_STRATEGY_OUTPUT_LANES.filter((lane) => lane.group === group),
+    ])
+  ) as Record<DailyStrategyOutputGroup, DailyStrategyOutputLane[]>
+  const allocations = DAILY_STRATEGY_OUTPUT_LANES.map((lane) => {
+    const lanes = groupLanes[lane.group]
+    const laneIndex = lanes.findIndex((candidate) => candidate.key === lane.key)
+    const groupTarget = groupTargets[lane.group]
+    const groupBase = Math.floor(groupTarget / lanes.length)
+    const groupRemainder = groupTarget % lanes.length
+    const groupRotation = dailyRotationOffsetForCount(now, lanes.length)
+    const receivesRemainder = Array.from(
+      { length: groupRemainder },
+      (_, index) => (groupRotation + index) % lanes.length,
+    ).includes(laneIndex)
+    return { ...lane, target: groupBase + (receivesRemainder ? 1 : 0) }
+  })
   const byKey = Object.fromEntries(
     allocations.map((allocation) => [allocation.key, allocation.target])
   ) as DailyStrategyOutputLookup

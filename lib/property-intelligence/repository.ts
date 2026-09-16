@@ -1,7 +1,18 @@
+import { createHash } from 'node:crypto'
+
 import { createAdminClient } from '@/lib/supabase/admin'
-import { normalizePropertyAddressKey } from '@/lib/property-intelligence/address'
+import {
+  canonicalPropertyKey,
+  isSameParcelIdentity,
+  mergePropertyRawFields,
+  mergedOwnerEntityPayload,
+  missingPropertySignals,
+  normalizeParcelToken,
+  normalizedInputFromStoredProperty,
+  type PropertySourceEvidence,
+} from '@/lib/property-intelligence/identity'
 import { cleanupPartialPropertyImport } from '@/lib/property-intelligence/importCleanup'
-import { detectVacantLot } from '@/lib/property-intelligence/scoring'
+import { detectVacantLot, scoreDeal } from '@/lib/property-intelligence/scoring'
 import { generateSafeOutreachSummary } from '@/lib/property-intelligence/outreach'
 import { buildAttomSignals, finalizeAttomFacts, type AttomPropertyFacts, type AttomStrategyRoute } from '@/lib/property-intelligence/attom-strategy'
 import type {
@@ -19,6 +30,13 @@ function nullIfBlank(value?: string | null) {
 function importFailureMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || 'Property intelligence import failed.')
   return message.slice(0, 2000)
+}
+
+function missingIdentityColumn(error: { code?: string | null; message?: string | null } | null | undefined) {
+  return Boolean(error && (
+    error.code === '42703' ||
+    /canonical_property_key|normalized_parcel_id/i.test(error.message || '')
+  ))
 }
 
 function ownerPayload(input: NormalizedPropertyInput) {
@@ -42,40 +60,117 @@ function ownerPayload(input: NormalizedPropertyInput) {
   }
 }
 
+function hasOwnerDetails(input: NormalizedPropertyInput) {
+  return Boolean(
+    nullIfBlank(input.ownerName) ||
+    nullIfBlank(input.mailingAddress) ||
+    nullIfBlank(input.mailingCity) ||
+    nullIfBlank(input.mailingState) ||
+    nullIfBlank(input.mailingZip)
+  )
+}
+
 async function findDuplicateProperty(input: NormalizedPropertyInput) {
   const admin = createAdminClient()
-  if (input.parcelId) {
-    const { data } = await admin
+  const canonicalKey = canonicalPropertyKey(input)
+  if (canonicalKey) {
+    const { data, error } = await admin
       .from('property_intelligence_records')
-      .select('id')
-      .eq('parcel_id', input.parcelId)
+      .select('*')
+      .eq('canonical_property_key', canonicalKey)
+      .limit(1)
       .maybeSingle()
-    if (data?.id) return data as { id: string }
+    if (error && !missingIdentityColumn(error)) throw error
+    if (data?.id) return data
+  }
+
+  const normalizedParcelId = normalizeParcelToken(input.parcelId)
+  const state = nullIfBlank(input.state)?.toUpperCase()
+  if (normalizedParcelId && state) {
+    const normalizedQuery = await admin
+      .from('property_intelligence_records')
+      .select('*')
+      .eq('state', state)
+      .eq('normalized_parcel_id', normalizedParcelId)
+      .limit(50)
+    let data = normalizedQuery.data
+    if (normalizedQuery.error) {
+      if (!missingIdentityColumn(normalizedQuery.error)) throw normalizedQuery.error
+      const legacyQuery = await admin
+        .from('property_intelligence_records')
+        .select('*')
+        .eq('state', state)
+        .eq('parcel_id', input.parcelId)
+        .limit(50)
+      if (legacyQuery.error) throw legacyQuery.error
+      data = legacyQuery.data
+    }
+    const duplicate = (data || []).find((row: any) => isSameParcelIdentity(row, input))
+    if (duplicate?.id) return duplicate
   }
 
   const address = nullIfBlank(input.propertyAddress)
   const city = nullIfBlank(input.city)
-  const state = nullIfBlank(input.state)?.toUpperCase()
   if (!address || !city || !state) return null
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from('property_intelligence_records')
-    .select('id,property_address,city,state,zip_code')
+    .select('*')
     .ilike('property_address', address)
     .ilike('city', city)
     .eq('state', state)
     .limit(5)
+  if (error) throw error
 
-  const key = normalizePropertyAddressKey(input)
-  return (data || []).find((row: any) => normalizePropertyAddressKey({
+  const key = canonicalPropertyKey({ ...input, parcelId: null })
+  return (data || []).find((row: any) => canonicalPropertyKey({
+    parcelId: null,
     propertyAddress: row.property_address,
     city: row.city,
     state: row.state,
     zipCode: row.zip_code,
+    county: row.county,
   }) === key) || null
 }
 
-function propertyPayload(input: NormalizedPropertyInput, sourceId: string, importId: string, ownerEntityId: string) {
+function buildSourceEvidence(input: NormalizedPropertyInput, sourceId: string, importId: string, observedAt: string): PropertySourceEvidence {
+  return {
+    sourceName: input.sourceName,
+    sourceUrl: nullIfBlank(input.sourceUrl),
+    fileName: nullIfBlank(input.fileName),
+    sourceId,
+    importId,
+    observedAt,
+    fields: input.rawFields,
+  }
+}
+
+async function attachPropertySourceEvidence(
+  admin: ReturnType<typeof createAdminClient>,
+  propertyId: string,
+  evidence: PropertySourceEvidence,
+) {
+  const evidenceKey = createHash('sha256')
+    .update([evidence.sourceName, evidence.sourceUrl, evidence.fileName].map((value) => String(value || '').trim().toLowerCase()).join('|'))
+    .digest('hex')
+  const { error } = await admin.from('property_intelligence_record_sources').upsert({
+    property_intelligence_record_id: propertyId,
+    source_id: evidence.sourceId,
+    import_id: evidence.importId,
+    source_name: evidence.sourceName,
+    source_url: evidence.sourceUrl,
+    file_name: evidence.fileName,
+    evidence_key: evidenceKey,
+    observed_at: evidence.observedAt,
+    raw_fields: evidence.fields,
+    updated_at: evidence.observedAt,
+  }, {
+    onConflict: 'property_intelligence_record_id,evidence_key',
+  })
+  if (error && error.code !== '42P01' && !/property_intelligence_record_sources|schema cache/i.test(error.message || '')) throw error
+}
+
+function propertyPayload(input: NormalizedPropertyInput, sourceId: string, importId: string, ownerEntityId: string, observedAt: string) {
   const vacant = detectVacantLot(input)
   return {
     source_id: sourceId,
@@ -100,9 +195,162 @@ function propertyPayload(input: NormalizedPropertyInput, sourceId: string, impor
     year_built: input.yearBuilt,
     is_vacant_lot: vacant.isVacantLot,
     vacant_lot_confidence: vacant.confidence,
-    raw_fields: input.rawFields,
-    updated_at: new Date().toISOString(),
+    raw_fields: mergePropertyRawFields({}, input.rawFields, buildSourceEvidence(input, sourceId, importId, observedAt)),
+    updated_at: observedAt,
   }
+}
+
+function preferStored<T>(stored: T | null | undefined, incoming: T | null | undefined) {
+  if (stored !== null && stored !== undefined && String(stored).trim() !== '') return stored
+  return incoming ?? null
+}
+
+function mergedDuplicatePayload(
+  existing: Record<string, any>,
+  input: NormalizedPropertyInput,
+  sourceId: string,
+  importId: string,
+  observedAt: string,
+  ownerEntityId?: string | null,
+) {
+  const vacant = detectVacantLot(input)
+  return {
+    owner_entity_id: ownerEntityId || existing.owner_entity_id || null,
+    parcel_id: preferStored(existing.parcel_id, nullIfBlank(input.parcelId)),
+    property_address: preferStored(existing.property_address, nullIfBlank(input.propertyAddress)),
+    city: preferStored(existing.city, nullIfBlank(input.city)),
+    state: preferStored(existing.state, nullIfBlank(input.state)?.toUpperCase() || null),
+    zip_code: preferStored(existing.zip_code, nullIfBlank(input.zipCode)),
+    county: preferStored(existing.county, nullIfBlank(input.county)),
+    latitude: preferStored(existing.latitude, input.latitude),
+    longitude: preferStored(existing.longitude, input.longitude),
+    land_use: preferStored(existing.land_use, nullIfBlank(input.landUse)),
+    property_class: preferStored(existing.property_class, nullIfBlank(input.propertyClass)),
+    assessed_value: preferStored(existing.assessed_value, input.assessedValue),
+    land_value: preferStored(existing.land_value, input.landValue),
+    building_value: preferStored(existing.building_value, input.buildingValue),
+    improvement_value: preferStored(existing.improvement_value, input.improvementValue),
+    structure_sqft: preferStored(existing.structure_sqft, input.structureSqft),
+    lot_sqft: preferStored(existing.lot_sqft, input.lotSqft),
+    year_built: preferStored(existing.year_built, input.yearBuilt),
+    is_vacant_lot: Boolean(existing.is_vacant_lot || vacant.isVacantLot),
+    vacant_lot_confidence: Math.max(Number(existing.vacant_lot_confidence || 0), vacant.confidence),
+    raw_fields: mergePropertyRawFields(
+      existing.raw_fields,
+      input.rawFields,
+      buildSourceEvidence(input, sourceId, importId, observedAt),
+    ),
+    updated_at: observedAt,
+  }
+}
+
+async function mergeDuplicateOwner(
+  admin: ReturnType<typeof createAdminClient>,
+  property: Record<string, any>,
+  input: NormalizedPropertyInput,
+) {
+  if (!hasOwnerDetails(input)) return property.owner_entity_id || null
+
+  if (property.owner_entity_id) {
+    const { data: existingOwner, error: ownerReadError } = await admin
+      .from('owner_entities')
+      .select('*')
+      .eq('id', property.owner_entity_id)
+      .maybeSingle()
+    if (ownerReadError) throw ownerReadError
+    if (existingOwner?.id) {
+      const { error: ownerUpdateError } = await admin
+        .from('owner_entities')
+        .update(mergedOwnerEntityPayload(existingOwner, input))
+        .eq('id', existingOwner.id)
+      if (ownerUpdateError) throw ownerUpdateError
+      return existingOwner.id as string
+    }
+  }
+
+  const { data: owner, error: ownerInsertError } = await admin
+    .from('owner_entities')
+    .insert(ownerPayload(input))
+    .select('id')
+    .single()
+  if (ownerInsertError) throw ownerInsertError
+  return owner.id as string
+}
+
+async function mergeDuplicateProperty(input: {
+  property: Record<string, any>
+  row: ImportPreviewRow
+  sourceId: string
+  importId: string
+  observedAt: string
+}) {
+  const admin = createAdminClient()
+  const { property, row } = input
+  const evidence = buildSourceEvidence(row.input, input.sourceId, input.importId, input.observedAt)
+  const ownerEntityId = await mergeDuplicateOwner(admin, property, row.input)
+  const { data: storedSignals, error: storedSignalsError } = await admin
+    .from('property_signals')
+    .select('signal_type,signal_label,signal_value,confidence_score,source_name,source_url,raw_fields')
+    .eq('property_intelligence_record_id', property.id)
+  if (storedSignalsError) throw storedSignalsError
+
+  const newSignals = missingPropertySignals(storedSignals || [], row.signals)
+  const mergedProperty = mergedDuplicatePayload(
+    property,
+    row.input,
+    input.sourceId,
+    input.importId,
+    input.observedAt,
+    ownerEntityId,
+  )
+  const { error: updateError } = await admin
+    .from('property_intelligence_records')
+    .update(mergedProperty)
+    .eq('id', property.id)
+  if (updateError) throw updateError
+  await attachPropertySourceEvidence(admin, property.id, evidence)
+
+  if (newSignals.length) {
+    const { error: signalError } = await admin.from('property_signals').insert(
+      newSignals.map((signal) => ({
+        property_intelligence_record_id: property.id,
+        signal_type: signal.signal_type,
+        signal_label: signal.signal_label,
+        signal_value: signal.signal_value || null,
+        confidence_score: signal.confidence_score,
+        source_name: signal.source_name || row.input.sourceName,
+        source_url: signal.source_url || row.input.sourceUrl || null,
+        raw_fields: signal.raw_fields || row.input.rawFields,
+      })),
+    )
+    if (signalError) throw signalError
+  }
+
+  const combinedSignals = [...(storedSignals || []), ...newSignals]
+  const updatedScore = scoreDeal(normalizedInputFromStoredProperty(mergedProperty, row.input), combinedSignals)
+  const { data: currentScore, error: currentScoreError } = await admin
+    .from('deal_scores')
+    .select('score,reason_codes,scoring_version')
+    .eq('property_intelligence_record_id', property.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (currentScoreError) throw currentScoreError
+  const priorReasons = Array.isArray(currentScore?.reason_codes) ? [...currentScore.reason_codes].sort().join('|') : ''
+  const nextReasons = [...updatedScore.reason_codes].sort().join('|')
+  if (!currentScore || currentScore.score !== updatedScore.score || priorReasons !== nextReasons || currentScore.scoring_version !== updatedScore.scoring_version) {
+    const { error: scoreError } = await admin.from('deal_scores').insert({
+      property_intelligence_record_id: property.id,
+      score: updatedScore.score,
+      reason_codes: updatedScore.reason_codes,
+      explanation: updatedScore.explanation,
+      recommended_next_action: updatedScore.recommended_next_action,
+      scoring_version: updatedScore.scoring_version || 'phase1-v1',
+    })
+    if (scoreError) throw scoreError
+  }
+
+  return { signalsCreated: newSignals.length }
 }
 
 export async function importPropertyIntelligenceRows(input: {
@@ -149,6 +397,7 @@ export async function importPropertyIntelligenceRows(input: {
 
   let imported = 0
   let deduped = 0
+  let merged = 0
   let signalsCreated = 0
   const scoreCounts = { high: 0, medium: 0, low: 0 }
 
@@ -157,6 +406,15 @@ export async function importPropertyIntelligenceRows(input: {
       const duplicate = await findDuplicateProperty(row.input)
       if (duplicate?.id) {
         deduped += 1
+        const mergeResult = await mergeDuplicateProperty({
+          property: duplicate,
+          row,
+          sourceId: source.id,
+          importId: importRun.id,
+          observedAt: new Date().toISOString(),
+        })
+        merged += 1
+        signalsCreated += mergeResult.signalsCreated
         continue
       }
 
@@ -170,11 +428,16 @@ export async function importPropertyIntelligenceRows(input: {
 
         const { data: property, error: propertyError } = await admin
           .from('property_intelligence_records')
-          .insert(propertyPayload(row.input, source.id, importRun.id, ownerRecord.id))
+          .insert(propertyPayload(row.input, source.id, importRun.id, ownerRecord.id, new Date().toISOString()))
           .select('id')
           .single()
         if (propertyError) throw propertyError
         propertyId = property.id
+        await attachPropertySourceEvidence(
+          admin,
+          property.id,
+          buildSourceEvidence(row.input, source.id, importRun.id, new Date().toISOString()),
+        )
 
         if (row.signals.length) {
           const { error: signalError } = await admin.from('property_signals').insert(
@@ -252,7 +515,7 @@ export async function importPropertyIntelligenceRows(input: {
     throw error
   }
 
-  return { imported, deduped, signalsCreated, dataSourceId: source.id as string, importId: importRun.id as string, scoreCounts }
+  return { imported, deduped, merged, signalsCreated, dataSourceId: source.id as string, importId: importRun.id as string, scoreCounts }
 }
 
 export async function listPropertyIntelligence(filters: PropertyIntelligenceFilters = {}) {
