@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 
@@ -5,6 +7,11 @@ export const PUBLIC_BUSINESS_WEBSITE_FETCH_TIMEOUT_MS = 8_000
 export const PUBLIC_BUSINESS_WEBSITE_MAX_REDIRECTS = 3
 export const PUBLIC_BUSINESS_WEBSITE_MAX_PAGES = 3
 export const PUBLIC_BUSINESS_WEBSITE_MAX_HTML_BYTES = 1_000_000
+export const PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_METADATA_KEY = 'publicBusinessWebsiteEvidenceMiss'
+export const PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_TTL_MS = 7 * 24 * 60 * 60 * 1_000
+
+const PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_VERSION = 1
+const PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_FUTURE_SKEW_MS = 5 * 60 * 1_000
 
 const CONTACT_LINK_PATTERN = /(?:contact|about|team|staff|support|office|location)/i
 const NON_HTML_PATH_PATTERN = /\.(?:css|js|json|xml|txt|png|jpe?g|gif|webp|svg|pdf|woff2?|ttf|eot)(?:$|\?)/i
@@ -26,6 +33,17 @@ type PublicBusinessWebsiteFetchDependencies = {
   validatePublicUrl: (url: string) => Promise<boolean>
 }
 
+export type PublicBusinessWebsiteEvidenceMiss = {
+  schemaVersion: typeof PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_VERSION
+  status: 'terminal_miss'
+  provider: 'public_website'
+  reason: string
+  checkedAt: string
+  retryAfter: string
+  recipientHash: string
+  websiteBindingHash: string
+}
+
 function httpUrl(value: unknown) {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return null
@@ -38,6 +56,121 @@ function httpUrl(value: unknown) {
   } catch {
     return null
   }
+}
+
+function websiteBindingValue(value: unknown) {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  const parsed = httpUrl(raw)
+  if (!parsed) return raw ? `raw:${raw.toLowerCase()}` : 'missing:'
+
+  const url = new URL(parsed)
+  url.protocol = url.protocol.toLowerCase()
+  url.hostname = url.hostname.toLowerCase()
+  if (
+    (url.protocol === 'http:' && url.port === '80') ||
+    (url.protocol === 'https:' && url.port === '443')
+  ) url.port = ''
+  url.pathname = url.pathname.replace(/\/+$/, '') || '/'
+  return `url:${url.toString()}`
+}
+
+export function hashPublicBusinessWebsiteBinding(value: unknown) {
+  return createHash('sha256').update(websiteBindingValue(value)).digest('hex')
+}
+
+export function buildPublicBusinessWebsiteEvidenceMiss(input: {
+  recipientEmail: string
+  website: string | null | undefined
+  reason: string
+  checkedAt: string
+}): PublicBusinessWebsiteEvidenceMiss {
+  const checkedAtMs = Date.parse(input.checkedAt)
+  if (!Number.isFinite(checkedAtMs)) {
+    throw new Error('Public business website evidence miss requires a valid checkedAt timestamp.')
+  }
+  return {
+    schemaVersion: PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_VERSION,
+    status: 'terminal_miss',
+    provider: 'public_website',
+    reason: String(input.reason || 'terminal_miss').slice(0, 200),
+    checkedAt: new Date(checkedAtMs).toISOString(),
+    retryAfter: new Date(checkedAtMs + PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_TTL_MS).toISOString(),
+    recipientHash: hashHunterVerificationEmail(input.recipientEmail),
+    websiteBindingHash: hashPublicBusinessWebsiteBinding(input.website),
+  }
+}
+
+export function assessPublicBusinessWebsiteEvidenceMiss(input: {
+  metadataJson: Record<string, unknown> | null | undefined
+  recipientEmail: string | null | undefined
+  website: string | null | undefined
+  now?: Date
+}) {
+  const raw = input.metadataJson?.[PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_METADATA_KEY]
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { active: false, reason: 'public_business_evidence_miss_missing', record: null }
+  }
+  const candidate = raw as Record<string, unknown>
+  const checkedAtMs = Date.parse(String(candidate.checkedAt || ''))
+  const storedRetryAfterMs = Date.parse(String(candidate.retryAfter || ''))
+  const nowMs = (input.now || new Date()).getTime()
+  if (
+    candidate.schemaVersion !== PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_VERSION ||
+    candidate.status !== 'terminal_miss' ||
+    candidate.provider !== 'public_website' ||
+    typeof candidate.reason !== 'string' ||
+    !candidate.reason ||
+    typeof candidate.recipientHash !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(candidate.recipientHash) ||
+    typeof candidate.websiteBindingHash !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(candidate.websiteBindingHash) ||
+    !Number.isFinite(checkedAtMs) ||
+    !Number.isFinite(storedRetryAfterMs)
+  ) {
+    return { active: false, reason: 'public_business_evidence_miss_invalid', record: null }
+  }
+
+  const record: PublicBusinessWebsiteEvidenceMiss = {
+    schemaVersion: PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_VERSION,
+    status: 'terminal_miss',
+    provider: 'public_website',
+    reason: candidate.reason,
+    checkedAt: new Date(checkedAtMs).toISOString(),
+    retryAfter: new Date(checkedAtMs + PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_TTL_MS).toISOString(),
+    recipientHash: candidate.recipientHash,
+    websiteBindingHash: candidate.websiteBindingHash,
+  }
+  if (checkedAtMs > nowMs + PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_FUTURE_SKEW_MS) {
+    return { active: false, reason: 'public_business_evidence_miss_timestamp_future', record }
+  }
+  if (
+    record.recipientHash !== hashHunterVerificationEmail(normalizeEmailAddress(input.recipientEmail)) ||
+    record.websiteBindingHash !== hashPublicBusinessWebsiteBinding(input.website)
+  ) {
+    return { active: false, reason: 'public_business_evidence_miss_binding_changed', record }
+  }
+  if (nowMs >= checkedAtMs + PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_TTL_MS) {
+    return { active: false, reason: 'public_business_evidence_miss_expired', record }
+  }
+  return { active: true, reason: 'public_business_evidence_miss_active', record }
+}
+
+export function metadataWithPublicBusinessWebsiteEvidenceMiss(
+  metadataJson: Record<string, unknown> | null | undefined,
+  miss: PublicBusinessWebsiteEvidenceMiss
+) {
+  return {
+    ...(metadataJson || {}),
+    [PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_METADATA_KEY]: miss,
+  }
+}
+
+export function metadataWithoutPublicBusinessWebsiteEvidenceMiss(
+  metadataJson: Record<string, unknown> | null | undefined
+) {
+  const next = { ...(metadataJson || {}) }
+  delete next[PUBLIC_BUSINESS_WEBSITE_EVIDENCE_MISS_METADATA_KEY]
+  return next
 }
 
 export function publicBusinessWebsiteDomain(value: unknown) {

@@ -6,7 +6,8 @@ import { logEvent } from '@/lib/system/logEvent'
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation'
 import { generateLeadOutreach } from '@/lib/leads/outreach'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
-import { addLeadNote, finishScrapeRun, insertOutreachSendEvent, listSuppressions, saveLeadScore, saveOutreachMessages, startScrapeRun, updateOutreachMessage, upsertLead, updateLeadRecord } from '@/lib/leads/repository'
+import { addLeadNote, finishScrapeRun, insertOutreachSendEvent, listSuppressions, persistCurrentEmailReadyRefillProvenance, saveLeadScore, saveOutreachMessages, startScrapeRun, updateOutreachMessage, upsertLead, updateLeadRecord } from '@/lib/leads/repository'
+import type { CurrentEmailRefillProvider } from '@/lib/leads/refillProvenance'
 import { scoreLead } from '@/lib/leads/scoring'
 import { safeUrl } from '@/lib/leads/utils'
 import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput } from '@/lib/leads/types'
@@ -14,6 +15,7 @@ import type { GeneratedOutreachBundle, LeadRecord, NormalizedLeadInput } from '@
 type IngestLeadOptions = {
   scoreOnIngest?: boolean
   autoGenerateOutreach?: boolean
+  currentEmailReadyRefillProvider?: CurrentEmailRefillProvider
 }
 
 function shouldTriggerLeadAutomation(category: string | null | undefined, score: number) {
@@ -334,7 +336,13 @@ export async function ingestNormalizedLeads(
   try {
     const createdLeads: LeadRecord[] = []
     for (const input of inputs) {
-      const lead = await upsertLead(input)
+      let lead = await upsertLead(input)
+      if (options.currentEmailReadyRefillProvider) {
+        lead = await persistCurrentEmailReadyRefillProvenance({
+          lead,
+          provider: options.currentEmailReadyRefillProvider,
+        })
+      }
       if (scoreOnIngest) {
         const score = await scoreAndPersistLead(lead, input)
         createdLeads.push({

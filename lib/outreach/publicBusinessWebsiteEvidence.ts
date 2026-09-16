@@ -6,41 +6,24 @@ import { request as requestHttps } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
 import { Readable } from 'node:stream'
 
-import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
 import {
-  buildPublicBusinessWebsiteContactInfo,
   observeExactRecipientOnBusinessWebsite,
 } from '@/lib/outreach/publicBusinessWebsiteEvidenceCore'
 import {
-  deriveRecipientBoundBusinessContactEvidence,
-  type VerifiedBusinessContactEvidence,
-} from '@/lib/outreach/verifiedBusinessColdEmail'
+  runPublicBusinessWebsiteEvidenceWorkflow,
+  type PublicBusinessEvidenceEntity,
+  type PublicBusinessEvidenceRefreshResult,
+  type PublicBusinessEvidenceScope,
+  type PublicBusinessEvidenceStateStore,
+} from '@/lib/outreach/publicBusinessWebsiteEvidenceWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-type PublicBusinessEvidenceScope = 'buyer' | 'lender'
-
-type PublicBusinessEvidenceEntity = {
-  id: string
-  contactEmail: string | null | undefined
-  website: string | null | undefined
-  contactInfo: Record<string, unknown> | null | undefined
-  metadataJson: Record<string, unknown> | null | undefined
-  source?: string | null
-  updatedAt: string
-}
-
-export type PublicBusinessEvidenceRefreshResult = {
-  evidence: VerifiedBusinessContactEvidence | null
-  contactInfo: Record<string, unknown>
-  updatedAt: string
-  refreshed: boolean
-  retryable: boolean
-  reason: string
-}
+export type { PublicBusinessEvidenceRefreshResult }
 
 const STORAGE = {
-  buyer: { table: 'buyers' },
-  lender: { table: 'lenders' },
+  buyer: { table: 'buyers', emailColumn: 'contact_email' },
+  lender: { table: 'lenders', emailColumn: 'contact_email' },
+  lead: { table: 'leads', emailColumn: 'email' },
 } as const
 const PUBLIC_DNS_LOOKUP_TIMEOUT_MS = 2_000
 
@@ -174,20 +157,94 @@ export const fetchPinnedPublicBusinessUrl = (async (
   })
 }) as typeof fetch
 
-function nextCasTimestamp(previous: string, now: Date) {
-  const previousMs = Date.parse(previous)
-  return new Date(Math.max(now.getTime(), Number.isFinite(previousMs) ? previousMs + 1 : 0)).toISOString()
+function selectColumnsForStorage(storage: (typeof STORAGE)[PublicBusinessEvidenceScope]) {
+  return storage.emailColumn === 'email'
+    ? 'id,source,email,website,contact_info,metadata_json,updated_at'
+    : 'id,source,contact_email,website,contact_info,metadata_json,updated_at'
 }
 
-function deriveFromEntity(entity: PublicBusinessEvidenceEntity, now: Date) {
-  return deriveRecipientBoundBusinessContactEvidence({
-    source: entity.source,
-    metadataJson: entity.metadataJson,
-    contactInfo: entity.contactInfo,
-    recipientEmail: entity.contactEmail,
-    website: entity.website,
-    now,
-  })
+function entityFromRecord(input: {
+  record: Record<string, unknown>
+  storage: (typeof STORAGE)[PublicBusinessEvidenceScope]
+  fallback: PublicBusinessEvidenceEntity
+}) : PublicBusinessEvidenceEntity {
+  const { record, storage, fallback } = input
+  return {
+    id: String(record.id || fallback.id),
+    source: typeof record.source === 'string' ? record.source : fallback.source,
+    contactEmail: typeof record[storage.emailColumn] === 'string'
+      ? record[storage.emailColumn] as string
+      : null,
+    website: typeof record.website === 'string' ? record.website : null,
+    contactInfo: record.contact_info && typeof record.contact_info === 'object'
+      ? record.contact_info as Record<string, unknown>
+      : {},
+    metadataJson: record.metadata_json && typeof record.metadata_json === 'object'
+      ? record.metadata_json as Record<string, unknown>
+      : {},
+    updatedAt: String(record.updated_at || fallback.updatedAt),
+  }
+}
+
+function createPublicBusinessEvidenceStateStore(): PublicBusinessEvidenceStateStore {
+  const admin = createAdminClient()
+  return {
+    compareAndSwap: async ({ scope, currentEntity, contactInfo, metadataJson, updatedAt }) => {
+      const storage = STORAGE[scope]
+      const selectColumns = selectColumnsForStorage(storage)
+      let query = admin
+        .from(storage.table)
+        .update({
+          contact_info: contactInfo,
+          metadata_json: metadataJson,
+          updated_at: updatedAt,
+        })
+        .eq('id', currentEntity.id)
+        .eq(storage.emailColumn, currentEntity.contactEmail)
+        .eq('updated_at', currentEntity.updatedAt)
+      query = currentEntity.website == null
+        ? query.is('website', null)
+        : query.eq('website', currentEntity.website)
+      const { data, error } = await query.select(selectColumns).maybeSingle()
+      return {
+        entity: data
+          ? entityFromRecord({
+              record: data as Record<string, unknown>,
+              storage,
+              fallback: currentEntity,
+            })
+          : null,
+        error,
+      }
+    },
+    readById: async ({ scope, entityId }) => {
+      const storage = STORAGE[scope]
+      const selectColumns = selectColumnsForStorage(storage)
+      const { data, error } = await admin
+        .from(storage.table)
+        .select(selectColumns)
+        .eq('id', entityId)
+        .maybeSingle()
+      return {
+        entity: data
+          ? entityFromRecord({
+              record: data as Record<string, unknown>,
+              storage,
+              fallback: {
+                id: entityId,
+                source: null,
+                contactEmail: null,
+                website: null,
+                contactInfo: {},
+                metadataJson: {},
+                updatedAt: '',
+              },
+            })
+          : null,
+        error,
+      }
+    },
+  }
 }
 
 export async function ensurePublicBusinessWebsiteEvidenceForEntity(input: {
@@ -195,142 +252,16 @@ export async function ensurePublicBusinessWebsiteEvidenceForEntity(input: {
   entity: PublicBusinessEvidenceEntity
   now?: Date
 }): Promise<PublicBusinessEvidenceRefreshResult> {
-  const now = input.now || new Date()
-  const existingEvidence = deriveFromEntity(input.entity, now)
-  if (existingEvidence) {
-    return {
-      evidence: existingEvidence,
-      contactInfo: input.entity.contactInfo || {},
-      updatedAt: input.entity.updatedAt,
-      refreshed: false,
-      retryable: false,
-      reason: 'business_contact_evidence_already_fresh',
-    }
-  }
-  const recipientEmail = normalizeEmailAddress(input.entity.contactEmail)
-  if (!isUsableContactEmail(recipientEmail)) {
-    return {
-      evidence: null,
-      contactInfo: input.entity.contactInfo || {},
-      updatedAt: input.entity.updatedAt,
-      refreshed: false,
-      retryable: false,
-      reason: 'business_contact_evidence_recipient_invalid',
-    }
-  }
-
-  const observation = await observeExactRecipientOnBusinessWebsite({
-    website: input.entity.website,
-    recipientEmail,
-    dependencies: {
-      fetchImpl: fetchPinnedPublicBusinessUrl,
-      validatePublicUrl: validatePublicBusinessUrl,
-    },
+  return runPublicBusinessWebsiteEvidenceWorkflow({
+    ...input,
+    store: createPublicBusinessEvidenceStateStore(),
+    observe: ({ website, recipientEmail }) => observeExactRecipientOnBusinessWebsite({
+      website,
+      recipientEmail,
+      dependencies: {
+        fetchImpl: fetchPinnedPublicBusinessUrl,
+        validatePublicUrl: validatePublicBusinessUrl,
+      },
+    }),
   })
-  if (observation.status !== 'found') {
-    return {
-      evidence: null,
-      contactInfo: input.entity.contactInfo || {},
-      updatedAt: input.entity.updatedAt,
-      refreshed: false,
-      retryable: observation.status === 'unavailable',
-      reason: `business_contact_evidence_refresh_${observation.reason}`,
-    }
-  }
-
-  const observedAt = now.toISOString()
-  const contactInfo = buildPublicBusinessWebsiteContactInfo({
-    existingContactInfo: input.entity.contactInfo,
-    recipientEmail,
-    sourceUrl: observation.sourceUrl,
-    attemptedUrls: observation.attemptedUrls,
-    observedAt,
-  })
-  const updatedAt = nextCasTimestamp(input.entity.updatedAt, now)
-  const admin = createAdminClient()
-  let query = admin
-    .from(STORAGE[input.scope].table)
-    .update({ contact_info: contactInfo, updated_at: updatedAt })
-    .eq('id', input.entity.id)
-    .eq('contact_email', input.entity.contactEmail)
-    .eq('updated_at', input.entity.updatedAt)
-  query = input.entity.website == null
-    ? query.is('website', null)
-    : query.eq('website', input.entity.website)
-  const { data, error } = await query
-    .select('id,source,contact_email,website,contact_info,metadata_json,updated_at')
-    .maybeSingle()
-  if (error) {
-    return {
-      evidence: null,
-      contactInfo: input.entity.contactInfo || {},
-      updatedAt: input.entity.updatedAt,
-      refreshed: false,
-      retryable: true,
-      reason: 'business_contact_evidence_refresh_persistence_failed',
-    }
-  }
-
-  if (!data) {
-    const { data: current } = await admin
-      .from(STORAGE[input.scope].table)
-      .select('id,source,contact_email,website,contact_info,metadata_json,updated_at')
-      .eq('id', input.entity.id)
-      .maybeSingle()
-    const currentRecord = current as Record<string, unknown> | null
-    const currentEntity: PublicBusinessEvidenceEntity | null = currentRecord ? {
-      id: String(currentRecord.id || ''),
-      source: typeof currentRecord.source === 'string' ? currentRecord.source : null,
-      contactEmail: typeof currentRecord.contact_email === 'string' ? currentRecord.contact_email : null,
-      website: typeof currentRecord.website === 'string' ? currentRecord.website : null,
-      contactInfo: currentRecord.contact_info && typeof currentRecord.contact_info === 'object'
-        ? currentRecord.contact_info as Record<string, unknown>
-        : {},
-      metadataJson: currentRecord.metadata_json && typeof currentRecord.metadata_json === 'object'
-        ? currentRecord.metadata_json as Record<string, unknown>
-        : {},
-      updatedAt: String(currentRecord.updated_at || input.entity.updatedAt),
-    } : null
-    const concurrentEvidence = currentEntity &&
-      normalizeEmailAddress(currentEntity.contactEmail) === recipientEmail &&
-      currentEntity.website === input.entity.website
-      ? deriveFromEntity(currentEntity, now)
-      : null
-    return {
-      evidence: concurrentEvidence || null,
-      contactInfo: currentEntity?.contactInfo || input.entity.contactInfo || {},
-      updatedAt: currentEntity?.updatedAt || input.entity.updatedAt,
-      refreshed: false,
-      retryable: !concurrentEvidence,
-      reason: concurrentEvidence
-        ? 'business_contact_evidence_refreshed_concurrently'
-        : 'business_contact_evidence_refresh_concurrent_change',
-    }
-  }
-
-  const updated = data as Record<string, unknown>
-  const updatedEntity: PublicBusinessEvidenceEntity = {
-    id: String(updated.id || input.entity.id),
-    source: typeof updated.source === 'string' ? updated.source : input.entity.source,
-    contactEmail: typeof updated.contact_email === 'string' ? updated.contact_email : null,
-    website: typeof updated.website === 'string' ? updated.website : null,
-    contactInfo: updated.contact_info && typeof updated.contact_info === 'object'
-      ? updated.contact_info as Record<string, unknown>
-      : {},
-    metadataJson: updated.metadata_json && typeof updated.metadata_json === 'object'
-      ? updated.metadata_json as Record<string, unknown>
-      : {},
-    updatedAt: String(updated.updated_at || updatedAt),
-  }
-  const evidence = deriveFromEntity(updatedEntity, now)
-  return {
-    evidence,
-    contactInfo: updatedEntity.contactInfo || {},
-    updatedAt: updatedEntity.updatedAt,
-    refreshed: Boolean(evidence),
-    retryable: !evidence,
-    reason: evidence
-      ? 'business_contact_evidence_refreshed'
-      : 'business_contact_evidence_refresh_persisted_evidence_invalid',
-  }
 }

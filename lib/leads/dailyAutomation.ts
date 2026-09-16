@@ -15,7 +15,11 @@ import { searchApifyYelp } from '@/lib/leads/connectors/apify-yelp'
 import { searchSamOpportunities } from '@/lib/leads/connectors/sam'
 import { searchWeakWebPresenceBusinesses } from '@/lib/leads/connectors/weak-web-presence'
 import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
-import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
+import {
+  ensureLeadBusinessContactEvidence,
+  getOutboundProviderReadiness,
+  sendLeadOutreachEmail,
+} from '@/lib/leads/outbound'
 import { buildOutreachV2EmailDraft, evaluateOutreachV2Lead, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import {
   paidSourceFailureDetail,
@@ -1035,7 +1039,14 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
                 immediateContactFormHits: contactFormHits,
               },
               enrichedLeads,
-              { scoreOnIngest: true, autoGenerateOutreach: !emailReadyRefillOnly }
+              {
+                scoreOnIngest: true,
+                autoGenerateOutreach: !emailReadyRefillOnly,
+                currentEmailReadyRefillProvider:
+                  emailReadyRefillOnly && mapsProvider === 'outscraper'
+                    ? 'outscraper'
+                    : undefined,
+              }
             )
 
         marketSummary.push({
@@ -1230,7 +1241,11 @@ export async function runDailyLeadScrape(options: LeadAutomationOptions = {}) {
                 immediateContactFormHits: contactFormHits,
               },
               enrichedLeads,
-              { scoreOnIngest: true, autoGenerateOutreach: !emailReadyRefillOnly }
+              {
+                scoreOnIngest: true,
+                autoGenerateOutreach: !emailReadyRefillOnly,
+                currentEmailReadyRefillProvider: emailReadyRefillOnly ? 'apify' : undefined,
+              }
             )
 
         marketSummary.push({
@@ -2064,6 +2079,26 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
           reason,
         })
         sendResults.push({ leadId: currentLead.id, status: 'suppression_blocked', detail: reason })
+        continue
+      }
+
+      const businessContact = await ensureLeadBusinessContactEvidence(currentLead)
+      currentLead = businessContact.lead
+      if (!businessContact.evidence) {
+        const reason = 'business_contact_evidence_required'
+        const detail = `${reason}; ${businessContact.reason}${businessContact.retryable ? '; public_business_evidence_refresh_retryable' : ''}`
+        incrementCount(skipReasonCounts, reason)
+        await persistSkippedSendEvent({
+          lead: currentLead,
+          outreachMessageId: currentRow.id,
+          subject: currentRow.subject,
+          reason,
+        })
+        sendResults.push({
+          leadId: currentLead.id,
+          status: 'business_evidence_blocked',
+          detail,
+        })
         continue
       }
 

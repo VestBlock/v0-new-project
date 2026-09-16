@@ -13,6 +13,8 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerification } from '@/lib/outreach/hunterSendVerification'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+import { ensurePublicBusinessWebsiteEvidenceForEntity } from '@/lib/outreach/publicBusinessWebsiteEvidence'
+import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type SendLeadEmailInput = {
   lead: LeadRecord
@@ -112,6 +114,45 @@ export function getOutboundProviderReadiness() {
   }
 }
 
+export async function ensureLeadBusinessContactEvidence(lead: LeadRecord) {
+  const existing = deriveRecipientBoundBusinessContactEvidence({
+    source: lead.source,
+    metadataJson: lead.metadata_json,
+    contactInfo: lead.contact_info,
+    recipientEmail: lead.email,
+    website: lead.website,
+  })
+  if (existing) {
+    return {
+      lead,
+      evidence: existing,
+      retryable: false,
+      reason: 'business_contact_evidence_already_fresh',
+    }
+  }
+
+  const refresh = await ensurePublicBusinessWebsiteEvidenceForEntity({
+    scope: 'lead',
+    entity: {
+      id: lead.id,
+      source: lead.source,
+      contactEmail: lead.email,
+      website: lead.website,
+      contactInfo: lead.contact_info,
+      metadataJson: lead.metadata_json,
+      updatedAt: lead.updated_at,
+    },
+  })
+  return {
+    lead: refresh.evidence
+      ? { ...lead, contact_info: refresh.contactInfo, updated_at: refresh.updatedAt }
+      : lead,
+    evidence: refresh.evidence,
+    retryable: refresh.retryable,
+    reason: refresh.reason,
+  }
+}
+
 export async function sendLeadOutreachEmail(
   input: SendLeadEmailInput
 ): Promise<SendLeadEmailResult> {
@@ -172,6 +213,18 @@ export async function sendLeadOutreachEmail(
   }
   let lead = input.lead
   if (purpose === 'cold_outreach') {
+    const businessContact = await ensureLeadBusinessContactEvidence(lead)
+    lead = businessContact.lead
+    if (!businessContact.evidence) {
+      return {
+        ...base,
+        ok: false,
+        deferred: true,
+        deferredScope: 'record',
+        provider: 'none',
+        error: `Verified B2B cold email admission failed (business_contact_evidence_required; ${businessContact.reason}${businessContact.retryable ? '; public_business_evidence_refresh_retryable' : ''}).`,
+      }
+    }
     const hunter = await ensureFreshHunterSendVerification({
       lead,
       messageId: input.message.id,

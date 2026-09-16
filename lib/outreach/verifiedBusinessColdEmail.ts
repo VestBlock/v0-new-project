@@ -10,6 +10,7 @@ import {
   type HunterSendVerificationCache,
 } from '@/lib/outreach/hunterSendVerificationCore'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
+import { assessPublicBusinessWebsiteEvidenceMiss } from '@/lib/outreach/publicBusinessWebsiteEvidenceCore'
 
 export const VERIFIED_BUSINESS_CONTACT_EVIDENCE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000
 const FUTURE_EVIDENCE_SKEW_MS = 5 * 60 * 1_000
@@ -280,6 +281,47 @@ export function isAutonomousEmailQueueLeadAllowed(lead: {
     now,
   })
   return evidence?.source === 'verified_listing_feed_agent_contact'
+}
+
+export function isPublicBusinessWebsiteEvidenceMissQuarantined(lead: {
+  source?: string | null
+  email?: string | null
+  website?: string | null
+  contact_info?: Record<string, unknown> | null
+  metadata_json?: Record<string, unknown> | null
+}, now: Date = new Date()) {
+  const positiveEvidence = deriveRecipientBoundBusinessContactEvidence({
+    source: lead.source,
+    metadataJson: lead.metadata_json,
+    contactInfo: lead.contact_info,
+    recipientEmail: lead.email,
+    website: lead.website,
+    now,
+  })
+  if (positiveEvidence) return false
+
+  return assessPublicBusinessWebsiteEvidenceMiss({
+    metadataJson: lead.metadata_json,
+    recipientEmail: lead.email,
+    website: lead.website,
+    now,
+  }).active
+}
+
+export function excludePublicBusinessWebsiteEvidenceMissesFromQueue<
+  T extends {
+    leads: {
+      source?: string | null
+      email?: string | null
+      website?: string | null
+      contact_info?: Record<string, unknown> | null
+      metadata_json?: Record<string, unknown> | null
+    } | null
+  }
+>(rows: readonly T[], now: Date = new Date()) {
+  return rows.filter((row) => (
+    row.leads && !isPublicBusinessWebsiteEvidenceMissQuarantined(row.leads, now)
+  ))
 }
 
 export function assessVerifiedBusinessColdEmailAdmission(input: {

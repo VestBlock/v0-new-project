@@ -8,6 +8,13 @@ import {
   validateOutreachMessageQuality,
 } from '@/lib/leads/revenueCampaigns'
 import { isSourceInFamily } from '@/lib/leads/source-keys'
+import {
+  type CurrentEmailRefillProvider,
+} from '@/lib/leads/refillProvenance'
+import {
+  persistCurrentEmailReadyRefillProvenanceWithStore,
+  type CurrentEmailReadyRefillProvenanceStore,
+} from '@/lib/leads/refillProvenancePersistence'
 import type {
   LeadSuppressionRecord,
   LeadNoteRecord,
@@ -27,7 +34,10 @@ import {
   type StrategyLeadMembershipShape,
 } from '@/lib/outreach/strategyMembershipShape'
 import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
-import { isAutonomousEmailQueueLeadAllowed } from '@/lib/outreach/verifiedBusinessColdEmail'
+import {
+  excludePublicBusinessWebsiteEvidenceMissesFromQueue,
+  isAutonomousEmailQueueLeadAllowed,
+} from '@/lib/outreach/verifiedBusinessColdEmail'
 import {
   DAILY_STRATEGY_OUTPUT_LANES,
   getDailyStrategyOutputLane,
@@ -589,6 +599,52 @@ export async function upsertLead(input: NormalizedLeadInput) {
   return data as LeadRecord
 }
 
+/**
+ * Adds current-refill provenance only after dedupe/upsert has resolved the
+ * canonical lead id, source and recipient. Metadata is merged through a
+ * bounded compare-and-swap loop so unrelated concurrent metadata survives.
+ */
+export async function persistCurrentEmailReadyRefillProvenance(input: {
+  lead: LeadRecord
+  provider: CurrentEmailRefillProvider
+  issuedAt?: Date
+  store?: CurrentEmailReadyRefillProvenanceStore
+}) {
+  return persistCurrentEmailReadyRefillProvenanceWithStore({
+    ...input,
+    store: input.store || createCurrentEmailReadyRefillProvenanceStore(),
+  })
+}
+
+function createCurrentEmailReadyRefillProvenanceStore(): CurrentEmailReadyRefillProvenanceStore {
+  const admin = createAdminClient()
+  return {
+    compareAndSwap: async ({ currentLead, metadataJson, updatedAt }) => {
+      const { data, error } = await admin
+        .from('leads')
+        .update({
+          metadata_json: metadataJson,
+          updated_at: updatedAt,
+        })
+        .eq('id', currentLead.id)
+        .eq('source', currentLead.source)
+        .eq('email', currentLead.email)
+        .eq('updated_at', currentLead.updated_at)
+        .select('*')
+        .maybeSingle()
+      return { updated: data ? data as LeadRecord : null, error }
+    },
+    readById: async (leadId) => {
+      const { data, error } = await admin
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+        .maybeSingle()
+      return { lead: data ? data as LeadRecord : null, error }
+    },
+  }
+}
+
 export async function saveLeadScore(leadId: string, score: LeadScoreBreakdown) {
   const admin = createAdminClient()
   const payload = {
@@ -976,6 +1032,62 @@ export async function listApprovedEmailOutreach(limit = 50) {
   )
 }
 
+type EmailOutreachSendQueueRow = OutreachMessageRecord & { leads: LeadRecord | null }
+
+export function prepareEmailOutreachSendQueueCandidates(
+  rows: EmailOutreachSendQueueRow[],
+  options: {
+    allowSecondaryCampaigns?: boolean
+    contactedProperties?: ReadonlySet<string>
+    now?: Date
+  } = {}
+) {
+  const allowSecondaryCampaigns = options.allowSecondaryCampaigns ?? false
+  const contactedProperties = options.contactedProperties || new Set<string>()
+  const evidenceNow = options.now || new Date()
+  const eligible = excludePublicBusinessWebsiteEvidenceMissesFromQueue(rows, evidenceNow).filter((row) => {
+    const lead = row.leads
+    if (
+      !lead ||
+      lead.delivery_status === 'sent' ||
+      lead.outreach_status === 'sent' ||
+      !isCurrentVestblockOutboundLead(lead) ||
+      !shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
+    ) return false
+
+    if (!isAutonomousEmailQueueLeadAllowed(lead)) return false
+
+    // A listing-agent intermediary can have valid business-contact evidence
+    // while the underlying seller strategy still requires human review. Keep
+    // that draft in the review workflow instead of repeatedly consuming the
+    // autonomous queue's bounded replacement scan.
+    if (!sellerMessageDeliveryAuthorized(row)) return false
+
+    if (lead.email) {
+      const hunterCache = assessHunterSendVerificationCache({
+        metadata: lead.metadata_json,
+        email: lead.email,
+      })
+      if (hunterCache.fresh && !hunterCache.sendable) return false
+    }
+
+    const enrolledKey = enrolledPropertyKey(lead.property_address)
+    return !enrolledKey || !contactedProperties.has(enrolledKey)
+  })
+
+  // Readiness must participate before recipient/property dedupe. Otherwise an
+  // old blocked approval can erase a newer provenance-backed draft for the
+  // same seller before the lane ranking ever sees the sendable record.
+  return prioritizeAndDedupeOutreachQueueCandidates(
+    sortMessagesForSendQueue(eligible),
+    sellerMessageReadinessTier,
+    {
+      recipient: (row) => normalizeEmailAddress(row.leads?.email),
+      sellerProperty: (row) => sellerPropertyKey(row.leads),
+    }
+  )
+}
+
 export async function listEmailOutreachForSendQueue(
   limit = 75,
   options: {
@@ -1028,45 +1140,12 @@ export async function listEmailOutreachForSendQueue(
       .map((row) => enrolledPropertyKey(row.property_address))
       .filter((key): key is string => Boolean(key))
   )
-  const eligible = ((data || []) as Array<OutreachMessageRecord & { leads: LeadRecord | null }>).filter((row) => {
-    const lead = row.leads
-    if (
-      !lead ||
-      lead.delivery_status === 'sent' ||
-      lead?.outreach_status === 'sent' ||
-      !isCurrentVestblockOutboundLead(lead) ||
-      !shouldIncludeInRevenueOutreach(lead, allowSecondaryCampaigns)
-    ) return false
-
-    if (!isAutonomousEmailQueueLeadAllowed(lead)) return false
-
-    // A listing-agent intermediary can have valid business-contact evidence
-    // while the underlying seller strategy still requires human review. Keep
-    // that draft in the review workflow instead of repeatedly consuming the
-    // autonomous queue's bounded replacement scan.
-    if (!sellerMessageDeliveryAuthorized(row)) return false
-
-    if (lead?.email) {
-      const hunterCache = assessHunterSendVerificationCache({
-        metadata: lead.metadata_json,
-        email: lead.email,
-      })
-      if (hunterCache.fresh && !hunterCache.sendable) return false
-    }
-
-    const enrolledKey = enrolledPropertyKey(lead?.property_address)
-    return !enrolledKey || !contactedProperties.has(enrolledKey)
-  })
-
-  // Readiness must participate before recipient/property dedupe. Otherwise an
-  // old blocked approval can erase a newer provenance-backed draft for the
-  // same seller before the lane ranking ever sees the sendable record.
-  const deduped = prioritizeAndDedupeOutreachQueueCandidates(
-    sortMessagesForSendQueue(eligible),
-    sellerMessageReadinessTier,
+  const deduped = prepareEmailOutreachSendQueueCandidates(
+    (data || []) as EmailOutreachSendQueueRow[],
     {
-      recipient: (row) => normalizeEmailAddress(row.leads?.email),
-      sellerProperty: (row) => sellerPropertyKey(row.leads),
+      allowSecondaryCampaigns,
+      contactedProperties,
+      now: new Date(),
     }
   )
   if (!options.remainingByLane) return deduped.slice(0, limit)

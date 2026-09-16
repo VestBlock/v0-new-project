@@ -1,10 +1,15 @@
 import { getSourceFamily, isSourceInFamily } from '@/lib/leads/source-keys'
+import { hasValidCurrentEmailReadyRefillProvenance } from '@/lib/leads/refillProvenance'
 
 type LeadOutboundShape = {
+  id?: string | null
   source?: string | null
+  email?: string | null
+  email_valid?: boolean | null
   lead_type?: string | null
   category?: string | null
   market_segment?: string | null
+  metadata_json?: Record<string, unknown> | null
 }
 
 const LEGACY_SMALL_BUSINESS_LEAD_TYPES = new Set([
@@ -53,6 +58,8 @@ export function getLeadOutboundPauseReason(lead: LeadOutboundShape | null | unde
   }
 
   if (!isLegacySmallBusinessOutboundPaused()) return null
+
+  if (hasValidCurrentEmailReadyRefillProvenance(lead)) return null
 
   const sourceFamily = getSourceFamily(lead.source)
   if (LEGACY_SMALL_BUSINESS_SOURCE_FAMILIES.has(sourceFamily)) {
