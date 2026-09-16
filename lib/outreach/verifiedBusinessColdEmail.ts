@@ -177,8 +177,10 @@ export function deriveRecipientBoundBusinessContactEvidence(input: {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return false
       const candidate = value as Record<string, unknown>
       const sourceUrl = httpUrl(candidate.sourceUrl)
+      const candidateRecipientHash = String(candidate.recipientHash || '').trim().toLowerCase()
       return normalizeEmailAddress(String(candidate.email || '')) === recipientEmail &&
         Number(candidate.score) >= 5 &&
+        (!candidateRecipientHash || candidateRecipientHash === recipientHash) &&
         Boolean(sourceUrl) &&
         Boolean(websiteDomain(input.website)) &&
         domainsAlign(websiteDomain(sourceUrl), websiteDomain(input.website))
@@ -186,6 +188,7 @@ export function deriveRecipientBoundBusinessContactEvidence(input: {
     if (
       enrichment.provider === 'public_website' &&
       ['medium', 'high'].includes(String(enrichment.confidence || '').toLowerCase()) &&
+      (!enrichment.recipientHash || enrichment.recipientHash === recipientHash) &&
       matchingCandidate
     ) {
       const assessed = assessVerifiedBusinessContactEvidence({

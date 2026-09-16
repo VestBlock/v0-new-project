@@ -11,9 +11,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
+  title: 'Find Your Next Move Across Capital, Deals, and Opportunity',
   description:
-    'Organize readiness and connect the next workflow across capital, real estate, business growth and AI, or a personal roadmap—with active work preserved in DealVault.',
+    'VestBlock helps people prepare for capital, evaluate real estate deals, and build or grow opportunities—with a clear next-step plan and DealVault support for active work.',
   keywords: [
     'business capital preparation',
     'capital readiness',
@@ -34,24 +34,24 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
+    title: 'Find Your Next Move Across Capital, Deals, and Opportunity | VestBlock',
     description:
-      'Four clear outcomes, qualified workflow routing, and DealVault continuity organized around your next move.',
+      'Prepare for capital, evaluate deals, and build or grow opportunities from one coordinated starting point.',
     url: absoluteUrl('/'),
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock decision pathways for capital, real estate, business growth and AI, and personal roadmaps',
+        alt: 'VestBlock pathways for capital, deals, opportunity, and DealVault',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Capital, Real Estate, Business Growth + AI, and Personal Roadmaps | VestBlock',
+    title: 'Find Your Next Move Across Capital, Deals, and Opportunity | VestBlock',
     description:
-      'Four clear outcomes, qualified workflow routing, and DealVault continuity organized around your next move.',
+      'Prepare for capital, evaluate deals, and build or grow opportunities from one coordinated starting point.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };

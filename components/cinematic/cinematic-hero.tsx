@@ -8,20 +8,20 @@ const operatorBeats = [
   {
     number: "01",
     label: "Goal",
-    title: "Start with the outcome and the timing.",
-    body: "Choose the result you want across Capital, Real Estate, Business Growth + AI, or a Personal Roadmap. VestBlock captures the objective before it suggests a path.",
+    title: "Tell us what you want to move forward.",
+    body: "Start with Capital, Deals, or Opportunity. VestBlock uses your goal, timing, and current position to shape a useful starting plan.",
   },
   {
     number: "02",
-    label: "Criteria + gaps",
-    title: "Organize criteria. Surface gaps.",
-    body: "VestBlock structures the facts, surfaces missing preparation, and keeps independent decision criteria clear.",
+    label: "Readiness",
+    title: "See where you stand.",
+    body: "Get a plain-language view of what is ready, what is missing, and what deserves attention first.",
   },
   {
     number: "03",
-    label: "Route + record",
-    title: "Connect the route. Keep the record.",
-    body: "Qualified requests enter the right workflow. DealVault keeps the active record connected.",
+    label: "Next step",
+    title: "Act on an ordered plan.",
+    body: "Receive clear next actions and, when appropriate, submit information for review or continue into the relevant VestBlock path.",
   },
 ] as const
 
@@ -29,13 +29,13 @@ function DecisionConsole({ activeBeat }: { activeBeat: number }) {
   return (
     <div className="vb-decision-console" data-beat={activeBeat} aria-hidden="true">
       <header className="vb-decision-console__bar">
-        <span><i /> VestBlock decision interface</span>
+        <span><i /> Example next-step plan</span>
         <strong>{operatorBeats[activeBeat].label}</strong>
       </header>
 
       <div className="vb-decision-console__canvas">
         <div className="vb-decision-console__rail">
-          {["Goal", "Criteria / gaps", "Route", "Connected record"].map((label, index) => (
+          {["Goal", "Readiness", "Options", "Action plan"].map((label, index) => (
             <span key={label} data-active={(activeBeat === 0 ? index === 0 : activeBeat === 1 ? index <= 1 : true) || undefined}>
               <i>{index + 1}</i>{label}
             </span>
@@ -45,40 +45,40 @@ function DecisionConsole({ activeBeat }: { activeBeat: number }) {
         <section className="vb-decision-console__panel vb-decision-console__goal">
           <div className="vb-decision-console__panel-head"><span>Input 01</span><b>Goal confirmed</b></div>
           <p>Selected outcome</p>
-          <h3>Business Growth + AI</h3>
+          <h3>Prepare for business capital</h3>
           <dl>
-            <div><dt>Objective</dt><dd>Respond to every qualified inquiry</dd></div>
+            <div><dt>Objective</dt><dd>Prepare a request that can be reviewed</dd></div>
             <div><dt>Timing</dt><dd>Within 30 days</dd></div>
           </dl>
         </section>
 
         <section className="vb-decision-console__panel vb-decision-console__evidence">
-          <div className="vb-decision-console__panel-head"><span>Review 02</span><b>2 gaps surfaced</b></div>
-          <h3>Readiness evidence</h3>
+          <div className="vb-decision-console__panel-head"><span>Review 02</span><b>2 items to address</b></div>
+          <h3>Funding readiness</h3>
           <ul>
-            <li data-state="ready"><span>Offer + service area</span><b>Recorded</b></li>
-            <li data-state="ready"><span>Current inquiry volume</span><b>Recorded</b></li>
-            <li data-state="gap"><span>After-hours response path</span><b>Missing</b></li>
-            <li data-state="gap"><span>Qualified-call handoff rule</span><b>Define</b></li>
+            <li data-state="ready"><span>Use of funds</span><b>Ready</b></li>
+            <li data-state="ready"><span>Requested amount</span><b>Ready</b></li>
+            <li data-state="gap"><span>Recent statements</span><b>Missing</b></li>
+            <li data-state="gap"><span>Repayment picture</span><b>Review</b></li>
           </ul>
-          <p className="vb-decision-console__boundary">Boundary: implementation fit still requires review.</p>
+          <p className="vb-decision-console__boundary">A provider makes the final eligibility and terms decision.</p>
         </section>
 
         <section className="vb-decision-console__panel vb-decision-console__route">
-          <div className="vb-decision-console__panel-head"><span>Route 03</span><b>Path matched</b></div>
-          <p>Recommended next workflow</p>
-          <h3>AI receptionist assessment</h3>
-          <div><span>First action</span><strong>Define intake and handoff rules</strong></div>
-          <small>Qualified request · review required</small>
+          <div className="vb-decision-console__panel-head"><span>Option 03</span><b>Starting path</b></div>
+          <p>Recommended place to begin</p>
+          <h3>Business funding readiness review</h3>
+          <div><span>First action</span><strong>Gather the two missing records</strong></div>
+          <small>Preparation first · provider review later</small>
         </section>
 
         <section className="vb-decision-console__panel vb-decision-console__record">
-          <div className="vb-decision-console__panel-head"><span>Record 04</span><b>DealVault layer</b></div>
-          <h3>VB–GROW–018</h3>
+          <div className="vb-decision-console__panel-head"><span>Plan 04</span><b>Saved next steps</b></div>
+          <h3>30-day starting plan</h3>
           <ul>
-            <li><Check /> Goal + criteria</li>
-            <li><Check /> Readiness review</li>
-            <li><Check /> Next action</li>
+            <li><Check /> Goal</li>
+            <li><Check /> Readiness gaps</li>
+            <li><Check /> Ordered actions</li>
           </ul>
         </section>
 
@@ -131,21 +131,21 @@ export function CinematicHero() {
     <section className="vb-operator-hero" aria-labelledby="homepage-hero-title">
       <div className="vb-home-shell vb-operator-hero__grid">
         <div className="vb-operator-hero__lead" data-operator-beat="0">
-          <p className="vb-home-kicker">Capital · Real Estate · Business Growth + AI · Personal Roadmap</p>
-          <h1 id="homepage-hero-title">Turn a goal into a clear next move.</h1>
+          <p className="vb-home-kicker">Capital · Deals · Opportunity</p>
+          <h1 id="homepage-hero-title">Find your next move.</h1>
           <p className="vb-operator-hero__lede">
-            VestBlock organizes readiness, routes qualified requests into the right workflow, connects the next action,
-            and preserves active work in DealVault&apos;s record layer.
+            VestBlock helps you prepare for capital, evaluate real estate deals, and build or grow opportunities—then
+            turns your starting point into a clear, practical plan.
           </p>
           <div className="vb-operator-hero__actions">
             <Link href="/next-move" className="vb-home-button vb-home-button--primary">
-              Start the free questionnaire <ArrowRight aria-hidden="true" />
+              Get my free next-step plan <ArrowRight aria-hidden="true" />
             </Link>
             <Link href="#choose-your-path" className="vb-home-button vb-home-button--secondary">
-              Choose an outcome
+              Explore the three paths
             </Link>
           </div>
-          <p className="vb-operator-hero__assurance"><Check aria-hidden="true" /> No SSN required to receive a starting plan.</p>
+          <p className="vb-operator-hero__assurance"><Check aria-hidden="true" /> About 3 minutes · No SSN required.</p>
         </div>
 
         <div className="vb-operator-hero__stage">

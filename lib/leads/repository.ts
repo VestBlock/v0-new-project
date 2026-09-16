@@ -36,6 +36,7 @@ import {
 import {
   prioritizeAndDedupeOutreachQueueCandidates,
   prioritizeOutreachQueueCandidates,
+  sellerQueueCandidateDeliveryAuthorized,
   sellerQueueCandidateReadinessTier,
 } from '@/lib/outreach/sendQueuePriorityCore'
 
@@ -308,6 +309,24 @@ function sellerMessageReadinessTier(
     compliantCopy: !validateOutreachMessageQuality({ lead, message }),
     provenanceAutoApproval: isStrategyEngineAutoApprovalAllowed(lead),
     explicitAdminApproval,
+    messageStatus: message.status,
+  })
+}
+
+function sellerMessageDeliveryAuthorized(
+  message: OutreachMessageRecord & { leads: LeadRecord | null }
+) {
+  const lead = message.leads
+  const isSellerLead =
+    lead?.category === 'seller_lead' || lead?.lead_type === 'sell_house'
+  if (!lead || !isSellerLead) return true
+
+  return sellerQueueCandidateDeliveryAuthorized({
+    provenanceAutoApproval: isStrategyEngineAutoApprovalAllowed(lead),
+    explicitAdminApproval:
+      message.status === 'approved' &&
+      Boolean(message.approved_by_user_id) &&
+      Boolean(message.approved_at),
     messageStatus: message.status,
   })
 }
@@ -1020,6 +1039,12 @@ export async function listEmailOutreachForSendQueue(
     ) return false
 
     if (!isAutonomousEmailQueueLeadAllowed(lead)) return false
+
+    // A listing-agent intermediary can have valid business-contact evidence
+    // while the underlying seller strategy still requires human review. Keep
+    // that draft in the review workflow instead of repeatedly consuming the
+    // autonomous queue's bounded replacement scan.
+    if (!sellerMessageDeliveryAuthorized(row)) return false
 
     if (lead?.email) {
       const hunterCache = assessHunterSendVerificationCache({

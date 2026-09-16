@@ -32,7 +32,7 @@ export function PublicSiteFooter() {
         <div>
           <p className="font-medium text-white">Vestblock LLC</p>
           <p className="mt-1 text-xs leading-5 text-white/45">
-            Decision support, workflow routing, and qualified introductions. Results are not guaranteed.
+            Plan your next move across capital, deals, and opportunity. Independent providers make their own decisions; results are not guaranteed.
           </p>
         </div>
         <nav aria-label="Legal" className="flex flex-wrap gap-x-6 gap-y-3">

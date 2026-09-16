@@ -26,9 +26,11 @@ export function classifyPartnerOutreachSendResult(
 ): PartnerOutreachSendDisposition {
   const deferred = result.ok === false && result.deferred === true
   const recordDeferred = deferred && result.deferredScope === 'record'
-  const retryableReservation = recordDeferred &&
-    /lead_hunter_(?:claim|email)_already_reserved/.test(String(result.error || '').toLowerCase())
-  const quarantineRecord = recordDeferred && !retryableReservation
+  const retryableRecordDeferral = recordDeferred &&
+    /lead_hunter_(?:claim|email)_already_reserved|public_business_evidence_refresh_retryable/.test(
+      String(result.error || '').toLowerCase()
+    )
+  const quarantineRecord = recordDeferred && !retryableRecordDeferral
 
   return {
     providerAttempted: result.provider === 'outlook',

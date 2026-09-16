@@ -7,6 +7,7 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
 import { classifyHunterVerificationFailureScope } from '@/lib/outreach/hunterSendVerificationCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+import { ensurePublicBusinessWebsiteEvidenceForEntity } from '@/lib/outreach/publicBusinessWebsiteEvidence'
 import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type BuyerEmailAttachment = {
@@ -159,6 +160,40 @@ function invalidResult(
   }
 }
 
+async function ensureBuyerBusinessContactEvidence(buyer: BuyerRecord) {
+  const existing = deriveRecipientBoundBusinessContactEvidence({
+    source: buyer.source,
+    metadataJson: buyer.metadata_json,
+    contactInfo: buyer.contact_info,
+    recipientEmail: buyer.contact_email,
+    website: buyer.website,
+  })
+  if (existing) {
+    return { buyer, evidence: existing, retryable: false, reason: 'business_contact_evidence_already_fresh' }
+  }
+
+  const refresh = await ensurePublicBusinessWebsiteEvidenceForEntity({
+    scope: 'buyer',
+    entity: {
+      id: buyer.id,
+      source: buyer.source,
+      contactEmail: buyer.contact_email,
+      website: buyer.website,
+      contactInfo: buyer.contact_info,
+      metadataJson: buyer.metadata_json,
+      updatedAt: buyer.updated_at,
+    },
+  })
+  return {
+    buyer: refresh.evidence
+      ? { ...buyer, contact_info: refresh.contactInfo, updated_at: refresh.updatedAt }
+      : buyer,
+    evidence: refresh.evidence,
+    retryable: refresh.retryable,
+    reason: refresh.reason,
+  }
+}
+
 export async function sendBuyerOutreachEmail(
   input: SendBuyerEmailInput
 ): Promise<SendBuyerEmailResult> {
@@ -175,16 +210,14 @@ export async function sendBuyerOutreachEmail(
   const purpose = input.deliveryPurpose || 'cold_outreach'
   let buyer = input.buyer
   if (purpose === 'cold_outreach') {
-    const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
-      source: buyer.source,
-      metadataJson: buyer.metadata_json,
-      contactInfo: buyer.contact_info,
-      recipientEmail: buyer.contact_email,
-      website: buyer.website,
-    })
-    if (!businessContactEvidence) {
+    const businessContact = await ensureBuyerBusinessContactEvidence(buyer)
+    buyer = businessContact.buyer
+    if (!businessContact.evidence) {
       return {
-        ...invalidResult(identity, 'Verified B2B cold email admission failed (business_contact_evidence_required).'),
+        ...invalidResult(
+          identity,
+          `Verified B2B cold email admission failed (business_contact_evidence_required; ${businessContact.reason}${businessContact.retryable ? '; public_business_evidence_refresh_retryable' : ''}).`
+        ),
         deferred: true,
         deferredScope: 'record',
       }
@@ -254,16 +287,14 @@ export async function sendBuyerPacketEmail(
     : requestedPurpose
   let buyer = input.buyer
   if (effectivePurpose === 'cold_outreach') {
-    const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
-      source: buyer.source,
-      metadataJson: buyer.metadata_json,
-      contactInfo: buyer.contact_info,
-      recipientEmail: buyer.contact_email,
-      website: buyer.website,
-    })
-    if (!businessContactEvidence) {
+    const businessContact = await ensureBuyerBusinessContactEvidence(buyer)
+    buyer = businessContact.buyer
+    if (!businessContact.evidence) {
       return {
-        ...invalidResult(identity, 'Verified B2B cold email admission failed (business_contact_evidence_required).'),
+        ...invalidResult(
+          identity,
+          `Verified B2B cold email admission failed (business_contact_evidence_required; ${businessContact.reason}${businessContact.retryable ? '; public_business_evidence_refresh_retryable' : ''}).`
+        ),
         deferred: true,
         deferredScope: 'record',
       }

@@ -1,9 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Bot, Building2, Landmark, ShieldCheck, TrendingUp } from "lucide-react"
+import { ArrowRight, Building2, Landmark, ShieldCheck, TrendingUp } from "lucide-react"
 
-export type HomepageOutcomeId = "capital" | "real-estate" | "business-growth" | "personal-roadmap"
+export type HomepageOutcomeId = "capital" | "deals" | "opportunity"
 
 export const homepageOutcomes = [
   {
@@ -23,13 +23,13 @@ export const homepageOutcomes = [
     icon: Landmark,
   },
   {
-    id: "real-estate",
-    label: "Real Estate",
-    title: "Move through a buyer, seller, lender, or partner path",
+    id: "deals",
+    label: "Deals",
+    title: "Evaluate, finance, buy, or sell real estate",
     href: "/real-estate",
-    action: "Choose a real estate role",
+    action: "Explore real estate deals",
     access: "Free profiles and submissions · Routing requires review",
-    summary: "Start with your role and criteria so a relevant property, participant, or intake workflow can be connected.",
+    summary: "Start with your role and criteria, then use the relevant property, analysis, financing, buyer, seller, or lender path.",
     prepare: "Market, role, asset type, price range, timing, property details, capacity, and clear no-go criteria.",
     boundary: "VestBlock is not a broker or guarantor. Licensed and independent parties control regulated services, offers, underwriting, and closings.",
     shortcuts: [
@@ -40,34 +40,19 @@ export const homepageOutcomes = [
     icon: Building2,
   },
   {
-    id: "business-growth",
-    label: "Business Growth + AI",
-    title: "Improve discovery, lead response, or operations",
-    href: "/services",
-    action: "Explore growth workflows",
-    access: "Free reviews · Paid implementation is identified before purchase",
-    summary: "Define the operating constraint, organize the current process, and connect the next practical growth or automation review.",
-    prepare: "Primary offer, lead sources, response process, service area, operating capacity, and the result to improve.",
-    boundary: "Growth and AI support do not guarantee rankings, leads, appointments, revenue, or profitability.",
+    id: "opportunity",
+    label: "Opportunity",
+    title: "Strengthen your position and build what comes next",
+    href: "/opportunity",
+    action: "Explore opportunities",
+    access: "Free starting plan · Some tools require an account · Paid services are identified upfront",
+    summary: "Build a personal or business starting plan, improve financial readiness, set up a business, or explore practical growth and AI support.",
+    prepare: "Your goal, current position, available time, main obstacle, and—when relevant—your business offer and operating needs.",
+    boundary: "Roadmaps are educational, and growth support does not guarantee credit, rankings, leads, revenue, or profitability.",
     shortcuts: [
-      ["AI receptionist", "/ai-assistant"],
-      ["Search visibility", "/visibility-expansion"],
-    ],
-    icon: Bot,
-  },
-  {
-    id: "personal-roadmap",
-    label: "Personal Roadmap",
-    title: "Build a starting plan for financial readiness",
-    href: "/next-move",
-    action: "Build my starting plan",
-    access: "Free to view · No account or SSN required",
-    summary: "Turn your goal, current position, time, and main obstacle into an ordered educational roadmap.",
-    prepare: "Your goal, timeline, current position, available time, and main obstacle. The questionnaire does not request an SSN.",
-    boundary: "The roadmap is educational. Creditors, issuers, programs, employers, and partners make their own decisions.",
-    shortcuts: [
-      ["Free questionnaire", "/next-move"],
-      ["Credit review", "/credit-upload"],
+      ["Free next-step plan", "/next-move"],
+      ["Business setup", "/business-setup"],
+      ["Growth + AI", "/services"],
     ],
     icon: TrendingUp,
   },
@@ -84,7 +69,10 @@ export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryPro
   const rememberChoice = () => {
     try {
       window.localStorage.setItem("vestblock:selected-homepage-goal", selected.id)
-      window.localStorage.setItem("vestblock:active-lane", selected.id)
+      window.localStorage.setItem(
+        "vestblock:active-lane",
+        selected.id === "deals" ? "real-estate" : selected.id,
+      )
     } catch {
       // The route still works when storage is unavailable.
     }
@@ -95,10 +83,10 @@ export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryPro
       <div className="vb-home-shell">
         <div className="vb-home-heading vb-home-heading--split">
           <div>
-            <p className="vb-home-kicker">Four outcomes · one starting point</p>
-            <h2 id="path-selector-title">What are you working toward?</h2>
+            <p className="vb-home-kicker">Three paths · one coordinated platform</p>
+            <h2 id="path-selector-title">Where do you want to move forward?</h2>
           </div>
-          <p>Choose the closest outcome. VestBlock will show the information to organize, the next workflow, and where an independent decision applies.</p>
+          <p>Choose the closest path. VestBlock will show what to prepare, what you can do next, and where another provider or participant makes the decision.</p>
         </div>
 
         <div className="vb-home-paths__workspace">
@@ -132,8 +120,8 @@ export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryPro
               {selected.shortcuts.map(([label, href]) => <Link key={href} href={href} onClick={rememberChoice}>{label}<ArrowRight aria-hidden="true" /></Link>)}
             </div>
             <dl>
-              <div><dt>Organize</dt><dd>{selected.prepare}</dd></div>
-              <div><dt>Decision boundary</dt><dd>{selected.boundary}</dd></div>
+              <div><dt>What to prepare</dt><dd>{selected.prepare}</dd></div>
+              <div><dt>What to know</dt><dd>{selected.boundary}</dd></div>
             </dl>
             <p className="vb-home-paths__access"><ShieldCheck aria-hidden="true" /> {selected.access}</p>
             <div className="vb-home-paths__actions">

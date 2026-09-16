@@ -14,40 +14,28 @@ const proofByOutcome = {
       ["When ready", "Submit to the matched path", "Continue only when the request fits the stated provider criteria and review process."],
     ],
   },
-  "real-estate": {
-    label: "Real Estate",
+  deals: {
+    label: "Deals",
     document: "Real estate criteria brief",
     objective: "Source a small multifamily property",
-    path: "Buyer profile and property-matching workflow",
+    path: "Buyer profile and property review path",
     boundary: "Participants control offers, diligence, financing, and closing",
     steps: [
       ["First 7 days", "Define the buy box", "Record the market, asset type, range, timing, capacity, and conditions that make a property unsuitable."],
       ["Next 30 days", "Validate the criteria", "Confirm proof of capacity, decision speed, diligence needs, and who must participate."],
-      ["When qualified", "Activate the matching path", "Use the approved criteria for relevant sourcing, introductions, and participant review."],
+      ["When ready", "Submit the criteria for review", "Use the stated criteria for relevant sourcing, possible introductions, and participant review."],
     ],
   },
-  "business-growth": {
-    label: "Business Growth + AI",
-    document: "Growth workflow brief",
-    objective: "Improve response to qualified inquiries",
-    path: "AI receptionist and handoff assessment",
-    boundary: "Implementation fit and business results require review",
+  opportunity: {
+    label: "Opportunity",
+    document: "Opportunity starting plan",
+    objective: "Strengthen financial readiness and start a service business",
+    path: "Educational roadmap and business-setup path",
+    boundary: "Programs, creditors, partners, and the market decide outcomes",
     steps: [
-      ["First 7 days", "Map the current response flow", "Document inquiry sources, response times, qualification rules, coverage, and missed handoffs."],
-      ["Next 30 days", "Design the operating workflow", "Define scripts, routing logic, escalation rules, reporting, and human ownership."],
-      ["When approved", "Connect the implementation path", "Move the reviewed workflow into setup, testing, and measured iteration."],
-    ],
-  },
-  "personal-roadmap": {
-    label: "Personal Roadmap",
-    document: "Financial readiness roadmap",
-    objective: "Improve credit and monthly cash flow",
-    path: "Educational next-move roadmap",
-    boundary: "Creditors, issuers, programs, and partners decide outcomes",
-    steps: [
-      ["First 7 days", "Establish the baseline", "Organize the stated goal, timeline, current position, available time, and main constraint."],
-      ["Next 30 days", "Complete the preparation work", "Prioritize the educational actions and records most relevant to the stated goal."],
-      ["At each checkpoint", "Review the next decision", "Update progress and choose the next appropriate workflow without assuming an approval."],
+      ["First 7 days", "Establish the starting point", "Organize the goal, timeline, current position, available time, and main constraint."],
+      ["Next 30 days", "Build the foundation", "Prioritize the financial, business-setup, offer, and operating actions most relevant to the goal."],
+      ["At each checkpoint", "Choose the next move", "Update progress and continue into the appropriate tool, review, or service without assuming an outcome."],
     ],
   },
 } satisfies Record<HomepageOutcomeId, {
@@ -67,17 +55,17 @@ export function DecisionProofSection({ outcomeId }: { outcomeId: HomepageOutcome
       <div className="vb-home-shell vb-home-proof__layout">
         <div className="vb-home-proof__intro">
           <p className="vb-home-kicker">Tangible output · {proof.label}</p>
-          <h2 id="roadmap-proof-title">A decision brief you can use.</h2>
+          <h2 id="roadmap-proof-title">A starting plan you can use.</h2>
           <p>
-            The selected outcome changes the criteria, route, and working result. This example shows how VestBlock turns
-            your answers into a clear sequence without presenting an approval or guarantee.
+            The selected path changes what VestBlock asks, what it helps you prepare, and the result you receive. This
+            example shows a clear sequence without presenting an approval or guarantee.
           </p>
         </div>
 
-        <div className="vb-roadmap-sheet" aria-label={`Illustrative ${proof.label} decision brief`}>
+        <div className="vb-roadmap-sheet" aria-label={`Illustrative ${proof.label} starting plan`}>
           <header>
             <div>
-              <span>VestBlock decision brief</span>
+              <span>VestBlock starting plan</span>
               <strong>{proof.document}</strong>
             </div>
             <span className="vb-roadmap-sheet__status"><Check aria-hidden="true" /> Route identified</span>
@@ -85,8 +73,8 @@ export function DecisionProofSection({ outcomeId }: { outcomeId: HomepageOutcome
 
           <div className="vb-roadmap-sheet__summary">
             <div><FileText aria-hidden="true" /><span>Objective</span><strong>{proof.objective}</strong></div>
-            <div><Route aria-hidden="true" /><span>Connected workflow</span><strong>{proof.path}</strong></div>
-            <div><ShieldCheck aria-hidden="true" /><span>Decision boundary</span><strong>{proof.boundary}</strong></div>
+            <div><Route aria-hidden="true" /><span>Starting path</span><strong>{proof.path}</strong></div>
+            <div><ShieldCheck aria-hidden="true" /><span>What to know</span><strong>{proof.boundary}</strong></div>
           </div>
 
           <ol>

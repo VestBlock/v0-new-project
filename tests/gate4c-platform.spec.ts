@@ -3,23 +3,24 @@ import { expect, test } from '@playwright/test'
 test.setTimeout(90_000)
 
 test.describe('Gate 4C public platform and customer workspace', () => {
-  test('homepage explains the four lanes and routes Real Estate to its hub', async ({ page }) => {
+  test('homepage explains the three paths and routes each public hub', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Find your next move.' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Real Estate', exact: true }).first()).toHaveAttribute('href', '/real-estate')
-    await expect(page.getByRole('heading', { name: 'What are you trying to do next?' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Four lanes. One connected account.' })).toBeVisible()
-    await expect(page.locator('body')).not.toContainText('See every Deals option')
+    await expect(page.getByRole('link', { name: 'Capital', exact: true }).first()).toHaveAttribute('href', '/capital')
+    await expect(page.getByRole('link', { name: 'Deals', exact: true }).first()).toHaveAttribute('href', '/real-estate')
+    await expect(page.getByRole('link', { name: 'Opportunity', exact: true }).first()).toHaveAttribute('href', '/opportunity')
+    await expect(page.getByRole('heading', { name: 'Where do you want to move forward?' })).toBeVisible()
+    await expect(page.getByText('Three paths · one coordinated platform')).toBeVisible()
   })
 
-  test('scenario selector previews the correct role and saves guest continuity', async ({ page }) => {
-    await page.goto('/#choose-your-path', { waitUntil: 'domcontentloaded' })
-    await page.getByRole('button', { name: /Find, buy, or finance a property/ }).click()
-    await expect(page.getByText('Recommended lane').locator('..').getByText('Real Estate')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Set my property criteria' })).toHaveAttribute('href', '/real-estate')
-    await page.getByRole('link', { name: 'Set my property criteria' }).click()
+  test('path selector previews Deals and saves guest continuity', async ({ page }) => {
+    await page.goto('/#choose-your-path', { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: /Deals/ }).click()
+    await expect(page.getByRole('heading', { name: 'Evaluate, finance, buy, or sell real estate' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Explore real estate deals/ })).toHaveAttribute('href', '/real-estate')
+    await page.getByRole('link', { name: /Explore real estate deals/ }).click()
     await expect(page).toHaveURL(/\/real-estate$/)
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('vestblock:selected-scenario'))).toBe('property')
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('vestblock:selected-homepage-goal'))).toBe('deals')
     await expect.poll(() => page.evaluate(() => localStorage.getItem('vestblock:active-lane'))).toBe('real-estate')
   })
 
@@ -37,7 +38,7 @@ test.describe('Gate 4C public platform and customer workspace', () => {
   }
 
   test('questionnaire resumes non-sensitive planning fields without contact data', async ({ page }) => {
-    await page.goto('/next-move?focus=buy-property', { waitUntil: 'domcontentloaded' })
+    await page.goto('/next-move?focus=buy-property', { waitUntil: 'networkidle' })
     await page.getByRole('button', { name: /Continue/ }).click()
     await page.getByLabel('Main obstacle').fill('Need a clear acquisition plan')
     await page.getByLabel('Useful context (optional)').fill('Duplex in Milwaukee')
@@ -60,42 +61,24 @@ test.describe('Gate 4C public platform and customer workspace', () => {
     expect(response.status()).toBe(401)
   })
 
-  test('hero has robust media states and reduced-motion fallback', async ({ browser }) => {
+  test('hero keeps a static decision example when reduced motion is requested', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-material-hero__fallback--desktop')).toBeVisible()
-    await expect(page.locator('.vb-material-hero__video')).toBeHidden()
+    await expect(page.locator('.vb-decision-console')).toBeVisible()
+    await expect(page.getByText('Example next-step plan')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Get my free next-step plan/ }).first()).toHaveAttribute('href', '/next-move')
     await context.close()
   })
 
-  test('hero is a framed decision room with four working platform lanes', async ({ page }) => {
+  test('hero is a framed next-step example with a working three-path handoff', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-material-hero__scene')).toBeVisible()
-    await expect(page.locator('.vb-material-hero__scene')).toHaveCount(1)
-    await expect(page.locator('.vb-material-hero__robot')).toBeAttached()
-    await page.locator('.vb-material-hero__video').dispatchEvent('loadeddata')
-    await expect(page.getByRole('button', { name: /hero scene/i })).toBeVisible()
-
-    const laneNavigation = page.getByRole('navigation', { name: /four platform lanes/i })
-    await expect(laneNavigation.getByRole('link')).toHaveCount(4)
-    await expect(laneNavigation.getByRole('link', { name: /Capital/ })).toHaveAttribute('href', '/capital')
-    await expect(laneNavigation.getByRole('link', { name: /Real Estate/ })).toHaveAttribute('href', '/real-estate')
-    await expect(laneNavigation.getByRole('link', { name: /Opportunity/ })).toHaveAttribute('href', '/opportunity')
-    await expect(laneNavigation.getByRole('link', { name: /DealVault/ })).toHaveAttribute('href', '/dealvault')
-
-    await page.getByRole('link', { name: /What are you trying to do next/ }).click()
+    await expect(page.locator('.vb-decision-console')).toBeVisible()
+    await expect(page.locator('.vb-decision-console')).toHaveCount(1)
+    await expect(page.getByText('Prepare for business capital')).toBeVisible()
+    await page.getByRole('link', { name: /Explore the three paths/ }).click()
     await expect(page).toHaveURL(/#choose-your-path$/)
-    await expect(page.getByRole('heading', { name: 'What are you trying to do next?' })).toBeInViewport()
-  })
-
-  test('hero reports a static fallback when motion media fails', async ({ page }) => {
-    await page.route(/\/hero\/material-ledger\/(desktop|mobile)\.(webm|mp4)$/, (route) => route.abort())
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-material-hero__scene')).toHaveAttribute('data-media-failed', 'true')
-    await expect(page.getByText('Static working reference')).toBeVisible()
-    await expect(page.getByRole('button', { name: /hero scene/i })).toHaveCount(0)
-    await expect(page.locator('.vb-material-hero__fallback--desktop')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Where do you want to move forward?' })).toBeInViewport()
   })
 
   test('public surfaces have no horizontal overflow at phone and tablet widths', async ({ page }) => {

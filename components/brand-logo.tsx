@@ -35,7 +35,7 @@ export function BrandLogo({ className, markClassName, showTagline = false }: Bra
         </span>
         {showTagline ? (
           <span className="mt-1 hidden text-xs font-medium uppercase leading-none tracking-[0.14em] text-[#d7f80b]/80 xl:block">
-            Decision infrastructure
+            Find your next move
           </span>
         ) : null}
       </span>

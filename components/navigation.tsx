@@ -99,9 +99,9 @@ export function Navigation() {
   // Main public navigation links
   const mainNavLinks = [
     { href: '/capital', label: 'Capital' },
-    { href: '/real-estate', label: 'Real Estate' },
-    { href: '/services', label: 'Business Growth + AI' },
-    { href: '/next-move', label: 'Personal Roadmap' },
+    { href: '/real-estate', label: 'Deals' },
+    { href: '/opportunity', label: 'Opportunity' },
+    { href: '/dealvault', label: 'DealVault' },
   ];
 
   const isActiveLink = (href: string) => {
@@ -222,7 +222,7 @@ export function Navigation() {
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="flex min-h-11 items-center rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Start free questionnaire
+                        Get my free plan
                       </Link>
                     </>
                   ) : (
@@ -319,7 +319,7 @@ export function Navigation() {
                 <Link href="/login?redirect=/workspace" aria-hidden={isLoading || undefined} tabIndex={isLoading ? -1 : undefined}>Sign In</Link>
               </Button>
               <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/next-move" data-home-primary-cta>Start free questionnaire</Link>
+                <Link href="/next-move" data-home-primary-cta>Get my free plan</Link>
               </Button>
             </nav>
           )}

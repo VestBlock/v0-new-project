@@ -32,10 +32,10 @@ export function DealVaultProofSection() {
         <div className="vb-home-continuity__layout">
           <div className="vb-home-continuity__intro">
             <p className="vb-home-kicker">DealVault</p>
-            <h2 id="continuity-title">The record layer behind active work.</h2>
+            <h2 id="continuity-title">Keep important work connected.</h2>
             <p>
-              DealVault is not a fifth outcome. It preserves the agreements, milestones, permissions, and payout
-              references behind work activated through any VestBlock path.
+              When a VestBlock path becomes active work, DealVault can keep agreements, milestones, permissions, and
+              payout references together in one controlled record.
             </p>
             <div>
               <Link href="/dealvault/demo" className="vb-home-button vb-home-button--primary">

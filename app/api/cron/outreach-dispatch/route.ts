@@ -100,6 +100,10 @@ export async function GET(request: Request) {
       budgetMs: 240_000,
       startedAtMs: Date.now(),
       suppressDigest: true,
+      // A production dispatch gap must attempt the email-ready refill. Each
+      // paid source remains independently protected by approval, credentials,
+      // daily-unit reservations, and the source cost governor.
+      refillEnabled: true,
     })
     const sendPasses = [
       result.firstPass.send,

@@ -6,6 +6,7 @@ import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
 import { classifyHunterVerificationFailureScope } from '@/lib/outreach/hunterSendVerificationCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+import { ensurePublicBusinessWebsiteEvidenceForEntity } from '@/lib/outreach/publicBusinessWebsiteEvidence'
 import { deriveRecipientBoundBusinessContactEvidence } from '@/lib/outreach/verifiedBusinessColdEmail'
 
 type SendLenderEmailInput = {
@@ -87,7 +88,7 @@ export async function sendLenderOutreachEmail(
   const purpose = input.deliveryPurpose || 'cold_outreach'
   let lender = input.lender
   if (purpose === 'cold_outreach') {
-    const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
+    let businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
       source: lender.source,
       metadataJson: lender.metadata_json,
       contactInfo: lender.contact_info,
@@ -95,13 +96,31 @@ export async function sendLenderOutreachEmail(
       website: lender.website,
     })
     if (!businessContactEvidence) {
-      return {
-        ...base,
-        ok: false,
-        deferred: true,
-        deferredScope: 'record',
-        provider: 'none',
-        error: 'Verified B2B cold email admission failed (business_contact_evidence_required).',
+      const refresh = await ensurePublicBusinessWebsiteEvidenceForEntity({
+        scope: 'lender',
+        entity: {
+          id: lender.id,
+          source: lender.source,
+          contactEmail: lender.contact_email,
+          website: lender.website,
+          contactInfo: lender.contact_info,
+          metadataJson: lender.metadata_json,
+          updatedAt: lender.updated_at,
+        },
+      })
+      businessContactEvidence = refresh.evidence
+      if (businessContactEvidence) {
+        lender = { ...lender, contact_info: refresh.contactInfo, updated_at: refresh.updatedAt }
+      }
+      if (!businessContactEvidence) {
+        return {
+          ...base,
+          ok: false,
+          deferred: true,
+          deferredScope: 'record',
+          provider: 'none',
+          error: `Verified B2B cold email admission failed (business_contact_evidence_required; ${refresh.reason}${refresh.retryable ? '; public_business_evidence_refresh_retryable' : ''}).`,
+        }
       }
     }
     const hunter = await ensureFreshHunterSendVerificationForEntity({

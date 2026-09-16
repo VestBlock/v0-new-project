@@ -109,6 +109,8 @@ type LeadAutomationOptions = {
   refillMarketOffset?: number
   refillNicheCount?: number
   refillMapTimeoutMs?: number
+  /** Explicit caller policy; provider cost governors still apply per source. */
+  refillEnabled?: boolean
   weakWebPresenceOnly?: boolean
   /** Shared cold-email budget identity for a single cron invocation. */
   invocationId?: string
@@ -2719,7 +2721,8 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
   const target = options.sendLimit || getLeadThroughputTargetPerRun()
   const enrichmentBase = envInt('LEADS_DAILY_EMAIL_ENRICH_LIMIT', 250)
   const outreachBase = envInt('LEADS_DAILY_OUTREACH_LIMIT', 300)
-  const refillEnabled = envBool('LEADS_THROUGHPUT_REFILL_ENABLED', true)
+  const refillEnabled =
+    options.refillEnabled ?? envBool('LEADS_THROUGHPUT_REFILL_ENABLED', true)
   const firstOutreachLimit = scaleLeadWorkset(outreachBase, target, 4, 600)
   const fallbackEnrichmentLimit = scaleLeadWorkset(Math.ceil(enrichmentBase / 2), target, 3, 300)
   const refillScrapeLimit = envInt(

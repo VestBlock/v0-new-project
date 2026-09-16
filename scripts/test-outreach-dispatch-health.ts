@@ -10,8 +10,46 @@ import {
 import {
   prioritizeAndDedupeOutreachQueueCandidates,
   prioritizeOutreachQueueCandidates,
+  sellerQueueCandidateDeliveryAuthorized,
   sellerQueueCandidateReadinessTier,
 } from '../lib/outreach/sendQueuePriorityCore'
+
+assert.equal(
+  sellerQueueCandidateDeliveryAuthorized({
+    provenanceAutoApproval: false,
+    explicitAdminApproval: false,
+    messageStatus: 'needs_review',
+  }),
+  false,
+  'a review-only seller draft must not occupy an autonomous delivery candidate slot'
+)
+assert.equal(
+  sellerQueueCandidateDeliveryAuthorized({
+    provenanceAutoApproval: true,
+    explicitAdminApproval: false,
+    messageStatus: 'needs_review',
+  }),
+  true,
+  'seller strategy provenance may authorize the existing guarded auto-approval path'
+)
+assert.equal(
+  sellerQueueCandidateDeliveryAuthorized({
+    provenanceAutoApproval: false,
+    explicitAdminApproval: true,
+    messageStatus: 'approved',
+  }),
+  true,
+  'an exact admin-approved seller message must remain eligible'
+)
+assert.equal(
+  sellerQueueCandidateDeliveryAuthorized({
+    provenanceAutoApproval: true,
+    explicitAdminApproval: false,
+    messageStatus: 'queued',
+  }),
+  false,
+  'a stale queued seller message must stay out of the autonomous candidate set'
+)
 
 assert.equal(
   sellerQueueCandidateReadinessTier({
@@ -241,6 +279,11 @@ const leadRoute = readFileSync(
   'utf8'
 )
 assert.match(leadRoute, /suppressDigest: true/)
+assert.match(
+  leadRoute,
+  /refillEnabled: true/,
+  'the production cron must explicitly request guarded refill even when stale deployment configuration disables the generic default'
+)
 assert.match(leadRoute, /runLeadThroughputSprint/)
 assert.match(leadRoute, /taskType: 'outreach_dispatch_operational_failure'/)
 assert.match(leadRoute, /const ok = result\.ok && dispatchHealth\.ok/)
@@ -281,6 +324,7 @@ const leadRepository = readFileSync(
   'utf8'
 )
 assert.match(leadRepository, /sellerQueueCandidateReadinessTier/)
+assert.match(leadRepository, /sellerMessageDeliveryAuthorized\(row\)/)
 assert.match(leadRepository, /prioritizeOutreachQueueCandidates/)
 assert.match(leadRepository, /prioritizeAndDedupeOutreachQueueCandidates/)
 assert.match(

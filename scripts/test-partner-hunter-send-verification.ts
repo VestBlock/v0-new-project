@@ -92,6 +92,21 @@ for (const reason of [
     `${reason} must be restored for a later retry while this run scans another record`
   )
 }
+assert.deepEqual(
+  classifyPartnerOutreachSendResult({
+    ok: false,
+    deferred: true,
+    deferredScope: 'record',
+    provider: 'none',
+    error: 'public_business_evidence_refresh_retryable',
+  }),
+  {
+    providerAttempted: false,
+    quarantineRecord: false,
+    stopReplacementScan: false,
+  },
+  'A transient website evidence refresh failure must be restored while the run scans another record'
+)
 assert.equal(isPartnerSendOperationalFailureStatus('record_delivery_quarantine_failed'), true)
 assert.equal(isPartnerSendOperationalFailureStatus('delivery_deferred_restore_failed'), true)
 assert.equal(isPartnerSendOperationalFailureStatus('record_delivery_quarantined'), false)
@@ -169,6 +184,13 @@ for (const [file, scope, strategy] of [
   assert.match(outbound, /!hunter\.sendable \|\| hunter\.status !== 'valid' \|\| !hunter\.cache/)
   assert.match(outbound, /deferredScope: classifyHunterVerificationFailureScope\(hunter\.reason\)/)
   assert.match(outbound, /business_contact_evidence_required/)
+  if (scope === 'buyer' || scope === 'lender') {
+    assert.match(outbound, /ensurePublicBusinessWebsiteEvidenceForEntity/)
+    assert.ok(
+      outbound.indexOf('ensurePublicBusinessWebsiteEvidenceForEntity') < outbound.indexOf('ensureFreshHunterSendVerificationForEntity({'),
+      `${file} must refresh exact public website evidence before spending a Hunter credit`
+    )
+  }
   assert.match(outbound, /sendGuardedOutlookEmail/)
   assert.ok(
     outbound.indexOf('deriveRecipientBoundBusinessContactEvidence({') < outbound.indexOf('ensureFreshHunterSendVerificationForEntity({'),
