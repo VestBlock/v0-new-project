@@ -18,9 +18,7 @@ import {
 import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 import type { BuyerPacketRecord, BuyerRecord } from '@/lib/buyers/types'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
-import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
 import { buildBuyerPacketFileName, buildPremiumBuyerPacketPdf } from '@/lib/property/buyerPacketPdf'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
@@ -158,7 +156,9 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
   const admin = createAdminClient()
   const packet = await getBuyerPacketById(packetId)
   const allRows = await loadMatches(packet, options)
-  const activeBuyBoxBuyerIds = options.requireConfirmedBuyer ? await confirmedBuyerIds(allRows) : new Set<string>()
+  const activeBuyBoxBuyerIds = await confirmedBuyerIds(allRows)
+  const hasConfirmedRelationship = (buyer: BuyerRecord) =>
+    CONFIRMED_BUYER_STAGES.has(buyer.relationship_stage) && activeBuyBoxBuyerIds.has(buyer.id)
   const buyerIds = allRows.map((row: any) => String(row.buyer_id || '')).filter(Boolean)
   const { data: existingSends, error: existingError } = buyerIds.length
     ? await admin
@@ -175,7 +175,7 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
     if (!buyer || buyer.outreach_status === 'do_not_contact') return false
     if (ACCEPTED_OR_FURTHER.has(existingByBuyer.get(String(buyer.id)) || '')) return false
     if (!options.requireConfirmedBuyer) return true
-    return CONFIRMED_BUYER_STAGES.has(buyer.relationship_stage) && activeBuyBoxBuyerIds.has(buyer.id)
+    return hasConfirmedRelationship(buyer)
   })
 
   if (!rows.length) {
@@ -197,12 +197,16 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
       acceptedCount: 0,
       failedCount: 0,
       skippedCount: allRows.length - rows.length,
-      results: rows.map((match: any) => ({
-        buyerId: match.buyers.id,
-        matchId: match.id,
-        ok: true,
-        status: 'would_send',
-      })) as DeliveryResult[],
+      results: rows.map((match: any) => {
+        const buyer = match.buyers as BuyerRecord
+        const permissioned = hasConfirmedRelationship(buyer)
+        return {
+          buyerId: buyer.id,
+          matchId: match.id,
+          ok: permissioned,
+          status: permissioned ? 'would_send' : 'would_hold_for_verified_b2b_outlook',
+        }
+      }) as DeliveryResult[],
     }
   }
 
@@ -218,10 +222,7 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
   const results: DeliveryResult[] = []
   let acceptedCount = 0
   let deferredCount = 0
-  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
-    provider: getConfiguredOutboundProvider(),
-    allowControlledTrial: true,
-  })
+  const invocationId = `buyer-packet:${packet.id}:${randomUUID()}`
 
   for (const match of rows as any[]) {
     const buyer = match.buyers as BuyerRecord
@@ -285,12 +286,15 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
       subject,
       body,
       attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
-      deliveryCircuitBreaker,
+      // Only a current relationship plus active buy box is transactional.
+      // An admin selecting an unconfirmed prospect cannot override policy.
+      deliveryPurpose: hasConfirmedRelationship(buyer) ? 'transactional' : 'cold_outreach',
+      invocationId,
     })
     const acceptedAt = sendResult.ok ? new Date().toISOString() : null
 
     await finalizeQueuedBuyerPacketSend(queuedSend.id, claimToken, {
-      status: sendResult.ok ? 'accepted' : sendResult.deferred ? 'queued' : 'failed',
+      status: sendResult.ok ? 'accepted' : sendResult.deferred || sendResult.reconciliationRequired ? 'queued' : 'failed',
       sendProvider: sendResult.provider,
       providerMessageId: sendResult.providerMessageId || null,
       sentAt: acceptedAt,
@@ -299,14 +303,30 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
         confidenceScore: match.confidence_score,
         ...outboundIdentityMetadata(identity),
         providerMessageId: sendResult.providerMessageId || null,
+        internetMessageId: sendResult.internetMessageId,
+        dispatchId: sendResult.dispatchId,
         providerAcceptedAt: acceptedAt,
         idempotencyKey: sendResult.idempotencyKey || null,
         correlationId: sendResult.correlationId || null,
+        acceptanceStatus: sendResult.acceptanceStatus,
+        ledgerFinalized: sendResult.ledgerFinalized,
+        reconciliationRequired: sendResult.reconciliationRequired,
         acceptedRecipientHash: hashHunterVerificationEmail(email),
       },
     })
 
     if (!sendResult.ok) {
+      if (sendResult.reconciliationRequired) {
+        results.push({
+          buyerId: buyer.id,
+          matchId: match.id,
+          ok: false,
+          status: 'reconciliation_required',
+          provider: sendResult.provider,
+          error: sendResult.error || 'Reconcile Outlook before another packet attempt.',
+        })
+        continue
+      }
       if (sendResult.deferred) deferredCount += 1
       results.push({
         buyerId: buyer.id,
@@ -314,7 +334,7 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
         ok: false,
         status: sendResult.deferred ? 'deferred' : 'failed',
         provider: sendResult.provider,
-        error: sendResult.error,
+        error: sendResult.error || undefined,
       })
       if (sendResult.deferred && sendResult.deferredScope !== 'record') break
       continue
@@ -345,6 +365,8 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
         matchId: match.id,
         provider: sendResult.provider,
         providerMessageId: sendResult.providerMessageId || null,
+        internetMessageId: sendResult.internetMessageId,
+        dispatchId: sendResult.dispatchId,
         propertyAddress: packet.property_address,
       },
     })
@@ -363,6 +385,8 @@ export async function deliverBuyerPacket(packetId: string, options: DeliveryOpti
         matchId: match.id,
         provider: sendResult.provider,
         providerMessageId: sendResult.providerMessageId || null,
+        internetMessageId: sendResult.internetMessageId,
+        dispatchId: sendResult.dispatchId,
       },
     }).catch(() => null)
     results.push({

@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { runDailyInvestorSend } from '@/lib/investors/service'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -28,9 +29,11 @@ export async function GET(request: Request) {
       )
     }
     const dryRun = !liveRequested || !liveEnabled
-    const result = await runDailyInvestorSend(Number.isFinite(limit) && limit > 0 ? limit : undefined, { dryRun })
+    const invocationId = `investors-send:${randomUUID()}`
+    const requestedLimit = Number.isFinite(limit) && limit > 0 ? limit : 2
+    const result = await runDailyInvestorSend(Math.min(2, requestedLimit), { dryRun, invocationId })
     return NextResponse.json(
-      { success: result.ok, dryRun, ...result },
+      { success: result.ok, dryRun, ...result, invocationId },
       { status: result.ok ? 200 : 500 }
     )
   } catch (error) {

@@ -3,6 +3,18 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/system/logEvent';
 import type { ResendOutreachTag } from '@/lib/outreach/deliveryIdentity';
 import { getOutboundSenderForProvider } from '@/lib/outreach/provider-preference';
+import {
+  getMicrosoftGraphFailureDisposition,
+  hasMicrosoftGraphApplicationCredentials,
+  prefersMicrosoftGraphTransactionalEmail,
+  sendTransactionalEmailWithMicrosoftGraphIdempotently,
+  type MicrosoftGraphFailureDisposition,
+} from '@/lib/email/microsoftGraphSend';
+import {
+  claimOutlookTransactionalDispatch,
+  finalizeOutlookTransactionalDispatch,
+  recordOutlookTransactionalDraft,
+} from '@/lib/email/transactionalEmailDispatch';
 
 type EmailEventType =
   | 'admin_credit_report_uploaded'
@@ -38,7 +50,7 @@ type SendEmailInput = {
   eventType: EmailEventType;
   userId?: string | null;
   userEmail?: string | null;
-  providerPreference?: 'resend' | 'google';
+  providerPreference?: 'resend' | 'google' | 'outlook';
   idempotencyKey?: string;
   correlationId?: string;
   resendTags?: ResendOutreachTag[];
@@ -345,7 +357,109 @@ export async function sendEmail(input: SendEmailInput) {
     };
   }
 
-  if (!hasGoogleWorkspaceConfig() && !process.env.RESEND_API_KEY) {
+  const preferOutlook = prefersMicrosoftGraphTransactionalEmail(input.providerPreference);
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+
+  if (preferOutlook) {
+    let outlookFailure: MicrosoftGraphFailureDisposition;
+    if (hasMicrosoftGraphApplicationCredentials()) {
+      try {
+        const graphResult = await sendTransactionalEmailWithMicrosoftGraphIdempotently(
+          {
+            to: input.to,
+            subject: input.subject,
+            html: input.html,
+            replyTo: getReplyToEmail(),
+            correlationId: input.correlationId,
+            idempotencyKey: input.idempotencyKey,
+            eventType: input.eventType,
+          },
+          {
+            ledger: {
+              claim: claimOutlookTransactionalDispatch,
+              recordDraft: recordOutlookTransactionalDraft,
+              finalize: finalizeOutlookTransactionalDispatch,
+            },
+          }
+        );
+        if (!graphResult.deduplicated) {
+          await recordEmailEvent(input, 'accepted');
+          await logEvent({
+            eventType: 'email_accepted',
+            actorUserId: input.userId,
+            entityType: 'email',
+            metadata: {
+              subject: input.subject,
+              eventType: input.eventType,
+              provider: 'outlook',
+              providerStatus: 'accepted',
+              ledgerFinalized: graphResult.ledgerFinalized,
+              dispatchId: graphResult.dispatchId,
+              graphMessageId: graphResult.graphMessageId,
+              internetMessageId: graphResult.internetMessageId,
+            },
+          });
+        }
+        return {
+          ok: true,
+          id: graphResult.providerMessageId,
+          provider: 'outlook',
+          accepted: true,
+          deduplicated: graphResult.deduplicated,
+          reconciliationPending: !graphResult.ledgerFinalized,
+          correlationId: graphResult.correlationId,
+          dispatchId: graphResult.dispatchId,
+          internetMessageId: graphResult.internetMessageId,
+          acceptanceStatus: 'accepted' as const,
+        };
+      } catch (error) {
+        outlookFailure = getMicrosoftGraphFailureDisposition(error);
+      }
+    } else {
+      outlookFailure = {
+        message: 'Microsoft Graph application credentials are not configured.',
+        acceptance: 'not_accepted',
+        phase: 'pre_dispatch',
+        safeToFallback: true,
+      };
+    }
+
+    // Outlook selection is terminal for this attempt. The Outlook ledger does
+    // not claim Resend delivery, so crossing providers after any Graph failure
+    // could allow a later Outlook retry to deliver the same logical message.
+    const acceptanceUnknown = outlookFailure.acceptance === 'unknown';
+    const retrySafe =
+      outlookFailure.acceptance === 'not_accepted' &&
+      outlookFailure.phase === 'pre_dispatch';
+    const message = acceptanceUnknown
+      ? `${outlookFailure.message} Do not retry automatically; reconcile Outlook Sent Items before another attempt.`
+      : outlookFailure.message;
+    await recordEmailEvent(input, 'failed', null, message);
+    await logEvent({
+      eventType: 'email_failed',
+      actorUserId: input.userId,
+      entityType: 'email',
+      metadata: {
+        subject: input.subject,
+        eventType: input.eventType,
+        message,
+        provider: 'outlook',
+        providerStatus: acceptanceUnknown ? 'acceptance_unknown' : 'not_accepted',
+        retrySafe,
+        crossProviderFallbackAllowed: false,
+      },
+    });
+    return {
+      ok: false,
+      ambiguous: acceptanceUnknown,
+      retrySafe,
+      acceptanceStatus: outlookFailure.acceptance,
+      error: message,
+      provider: 'outlook',
+    };
+  }
+
+  if (!preferOutlook && !hasGoogleWorkspaceConfig() && !resendConfigured) {
     await recordEmailEvent(input, 'skipped', null, 'No email provider is configured.');
     return {
       ok: false,
@@ -355,8 +469,8 @@ export async function sendEmail(input: SendEmailInput) {
   }
 
   let googleError: string | null = null;
-  const preferResend = input.providerPreference === 'resend' && Boolean(process.env.RESEND_API_KEY);
-  if (hasGoogleWorkspaceConfig() && !preferResend) {
+  const preferResend = input.providerPreference === 'resend' && resendConfigured;
+  if (!preferOutlook && hasGoogleWorkspaceConfig() && !preferResend) {
     try {
       const data = await sendEmailWithGoogle(input);
       await recordEmailEvent(input, 'accepted', data.id);
@@ -370,7 +484,7 @@ export async function sendEmail(input: SendEmailInput) {
       return { ok: true, id: data.id, provider: 'gmail' };
     } catch (error) {
       googleError = error instanceof Error ? error.message : String(error);
-      if (!process.env.RESEND_API_KEY || input.disableProviderFallback) {
+      if (!resendConfigured || input.disableProviderFallback) {
         await recordEmailEvent(input, 'failed', null, googleError);
         await logEvent({
           eventType: 'email_failed',
@@ -407,7 +521,11 @@ export async function sendEmail(input: SendEmailInput) {
         entityType: 'email',
         metadata: { subject: input.subject, eventType: input.eventType, message },
       });
-      return { ok: false, error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message, provider: 'resend' };
+      return {
+        ok: false,
+        error: googleError ? `Gmail: ${googleError}; Resend: ${message}` : message,
+        provider: 'resend',
+      };
     }
 
     await recordEmailEvent(input, 'accepted', data?.id ?? null);

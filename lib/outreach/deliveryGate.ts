@@ -9,6 +9,7 @@ import {
 import type { DailyStrategyOutputLaneKey } from '@/lib/outreach/dailyStrategyOutputCore'
 import type { OutboundEmailProvider } from '@/lib/outreach/provider-preference'
 import { getOperationalReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { assertPurposeBoundBreakerProvider } from '@/lib/outreach/deliveryRuntime'
 import {
   recordOutreachThroughputOutcome,
   reserveOutreachThroughputAttempt,
@@ -36,6 +37,11 @@ export async function acquireGuardedDeliveryAttempt(input: {
   attemptKind: OutreachThroughputAttemptKind
   recoveryCanary?: boolean
 }): Promise<GuardedDeliveryAttempt> {
+  // A breaker is only valid for the provider whose telemetry it evaluated.
+  // Reject injected legacy Gmail evidence before any reservation can be made
+  // for the purpose-bound Resend path.
+  assertPurposeBoundBreakerProvider(input.provider, input.breaker)
+
   const replyCapture = await getOperationalReplyCaptureReadiness()
   if (!replyCapture.ready) {
     throw new Error(

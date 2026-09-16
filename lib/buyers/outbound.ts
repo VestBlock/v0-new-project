@@ -1,29 +1,28 @@
-import { Resend } from 'resend'
 import type { BuyerOutreachMessageRecord, BuyerRecord } from '@/lib/buyers/types'
-import { isUsableContactEmail } from '@/lib/outreach/email-quality'
-import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
-import {
-  getOutboundProviderAvailability,
-  getOutboundSenderForProvider,
-  getPreferredOutboundProvider,
-  shouldPreferResend,
-} from '@/lib/outreach/provider-preference'
-import {
-  buildOutboundSendIdentity,
-  buildResendOutreachTags,
-  type OutboundSendIdentity,
-} from '@/lib/outreach/deliveryIdentity'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
-import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
-import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
-import type { DeliveryCircuitBreaker } from '@/lib/leads/deliveryHealthCore'
-import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
+import { buildOutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import type { DeliveryPurpose } from '@/lib/outreach/deliveryPurposeCore'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
+import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
+
+type BuyerEmailAttachment = {
+  filename: string
+  content: Buffer
+  contentType: string
+}
 
 type SendBuyerEmailInput = {
   buyer: BuyerRecord
   message: BuyerOutreachMessageRecord
   attachments?: BuyerEmailAttachment[]
-  deliveryCircuitBreaker?: DeliveryCircuitBreaker
+  deliveryPurpose?: DeliveryPurpose
+  hasExplicitOptIn?: boolean
+  isBusinessContact?: boolean
+  businessContactEvidence?: unknown
+  marketingConsentEvidence?: unknown
+  invocationId?: string
 }
 
 type SendBuyerPacketEmailInput = {
@@ -32,278 +31,135 @@ type SendBuyerPacketEmailInput = {
   subject: string
   body: string
   attachments: BuyerEmailAttachment[]
-  deliveryCircuitBreaker?: DeliveryCircuitBreaker
+  deliveryPurpose?: DeliveryPurpose
+  hasExplicitOptIn?: boolean
+  isBusinessContact?: boolean
+  marketingConsentEvidence?: unknown
+  invocationId?: string
 }
 
-type BuyerEmailAttachment = {
-  filename: string
-  content: Buffer
-  contentType: string
-}
-
-type SendBuyerEmailResult = {
+export type SendBuyerEmailResult = {
   ok: boolean
   deferred?: boolean
   deferredScope?: 'record' | 'lane' | 'global' | 'infrastructure'
-  provider: 'gmail' | 'resend' | 'none'
-  providerMessageId?: string | null
-  idempotencyKey?: string
-  correlationId?: string
-  error?: string
+  provider: 'outlook' | 'none'
+  providerMessageId: string | null
+  internetMessageId: string | null
+  dispatchId: string | null
+  idempotencyKey: string
+  correlationId: string
+  accepted: boolean
+  deduplicated: boolean
+  acceptanceStatus: 'accepted' | 'not_accepted' | 'unknown'
+  ledgerFinalized: boolean
+  reconciliationRequired: boolean
+  retrySafe: boolean
+  error?: string | null
 }
 
-type BuyerEmailEnvelope = {
-  buyer: BuyerRecord
-  subject: string
-  body: string
-  attachments?: BuyerEmailAttachment[]
-  identity?: OutboundSendIdentity
-}
-
-const DEFAULT_OUTREACH_SENDER = 'acquisitions@vestblock.io'
 const BUYER_PACKET_COMPLIANCE_NOTE =
   'If you do not want property opportunities from VestBlock, reply opt out and we will stop.'
+const CONFIRMED_PACKET_RELATIONSHIP_STAGES = ['responded', 'reviewing', 'active_buyer'] as const
 
-function getSender() {
-  return getOutboundSenderForProvider('gmail')
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
-function getResendSender() {
-  return getOutboundSenderForProvider('resend')
+function renderBody(body: string) {
+  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.65;color:#172027">${escapeHtml(body).replace(/\n/g, '<br />')}</div>`
 }
 
-function getReplyToEmail() {
-  return process.env.OUTREACH_REPLY_TO_EMAIL || DEFAULT_OUTREACH_SENDER
+function outlookAttachments(attachments?: BuyerEmailAttachment[]) {
+  return attachments?.map((attachment) => ({
+    filename: attachment.filename,
+    contentBase64: attachment.content.toString('base64'),
+    contentType: attachment.contentType,
+  }))
 }
 
-function buildOutreachBody(message: BuyerOutreachMessageRecord) {
-  return buildCommercialOutreachBody({
-    body: message.body,
-    complianceNote: message.compliance_note,
-    mailingAddress: getCommercialOutreachMailingAddress(),
-  })
-}
-
-async function getGoogleAccessToken() {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID || '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN || '',
-      grant_type: 'refresh_token',
-    }),
-  })
-  if (!response.ok) {
-    throw new Error(`Google token refresh failed with ${response.status}.`)
-  }
-  const data = await response.json()
-  if (!data.access_token) throw new Error('Google token refresh did not return an access token.')
-  return data.access_token as string
-}
-
-function encodeBase64Url(value: string) {
-  return Buffer.from(value)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
-}
-
-function buildGmailMime(input: BuyerEmailEnvelope) {
-  const recipient = input.buyer.contact_email?.trim() || ''
-  const headers = [
-    `From: VestBlock <${getSender()}>`,
-    `Reply-To: ${getReplyToEmail()}`,
-    `To: ${recipient}`,
-    `Subject: ${input.subject}`,
-    ...(input.identity
-      ? [`Message-ID: <${input.identity.correlationId}@vestblock.io>`, `X-VestBlock-Correlation-ID: ${input.identity.correlationId}`]
-      : []),
-    'MIME-Version: 1.0',
-  ]
-
-  if (!input.attachments?.length) {
-    return [...headers, 'Content-Type: text/plain; charset=UTF-8', '', input.body].join('\r\n')
-  }
-
-  const boundary = `vestblock_${Date.now().toString(36)}`
-  const parts = [
-    ...headers,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
-    '',
-    input.body,
-  ]
-
-  for (const attachment of input.attachments) {
-    parts.push(
-      `--${boundary}`,
-      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
-      'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="${attachment.filename}"`,
-      '',
-      attachment.content.toString('base64').replace(/.{1,76}/g, '$&\r\n').trim()
-    )
-  }
-
-  parts.push(`--${boundary}--`)
-  return parts.join('\r\n')
-}
-
-async function sendWithGmail(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
-  const accessToken = await getGoogleAccessToken()
-  const recipient = input.buyer.contact_email?.trim() || ''
-  if (!isUsableContactEmail(recipient)) {
-    return {
-      ok: false,
-      provider: 'gmail',
-      error: 'Buyer does not have a usable contact email.',
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-
-  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ raw: encodeBase64Url(buildGmailMime(input)) }),
-  })
-
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    return {
-      ok: false,
-      provider: 'gmail',
-      error: typeof data?.error?.message === 'string' ? data.error.message : `Gmail send failed with ${response.status}.`,
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-
-  return {
-    ok: true,
-    provider: 'gmail',
-    providerMessageId: data.id || null,
-    idempotencyKey: input.identity?.idempotencyKey,
-    correlationId: input.identity?.correlationId,
-  }
-}
-
-async function sendWithResend(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
-  const recipient = input.buyer.contact_email?.trim() || ''
-  if (!isUsableContactEmail(recipient)) {
-    return {
-      ok: false,
-      provider: 'resend',
-      error: 'Buyer does not have a usable contact email.',
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { data, error } = await resend.emails.send(
-    {
-      from: getResendSender(),
-      to: recipient,
-      subject: input.subject,
-      text: input.body,
-      replyTo: getReplyToEmail(),
-      headers: input.identity ? { 'X-VestBlock-Correlation-ID': input.identity.correlationId } : undefined,
-      tags: input.identity ? buildResendOutreachTags(input.identity) : undefined,
-      attachments: input.attachments?.map((attachment) => ({
-        filename: attachment.filename,
-        content: attachment.content,
-        contentType: attachment.contentType,
-      })),
-    },
-    input.identity ? { idempotencyKey: input.identity.idempotencyKey } : undefined
+async function hasConfirmedBuyerPacketRelationship(buyerId: string) {
+  const admin = createAdminClient()
+  const [buyerResult, buyBoxResult] = await Promise.all([
+    admin
+      .from('buyers')
+      .select('relationship_stage,outreach_status')
+      .eq('id', buyerId)
+      .maybeSingle(),
+    admin
+      .from('buyer_buy_boxes')
+      .select('buyer_id')
+      .eq('buyer_id', buyerId)
+      .eq('active', true)
+      .limit(1)
+      .maybeSingle(),
+  ])
+  if (buyerResult.error) throw buyerResult.error
+  if (buyBoxResult.error) throw buyBoxResult.error
+  const relationshipStage = String(buyerResult.data?.relationship_stage || '')
+  return Boolean(
+    buyerResult.data &&
+      buyerResult.data.outreach_status !== 'do_not_contact' &&
+      CONFIRMED_PACKET_RELATIONSHIP_STAGES.includes(
+        relationshipStage as (typeof CONFIRMED_PACKET_RELATIONSHIP_STAGES)[number]
+      ) &&
+      buyBoxResult.data?.buyer_id
   )
+}
 
-  if (error) {
-    return {
-      ok: false,
-      provider: 'resend',
-      error: error.message || 'Resend send failed.',
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-
+function mapResult(
+  result: Awaited<ReturnType<typeof sendGuardedOutlookEmail>>,
+  identity: ReturnType<typeof buildOutboundSendIdentity>
+): SendBuyerEmailResult {
   return {
-    ok: true,
-    provider: 'resend',
-    providerMessageId: data?.id || null,
-    idempotencyKey: input.identity?.idempotencyKey,
-    correlationId: input.identity?.correlationId,
+    ok: result.ok,
+    deferred: result.deferred || undefined,
+    deferredScope: result.deferredScope || undefined,
+    provider: result.provider,
+    providerMessageId: result.providerMessageId,
+    internetMessageId: result.internetMessageId,
+    dispatchId: result.dispatchId,
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: result.correlationId,
+    accepted: result.accepted,
+    deduplicated: result.deduplicated,
+    acceptanceStatus: result.acceptanceStatus,
+    ledgerFinalized: result.ledgerFinalized,
+    reconciliationRequired: result.reconciliationRequired,
+    retrySafe: result.retrySafe,
+    error: result.error,
   }
 }
 
-async function sendBuyerEnvelope(input: BuyerEmailEnvelope): Promise<SendBuyerEmailResult> {
-  const replyCapture = getReplyCaptureReadiness()
-  if (!replyCapture.ready) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      error: replyCapture.reason || 'Reply capture is disconnected.',
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-  if (!isUsableContactEmail(input.buyer.contact_email)) {
-    return {
-      ok: false,
-      provider: 'none',
-      error: 'Buyer does not have a usable contact email.',
-      idempotencyKey: input.identity?.idempotencyKey,
-      correlationId: input.identity?.correlationId,
-    }
-  }
-  const availability = getOutboundProviderAvailability()
-  const preferResend = shouldPreferResend(availability)
-
-  if (availability.resend && preferResend) {
-    return sendWithResend(input)
-  }
-
-  if (availability.gmail) {
-    try {
-      return await sendWithGmail(input)
-    } catch (error) {
-      const gmailError = error instanceof Error ? error.message : 'Google Workspace sender failed.'
-      return {
-        ok: false,
-        provider: 'gmail',
-        error: gmailError,
-        idempotencyKey: input.identity?.idempotencyKey,
-        correlationId: input.identity?.correlationId,
-      }
-    }
-  }
-
-  if (availability.resend && !preferResend) {
-    return sendWithResend(input)
-  }
-
+function invalidResult(
+  identity: ReturnType<typeof buildOutboundSendIdentity>,
+  error: string
+): SendBuyerEmailResult {
   return {
     ok: false,
     provider: 'none',
-    error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
-    idempotencyKey: input.identity?.idempotencyKey,
-    correlationId: input.identity?.correlationId,
+    providerMessageId: null,
+    internetMessageId: null,
+    dispatchId: null,
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: identity.correlationId,
+    accepted: false,
+    deduplicated: false,
+    acceptanceStatus: 'not_accepted',
+    ledgerFinalized: false,
+    reconciliationRequired: false,
+    retrySafe: true,
+    error,
   }
 }
 
-export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promise<SendBuyerEmailResult> {
+export async function sendBuyerOutreachEmail(
+  input: SendBuyerEmailInput
+): Promise<SendBuyerEmailResult> {
   const isFollowup = input.message.channel === 'email_followup'
   const identity = buildOutboundSendIdentity({
     scope: 'buyer',
@@ -311,292 +167,117 @@ export async function sendBuyerOutreachEmail(input: SendBuyerEmailInput): Promis
     messageId: input.message.id,
     sequenceStep: isFollowup ? 2 : 1,
   })
-  const replyCapture = getReplyCaptureReadiness()
-  if (!replyCapture.ready) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: replyCapture.reason || 'Reply capture is disconnected.',
-    }
-  }
-  if (!getCommercialOutreachMailingAddress()) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'Buyer outreach is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
-    }
-  }
   if (!isUsableContactEmail(input.buyer.contact_email)) {
-    return {
-      ok: false,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'Buyer does not have a usable contact email.',
-    }
+    return invalidResult(identity, 'Buyer does not have a usable contact email.')
   }
-  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
-  if (provider === 'none') {
-    return {
-      ok: false,
-      deferred: true,
-      provider,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
-    }
-  }
-  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
-  try {
-    const recipientGuard = await getOutreachRecipientGuard({
+  const purpose = input.deliveryPurpose || 'cold_outreach'
+  let buyer = input.buyer
+  if (purpose === 'cold_outreach') {
+    const hunter = await ensureFreshHunterSendVerificationForEntity({
       scope: 'buyer',
-      entityId: input.buyer.id,
-      email: input.buyer.contact_email,
-    })
-    if (!recipientGuard.allowed) {
-      return {
-        ok: false,
-        provider: 'none',
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Buyer outreach blocked before send: ${recipientGuard.reason}.`,
-      }
-    }
-    const hunterPreflight = await preflightPartnerHunterSendVerification({
-      scope: 'buyer',
-      entity: input.buyer,
+      entity: { id: buyer.id, email: buyer.contact_email, metadata_json: buyer.metadata_json },
       messageId: input.message.id,
-      strategyKey: 'buyers',
-      provider,
-      isFollowup,
-      deliveryCircuitBreaker: input.deliveryCircuitBreaker,
+      allowNetwork: true,
+      dailyLimit: Number.parseInt(process.env.OUTLOOK_COLD_HUNTER_DAILY_LIMIT || '25', 10) || 25,
     })
-    if (!hunterPreflight.allowed) {
+    if (!hunter.sendable || hunter.status !== 'valid' || !hunter.cache) {
       return {
-        ok: false,
+        ...invalidResult(identity, `Verified B2B Outlook admission requires fresh Hunter status=valid (${hunter.reason}).`),
         deferred: true,
-        deferredScope: hunterPreflight.deferredScope || 'record',
-        provider: 'none',
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Buyer outreach blocked before send: fresh Hunter status=valid verification is required (${hunterPreflight.reason}).`,
+        deferredScope: hunter.reason.includes('budget') ? 'global' : 'record',
       }
     }
-    deliveryAttempt = await acquireGuardedDeliveryAttempt({
-      provider,
-      breaker: input.deliveryCircuitBreaker,
+    buyer = { ...buyer, metadata_json: { ...(buyer.metadata_json || {}), hunterSendVerification: hunter.cache } }
+  }
+  const body = buildCommercialOutreachBody({
+    body: input.message.body,
+    complianceNote: input.message.compliance_note,
+    mailingAddress: getCommercialOutreachMailingAddress(),
+  })
+  const result = await sendGuardedOutlookEmail({
+    strategyKey: 'buyers',
+    purpose,
+    entity: {
       scope: 'buyer',
-      messageId: input.message.id,
-      idempotencyKey: identity.idempotencyKey,
-      strategyKey: 'buyers',
-      recipientEmail: input.buyer.contact_email!,
-      senderEmail: getOutboundSenderForProvider(provider),
-      attemptKind: isFollowup ? 'follow_up' : 'first_touch',
-    })
-  } catch (error) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Buyer outreach safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    }
-  }
-  if (!deliveryAttempt.allowed) {
-    const reason = String(deliveryAttempt.reason || '')
-    const deferredScope = /outreach_(?:recipient_24h_cooldown|attempt_already_reserved|reserved_attempt_requires_reconciliation|attempt_identity_conflict)/.test(reason)
-      ? 'record'
-      : /outreach_(?:strategy_daily_limit_exhausted|strategy_not_scheduled_today)/.test(reason)
-        ? 'lane'
-        : 'global'
-    return {
-      ok: false,
-      deferred: true,
-      deferredScope,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Buyer outreach blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
-    }
-  }
-
-  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
-  let providerMessageId: string | null | undefined
-  try {
-    const result = await sendBuyerEnvelope({
-      buyer: input.buyer,
-      subject: input.message.subject || 'VestBlock partnership note',
-      body: buildOutreachBody(input.message),
-      attachments: input.attachments,
-      identity,
-    })
-    outcome = result.ok ? 'accepted' : 'failed'
-    providerMessageId = result.providerMessageId
-    return result
-  } catch (error) {
-    return {
-      ok: false,
-      deferred: true,
-      deferredScope: 'infrastructure',
-      provider,
-      error: `Provider response was ambiguous; retry will retain the same idempotency key: ${error instanceof Error ? error.message : String(error)}`,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-    }
-  } finally {
-    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome, providerMessageId).catch((error) => {
-      console.error('[outreach] failed to release global buyer delivery permit', error)
-    })
-  }
+      id: buyer.id,
+      recipientEmail: buyer.contact_email || '',
+      metadataJson: buyer.metadata_json,
+      contactInfo: buyer.contact_info,
+      website: buyer.website,
+    },
+    subject: input.message.subject || 'VestBlock partnership note',
+    html: renderBody(body),
+    attachments: outlookAttachments(input.attachments),
+    eventType: 'buyer_outreach',
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: identity.correlationId,
+    invocationId: input.invocationId,
+    marketingConsentEvidence: input.marketingConsentEvidence,
+  })
+  return mapResult(result, identity)
 }
 
-export async function sendBuyerPacketEmail(input: SendBuyerPacketEmailInput): Promise<SendBuyerEmailResult> {
+export async function sendBuyerPacketEmail(
+  input: SendBuyerPacketEmailInput
+): Promise<SendBuyerEmailResult> {
   const identity = buildOutboundSendIdentity({
     scope: 'buyer-packet',
     entityId: input.buyer.id,
     messageId: input.messageId,
     sequenceStep: 1,
   })
-  const replyCapture = getReplyCaptureReadiness()
-  if (!replyCapture.ready) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: replyCapture.reason || 'Reply capture is disconnected.',
-    }
-  }
-  const mailingAddress = getCommercialOutreachMailingAddress()
-  if (!mailingAddress) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'Buyer packet delivery is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
-    }
-  }
   if (!isUsableContactEmail(input.buyer.contact_email)) {
-    return {
-      ok: false,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'Buyer does not have a usable contact email.',
-    }
+    return invalidResult(identity, 'Buyer does not have a usable contact email.')
   }
-  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
-  if (provider === 'none') {
-    return {
-      ok: false,
-      deferred: true,
-      provider,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
-    }
-  }
-
-  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
-  try {
-    const recipientGuard = await getOutreachRecipientGuard({
+  const requestedPurpose = input.deliveryPurpose || 'cold_outreach'
+  const confirmedTransactionalRelationship = requestedPurpose === 'transactional'
+    ? await hasConfirmedBuyerPacketRelationship(input.buyer.id)
+    : false
+  const effectivePurpose = requestedPurpose === 'transactional' && !confirmedTransactionalRelationship
+    ? 'cold_outreach'
+    : requestedPurpose
+  let buyer = input.buyer
+  if (effectivePurpose === 'cold_outreach') {
+    const hunter = await ensureFreshHunterSendVerificationForEntity({
       scope: 'buyer',
-      entityId: input.buyer.id,
-      email: input.buyer.contact_email,
-    })
-    if (!recipientGuard.allowed) {
-      return {
-        ok: false,
-        provider: 'none',
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Buyer packet delivery blocked before send: ${recipientGuard.reason}.`,
-      }
-    }
-    const hunterPreflight = await preflightPartnerHunterSendVerification({
-      scope: 'buyer',
-      entity: input.buyer,
+      entity: { id: buyer.id, email: buyer.contact_email, metadata_json: buyer.metadata_json },
       messageId: input.messageId,
-      strategyKey: 'buyers',
-      provider,
-      // A packet may follow an accepted introduction. Without that evidence,
-      // the helper treats this as a first touch and requires fresh valid proof.
-      isFollowup: true,
-      deliveryCircuitBreaker: input.deliveryCircuitBreaker,
+      allowNetwork: true,
+      dailyLimit: Number.parseInt(process.env.OUTLOOK_COLD_HUNTER_DAILY_LIMIT || '25', 10) || 25,
     })
-    if (!hunterPreflight.allowed) {
+    if (!hunter.sendable || hunter.status !== 'valid' || !hunter.cache) {
       return {
-        ok: false,
+        ...invalidResult(identity, `Verified B2B Outlook admission requires fresh Hunter status=valid (${hunter.reason}).`),
         deferred: true,
-        deferredScope: hunterPreflight.deferredScope || 'record',
-        provider: 'none',
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Buyer packet delivery blocked before send: fresh Hunter status=valid verification is required (${hunterPreflight.reason}).`,
+        deferredScope: hunter.reason.includes('budget') ? 'global' : 'record',
       }
     }
-    deliveryAttempt = await acquireGuardedDeliveryAttempt({
-      provider,
-      breaker: input.deliveryCircuitBreaker,
-      scope: 'buyer-packet',
-      messageId: input.messageId,
-      idempotencyKey: identity.idempotencyKey,
-      strategyKey: 'buyers',
-      recipientEmail: input.buyer.contact_email!,
-      senderEmail: getOutboundSenderForProvider(provider),
-      attemptKind: 'buyer_packet',
-    })
-  } catch (error) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Buyer packet safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    }
+    buyer = { ...buyer, metadata_json: { ...(buyer.metadata_json || {}), hunterSendVerification: hunter.cache } }
   }
-  if (!deliveryAttempt.allowed) {
-    return {
-      ok: false,
-      deferred: true,
-      provider: 'none',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Buyer packet delivery blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
-    }
-  }
-
-  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
-  let providerMessageId: string | null | undefined
-  try {
-    const result = await sendBuyerEnvelope({
-      buyer: input.buyer,
-      subject: input.subject,
-      body: buildCommercialOutreachBody({
-        body: input.body,
-        complianceNote: BUYER_PACKET_COMPLIANCE_NOTE,
-        mailingAddress,
-      }),
-      attachments: input.attachments,
-      identity,
-    })
-    outcome = result.ok ? 'accepted' : 'failed'
-    providerMessageId = result.providerMessageId
-    return result
-  } finally {
-    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome, providerMessageId).catch((error) => {
-      console.error('[outreach] failed to release global buyer-packet delivery permit', error)
-    })
-  }
+  const body = buildCommercialOutreachBody({
+    body: input.body,
+    complianceNote: BUYER_PACKET_COMPLIANCE_NOTE,
+    mailingAddress: getCommercialOutreachMailingAddress(),
+  })
+  const result = await sendGuardedOutlookEmail({
+    strategyKey: 'buyers',
+    purpose: effectivePurpose,
+    entity: {
+      scope: 'buyer',
+      id: buyer.id,
+      recipientEmail: buyer.contact_email || '',
+      metadataJson: buyer.metadata_json,
+      contactInfo: buyer.contact_info,
+      website: buyer.website,
+    },
+    subject: input.subject,
+    html: renderBody(body),
+    attachments: outlookAttachments(input.attachments),
+    eventType: 'buyer_packet',
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: identity.correlationId,
+    invocationId: input.invocationId,
+    marketingConsentEvidence: input.marketingConsentEvidence,
+  })
+  return mapResult(result, identity)
 }

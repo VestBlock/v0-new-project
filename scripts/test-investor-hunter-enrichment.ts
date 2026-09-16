@@ -608,7 +608,9 @@ async function runWorkerFailureAssertions() {
 }
 
 const serviceSource = readFileSync(resolve(process.cwd(), 'lib/investors/service.ts'), 'utf8')
-assert.match(serviceSource, /\.not\('sent_at', 'is', null\)[\s\S]*?\.gte\('sent_at', since\)/)
+assert.match(serviceSource, /Math\.min\(requestedLimit, dailyLimit, 2\)/)
+assert.match(serviceSource, /const remainingDailyCapacity = effectiveLimit/)
+assert.match(serviceSource, /providerAttemptCount >= effectiveLimit/)
 assert.match(serviceSource, /getCommercialOutreachMailingAddress\(\)/)
 assert.match(serviceSource, /INVESTORS_HUNTER_CONCURRENCY/)
 assert.match(serviceSource, /reserveInvestorHunterDailyLookup/)

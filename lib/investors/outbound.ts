@@ -1,18 +1,10 @@
-import { sendEmail } from '@/lib/email/sendEmail'
 import type { InvestorProfileRecord } from '@/lib/investors/types'
-import { isUsableContactEmail } from '@/lib/outreach/email-quality'
-import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
-import {
-  getOutboundProviderAvailability,
-  getOutboundSenderForProvider,
-  getPreferredOutboundProvider,
-} from '@/lib/outreach/provider-preference'
-import { buildOutboundSendIdentity, buildResendOutreachTags } from '@/lib/outreach/deliveryIdentity'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
-import { acquireGuardedDeliveryAttempt, releaseGuardedDeliveryAttempt } from '@/lib/outreach/deliveryGate'
-import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
-import type { DeliveryCircuitBreaker } from '@/lib/leads/deliveryHealthCore'
-import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
+import { buildOutboundSendIdentity } from '@/lib/outreach/deliveryIdentity'
+import type { DeliveryPurpose } from '@/lib/outreach/deliveryPurposeCore'
+import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { ensureFreshHunterSendVerificationForEntity } from '@/lib/outreach/hunterSendVerification'
+import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
 
 type InvestorOutreachMessage = {
   id: string
@@ -20,6 +12,7 @@ type InvestorOutreachMessage = {
   body: string
   cta?: string | null
   channel?: string | null
+  step_number?: number
 }
 
 function escapeHtml(value: string) {
@@ -52,184 +45,102 @@ function renderInvestorEmail(message: InvestorOutreachMessage, mailingAddress: s
 export async function sendInvestorOutreachEmail(input: {
   investor: InvestorProfileRecord
   message: InvestorOutreachMessage
-  deliveryCircuitBreaker?: DeliveryCircuitBreaker
+  deliveryPurpose?: DeliveryPurpose
+  hasExplicitOptIn?: boolean
+  isBusinessContact?: boolean
+  businessContactEvidence?: unknown
+  marketingConsentEvidence?: unknown
+  invocationId?: string
 }) {
-  const sequenceStep = Number((input.message as { step_number?: number }).step_number || 1)
-  const isFollowup = sequenceStep > 1
+  const sequenceStep = Number(input.message.step_number || 1)
   const identity = buildOutboundSendIdentity({
     scope: 'investor',
     entityId: input.investor.id,
     messageId: input.message.id,
     sequenceStep,
   })
-  const replyCapture = getReplyCaptureReadiness()
-  if (!replyCapture.ready) {
-    return {
-      ok: false,
-      deferred: true,
-      skipped: true,
-      provider: 'none' as const,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: replyCapture.reason || 'Reply capture is disconnected.',
-    }
+  const base = {
+    providerMessageId: null,
+    internetMessageId: null,
+    dispatchId: null,
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: identity.correlationId,
+    accepted: false,
+    deduplicated: false,
+    acceptanceStatus: 'not_accepted' as const,
+    ledgerFinalized: false,
+    reconciliationRequired: false,
+    retrySafe: true,
   }
-
-  const mailingAddress = getCommercialOutreachMailingAddress()
-  if (!mailingAddress) {
+  if (!isUsableContactEmail(input.investor.contact_email)) {
     return {
-      ok: false,
-      deferred: true,
-      skipped: true,
-      provider: 'none' as const,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'Investor outreach is blocked until OUTREACH_MAILING_ADDRESS or BUSINESS_MAILING_ADDRESS is configured.',
-    }
-  }
-
-  const to = input.investor.contact_email
-  if (!isUsableContactEmail(to)) {
-    return {
+      ...base,
       ok: false,
       skipped: true,
       provider: 'none' as const,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
       error: 'Missing investor contact email.',
     }
   }
-
-  const provider = getPreferredOutboundProvider(getOutboundProviderAvailability())
-  if (provider === 'none') {
-    return {
-      ok: false,
-      deferred: true,
-      skipped: true,
-      provider,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: 'No outbound provider configured. Add Google Workspace OAuth credentials or Resend sender settings.',
-    }
-  }
-
-  let deliveryAttempt: Awaited<ReturnType<typeof acquireGuardedDeliveryAttempt>>
-  try {
-    const recipientGuard = await getOutreachRecipientGuard({
+  const purpose = input.deliveryPurpose || 'cold_outreach'
+  let investor = input.investor
+  if (purpose === 'cold_outreach') {
+    const hunter = await ensureFreshHunterSendVerificationForEntity({
       scope: 'investor',
-      entityId: input.investor.id,
-      email: to,
-    })
-    if (!recipientGuard.allowed) {
-      return {
-        ok: false,
-        skipped: true,
-        provider: 'none' as const,
-        providerMessageId: null,
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Investor outreach blocked before send: ${recipientGuard.reason}.`,
-      }
-    }
-    const hunterPreflight = await preflightPartnerHunterSendVerification({
-      scope: 'investor',
-      entity: input.investor,
+      entity: { id: investor.id, email: investor.contact_email, metadata_json: investor.metadata_json },
       messageId: input.message.id,
-      strategyKey: 'investors',
-      provider,
-      isFollowup,
-      deliveryCircuitBreaker: input.deliveryCircuitBreaker,
+      allowNetwork: true,
+      dailyLimit: Number.parseInt(process.env.OUTLOOK_COLD_HUNTER_DAILY_LIMIT || '25', 10) || 25,
     })
-    if (!hunterPreflight.allowed) {
+    if (!hunter.sendable || hunter.status !== 'valid' || !hunter.cache) {
       return {
+        ...base,
         ok: false,
         deferred: true,
-        deferredScope: hunterPreflight.deferredScope || 'record',
+        deferredScope: hunter.reason.includes('budget') ? 'global' as const : 'record' as const,
         skipped: true,
         provider: 'none' as const,
-        providerMessageId: null,
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        error: `Investor outreach blocked before send: fresh Hunter status=valid verification is required (${hunterPreflight.reason}).`,
+        error: `Verified B2B Outlook admission requires fresh Hunter status=valid (${hunter.reason}).`,
       }
     }
-    deliveryAttempt = await acquireGuardedDeliveryAttempt({
-      provider,
-      breaker: input.deliveryCircuitBreaker,
+    investor = { ...investor, metadata_json: { ...(investor.metadata_json || {}), hunterSendVerification: hunter.cache } }
+  }
+  const mailingAddress = getCommercialOutreachMailingAddress()
+  const result = await sendGuardedOutlookEmail({
+    strategyKey: 'investors',
+    purpose,
+    entity: {
       scope: 'investor',
-      messageId: input.message.id,
-      idempotencyKey: identity.idempotencyKey,
-      strategyKey: 'investors',
-      recipientEmail: to!,
-      senderEmail: getOutboundSenderForProvider(provider),
-      attemptKind: isFollowup ? 'follow_up' : 'first_touch',
-    })
-  } catch (error) {
-    return {
-      ok: false,
-      deferred: true,
-      skipped: true,
-      provider: 'none' as const,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Investor outreach safety checks unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    }
-  }
-  if (!deliveryAttempt.allowed) {
-    const reason = String(deliveryAttempt.reason || '')
-    const deferredScope = /outreach_(?:recipient_24h_cooldown|attempt_already_reserved|reserved_attempt_requires_reconciliation|attempt_identity_conflict)/.test(reason)
-      ? 'record'
-      : /outreach_(?:strategy_daily_limit_exhausted|strategy_not_scheduled_today)/.test(reason)
-        ? 'lane'
-        : 'global'
-    return {
-      ok: false,
-      deferred: true,
-      deferredScope,
-      skipped: true,
-      provider: 'none' as const,
-      providerMessageId: null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: `Investor outreach blocked by delivery safety gate: ${deliveryAttempt.reason}.`,
-    }
-  }
+      id: investor.id,
+      recipientEmail: investor.contact_email || '',
+      metadataJson: investor.metadata_json,
+      website: investor.website,
+    },
+    subject: input.message.subject || 'Strategic investor partnership with VestBlock',
+    html: renderInvestorEmail(input.message, mailingAddress),
+    eventType: 'investor_outreach',
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: identity.correlationId,
+    invocationId: input.invocationId,
+    marketingConsentEvidence: input.marketingConsentEvidence,
+  })
 
-  let outcome: 'accepted' | 'failed' | 'not_sent' = 'not_sent'
-  let providerMessageId: string | null | undefined
-  try {
-    const result = await sendEmail({
-      to,
-      subject: input.message.subject || 'Strategic investor partnership with VestBlock',
-      html: renderInvestorEmail(input.message, mailingAddress),
-      eventType: 'admin_lead_followup',
-      providerPreference: provider === 'resend' ? 'resend' : 'google',
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      resendTags: buildResendOutreachTags(identity),
-      disableProviderFallback: true,
-    })
-    outcome = result.ok ? 'accepted' : result.deferred ? 'not_sent' : 'failed'
-    providerMessageId = result.id || null
-    return {
-      ok: Boolean(result.ok),
-      deferred: Boolean(result.deferred),
-      deferredScope: result.deferred ? 'infrastructure' as const : undefined,
-      skipped: Boolean(result.skipped),
-      provider: result.provider || ('none' as const),
-      providerMessageId: result.id || null,
-      idempotencyKey: identity.idempotencyKey,
-      correlationId: identity.correlationId,
-      error: result.error || null,
-    }
-  } finally {
-    await releaseGuardedDeliveryAttempt(deliveryAttempt, outcome, providerMessageId).catch((error) => {
-      console.error('[outreach] failed to release global investor delivery permit', error)
-    })
+  return {
+    ok: result.ok,
+    deferred: result.deferred || undefined,
+    deferredScope: result.deferredScope || undefined,
+    skipped: !result.ok,
+    provider: result.provider,
+    providerMessageId: result.providerMessageId,
+    internetMessageId: result.internetMessageId,
+    dispatchId: result.dispatchId,
+    idempotencyKey: identity.idempotencyKey,
+    correlationId: result.correlationId,
+    accepted: result.accepted,
+    deduplicated: result.deduplicated,
+    acceptanceStatus: result.acceptanceStatus,
+    ledgerFinalized: result.ledgerFinalized,
+    reconciliationRequired: result.reconciliationRequired,
+    retrySafe: result.retrySafe,
+    error: result.error,
   }
 }

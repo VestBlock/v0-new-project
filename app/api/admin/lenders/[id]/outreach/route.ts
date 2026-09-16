@@ -109,6 +109,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const sendResult = await sendLenderOutreachEmail({
         lender,
         message: claimed,
+        invocationId: `admin-lender:${claimed.id}:${claimed.updated_at}`,
       })
 
       if (!sendResult.ok) {
@@ -126,6 +127,29 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             },
             { status: 409 }
           )
+        }
+        if (sendResult.reconciliationRequired) {
+          await updateLenderOutreachMessage(message.id, {
+            status: 'queued',
+            send_provider: 'outlook',
+            send_error: sendResult.error || 'Outlook acceptance is unknown; reconciliation is required.',
+            metadata_json: {
+              ...(claimed.metadata_json || {}),
+              dispatchId: sendResult.dispatchId,
+              providerMessageId: sendResult.providerMessageId,
+              internetMessageId: sendResult.internetMessageId,
+              correlationId: sendResult.correlationId,
+              acceptanceStatus: sendResult.acceptanceStatus,
+              reconciliationRequired: true,
+            },
+          })
+          return NextResponse.json({
+            success: false,
+            reconciliationRequired: true,
+            dispatchId: sendResult.dispatchId,
+            correlationId: sendResult.correlationId,
+            error: sendResult.error,
+          }, { status: 202 })
         }
         await updateLenderOutreachMessage(message.id, {
           status: 'failed',
@@ -149,8 +173,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         metadata_json: {
           ...(claimed.metadata_json || {}),
           providerMessageId: sendResult.providerMessageId || null,
+          internetMessageId: sendResult.internetMessageId,
+          dispatchId: sendResult.dispatchId,
           idempotencyKey: sendResult.idempotencyKey || null,
           correlationId: sendResult.correlationId || null,
+          acceptanceStatus: sendResult.acceptanceStatus,
+          ledgerFinalized: sendResult.ledgerFinalized,
+          reconciliationRequired: sendResult.reconciliationRequired,
           acceptedRecipientHash: hashHunterVerificationEmail(lender.contact_email || ''),
         },
       })
@@ -172,6 +201,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           channel: message.channel,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId || null,
+          internetMessageId: sendResult.internetMessageId,
+          dispatchId: sendResult.dispatchId,
           idempotencyKey: sendResult.idempotencyKey || null,
           correlationId: sendResult.correlationId || null,
         },

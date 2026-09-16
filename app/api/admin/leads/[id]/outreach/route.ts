@@ -173,6 +173,7 @@ export async function PATCH(
         lead,
         message: claimed,
         sequenceStep: 1,
+        invocationId: `admin-lead:${claimed.id}:${claimed.updated_at}`,
       })
 
       if (!sendResult.ok) {
@@ -193,6 +194,28 @@ export async function PATCH(
             },
             { status: 409 }
           )
+        }
+        if (sendResult.reconciliationRequired) {
+          await updateOutreachMessage(message.id, {
+            status: 'queued',
+            send_provider: 'outlook',
+            send_error: sendResult.error || 'Outlook acceptance is unknown; reconciliation is required.',
+            metadata_json: {
+              dispatchId: sendResult.dispatchId,
+              providerMessageId: sendResult.providerMessageId,
+              internetMessageId: sendResult.internetMessageId,
+              correlationId: sendResult.correlationId,
+              acceptanceStatus: sendResult.acceptanceStatus,
+              reconciliationRequired: true,
+            },
+          })
+          return NextResponse.json({
+            success: false,
+            reconciliationRequired: true,
+            dispatchId: sendResult.dispatchId,
+            correlationId: sendResult.correlationId,
+            error: sendResult.error,
+          }, { status: 202 })
         }
         await Promise.all([
           updateOutreachMessage(message.id, {
@@ -230,6 +253,15 @@ export async function PATCH(
           sent_at: new Date().toISOString(),
           send_provider: sendResult.provider,
           send_error: null,
+          metadata_json: {
+            dispatchId: sendResult.dispatchId,
+            providerMessageId: sendResult.providerMessageId,
+            internetMessageId: sendResult.internetMessageId,
+            correlationId: sendResult.correlationId,
+            acceptanceStatus: sendResult.acceptanceStatus,
+            ledgerFinalized: sendResult.ledgerFinalized,
+            reconciliationRequired: sendResult.reconciliationRequired,
+          },
         }),
         updateLeadRecord(id, {
           status: 'contacted',
@@ -243,13 +275,18 @@ export async function PATCH(
           outreachMessageId: message.id,
           channel: message.channel,
           provider: sendResult.provider,
-          status: 'sent',
+          status: 'accepted',
           recipient: lead.email,
           subject: updatedMessage.subject,
-          idempotencyKey: `${identity.idempotencyKey}:sent`,
+          idempotencyKey: `${identity.idempotencyKey}:accepted`,
           correlationId: identity.correlationId,
           metadata: {
             providerMessageId: sendResult.providerMessageId || null,
+            internetMessageId: sendResult.internetMessageId,
+            dispatchId: sendResult.dispatchId,
+            acceptanceStatus: sendResult.acceptanceStatus,
+            ledgerFinalized: sendResult.ledgerFinalized,
+            reconciliationRequired: sendResult.reconciliationRequired,
             ...outboundIdentityMetadata(identity),
           },
         }),

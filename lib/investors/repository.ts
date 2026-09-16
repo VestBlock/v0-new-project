@@ -13,6 +13,7 @@ import {
 import { calculateInvestorScore, scoreExistingInvestor } from '@/lib/investors/scoring'
 import { companyWebsiteDomain } from '@/lib/email/companyDomain'
 import { isUsableContactEmail, normalizeEmailAddress } from '@/lib/outreach/email-quality'
+import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 import { isMessageGenerationProtected } from '@/lib/outreach/messageState'
 import type {
   InvestorDashboardSummary,
@@ -244,6 +245,9 @@ export function buildSanitizedInvestorHunterMetadata(input: InvestorHunterEnrich
       reservationId: safeHunterOpaqueId(input.reservationId),
       budgetReason: safeHunterBudgetReason(input.budgetReason),
       accepted: candidateAccepted,
+      acceptedRecipientHash: candidateAccepted
+        ? hashHunterVerificationEmail(normalizedEmail)
+        : null,
       acceptedConfidence: candidateAccepted ? confidence : null,
       acceptedVerificationStatus: candidateAccepted ? 'valid' : null,
       topCandidateConfidence: Number.isFinite(Number(input.topCandidateConfidence))

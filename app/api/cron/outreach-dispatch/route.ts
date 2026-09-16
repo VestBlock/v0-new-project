@@ -67,7 +67,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const forcedDryRun = enabled(url.searchParams.get('dryRun'))
   const liveEnabled = enabled(process.env.OUTREACH_DISPATCH_CRON_SEND)
-  const dryRun = forcedDryRun || !liveEnabled
+  // The cron flag governs provider delivery only. Preparation remains a live,
+  // persistent pipeline unless the caller explicitly requests a full dry run.
+  const dryRun = forcedDryRun
+  const deliveryEnabled = liveEnabled && !forcedDryRun
   const window = chicagoDispatchWindow()
   const sendLimit = positiveInt(
     url.searchParams.get('limit') || process.env.OUTREACH_DISPATCH_PER_RUN,
@@ -82,15 +85,17 @@ export async function GET(request: Request) {
       reason: 'outside_chicago_weekday_dispatch_window',
       window,
       sendLimit,
+      deliveryEnabled,
     })
   }
 
   try {
-    const reservationReconciliation = dryRun
-      ? null
-      : await reconcileStaleOutreachReservations({ limit: 250 })
+    const reservationReconciliation = deliveryEnabled
+      ? await reconcileStaleOutreachReservations({ limit: 250 })
+      : null
     const result = await runLeadThroughputSprint({
       dryRun,
+      deliveryEnabled,
       sendLimit,
       budgetMs: 240_000,
       startedAtMs: Date.now(),
@@ -118,7 +123,6 @@ export async function GET(request: Request) {
       !firstSend.autoSendRequested ? 'automatic_sending_disabled' : null,
       !firstSend.replyCaptureReadiness.ready ? 'reply_capture_not_ready' : null,
       !firstSend.mailingAddressConfigured ? 'mailing_address_not_configured' : null,
-      firstSend.outboundProvider === 'none' ? 'outbound_provider_not_configured' : null,
     ].filter((reason): reason is string => Boolean(reason))
     const throughputBlockedReason =
       !firstSend.deliveryCircuitBreaker.allowed || firstSend.throughputDecision.effectiveDailyCap < 1
@@ -160,6 +164,7 @@ export async function GET(request: Request) {
         success: ok,
         dryRun,
         liveEnabled,
+        deliveryEnabled,
         window,
         sendLimit,
         reservationReconciliation,
@@ -184,6 +189,7 @@ export async function GET(request: Request) {
         success: false,
         dryRun,
         liveEnabled,
+        deliveryEnabled,
         window,
         sendLimit,
         operationalAlert,

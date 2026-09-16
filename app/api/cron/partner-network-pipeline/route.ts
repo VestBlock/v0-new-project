@@ -3,24 +3,18 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { runDailyBuyerPipeline } from '@/lib/buyers/automation'
 import { runDailyInvestorPipeline } from '@/lib/investors/automation'
-import { runDailyLenderPipeline, runDailyLenderSend } from '@/lib/lenders/automation'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
+import { runDailyLenderPipeline } from '@/lib/lenders/automation'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 import {
   allocateDailyStrategyOutput,
   configuredDailyStrategyOutputTarget,
 } from '@/lib/outreach/dailyStrategyOutputCore'
-import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
-import { readOutreachDispatchCapacity } from '@/lib/outreach/outreachDispatchCapacity'
-import {
-  evaluateAutomatedRecoveryCanaryHealth,
-  evaluateOutreachDispatchHealth,
-} from '@/lib/outreach/outreachDispatchCore'
-import { evaluateOutreachThroughputGovernor } from '@/lib/outreach/throughputGovernorCore'
-import { reconcileStaleOutreachReservations } from '@/lib/outreach/throughputGovernor'
+import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
+import { evaluateOutreachDispatchHealth } from '@/lib/outreach/outreachDispatchCore'
 
 function enabled(value: string | null | undefined) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase())
@@ -41,8 +35,6 @@ function settle<T>(result: PromiseSettledResult<T>) {
 }
 
 type PartnerLane = 'buyers' | 'lenders' | 'investors'
-
-type AutomatedRecoveryCanaryResult = Awaited<ReturnType<typeof runDailyLenderSend>>
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {}
@@ -114,22 +106,6 @@ async function persistPartnerDispatchFailure(input: {
   })
 }
 
-function summarizeAutomatedRecoveryCanary(result: AutomatedRecoveryCanaryResult) {
-  const health = evaluateAutomatedRecoveryCanaryHealth({
-    runOk: result.ok,
-    resultStatuses: result.results.map((item) => item.status),
-    sentLast24h: result.canarySentLast24h,
-    effectiveLimit: result.effectiveLimit,
-    sendGateOpen: result.sendGateOpen,
-    blockedReasons: result.sendBlockedReasons,
-  })
-
-  return {
-    ...health,
-    result,
-  }
-}
-
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
@@ -144,43 +120,60 @@ export async function GET(request: Request) {
     lenders: schedulerEnabled && enabled(process.env.LENDERS_PIPELINE_CRON_SEND),
     investors: schedulerEnabled && enabled(process.env.INVESTORS_PIPELINE_CRON_SEND),
   }
-  const laneDryRun = {
-    buyers: forcedDryRun || !laneLiveEnabled.buyers,
-    lenders: forcedDryRun || !laneLiveEnabled.lenders,
-    investors: forcedDryRun || !laneLiveEnabled.investors,
+  // Lane switches govern provider delivery, not discovery or draft creation.
+  // Only an explicit dryRun query turns the entire partner pipeline read-only.
+  const laneExecutionMode = {
+    buyers: resolvePipelineExecutionMode({
+      dryRun: forcedDryRun,
+      deliveryEnabled: laneLiveEnabled.buyers,
+    }),
+    lenders: resolvePipelineExecutionMode({
+      dryRun: forcedDryRun,
+      deliveryEnabled: laneLiveEnabled.lenders,
+    }),
+    investors: resolvePipelineExecutionMode({
+      dryRun: forcedDryRun,
+      deliveryEnabled: laneLiveEnabled.investors,
+    }),
   }
-  const configuredLanes = (['buyers', 'lenders', 'investors'] as const).filter((lane) => laneLiveEnabled[lane])
-  const dryRun = forcedDryRun || configuredLanes.length === 0
+  const laneDryRun = {
+    buyers: laneExecutionMode.buyers.dryRun,
+    lenders: laneExecutionMode.lenders.dryRun,
+    investors: laneExecutionMode.investors.dryRun,
+  }
+  const laneDeliveryEnabled = {
+    buyers: laneExecutionMode.buyers.deliveryEnabled,
+    lenders: laneExecutionMode.lenders.deliveryEnabled,
+    investors: laneExecutionMode.investors.deliveryEnabled,
+  }
+  const configuredLanes = (['buyers', 'lenders', 'investors'] as const).filter(
+    (lane) => laneDeliveryEnabled[lane]
+  )
+  const dryRun = forcedDryRun
+  const deliveryEnabled = configuredLanes.length > 0
   const strategyOutputTarget = configuredDailyStrategyOutputTarget()
   const productionPlan = allocateDailyStrategyOutput(strategyOutputTarget)
   const canonicalSendAllocations = {
-    buyers: laneLiveEnabled.buyers ? productionPlan.byKey.buyers : 0,
-    lenders: laneLiveEnabled.lenders ? productionPlan.byKey.lenders : 0,
-    investors: laneLiveEnabled.investors ? productionPlan.byKey.investors : 0,
+    buyers: laneDeliveryEnabled.buyers ? productionPlan.byKey.buyers : 0,
+    lenders: laneDeliveryEnabled.lenders ? productionPlan.byKey.lenders : 0,
+    investors: laneDeliveryEnabled.investors ? productionPlan.byKey.investors : 0,
   }
   const sharedSendLimit = Object.values(canonicalSendAllocations).reduce((sum, value) => sum + value, 0)
-  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
-    provider: getConfiguredOutboundProvider(),
-    allowControlledTrial: true,
-  })
-  const throughputDecision = evaluateOutreachThroughputGovernor({
-    mode: deliveryCircuitBreaker.mode,
-    sampleSize: deliveryCircuitBreaker.sampleSize,
-    complained: deliveryCircuitBreaker.complained,
-    badRate: deliveryCircuitBreaker.badRate,
-    globalFailureRate: deliveryCircuitBreaker.globalFailureRate,
-    terminalCompleteness: deliveryCircuitBreaker.terminalCompleteness,
-    requestedDailyTarget: strategyOutputTarget,
-  })
-  const sendAllocations = {
-    buyers: laneLiveEnabled.buyers ? throughputDecision.allocationPlan.byKey.buyers : 0,
-    lenders: laneLiveEnabled.lenders ? throughputDecision.allocationPlan.byKey.lenders : 0,
-    investors: laneLiveEnabled.investors ? throughputDecision.allocationPlan.byKey.investors : 0,
+  const invocationId = `partner-network:${randomUUID()}`
+  const partnerLaneOrder = (['buyers', 'lenders', 'investors'] as const)
+  const rotationOffset = productionPlan.rotationOffset % partnerLaneOrder.length
+  const rotatedLanes = partnerLaneOrder.map(
+    (_, index) => partnerLaneOrder[(rotationOffset + index) % partnerLaneOrder.length]
+  )
+  const sendAllocations: Record<PartnerLane, number> = { buyers: 0, lenders: 0, investors: 0 }
+  let invocationRemaining = 2
+  for (const lane of rotatedLanes) {
+    if (invocationRemaining < 1) break
+    if (!laneDeliveryEnabled[lane] || canonicalSendAllocations[lane] < 1) continue
+    sendAllocations[lane] = 1
+    invocationRemaining -= 1
   }
   const effectiveSendLimit = Object.values(sendAllocations).reduce((sum, value) => sum + value, 0)
-  const reservationReconciliation = dryRun
-    ? null
-    : await reconcileStaleOutreachReservations({ limit: 250 })
 
   // Discovery, enrichment, scoring, and drafting remain concurrent so the
   // combined partner cron stays inside its execution budget. Only the guarded
@@ -197,61 +190,53 @@ export async function GET(request: Request) {
   }
   const [buyers, lenders, investors] = await Promise.allSettled([
     runDailyBuyerPipeline({
-      dryRun: laneDryRun.buyers,
+      dryRun,
+      deliveryEnabled: laneDeliveryEnabled.buyers,
       sendLimit: sendAllocations.buyers,
+      invocationId,
       sendExecutor: serializePartnerSend,
     }),
     runDailyLenderPipeline({
-      dryRun: laneDryRun.lenders,
+      dryRun,
+      deliveryEnabled: laneDeliveryEnabled.lenders,
       sendLimit: sendAllocations.lenders,
+      invocationId,
       sendExecutor: serializePartnerSend,
     }),
     runDailyInvestorPipeline({
-      dryRun: laneDryRun.investors,
+      dryRun,
+      deliveryEnabled: laneDeliveryEnabled.investors,
       sendLimit: sendAllocations.investors,
+      invocationId,
       sendExecutor: serializePartnerSend,
     }),
   ])
   const lanes = { buyers: settle(buyers), lenders: settle(lenders), investors: settle(investors) }
-  const automatedRecoveryCanaryEnabled =
-    enabled(process.env.OUTREACH_AUTOMATED_RECOVERY_CANARY_ENABLED) &&
-    enabled(process.env.OUTREACH_CANARY_ENABLED)
-  const shouldRunAutomatedRecoveryCanary =
-    !dryRun &&
-    automatedRecoveryCanaryEnabled &&
-    laneLiveEnabled.lenders &&
-    deliveryCircuitBreaker.mode === 'blocked'
-  let automatedRecoveryCanary: ReturnType<typeof summarizeAutomatedRecoveryCanary> | null = null
-  if (shouldRunAutomatedRecoveryCanary) {
-    automatedRecoveryCanary = summarizeAutomatedRecoveryCanary(
-      await runDailyLenderSend(5, {
-        canary: true,
-        recoveryExplicitlyRequested: true,
+  const totalAccepted = (Object.keys(lanes) as PartnerLane[]).reduce((sum, lane) => {
+    return sum + partnerSendSummary(lane, lanes[lane], sendAllocations[lane]).sentCount
+  }, 0)
+  const capacity = {
+    globalRemaining: Math.max(0, 2 - totalAccepted),
+    remainingByLane: Object.fromEntries(
+      (Object.keys(lanes) as PartnerLane[]).map((lane) => {
+        const accepted = partnerSendSummary(lane, lanes[lane], sendAllocations[lane]).sentCount
+        return [lane, Math.max(0, sendAllocations[lane] - accepted)]
       })
-    )
+    ) as Record<PartnerLane, number>,
   }
-  const capacity = await readOutreachDispatchCapacity(throughputDecision)
-  const throughputBlockedReason =
-    !deliveryCircuitBreaker.allowed || throughputDecision.effectiveDailyCap < 1
-      ? throughputDecision.reason || deliveryCircuitBreaker.reason || 'delivery_not_permitted'
-      : null
-  // Provider acceptance only proves that the recovery test was submitted. It
-  // cannot restore broad sending until terminal delivery webhooks change the
-  // next circuit-breaker evaluation, so keep normal dispatch fail-closed.
-  const normalDispatchBlockedReason = throughputBlockedReason
   const dispatchHealth = Object.fromEntries(
     (Object.keys(lanes) as PartnerLane[]).map((lane) => {
       const summary = partnerSendSummary(lane, lanes[lane], sendAllocations[lane])
       return [
         lane,
         evaluateOutreachDispatchHealth({
-          dryRun: laneDryRun[lane],
+          dryRun,
           liveEnabled: laneLiveEnabled[lane],
           expectedSendCount: summary.expectedSendCount,
           sentCount: summary.sentCount,
           remainingCapacityAfterRun: capacity.remainingByLane[lane] || 0,
           globalRemainingAfterRun: capacity.globalRemaining,
-          throughputBlockedReason: normalDispatchBlockedReason,
+          throughputBlockedReason: null,
           blockingReasons: summary.blockingReasons,
           operationalFailureCount: summary.operationalFailureCount,
           providerFailureCount: summary.providerFailureCount,
@@ -261,13 +246,12 @@ export async function GET(request: Request) {
   ) as Record<PartnerLane, ReturnType<typeof evaluateOutreachDispatchHealth>>
   const pipelineOk = Object.values(lanes).every((lane) => lane.ok)
   const dispatchOk = Object.values(dispatchHealth).every((health) => health.ok)
-  const recoveryOk = automatedRecoveryCanary?.ok !== false
-  const ok = pipelineOk && dispatchOk && recoveryOk
+  const ok = pipelineOk && dispatchOk
   const failedDispatchLanes = (Object.keys(dispatchHealth) as PartnerLane[])
     .filter((lane) => !dispatchHealth[lane].ok)
   const operationalAlert = !dryRun && !ok
     ? await persistPartnerDispatchFailure({
-        businessDate: throughputDecision.allocationPlan.businessDate,
+        businessDate: productionPlan.businessDate,
         reason: failedDispatchLanes.length
           ? `Operational partner dispatch failure: ${failedDispatchLanes.join(', ')}.`
           : 'The partner pipeline reported one or more failed stages.',
@@ -276,9 +260,8 @@ export async function GET(request: Request) {
           capacity,
           laneLiveEnabled,
           sendAllocations,
-          deliveryMode: deliveryCircuitBreaker.mode,
-          throughputStage: throughputDecision.stage,
-          automatedRecoveryCanary,
+          deliveryMode: 'outlook_direct',
+          invocationId,
         },
       })
     : null
@@ -286,6 +269,7 @@ export async function GET(request: Request) {
     {
       success: ok,
       dryRun,
+      deliveryEnabled,
       businessDate: productionPlan.businessDate,
       strategyOutputTarget,
       sharedSendLimit,
@@ -294,17 +278,17 @@ export async function GET(request: Request) {
       canonicalSendAllocations,
       sendAllocations,
       throughput: {
-        stage: throughputDecision.stage,
-        effectiveDailyCap: throughputDecision.effectiveDailyCap,
-        reason: throughputDecision.reason,
+        stage: 'outlook_cold_guarded',
+        effectiveDailyCap: 25,
+        perInvocationCap: 2,
+        perDomainCap: 2,
+        reason: null,
       },
-      reservationReconciliation,
-      automatedRecoveryCanaryEnabled,
-      automatedRecoveryCanary,
-      recoveryTerminalEvidencePending: Boolean(automatedRecoveryCanary?.accepted),
+      invocationId,
       laneLiveEnabled,
+      laneDeliveryEnabled,
       laneDryRun,
-      deliveryMode: deliveryCircuitBreaker.mode,
+      deliveryMode: 'outlook_direct',
       capacity,
       dispatchHealth,
       operationalAlert,

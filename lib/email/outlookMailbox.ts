@@ -12,6 +12,8 @@ import { logEvent } from '@/lib/system/logEvent'
 import {
   correlateOutlookInbound,
   evaluateOutlookInboundIntegrity,
+  getOutlookReplyReferenceCandidates,
+  isOutlookDeliveryFailureMessage,
   requireOutlookThroughputProjectionUpdated,
   selectCorrelatedLead,
   shouldProcessMailboxSideEffects,
@@ -26,6 +28,13 @@ import {
 
 const OUTBOUND_SEND_STATUSES = ['accepted', 'sent', 'delivered', 'opened', 'clicked', 'replied']
 const EVIDENCE_PAGE_SIZE = 500
+const DELIVERY_FAILURE_SOURCE_TABLES = new Set([
+  'outreach_messages',
+  'buyer_outreach_messages',
+  'lender_outreach_messages',
+  'investor_outreach_messages',
+  'property_buyer_packet_sends',
+])
 
 type GraphMessage = OutlookInboundMessage & {
   receivedDateTime?: string | null
@@ -289,6 +298,242 @@ async function loadOutboundSendEventRows(
   return rows
 }
 
+function graphReferenceCandidates(messages: GraphMessage[]) {
+  const candidates = new Set<string>()
+  for (const message of messages) {
+    for (const rawValue of getOutlookReplyReferenceCandidates(message)) {
+      const bracketed = Array.from(rawValue.matchAll(/<([^>]+)>/g), (match) => match[1].trim())
+      const values = [rawValue.trim(), ...bracketed]
+      for (const value of values) {
+        const unwrapped = value.replace(/^<|>$/g, '').trim()
+        if (!unwrapped || unwrapped.length > 1_000 || !unwrapped.includes('@')) continue
+        candidates.add(unwrapped)
+        candidates.add(`<${unwrapped}>`)
+      }
+    }
+  }
+  return Array.from(candidates)
+}
+
+function rowMetadata(row: Record<string, unknown>) {
+  return row.metadata_json && typeof row.metadata_json === 'object' && !Array.isArray(row.metadata_json)
+    ? row.metadata_json as Record<string, unknown>
+    : {}
+}
+
+function sourceEvidence(input: {
+  row: Record<string, unknown>
+  dispatch: Record<string, unknown>
+  sourceMessageTable: string
+  entityScope: 'lead' | 'buyer' | 'lender' | 'investor' | 'buyer_packet'
+  entityId: unknown
+  recipient: unknown
+  sourceMessageId: unknown
+  sourceEventId?: unknown
+  leadId?: unknown
+  strategyKey?: string | null
+}): OutlookOutboundEvidence {
+  const metadata = rowMetadata(input.row)
+  const dispatchId = typeof input.dispatch.id === 'string' ? input.dispatch.id : null
+  const internetMessageId = typeof input.dispatch.internet_message_id === 'string'
+    ? input.dispatch.internet_message_id
+    : null
+  const graphMessageId = typeof input.dispatch.graph_message_id === 'string'
+    ? input.dispatch.graph_message_id
+    : null
+  const sourceMessageId = typeof input.sourceMessageId === 'string' ? input.sourceMessageId : null
+  const entityId = typeof input.entityId === 'string' ? input.entityId : null
+  return {
+    source: 'source_message',
+    leadId: typeof input.leadId === 'string' ? input.leadId : null,
+    strategyKey:
+      input.strategyKey ||
+      (typeof metadata.strategyKey === 'string' ? metadata.strategyKey : null),
+    recipient: typeof input.recipient === 'string' ? cleanText(input.recipient).toLowerCase() || null : null,
+    outboundMessageId: sourceMessageId,
+    provider: 'outlook',
+    providerMessageId: graphMessageId,
+    occurredAt: metadataTimestamp(
+      metadata,
+      input.dispatch.accepted_at || input.row.sent_at || input.row.created_at
+    ),
+    metadata: {
+      ...metadata,
+      dispatchId,
+      dispatchState: typeof input.dispatch.state === 'string' ? input.dispatch.state : null,
+      internetMessageId,
+      providerMessageId: graphMessageId,
+      provider: 'outlook',
+      sourceMessageTable: input.sourceMessageTable,
+      sourceMessageId,
+      sourceEventId: typeof input.sourceEventId === 'string' ? input.sourceEventId : null,
+      entityScope: input.entityScope,
+      entityId,
+    },
+  }
+}
+
+/**
+ * NDR senders are postmasters, not the original recipients. Resolve their
+ * References/In-Reply-To values against the durable Graph draft identity,
+ * then bind that dispatch back to the exact CRM source record.
+ */
+async function loadOutlookReferenceEvidence(
+  admin: ReturnType<typeof createAdminClient>,
+  messages: GraphMessage[]
+) {
+  const references = graphReferenceCandidates(messages)
+  if (!references.length) return [] as OutlookOutboundEvidence[]
+
+  const { data: dispatchData, error: dispatchError } = await admin
+    .from('transactional_email_dispatches')
+    .select('id,graph_message_id,internet_message_id,state,accepted_at,created_at,updated_at')
+    // An exact inbound References/In-Reply-To match proves the persisted draft
+    // left the mailbox even when the final ledger write was interrupted. These
+    // ambiguous states are already non-retryable; include them for correlation
+    // so the reply/NDR can safely drive reconciliation and source projection.
+    .in('state', [
+      'accepted',
+      'reconciled_accepted',
+      'dispatching',
+      'acceptance_unknown',
+      'failed_dispatch',
+    ])
+    .in('internet_message_id', references)
+  if (dispatchError) throw dispatchError
+
+  const evidence: OutlookOutboundEvidence[] = []
+  for (const dispatch of (dispatchData || []) as Array<Record<string, unknown>>) {
+    const dispatchId = typeof dispatch.id === 'string' ? dispatch.id : ''
+    if (!dispatchId) continue
+    const [eventResult, buyerResult, lenderResult, investorResult, packetResult] = await Promise.all([
+      admin
+        .from('outreach_send_events')
+        .select('id,lead_id,outreach_message_id,recipient,provider,status,metadata_json,created_at')
+        .contains('metadata_json', { dispatchId })
+        .limit(1),
+      admin
+        .from('buyer_outreach_messages')
+        .select('id,buyer_id,status,send_provider,sent_at,metadata_json,created_at')
+        .contains('metadata_json', { dispatchId })
+        .limit(1),
+      admin
+        .from('lender_outreach_messages')
+        .select('id,lender_id,status,send_provider,sent_at,metadata_json,created_at')
+        .contains('metadata_json', { dispatchId })
+        .limit(1),
+      admin
+        .from('investor_outreach_messages')
+        .select('id,investor_profile_id,status,send_provider,sent_at,metadata_json,created_at')
+        .contains('metadata_json', { dispatchId })
+        .limit(1),
+      admin
+        .from('property_buyer_packet_sends')
+        .select('id,buyer_packet_id,buyer_id,buyer_email,status,send_provider,sent_at,metadata_json,created_at')
+        .contains('metadata_json', { dispatchId })
+        .limit(1),
+    ])
+    const lookupError = [eventResult, buyerResult, lenderResult, investorResult, packetResult]
+      .find((result) => result.error)?.error
+    if (lookupError) throw lookupError
+
+    const event = (eventResult.data?.[0] || null) as Record<string, unknown> | null
+    const buyer = (buyerResult.data?.[0] || null) as Record<string, unknown> | null
+    const lender = (lenderResult.data?.[0] || null) as Record<string, unknown> | null
+    const investor = (investorResult.data?.[0] || null) as Record<string, unknown> | null
+    const packet = (packetResult.data?.[0] || null) as Record<string, unknown> | null
+
+    if (event) {
+      evidence.push(sourceEvidence({
+        row: event,
+        dispatch,
+        sourceMessageTable: 'outreach_messages',
+        entityScope: 'lead',
+        entityId: event.lead_id,
+        leadId: event.lead_id,
+        recipient: event.recipient,
+        sourceMessageId: event.outreach_message_id,
+        sourceEventId: event.id,
+      }))
+    }
+    if (buyer) {
+      evidence.push(sourceEvidence({
+        row: buyer,
+        dispatch,
+        sourceMessageTable: 'buyer_outreach_messages',
+        entityScope: 'buyer',
+        entityId: buyer.buyer_id,
+        recipient: null,
+        sourceMessageId: buyer.id,
+        strategyKey: 'buyer-network',
+      }))
+    }
+    if (lender) {
+      evidence.push(sourceEvidence({
+        row: lender,
+        dispatch,
+        sourceMessageTable: 'lender_outreach_messages',
+        entityScope: 'lender',
+        entityId: lender.lender_id,
+        recipient: null,
+        sourceMessageId: lender.id,
+        strategyKey: 'lender-network',
+      }))
+    }
+    if (investor) {
+      evidence.push(sourceEvidence({
+        row: investor,
+        dispatch,
+        sourceMessageTable: 'investor_outreach_messages',
+        entityScope: 'investor',
+        entityId: investor.investor_profile_id,
+        recipient: null,
+        sourceMessageId: investor.id,
+        strategyKey: 'investor-network',
+      }))
+    }
+    if (packet) {
+      evidence.push(sourceEvidence({
+        row: packet,
+        dispatch,
+        sourceMessageTable: 'property_buyer_packet_sends',
+        entityScope: typeof packet.buyer_id === 'string' ? 'buyer' : 'buyer_packet',
+        entityId: packet.buyer_id || packet.buyer_packet_id,
+        recipient: packet.buyer_email,
+        sourceMessageId: packet.id,
+        strategyKey: 'buyer-packet-routing',
+      }))
+    }
+
+    if (!event && !buyer && !lender && !investor && !packet) {
+      evidence.push({
+        source: 'dispatch_ledger',
+        leadId: null,
+        strategyKey: null,
+        recipient: null,
+        outboundMessageId: dispatchId,
+        provider: 'outlook',
+        providerMessageId:
+          typeof dispatch.graph_message_id === 'string' ? dispatch.graph_message_id : null,
+        occurredAt:
+          typeof dispatch.accepted_at === 'string'
+            ? dispatch.accepted_at
+            : typeof dispatch.created_at === 'string'
+              ? dispatch.created_at
+              : null,
+        metadata: {
+          dispatchId,
+          internetMessageId:
+            typeof dispatch.internet_message_id === 'string' ? dispatch.internet_message_id : null,
+          provider: 'outlook',
+          dispatchState: typeof dispatch.state === 'string' ? dispatch.state : null,
+        },
+      })
+    }
+  }
+  return evidence
+}
+
 function metadataTimestamp(metadata: Record<string, unknown>, fallback: unknown) {
   for (const key of ['providerAcceptedAt', 'provider_accepted_at', 'sentAt', 'sent_at', 'createdAt', 'created_at']) {
     const value = metadata[key]
@@ -451,6 +696,394 @@ async function claimMailboxSideEffects(input: {
 async function requireAdminTask(input: Parameters<typeof createAdminTask>[0]) {
   const result = await createAdminTask(input)
   if (!result.ok) throw new Error(result.error || 'Admin reply task write failed.')
+}
+
+async function reconcileAmbiguousOutlookDispatchFromInbound(input: {
+  admin: ReturnType<typeof createAdminClient>
+  row: ReplyMemoryRow
+}) {
+  const dispatchId = typeof input.row.metadata_json.correlatedDispatchId === 'string'
+    ? input.row.metadata_json.correlatedDispatchId
+    : ''
+  const dispatchState = typeof input.row.metadata_json.correlatedDispatchState === 'string'
+    ? input.row.metadata_json.correlatedDispatchState
+    : ''
+  const internetMessageId = typeof input.row.metadata_json.correlatedInternetMessageId === 'string'
+    ? input.row.metadata_json.correlatedInternetMessageId
+    : ''
+  if (!dispatchId || !['dispatching', 'acceptance_unknown', 'failed_dispatch'].includes(dispatchState)) {
+    return { attempted: false, reconciled: false }
+  }
+  if (!internetMessageId) {
+    throw new Error('An ambiguous Outlook dispatch is missing its durable internet message ID.')
+  }
+
+  const { data, error } = await input.admin.rpc('reconcile_outlook_dispatch_from_inbound', {
+    p_dispatch_id: dispatchId,
+    p_internet_message_id: internetMessageId,
+    p_inbound_message_id: input.row.message_id,
+  })
+  if (error) throw error
+  const result = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {}
+  if (result.reconciled === true && result.state === 'reconciled_accepted') {
+    return { attempted: true, reconciled: true }
+  }
+
+  // A concurrent mailbox worker may already have consumed the same proof.
+  // Confirm the ledger is accepted before treating that race as success.
+  const { data: current, error: lookupError } = await input.admin
+    .from('transactional_email_dispatches')
+    .select('state')
+    .eq('id', dispatchId)
+    .maybeSingle()
+  if (lookupError) throw lookupError
+  if (current?.state === 'accepted' || current?.state === 'reconciled_accepted') {
+    return { attempted: true, reconciled: false, alreadyAccepted: true }
+  }
+  throw new Error(
+    `Inbound Graph reference did not reconcile dispatch ${dispatchId} (${String(result.reason || current?.state || 'unknown_reason')}).`
+  )
+}
+
+async function projectReconciledOutlookSourceFromInbound(input: {
+  admin: ReturnType<typeof createAdminClient>
+  row: ReplyMemoryRow
+}) {
+  const metadata = input.row.metadata_json
+  const sourceTable = typeof metadata.correlatedSourceMessageTable === 'string'
+    ? metadata.correlatedSourceMessageTable
+    : ''
+  const sourceMessageId = typeof metadata.correlatedSourceMessageId === 'string'
+    ? metadata.correlatedSourceMessageId
+    : ''
+  const sourceEventId = typeof metadata.correlatedSourceEventId === 'string'
+    ? metadata.correlatedSourceEventId
+    : ''
+  const dispatchId = typeof metadata.correlatedDispatchId === 'string'
+    ? metadata.correlatedDispatchId
+    : ''
+  if (!sourceMessageId || !DELIVERY_FAILURE_SOURCE_TABLES.has(sourceTable)) {
+    return { attempted: false, projected: false, reason: 'source_message_not_bound' }
+  }
+
+  const reconciledAt = new Date().toISOString()
+  const acceptedAt = typeof metadata.correlatedOutboundOccurredAt === 'string'
+    ? metadata.correlatedOutboundOccurredAt
+    : input.row.received_at
+  const reconciliationMetadata = {
+    acceptanceStatus: 'accepted',
+    reconciliationRequired: false,
+    ledgerFinalized: true,
+    providerAcceptedAt: acceptedAt,
+    reconciledFromInboundAt: reconciledAt,
+    reconciliationInboundMessageId: input.row.message_id,
+  }
+  let projectedRows: Array<{ id: string }> | null = null
+  let projectionError: { message?: string } | null = null
+
+  if (sourceTable === 'outreach_messages') {
+    const result = await input.admin
+      .from('outreach_messages')
+      .update({
+        status: 'sent',
+        sent_at: acceptedAt,
+        send_provider: 'outlook',
+        send_error: null,
+        updated_at: reconciledAt,
+      })
+      .eq('id', sourceMessageId)
+      .select('id')
+    projectedRows = result.data
+    projectionError = result.error
+  } else if (sourceTable === 'buyer_outreach_messages') {
+    const { data: current, error: readError } = await input.admin
+      .from('buyer_outreach_messages')
+      .select('metadata_json')
+      .eq('id', sourceMessageId)
+      .maybeSingle()
+    if (readError) throw readError
+    const result = await input.admin
+      .from('buyer_outreach_messages')
+      .update({
+        status: 'sent',
+        sent_at: acceptedAt,
+        send_provider: 'outlook',
+        send_error: null,
+        metadata_json: { ...rowMetadata(current || {}), ...reconciliationMetadata },
+        updated_at: reconciledAt,
+      })
+      .eq('id', sourceMessageId)
+      .select('id')
+    projectedRows = result.data
+    projectionError = result.error
+  } else if (sourceTable === 'lender_outreach_messages') {
+    const { data: current, error: readError } = await input.admin
+      .from('lender_outreach_messages')
+      .select('metadata_json')
+      .eq('id', sourceMessageId)
+      .maybeSingle()
+    if (readError) throw readError
+    const result = await input.admin
+      .from('lender_outreach_messages')
+      .update({
+        status: 'sent',
+        sent_at: acceptedAt,
+        send_provider: 'outlook',
+        send_error: null,
+        metadata_json: { ...rowMetadata(current || {}), ...reconciliationMetadata },
+        updated_at: reconciledAt,
+      })
+      .eq('id', sourceMessageId)
+      .select('id')
+    projectedRows = result.data
+    projectionError = result.error
+  } else if (sourceTable === 'investor_outreach_messages') {
+    const { data: current, error: readError } = await input.admin
+      .from('investor_outreach_messages')
+      .select('metadata_json')
+      .eq('id', sourceMessageId)
+      .maybeSingle()
+    if (readError) throw readError
+    const result = await input.admin
+      .from('investor_outreach_messages')
+      .update({
+        status: 'sent',
+        sent_at: acceptedAt,
+        send_provider: 'outlook',
+        send_error: null,
+        metadata_json: { ...rowMetadata(current || {}), ...reconciliationMetadata },
+        updated_at: reconciledAt,
+      })
+      .eq('id', sourceMessageId)
+      .select('id')
+    projectedRows = result.data
+    projectionError = result.error
+  } else {
+    const { data: current, error: readError } = await input.admin
+      .from('property_buyer_packet_sends')
+      .select('metadata_json')
+      .eq('id', sourceMessageId)
+      .maybeSingle()
+    if (readError) throw readError
+    const result = await input.admin
+      .from('property_buyer_packet_sends')
+      .update({
+        status: 'replied',
+        sent_at: acceptedAt,
+        send_provider: 'outlook',
+        send_error: null,
+        metadata_json: { ...rowMetadata(current || {}), ...reconciliationMetadata },
+        updated_at: reconciledAt,
+      })
+      .eq('id', sourceMessageId)
+      .select('id')
+    projectedRows = result.data
+    projectionError = result.error
+  }
+  if (projectionError) throw projectionError
+  if (!projectedRows?.length) {
+    throw new Error('The inbound-reconciled Outlook source message was not updated.')
+  }
+
+  if (sourceEventId) {
+    const { data: currentEvent, error: eventReadError } = await input.admin
+      .from('outreach_send_events')
+      .select('metadata_json')
+      .eq('id', sourceEventId)
+      .maybeSingle()
+    if (eventReadError) throw eventReadError
+    const eventStatus = metadata.suppressionAuthorized === true ? 'suppressed' : 'replied'
+    const { data, error } = await input.admin
+      .from('outreach_send_events')
+      .update({
+        status: eventStatus,
+        error_message: null,
+        metadata_json: {
+          ...rowMetadata(currentEvent || {}),
+          ...reconciliationMetadata,
+          replyMessageId: input.row.message_id,
+        },
+      })
+      .eq('id', sourceEventId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The inbound-reconciled outreach event was not updated.')
+  }
+
+  if (dispatchId) {
+    const { error } = await input.admin
+      .from('command_center_outbound_enrollments')
+      .update({ status: 'replied', next_action_at: null, updated_at: reconciledAt })
+      .eq('channel', 'email')
+      .contains('metadata_json', { dispatchId })
+    if (error) throw error
+  }
+
+  return { attempted: true, projected: true, sourceTable, sourceMessageId }
+}
+
+async function projectOutlookDeliveryFailure(input: {
+  admin: ReturnType<typeof createAdminClient>
+  mailbox: string
+  row: ReplyMemoryRow
+}) {
+  const metadata = input.row.metadata_json
+  const sourceTable = typeof metadata.correlatedSourceMessageTable === 'string'
+    ? metadata.correlatedSourceMessageTable
+    : ''
+  const sourceMessageId = typeof metadata.correlatedSourceMessageId === 'string'
+    ? metadata.correlatedSourceMessageId
+    : ''
+  const entityScope = typeof metadata.correlatedEntityScope === 'string'
+    ? metadata.correlatedEntityScope
+    : ''
+  const entityId = typeof metadata.correlatedEntityId === 'string'
+    ? metadata.correlatedEntityId
+    : ''
+  const sourceEventId = typeof metadata.correlatedSourceEventId === 'string'
+    ? metadata.correlatedSourceEventId
+    : ''
+  const dispatchId = typeof metadata.correlatedDispatchId === 'string'
+    ? metadata.correlatedDispatchId
+    : ''
+  const providerMessageId = typeof metadata.correlatedProviderMessageId === 'string'
+    ? metadata.correlatedProviderMessageId
+    : ''
+  const reason = 'Microsoft Outlook reported a delivery failure.'
+  const now = new Date().toISOString()
+
+  if (!sourceMessageId || !DELIVERY_FAILURE_SOURCE_TABLES.has(sourceTable)) {
+    throw new Error('A correlated Outlook delivery failure is not yet bound to its source message.')
+  }
+
+  let sourceMutation: { data: Array<{ id: string }> | null; error: { message?: string } | null }
+  if (sourceTable === 'property_buyer_packet_sends') {
+    sourceMutation = await input.admin
+      .from('property_buyer_packet_sends')
+      .update({ status: 'bounced', send_error: reason, updated_at: now })
+      .eq('id', sourceMessageId)
+      .select('id')
+  } else if (sourceTable === 'outreach_messages') {
+    sourceMutation = await input.admin
+      .from('outreach_messages')
+      .update({ status: 'failed', send_error: reason, updated_at: now })
+      .eq('id', sourceMessageId)
+      .select('id')
+  } else if (sourceTable === 'buyer_outreach_messages') {
+    sourceMutation = await input.admin
+      .from('buyer_outreach_messages')
+      .update({ status: 'failed', send_error: reason, updated_at: now })
+      .eq('id', sourceMessageId)
+      .select('id')
+  } else if (sourceTable === 'lender_outreach_messages') {
+    sourceMutation = await input.admin
+      .from('lender_outreach_messages')
+      .update({ status: 'failed', send_error: reason, updated_at: now })
+      .eq('id', sourceMessageId)
+      .select('id')
+  } else {
+    sourceMutation = await input.admin
+      .from('investor_outreach_messages')
+      .update({ status: 'failed', send_error: reason, updated_at: now })
+      .eq('id', sourceMessageId)
+      .select('id')
+  }
+  if (sourceMutation.error) throw sourceMutation.error
+  if (!sourceMutation.data?.length) {
+    throw new Error('A correlated Outlook delivery failure source message was not updated.')
+  }
+
+  if (sourceEventId) {
+    const { data, error } = await input.admin
+      .from('outreach_send_events')
+      .update({ status: 'bounced', error_message: reason })
+      .eq('id', sourceEventId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The correlated outreach send event was not marked bounced.')
+  }
+
+  if (entityScope === 'lead' && entityId) {
+    const { data, error } = await input.admin
+      .from('leads')
+      .update({
+        delivery_status: 'bounced',
+        outreach_status: 'failed',
+        next_follow_up_at: null,
+        updated_at: now,
+      })
+      .eq('id', entityId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The bounced lead was not updated.')
+  } else if (entityScope === 'buyer' && entityId) {
+    const { data, error } = await input.admin
+      .from('buyers')
+      .update({ outreach_status: 'failed', next_follow_up_at: null, updated_at: now })
+      .eq('id', entityId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The bounced buyer was not updated.')
+  } else if (entityScope === 'lender' && entityId) {
+    const { data, error } = await input.admin
+      .from('lenders')
+      .update({ outreach_status: 'failed', next_follow_up_at: null, updated_at: now })
+      .eq('id', entityId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The bounced lender was not updated.')
+  } else if (entityScope === 'investor' && entityId) {
+    const { data, error } = await input.admin
+      .from('investor_profiles')
+      .update({ outreach_status: 'failed', next_follow_up_at: null, updated_at: now })
+      .eq('id', entityId)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('The bounced investor was not updated.')
+  }
+
+  if (dispatchId) {
+    const { error } = await input.admin
+      .from('command_center_outbound_enrollments')
+      .update({ status: 'failed', next_action_at: null, updated_at: now })
+      .eq('channel', 'email')
+      .contains('metadata_json', { dispatchId })
+    if (error) throw error
+  }
+
+  if (!providerMessageId) {
+    throw new Error('A correlated Outlook delivery failure is missing its Graph message ID.')
+  }
+  const { error: deliveryEventError } = await input.admin
+    .from('provider_delivery_events')
+    .upsert({
+      provider: 'outlook',
+      provider_event_id: `outlook-ndr:${input.row.message_id}`,
+      provider_message_id: providerMessageId,
+      event_type: 'bounce',
+      delivery_status: 'bounced',
+      recipient: null,
+      subject: input.row.subject,
+      reason,
+      sender_email: input.mailbox,
+      metadata_json: {
+        outreachRecordType: 'outlook_ndr',
+        mailbox: input.mailbox,
+        inboundMessageId: input.row.message_id,
+        dispatchId: dispatchId || null,
+        sourceMessageTable: sourceTable,
+        sourceMessageId,
+        entityScope: entityScope || null,
+        entityId: entityId || null,
+      },
+      occurred_at: input.row.received_at,
+    }, {
+      onConflict: 'provider,provider_event_id',
+      ignoreDuplicates: true,
+    })
+  if (deliveryEventError) throw deliveryEventError
 }
 
 async function ensureBuyerReplyEvent(input: {
@@ -763,6 +1396,7 @@ export async function syncOutlookMailbox(options: {
     if (leadResult.error) throw leadResult.error
     if (lenderResult.error) throw lenderResult.error
     if (investorResult.error) throw investorResult.error
+    const referenceEvidence = await loadOutlookReferenceEvidence(admin, messages)
     const buyersByEmail = new Map(
       (buyerResult.data || []).map((buyer) => [String(buyer.contact_email || '').toLowerCase(), buyer as BuyerRecord])
     )
@@ -826,6 +1460,7 @@ export async function syncOutlookMailbox(options: {
         occurredAt: metadataTimestamp(metadata, row.created_at),
         metadata,
       }}),
+      ...referenceEvidence,
     ]
     const messageIds = messages.map((message) => message.id)
     const { data: existingRows, error: existingError } = messageIds.length
@@ -866,6 +1501,11 @@ export async function syncOutlookMailbox(options: {
         },
       })
       const { classification, explicitOptOut } = integrity
+      const deliveryFailureAuthorized =
+        isOutlookDeliveryFailureMessage(message) &&
+        integrity.stateChangeAuthorized &&
+        outboundCorrelation.matchType === 'message_reference' &&
+        outboundCorrelation.provider === 'outlook'
       classifications[classification] = (classifications[classification] || 0) + 1
       if (classification === 'spam_noise') confirmedSpamMessageIds.push(message.id)
       const existingMetadata = existingMetadataByMessageId.get(message.id) || {}
@@ -873,6 +1513,7 @@ export async function syncOutlookMailbox(options: {
         metadata: existingMetadata,
         actionableReply: integrity.actionableReply,
         allowSuppression: integrity.allowSuppression,
+        allowDeliveryFailure: deliveryFailureAuthorized,
       })
 
       if (
@@ -950,6 +1591,15 @@ export async function syncOutlookMailbox(options: {
           correlatedOutboundProvider: outboundCorrelation.provider || null,
           correlatedProviderMessageId: outboundCorrelation.providerMessageId || null,
           correlatedOutboundOccurredAt: outboundCorrelation.occurredAt || null,
+          deliveryFailureAuthorized,
+          correlatedEntityScope: outboundCorrelation.entityScope || null,
+          correlatedEntityId: outboundCorrelation.entityId || null,
+          correlatedSourceMessageTable: outboundCorrelation.sourceMessageTable || null,
+          correlatedSourceMessageId: outboundCorrelation.sourceMessageId || null,
+          correlatedSourceEventId: outboundCorrelation.sourceEventId || null,
+          correlatedDispatchId: outboundCorrelation.dispatchId || null,
+          correlatedDispatchState: outboundCorrelation.dispatchState || null,
+          correlatedInternetMessageId: outboundCorrelation.internetMessageId || null,
         },
       }
       rows.push(row)
@@ -1000,7 +1650,24 @@ export async function syncOutlookMailbox(options: {
         const email = row.from_email
         const actionableReply = row.metadata_json.actionableReply === true
         const suppressionAuthorized = row.metadata_json.suppressionAuthorized === true
+        const deliveryFailureAuthorized = row.metadata_json.deliveryFailureAuthorized === true
         let throughputReplyTracking: Record<string, unknown> = { attempted: false }
+        const outlookDispatchReconciliation = await reconcileAmbiguousOutlookDispatchFromInbound({
+          admin,
+          row,
+        })
+        const sourceAcceptanceProjection =
+          outlookDispatchReconciliation.attempted && !deliveryFailureAuthorized
+            ? await projectReconciledOutlookSourceFromInbound({ admin, row })
+            : { attempted: false, projected: false }
+
+        if (deliveryFailureAuthorized) {
+          await projectOutlookDeliveryFailure({
+            admin,
+            mailbox: config.mailbox,
+            row,
+          })
+        }
 
         if (actionableReply && row.classification === 'partner_reply' && email) {
           if (buyer?.id) {
@@ -1206,19 +1873,50 @@ export async function syncOutlookMailbox(options: {
             ) {
               throw new Error('A correlated provider message is missing its outbound provider.')
             }
-            const result = await recordOutreachThroughputProviderOutcome({
-              provider: correlatedOutboundProvider.trim().toLowerCase(),
-              providerMessageId: correlatedProviderMessageId,
-              state: suppressionAuthorized ? 'suppressed' : 'replied',
-              metadata: {
-                mailbox: config.mailbox,
-                replyMessageId: row.message_id,
-                receivedAt: row.received_at,
-                suppressionAuthorized,
-              },
-            })
-            requireOutlookThroughputProjectionUpdated(result)
-            throughputReplyTracking = { attempted: true, ok: true, result }
+            const normalizedProvider = correlatedOutboundProvider.trim().toLowerCase()
+            if (normalizedProvider === 'outlook') {
+              const { error: eventError } = await admin.from('provider_delivery_events').upsert({
+                provider: 'outlook',
+                provider_event_id: `outlook-mailbox:${row.message_id}`,
+                provider_message_id: correlatedProviderMessageId,
+                event_type: suppressionAuthorized ? 'suppression' : 'reply',
+                delivery_status: suppressionAuthorized ? 'suppressed' : 'replied',
+                recipient: row.from_email,
+                subject: row.subject,
+                reason: suppressionAuthorized ? 'Explicit email opt-out received in Outlook.' : null,
+                sender_email: config.mailbox,
+                metadata_json: {
+                  outreachRecordType: 'outlook_mailbox_reply',
+                  mailbox: config.mailbox,
+                  replyMessageId: row.message_id,
+                  dispatchId: row.metadata_json.correlatedDispatchId || null,
+                },
+                occurred_at: row.received_at,
+              }, {
+                onConflict: 'provider,provider_event_id',
+                ignoreDuplicates: true,
+              })
+              if (eventError) throw eventError
+              throughputReplyTracking = {
+                attempted: false,
+                ok: true,
+                reason: 'outlook_mailbox_evidence_recorded',
+              }
+            } else {
+              const result = await recordOutreachThroughputProviderOutcome({
+                provider: normalizedProvider,
+                providerMessageId: correlatedProviderMessageId,
+                state: suppressionAuthorized ? 'suppressed' : 'replied',
+                metadata: {
+                  mailbox: config.mailbox,
+                  replyMessageId: row.message_id,
+                  receivedAt: row.received_at,
+                  suppressionAuthorized,
+                },
+              })
+              requireOutlookThroughputProjectionUpdated(result)
+              throughputReplyTracking = { attempted: true, ok: true, result }
+            }
           } catch (error) {
             throughputReplyTracking = {
               attempted: true,
@@ -1237,6 +1935,9 @@ export async function syncOutlookMailbox(options: {
         const completedMetadata = {
           ...row.metadata_json,
           throughputReplyTracking,
+          outlookDispatchReconciliation,
+          sourceAcceptanceProjection,
+          deliveryFailureProjected: deliveryFailureAuthorized,
           mailboxSideEffects: { status: 'completed', completedAt, version: 1 },
         }
         const { data: completedRows, error: completionError } = await admin

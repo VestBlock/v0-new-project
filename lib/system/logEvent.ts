@@ -11,6 +11,7 @@ export type SystemEventType =
   | 'dispute_secondary_bureau_reminder'
   | 'dispute_bureau_response_due'
   | 'dispute_letter_status_updated'
+  | 'email_accepted'
   | 'email_sent'
   | 'email_failed'
   | 'checkout_started'

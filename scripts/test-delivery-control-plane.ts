@@ -667,7 +667,6 @@ for (const routePath of [
   'app/api/admin/leads/[id]/outreach/route.ts',
   'app/api/admin/buyers/[id]/outreach/route.ts',
   'app/api/admin/lenders/[id]/outreach/route.ts',
-  'app/api/cron/seller-targeted-send/route.ts',
 ]) {
   const routeSource = source(routePath)
   assert.match(routeSource, /claim(?:Outreach|BuyerOutreach|LenderOutreach)MessageForSend/)
@@ -678,144 +677,22 @@ for (const outboundPath of [
   'lib/leads/outbound.ts',
   'lib/buyers/outbound.ts',
   'lib/lenders/outbound.ts',
-]) {
-  const outboundSource = source(outboundPath)
-  assert.match(outboundSource, /X-VestBlock-Correlation-ID/)
-  assert.match(outboundSource, /idempotencyKey/)
-}
-assert.match(source('lib/buyers/outbound.ts'), /scope: 'buyer-packet'/)
-assert.match(source('lib/buyers/packetDelivery.ts'), /messageId: `buyer-packet:\$\{packet\.id\}:\$\{buyer\.id\}`/)
-assert.match(
-  source('lib/buyers/outbound.ts'),
-  /sendBuyerPacketEmail[\s\S]*getCommercialOutreachMailingAddress\(\)[\s\S]*buildCommercialOutreachBody/
-)
-assert.match(source('lib/email/resendDeliveryCore.ts'), /recordType: 'buyer_packet_outreach'/)
-
-for (const repositoryPath of ['lib/buyers/repository.ts', 'lib/lenders/repository.ts']) {
-  const repositorySource = source(repositoryPath)
-  assert.match(repositorySource, /getReviewable(?:Buyer|Lender)OutreachMessageByChannel[\s\S]*\.in\('status', \[\.\.\.FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES\]\)[\s\S]*\.is\('sent_at', null\)/)
-  assert.match(repositorySource, /approve(?:Buyer|Lender)FollowupMessageIfReviewable[\s\S]*\.in\('status', \[\.\.\.FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES\]\)[\s\S]*\.is\('sent_at', null\)/)
-}
-for (const servicePath of ['lib/buyers/service.ts', 'lib/lenders/service.ts']) {
-  const serviceSource = source(servicePath)
-  assert.match(serviceSource, /const approvedMessage = await approve(?:Buyer|Lender)FollowupMessageIfReviewable/)
-  assert.match(serviceSource, /if \(!approvedMessage\)[\s\S]*reason: 'message_state_changed'[\s\S]*continue/)
-}
-const buyerServiceSource = source('lib/buyers/service.ts')
-assert.doesNotMatch(buyerServiceSource, /BUYER_DISCOVERY_PREFER_FREE === 'true'[\s\S]*enrichContactFromHunter/)
-assert.match(buyerServiceSource, /isUsableContactEmail\(buyer\.contact_email\)/)
-assert.match(buyerServiceSource, /isUsableContactEmail\(analysis\.contactEmail\)/)
-assert.match(buyerServiceSource, /verificationStatus === 'valid'[\s\S]*?candidate\.confidence >= 90/)
-
-const canaryRouteSource = source('app/api/cron/outreach-canary/route.ts')
-assert.match(canaryRouteSource, /mode === 'recovery_canary'/)
-assert.match(canaryRouteSource, /runDailyLenderSend\(5/)
-assert.match(canaryRouteSource, /dryRun: !send/)
-assert.match(canaryRouteSource, /recoveryExplicitlyRequested: explicitRecoveryRequest/)
-assert.doesNotMatch(source('lib/lenders/automation.ts'), /\.eq\('status', 'sent'\)[\s\S]*\.contains\('metadata_json', \{ canary: true \}\)/)
-assert.match(source('lib/lenders/automation.ts'), /\.contains\('metadata_json', \{ canary: true \}\)[\s\S]*\.not\('sent_at', 'is', null\)/)
-
-assert.match(
-  source('lib/investors/service.ts'),
-  /effectiveLimit = Math\.max\([\s\S]*deliveryCircuitBreaker\?\.maxBatchSize/
-)
-assert.match(
-  source('lib/lenders/automation.ts'),
-  /Math\.min\(limit \?\? dailyLimit, deliveryCircuitBreaker\?\.maxBatchSize/
-)
-assert.match(
-  source('lib/lenders/automation.ts'),
-  /decision\.reason === 'stale_template'[\s\S]*generateAndStoreLenderOutreach\(lender\)[\s\S]*refreshedIntro/
-)
-for (const automationPath of ['lib/buyers/automation.ts', 'lib/lenders/automation.ts']) {
-  const automationSource = source(automationPath)
-  assert.match(automationSource, /approval_revalidation:/)
-  assert.match(automationSource, /\.not\('sent_at', 'is', null\)|canarySentLast24h/)
-}
-assert.match(source('lib/investors/outbound.ts'), /disableProviderFallback: true/)
-
-const leadServiceSource = source('lib/leads/service.ts')
-assert.doesNotMatch(leadServiceSource, /sendLeadOutreachEmail|allowImmediateAutoSend|autoSendApprovedLeadEmail/)
-for (const suppressionReadPath of [
-  'lib/leads/service.ts',
-  'lib/leads/dailyAutomation.ts',
-  'app/api/admin/leads/[id]/outreach/route.ts',
-  'app/api/admin/leads/bulk/route.ts',
-  'app/api/admin/leads/route.ts',
-  'app/api/leads/export/route.ts',
-]) {
-  assert.doesNotMatch(source(suppressionReadPath), /listSuppressions\(\)\.catch/)
-}
-
-for (const outboundPath of [
-  'lib/leads/outbound.ts',
-  'lib/buyers/outbound.ts',
-  'lib/lenders/outbound.ts',
   'lib/investors/outbound.ts',
 ]) {
   const outboundSource = source(outboundPath)
-  assert.match(outboundSource, /acquireGuardedDeliveryAttempt/)
-  assert.match(outboundSource, /releaseGuardedDeliveryAttempt/)
-  assert.match(outboundSource, /getOutreachRecipientGuard/)
-  assert.match(outboundSource, /strategyKey[:,]/)
-  assert.match(outboundSource, /idempotencyKey:/)
-  assert.match(outboundSource, /recipientEmail:/)
+  assert.match(outboundSource, /sendGuardedOutlookEmail/)
+  assert.match(outboundSource, /providerMessageId/)
+  assert.match(outboundSource, /internetMessageId/)
+  assert.match(outboundSource, /dispatchId/)
+  assert.doesNotMatch(outboundSource, /sendWithResend|acquireGuardedDeliveryAttempt/)
 }
-const deliveryGateSource = source('lib/outreach/deliveryGate.ts')
-assert.match(deliveryGateSource, /reserveOutreachThroughputAttempt/)
-assert.match(deliveryGateSource, /recordOutreachThroughputOutcome/)
-assert.match(deliveryGateSource, /state: outcome === 'accepted' \? 'accepted' : 'failed'/)
-assert.match(deliveryGateSource, /breaker\?: DeliveryCircuitBreaker/)
-assert.match(deliveryGateSource, /const breaker = input\.breaker \?\?/)
+assert.match(source('lib/buyers/outbound.ts'), /scope: 'buyer-packet'/)
+assert.match(source('lib/buyers/packetDelivery.ts'), /messageId: `buyer-packet:\$\{packet\.id\}:\$\{buyer\.id\}`/)
 
-for (const batchPath of [
-  'lib/leads/dailyAutomation.ts',
-  'lib/buyers/automation.ts',
-  'lib/lenders/automation.ts',
-  'lib/investors/service.ts',
-]) {
-  assert.match(
-    source(batchPath),
-    /send(?:Lead|Buyer|Lender|Investor)OutreachEmail\(\{[\s\S]*?deliveryCircuitBreaker(?:[:,])/,
-    `${batchPath} reuses its batch delivery-breaker snapshot`
-  )
-}
-assert.match(
-  source('lib/lenders/automation.ts'),
-  /allowRecoveryCanary: canary[\s\S]*?sendLenderOutreachEmail\(\{[\s\S]*?deliveryCircuitBreaker:/
-)
-
-for (const claimPath of [
-  'lib/leads/dailyAutomation.ts',
-  'lib/buyers/automation.ts',
-  'lib/lenders/automation.ts',
-  'lib/investors/service.ts',
-  'app/api/admin/leads/[id]/outreach/route.ts',
-  'app/api/admin/buyers/[id]/outreach/route.ts',
-  'app/api/admin/lenders/[id]/outreach/route.ts',
-  'app/api/cron/seller-targeted-send/route.ts',
-]) {
-  assert.match(source(claimPath), /getOutreachRecipientGuard/)
-}
-
-for (const deferredClaimPath of [
-  'lib/leads/dailyAutomation.ts',
-  'app/api/admin/leads/[id]/outreach/route.ts',
-  'app/api/cron/seller-targeted-send/route.ts',
-]) {
-  const deferredClaimSource = source(deferredClaimPath)
-  assert.match(deferredClaimSource, /sendResult\.deferred/)
-  assert.match(deferredClaimSource, /restoreOutreachMessageAfterDeliveryDeferral/)
-}
-assert.match(source('lib/leads/dailyAutomation.ts'), /restoreLeadFollowupAfterDeliveryDeferral/)
-assert.match(
-  source('lib/leads/repository.ts'),
-  /restoreOutreachMessageAfterDeliveryDeferral[\s\S]*\.eq\('status', 'queued'\)[\s\S]*\.eq\('updated_at', claimedUpdatedAt\)[\s\S]*\.is\('sent_at', null\)/
-)
-assert.match(
-  source('lib/leads/repository.ts'),
-  /restoreLeadFollowupAfterDeliveryDeferral[\s\S]*\.eq\('updated_at', claimedUpdatedAt\)[\s\S]*\.is\('next_follow_up_at', null\)/
-)
+const sellerTargetedRoute = source('app/api/cron/seller-targeted-send/route.ts')
+assert.match(sellerTargetedRoute, /wouldSend: false/)
+assert.match(sellerTargetedRoute, /seller_cold_email_prohibited/)
+assert.doesNotMatch(sellerTargetedRoute, /sendLeadOutreachEmail|claimOutreachMessageForSend/)
 
 for (const repositoryPath of [
   'lib/buyers/repository.ts',
@@ -838,41 +715,32 @@ for (const revalidationPath of [
   assert.match(revalidationSource, /message_state_changed/)
 }
 
-const budgetSource = source('lib/outreach/deliveryBudget.ts')
+const budgetSource = source('lib/outreach/outlookColdBudget.ts')
 assert.match(budgetSource, /job_type: 'suppression_sync'/)
 assert.match(budgetSource, /\.eq\('updated_at', row\.updated_at\)/)
-assert.match(budgetSource, /attemptMarkers/)
-const resendDeliverySource = source('lib/email/resendDelivery.ts')
-assert.match(resendDeliverySource, /suppressAndCancelPendingOutreach/)
-assert.match(resendDeliverySource, /recordPartnerOutreachDelivery/)
-assert.match(resendDeliverySource, /recordOutreachThroughputProviderOutcome/)
-assert.match(resendDeliverySource, /duplicateEvent = !inserted\?\.id/)
-assert.match(resendDeliverySource, /recordThroughputBestEffort/)
-assert.match(resendDeliverySource, /deliveryProjectionAllowedCurrentStatuses/)
-assert.match(resendDeliverySource, /findThroughputAttemptSender/)
-assert.match(resendDeliverySource, /sender_email: senderEmail/)
-assert.doesNotMatch(resendDeliverySource, /if \(!inserted\?\.id\) return/)
-const deliveryHealthSource = source('lib/leads/deliveryHealth.ts')
-assert.match(deliveryHealthSource, /getConfiguredOutboundSender/)
-assert.match(deliveryHealthSource, /\.eq\('sender_email', senderEmail\)/)
-assert.match(deliveryHealthSource, /globalAttemptResult/)
-for (const senderBoundPath of [
+assert.match(budgetSource, /reservationId/)
+for (const outlookBoundPath of [
   'lib/leads/outbound.ts',
   'lib/buyers/outbound.ts',
   'lib/lenders/outbound.ts',
   'lib/investors/outbound.ts',
 ]) {
-  assert.match(source(senderBoundPath), /senderEmail: getOutboundSenderForProvider\(provider\)/)
+  const outlookBoundSource = source(outlookBoundPath)
+  assert.match(outlookBoundSource, /sendGuardedOutlookEmail/)
+  assert.doesNotMatch(outlookBoundSource, /sendEmailViaResend/)
 }
-assert.match(source('lib/email/sendEmail.ts'), /getOutboundSenderForProvider\('resend'\)/)
-assert.match(
-  source('lib/email/outlookMailbox.ts'),
-  /state: suppressionAuthorized \? 'suppressed' : 'replied'/
-)
+const sendEmailSource = source('lib/email/sendEmail.ts')
+assert.match(sendEmailSource, /prefersMicrosoftGraphTransactionalEmail/)
+assert.match(sendEmailSource, /sendTransactionalEmailWithMicrosoftGraphIdempotently/)
+assert.match(sendEmailSource, /crossProviderFallbackAllowed: false/)
+const outlookMailboxSource = source('lib/email/outlookMailbox.ts')
+assert.match(outlookMailboxSource, /reconcileAmbiguousOutlookDispatchFromInbound/)
+assert.match(outlookMailboxSource, /projectReconciledOutlookSourceFromInbound/)
+assert.match(outlookMailboxSource, /projectOutlookDeliveryFailure/)
 assert.match(source('app/api/cron/outreach-dispatch/route.ts'), /runLeadThroughputSprint/)
 assert.match(source('app/api/cron/outreach-dispatch/route.ts'), /OUTREACH_DISPATCH_CRON_SEND/)
 assert.match(source('lib/leads/outbound.ts'), /deferredScope\?: 'record' \| 'lane' \| 'global' \| 'infrastructure'/)
-assert.match(source('lib/leads/outbound.ts'), /deferredScope: laneLocal \? 'lane' : 'global'/)
+assert.match(source('lib/leads/outbound.ts'), /deferredScope: hunter\.reason\.includes\('budget'\) \? 'global' : 'record'/)
 assert.match(source('lib/leads/dailyAutomation.ts'), /sendResult\.deferredScope !== 'lane'/)
 
 const throughputMigrationSource = source(
@@ -897,10 +765,11 @@ for (const approvalRoute of [
   assert.match(source(approvalRoute), /canApproveOutreachMessage/)
 }
 assert.doesNotMatch(source('app/api/admin/leads/bulk/route.ts'), /\.in\('status', \['needs_review', 'queued'\]\)/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /allocateDailyStrategyOutput/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /evaluateOutreachThroughputGovernor/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /Promise\.allSettled/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /serializePartnerSend/)
+const partnerPipelineRoute = source('app/api/cron/partner-network-pipeline/route.ts')
+assert.match(partnerPipelineRoute, /allocateDailyStrategyOutput/)
+assert.match(partnerPipelineRoute, /Promise\.allSettled/)
+assert.match(partnerPipelineRoute, /serializePartnerSend/)
+assert.match(partnerPipelineRoute, /let invocationRemaining = 2/)
 for (const pipelinePath of [
   'lib/buyers/automation.ts',
   'lib/lenders/automation.ts',
@@ -910,16 +779,15 @@ for (const pipelinePath of [
   assert.match(pipelineSource, /sendExecutor/)
   assert.match(pipelineSource, /options\.sendExecutor/)
 }
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /mode: deliveryCircuitBreaker\.mode/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /LENDERS_PIPELINE_CRON_SEND/)
-assert.match(source('app/api/cron/partner-network-pipeline/route.ts'), /INVESTORS_PIPELINE_CRON_SEND/)
+assert.match(partnerPipelineRoute, /LENDERS_PIPELINE_CRON_SEND/)
+assert.match(partnerPipelineRoute, /INVESTORS_PIPELINE_CRON_SEND/)
 assert.doesNotMatch(
-  source('app/api/cron/partner-network-pipeline/route.ts'),
+  partnerPipelineRoute,
   /PARTNER_PIPELINE_CRON_SEND \|\| process\.env\.BUYERS_PIPELINE_CRON_SEND/
 )
 const investorPipelineRoute = source('app/api/cron/investors-pipeline/route.ts')
 assert.match(investorPipelineRoute, /INVESTORS_PIPELINE_CRON_SEND/)
-assert.match(investorPipelineRoute, /requestedDryRun === null[\s\S]*!liveEnabled/)
+assert.match(investorPipelineRoute, /deliveryEnabled = enabled\(process\.env\.INVESTORS_PIPELINE_CRON_SEND\) && !dryRun/)
 const investorSendRoute = source('app/api/cron/investors-send/route.ts')
 assert.match(investorSendRoute, /searchParams\.get\('send'\)/)
 assert.match(investorSendRoute, /INVESTORS_PIPELINE_CRON_SEND/)

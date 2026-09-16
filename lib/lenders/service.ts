@@ -44,6 +44,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 import { isPaidSourceBudgetSkipError } from '@/lib/leads/paidSourceBudget'
 
 function envInt(name: string, fallback: number) {
@@ -126,6 +127,9 @@ export function buildSanitizedLenderHunterMetadata(input: {
     reservationId: input.reservationId || null,
     budgetReason: safeHunterMetadataText(input.budgetReason, 120),
     accepted,
+    acceptedRecipientHash: accepted
+      ? hashHunterVerificationEmail(input.candidate?.email || '')
+      : null,
     acceptedConfidence: accepted ? Number(input.candidate?.confidence) : null,
     acceptedVerificationStatus: accepted ? 'valid' : null,
     topCandidateConfidence:

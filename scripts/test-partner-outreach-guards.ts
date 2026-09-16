@@ -132,7 +132,9 @@ assert.doesNotMatch(
   'legacy investor caps must not override the canonical 23-lane allocation'
 )
 assert.match(partnerRouteSource, /canonicalSendAllocations/)
-assert.match(partnerRouteSource, /evaluateOutreachThroughputGovernor/)
+assert.match(partnerRouteSource, /let invocationRemaining = 2/)
+assert.match(partnerRouteSource, /stage: 'outlook_cold_guarded'/)
+assert.match(partnerRouteSource, /perInvocationCap: 2/)
 assert.doesNotMatch(partnerRouteSource, /PARTNER_PIPELINE_SEND_LIMIT/)
 
 console.log('partner-outreach-guards: ok')

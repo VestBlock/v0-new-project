@@ -146,19 +146,11 @@ for (const [name, command] of Object.entries(scripts)) {
   )
 }
 
-for (const relativePath of [
-  'scripts/instantly-lead-sync.mjs',
-  'scripts/instantly-demand-discovery.mjs',
-]) {
-  const scriptSource = source(relativePath)
-  assert.match(scriptSource, /quarantineLegacyDirectLiveSend/)
-  assert.match(scriptSource, /requested: push && Boolean\(campaignId\)/)
-}
-const instantlyCampaignSource = source('scripts/instantly-campaign-control.mjs')
-assert.match(instantlyCampaignSource, /requested: activate \|\| apply/)
-assert.match(instantlyCampaignSource, /activate \|\| pause/)
-assert.match(scripts['instantly:push'], /instantly-lead-sync\.mjs --push/)
-assert.match(scripts['instantly:demand:push'], /instantly-demand-discovery\.mjs --push/)
+assert.equal(
+  Object.keys(scripts).some((name) => name.startsWith('instantly:')),
+  false,
+  'Instantly must not remain exposed as an operator command after the Outlook-only cutover.'
+)
 
 for (const instructionPath of [
   'scripts/dealmachine-export-lists.mjs',

@@ -257,7 +257,7 @@ function AutomationHealthPanel({
       <div className="mt-4 border-l border-white/[0.1] pl-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-semibold text-white">Provider-confirmed delivery</p>
+            <p className="text-xs font-semibold text-white">Recorded Outlook outcomes</p>
             <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">
               Latest outcome per message over {health.deliveryEvidence.windowDays} days. Accepted is not counted as delivered.
             </p>
@@ -270,7 +270,7 @@ function AutomationHealthPanel({
                 : "border-emerald-400/25 bg-emerald-400/[0.07] text-emerald-200"
             )}
           >
-            {dataIntegrityHold ? "Data integrity hold" : health.deliveryEvidence.circuitOpen ? "Sending blocked" : "Sending eligible"}
+            {dataIntegrityHold ? "Data integrity hold" : health.deliveryEvidence.circuitOpen ? "Outlook guard blocked" : "Outlook guard ready"}
           </span>
         </div>
         <div className="mt-3 grid gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3 xl:grid-cols-6">
@@ -288,6 +288,9 @@ function AutomationHealthPanel({
             </div>
           ))}
         </div>
+        {health.deliveryEvidence.reason ? (
+          <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">{health.deliveryEvidence.reason}</p>
+        ) : null}
       </div>
 
       <div className="mt-4 border-l border-white/[0.1] pl-3">

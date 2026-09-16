@@ -6,7 +6,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildInvestorPipelineSnapshotFromRecord } from '@/lib/investors/pipeline'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { isCurrentVestblockOutboundLead } from '@/lib/leads/outboundEligibility'
 import { loadOperatingLoopTelemetryFromDatabase, type OperatingLoopTelemetry } from '@/lib/admin/operatingLoops'
 import { buildOperatingArchitecture, type CommandCenterOperatingArchitecture } from '@/lib/admin/operatingArchitecture'
@@ -19,10 +18,14 @@ import { buildSourceGovernorSnapshot, type SourceGovernorSnapshot } from '@/lib/
 import { getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import {
   allocateDailyStrategyOutput,
-  chicagoBusinessDate,
   configuredDailyStrategyOutputTarget,
 } from '@/lib/outreach/dailyStrategyOutputCore'
-import { evaluateOutreachThroughputGovernor } from '@/lib/outreach/throughputGovernorCore'
+import {
+  OUTLOOK_COLD_B2B_INVOCATION_CAP,
+  inspectOutlookColdBudget,
+  isOutlookColdSendWindow,
+  seedOutlookColdBudget,
+} from '@/lib/outreach/outlookColdBudgetCore'
 import { buildDatabaseDealMachineFreshness } from '@/lib/admin/dealMachineFreshness'
 import { loadResearchSourceHealth, type ResearchSourceHealthSnapshot } from '@/lib/research/sourceHealth'
 import { buildRevenueFunnelSnapshot, type CommandCenterRevenueFunnel } from '@/lib/admin/revenueFunnel'
@@ -286,7 +289,7 @@ export type CommandCenterAutomationHealth = {
     suppressed: number
     failed: number
     badRate: number
-    threshold: number
+    threshold: number | null
     circuitOpen: boolean
     reason: string | null
   }
@@ -869,6 +872,42 @@ function hoursSince(value?: string | null) {
 
 const withinHours = (value: string | null | undefined, hours: number) => hoursSince(value) <= hours
 const withinDays = (value: string | null | undefined, days: number) => hoursSince(value) <= days * 24
+
+function buildOutlookDeliveryEvidence(rows: AnyRow[], now: Date) {
+  const windowDays = 7
+  const cutoff = now.getTime() - windowDays * 24 * 60 * 60 * 1_000
+  const latestByMessage = new Map<string, { status: string; occurredAt: number }>()
+  for (const row of rows) {
+    const providerMessageId = String(row.provider_message_id || '').trim()
+    const status = lower(row.delivery_status)
+    const occurredAt = Date.parse(String(row.occurred_at || ''))
+    if (!providerMessageId || !Number.isFinite(occurredAt) || occurredAt < cutoff) continue
+    const current = latestByMessage.get(providerMessageId)
+    if (!current || occurredAt > current.occurredAt) {
+      latestByMessage.set(providerMessageId, { status, occurredAt })
+    }
+  }
+
+  const statuses = [...latestByMessage.values()].map((entry) => entry.status)
+  const count = (...wanted: string[]) => statuses.filter((status) => wanted.includes(status)).length
+  const delivered = count('delivered', 'opened', 'clicked', 'replied')
+  const bounced = count('bounced')
+  const complained = count('complained')
+  const suppressed = count('suppressed')
+  const failed = count('failed')
+  const sampleSize = delivered + bounced + complained + suppressed + failed
+  const bad = bounced + complained + suppressed + failed
+  return {
+    windowDays,
+    sampleSize,
+    delivered,
+    bounced,
+    complained,
+    suppressed,
+    failed,
+    badRate: sampleSize > 0 ? bad / sampleSize : 0,
+  }
+}
 
 function latestTimestamp(values: Array<string | null | undefined>) {
   return values
@@ -2455,8 +2494,7 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     propertyBuyerPackets,
     propertyBuyerPacketSends,
     dealPipelineItems,
-    outreachAttemptReservations,
-    outreachDailyStrategyBudgets,
+    outlookDeliveryEvents,
   ] = await Promise.all([
     safeRows(
       () =>
@@ -2767,24 +2805,14 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     optionalRows(
       () =>
         admin
-          .from('outreach_attempt_reservations')
-          .select('id,business_date,strategy_key,state,reserved_at')
-          .neq('state', 'cancelled')
-          .gte('reserved_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .order('reserved_at', { ascending: false }),
-      'outreach_attempt_reservations',
+          .from('provider_delivery_events')
+          .select('provider_message_id,delivery_status,occurred_at,sender_email,metadata_json')
+          .eq('provider', 'outlook')
+          .gte('occurred_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+          .order('occurred_at', { ascending: false }),
+      'provider_delivery_events:outlook',
       issues,
-      { maxRows: 1100 }
-    ),
-    optionalRows(
-      () =>
-        admin
-          .from('outreach_daily_strategy_budgets')
-          .select('strategy_key,target_count,reserved_count,accepted_count,delivered_count,replied_count,bounced_count,suppressed_count,failed_count')
-          .eq('business_date', chicagoBusinessDate()),
-      'outreach_daily_strategy_budgets',
-      issues,
-      { maxRows: 100 }
+      { maxRows: 10000 }
     ),
   ])
 
@@ -2828,17 +2856,16 @@ async function loadTables(admin: SupabaseClient<any, any, any>, issues: DataSour
     propertyBuyerPackets,
     propertyBuyerPacketSends,
     dealPipelineItems,
-    outreachAttemptReservations,
-    outreachDailyStrategyBudgets,
+    outlookDeliveryEvents,
   }
 }
 
 export async function getCommandCenterData(): Promise<CommandCenterData> {
   const admin = createAdminClient()
   const issues: DataSourceIssue[] = []
-  const [t, deliveryEvidence, researchSourceHealth] = await Promise.all([
+  const now = new Date()
+  const [t, researchSourceHealth] = await Promise.all([
     loadTables(admin, issues),
-    getDeliveryCircuitBreaker(),
     loadResearchSourceHealth(),
   ])
   const local = loadLocalSignals()
@@ -2854,17 +2881,16 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   })
 
   // ── Shared signals ─────────────────────────────────────────────────────────
-  const outreachTarget = configuredDailyStrategyOutputTarget()
-  const strategyOutputPlan = allocateDailyStrategyOutput(Math.min(1000, outreachTarget))
-  const throughputDecision = evaluateOutreachThroughputGovernor({
-    mode: deliveryEvidence.mode,
-    sampleSize: deliveryEvidence.sampleSize,
-    complained: deliveryEvidence.complained,
-    badRate: deliveryEvidence.badRate,
-    globalFailureRate: deliveryEvidence.globalFailureRate,
-    terminalCompleteness: deliveryEvidence.terminalCompleteness,
-    requestedDailyTarget: strategyOutputPlan.target,
-  })
+  const outreachTarget = Math.min(1000, configuredDailyStrategyOutputTarget())
+  const strategyOutputPlan = allocateDailyStrategyOutput(outreachTarget, now)
+  const outlookBudgetJob = t.commandCenterJobs.find(
+    (job) => String(job.job_key || '') === 'outlook-cold-b2b-rolling-budget'
+  ) || null
+  const outlookColdBudget = inspectOutlookColdBudget(
+    outlookBudgetJob?.metrics_json || seedOutlookColdBudget(),
+    now
+  )
+  const outlookDeliveryEvidence = buildOutlookDeliveryEvidence(t.outlookDeliveryEvents, now)
   const revenueTarget = envInt('VESTBLOCK_MONTHLY_REVENUE_TARGET', 100000)
 
   const leadById = new Map(t.leads.map((lead) => [lead.id, lead]))
@@ -2904,7 +2930,7 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
     activeBuyerOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length +
     activeInvestorOutreach.filter((m) => lower(m.status) === 'sent' && withinHours(m.sent_at || m.updated_at, 24)).length
   const outreach24h = allLeadSends24h + partnerSends24h
-  const governedAttempts24h = t.outreachAttemptReservations.length
+  const governedAttempts24h = outlookColdBudget.attemptCount
   const sends7d =
     currentOutreachSendEvents.filter((event) => ['accepted', 'sent'].includes(lower(event.status)) && withinDays(event.created_at, 7)).length +
     activeLenderOutreach.filter((m) => lower(m.status) === 'sent' && withinDays(m.sent_at || m.updated_at, 7)).length +
@@ -2921,23 +2947,40 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const buyerNeedsReview = activeBuyerOutreach.filter((message) => lower(message.status) === 'needs_review').length
   const lenderApproved = activeLenderOutreach.filter((message) => lower(message.status) === 'approved').length
   const lenderNeedsReview = activeLenderOutreach.filter((message) => lower(message.status) === 'needs_review').length
-  const remainingToday = Math.max(0, outreachTarget - outreach24h)
-  const safeRemainingToday = Math.max(0, throughputDecision.effectiveDailyCap - governedAttempts24h)
-  const laneBudgetByKey = new Map(
-    t.outreachDailyStrategyBudgets.map((row) => [String(row.strategy_key || ''), row])
-  )
-  const reservationCountsByLane = new Map<string, number>()
-  for (const reservation of t.outreachAttemptReservations) {
-    if (String(reservation.business_date || '') !== throughputDecision.allocationPlan.businessDate) continue
-    const key = String(reservation.strategy_key || '')
-    reservationCountsByLane.set(key, (reservationCountsByLane.get(key) || 0) + 1)
+  const safeRemainingToday = outlookColdBudget.valid ? outlookColdBudget.remaining : 0
+  const laneOutputByKey = new Map<string, {
+    produced: number
+    accepted: number
+    delivered: number
+    replied: number
+    bounced: number
+    suppressed: number
+    failed: number
+  }>()
+  for (const run of t.commandCenterStrategyRuns) {
+    if (!String(run.run_key || '').startsWith(`${strategyOutputPlan.businessDate}:`)) continue
+    const key = String(run.strategy_key || '')
+    const current = laneOutputByKey.get(key) || {
+      produced: 0,
+      accepted: 0,
+      delivered: 0,
+      replied: 0,
+      bounced: 0,
+      suppressed: 0,
+      failed: 0,
+    }
+    current.produced += Number(run.draft_count || 0)
+    current.accepted += Number(run.accepted_count || 0)
+    current.delivered += Number(run.delivered_count || 0)
+    current.replied += Number(run.reply_count || 0)
+    current.bounced += Number(run.bounce_count || 0)
+    current.suppressed += Number(run.suppression_blocked_count || 0)
+    current.failed += lower(run.status) === 'failed' ? 1 : 0
+    laneOutputByKey.set(key, current)
   }
-  const laneBudgets = throughputDecision.allocationPlan.allocations.map((allocation) => {
-    const stored = laneBudgetByKey.get(allocation.key)
-    const reserved = Math.max(
-      Number(stored?.reserved_count || 0),
-      reservationCountsByLane.get(allocation.key) || 0
-    )
+  const laneBudgets = strategyOutputPlan.allocations.map((allocation) => {
+    const stored = laneOutputByKey.get(allocation.key)
+    const reserved = Math.max(0, Number(stored?.produced || 0))
     return {
       key: allocation.key,
       label: allocation.label,
@@ -2945,23 +2988,31 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       target: allocation.target,
       reserved,
       remaining: Math.max(0, allocation.target - reserved),
-      accepted: Number(stored?.accepted_count || 0),
-      delivered: Number(stored?.delivered_count || 0),
-      replied: Number(stored?.replied_count || 0),
-      bounced: Number(stored?.bounced_count || 0),
-      suppressed: Number(stored?.suppressed_count || 0),
-      failed: Number(stored?.failed_count || 0),
+      accepted: Number(stored?.accepted || 0),
+      delivered: Number(stored?.delivered || 0),
+      replied: Number(stored?.replied || 0),
+      bounced: Number(stored?.bounced || 0),
+      suppressed: Number(stored?.suppressed || 0),
+      failed: Number(stored?.failed || 0),
     }
   })
+  const remainingToday = laneBudgets.reduce((sum, lane) => sum + lane.remaining, 0)
   const leadLaneSafeRemaining = laneBudgets
-    .filter((lane) => lane.group !== 'partner')
+    .filter((lane) => lane.group === 'business')
     .reduce((sum, lane) => sum + lane.remaining, 0)
   const outboundReadiness = getOutboundProviderReadiness()
   const autoSendEnabled = envBool('AUTO_SEND_ENABLED', envBool('LEADS_AUTO_SEND_APPROVED', false))
-  const maxSprintTarget = envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', Math.min(outreachTarget, 100))
+  const maxSprintTarget = Math.min(
+    OUTLOOK_COLD_B2B_INVOCATION_CAP,
+    envInt('LEADS_COMMAND_CENTER_MAX_SENDS_PER_RUN', OUTLOOK_COLD_B2B_INVOCATION_CAP)
+  )
   const recommendedSprintTarget = Math.max(
     0,
-    Math.min(safeRemainingToday, leadLaneSafeRemaining, maxSprintTarget)
+    Math.min(
+      outboundReadiness.outlook && isOutlookColdSendWindow(now) ? safeRemainingToday : 0,
+      leadLaneSafeRemaining,
+      maxSprintTarget
+    )
   )
 
   const replySignals7d = currentLeads.filter(
@@ -2975,14 +3026,14 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
   const followupsDue = currentLeads.filter((lead) => lower(lead.outreach_status) === 'followup_due').length
   const outboundControl: CommandCenterOutboundControl = {
     dailyLimit: outreachTarget,
-    effectiveDailyLimit: throughputDecision.effectiveDailyCap,
+    effectiveDailyLimit: outlookColdBudget.globalAttemptCap,
     safeRemainingToday,
     leadLaneSafeRemaining,
     attempted24h: governedAttempts24h,
-    rampStage: throughputDecision.stage,
-    laneCount: throughputDecision.allocationPlan.laneCount,
-    laneBaseAllocation: throughputDecision.allocationPlan.baseAllocation,
-    laneRemainder: throughputDecision.allocationPlan.remainder,
+    rampStage: 'outlook_direct_guarded',
+    laneCount: strategyOutputPlan.laneCount,
+    laneBaseAllocation: strategyOutputPlan.baseAllocation,
+    laneRemainder: strategyOutputPlan.remainder,
     sent24h: outreach24h,
     remainingToday,
     recommendedSprintTarget,
@@ -4650,16 +4701,27 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       .map((reply) => reply.received_at)
   )
   const automationBlockers: CommandCenterAutomationHealth['blockers'] = []
+  const outlookControlBlocked =
+    !outboundReadiness.outlook ||
+    !outboundReadiness.mailingAddressConfigured ||
+    !outlookColdBudget.valid ||
+    !mailboxReadiness.ready
+  const outlookOperationalReason = !outboundReadiness.outlook
+    ? 'Microsoft Graph application credentials are incomplete; Outlook dispatch is unavailable.'
+    : !outboundReadiness.mailingAddressConfigured
+      ? 'The commercial mailing address required for governed outreach is not configured.'
+      : !outlookColdBudget.valid
+        ? `The Outlook rolling cold-attempt ledger is invalid (${outlookColdBudget.reason || 'unknown state'}).`
+        : !mailboxReadiness.ready
+          ? mailboxReadiness.reason || 'Operational reply capture is not ready.'
+          : `Outlook cold delivery is governed by the ${outlookColdBudget.globalAttemptCap}-attempt rolling budget. Delivery totals below use only recorded Outlook provider events; accepted sends are not treated as delivered.`
 
-  if (!deliveryEvidence.allowed) {
-    const hasEnoughEvidence = deliveryEvidence.sampleSize >= 20
+  if (!outboundReadiness.outlook || !outboundReadiness.mailingAddressConfigured || !outlookColdBudget.valid) {
     automationBlockers.push({
-      key: 'delivery-circuit-open',
-      severity: hasEnoughEvidence ? 'critical' : 'warning',
-      title: hasEnoughEvidence ? 'Email delivery circuit is open' : 'Email delivery evidence is incomplete',
-      detail: hasEnoughEvidence
-        ? `${(deliveryEvidence.badRate * 100).toFixed(1)}% of finalized email deliveries failed, bounced, or were suppressed. Automated sending is blocked above ${(deliveryEvidence.threshold * 100).toFixed(1)}%.`
-        : `Only ${deliveryEvidence.sampleSize} provider-confirmed outcomes are available. Automated sending remains blocked until enough evidence is collected.`,
+      key: 'outlook-direct-guard-unavailable',
+      severity: 'critical',
+      title: 'Outlook direct-send guard is unavailable',
+      detail: outlookOperationalReason,
       href: '#outreach-command',
     })
   }
@@ -4794,17 +4856,17 @@ export async function getCommandCenterData(): Promise<CommandCenterData> {
       followupsDue: enrollmentFollowupsDue,
     },
     deliveryEvidence: {
-      windowDays: deliveryEvidence.windowDays,
-      sampleSize: deliveryEvidence.sampleSize,
-      delivered: deliveryEvidence.delivered,
-      bounced: deliveryEvidence.bounced,
-      complained: deliveryEvidence.complained,
-      suppressed: deliveryEvidence.suppressed,
-      failed: deliveryEvidence.failed,
-      badRate: deliveryEvidence.badRate,
-      threshold: deliveryEvidence.threshold,
-      circuitOpen: !deliveryEvidence.allowed,
-      reason: deliveryEvidence.reason,
+      windowDays: outlookDeliveryEvidence.windowDays,
+      sampleSize: outlookDeliveryEvidence.sampleSize,
+      delivered: outlookDeliveryEvidence.delivered,
+      bounced: outlookDeliveryEvidence.bounced,
+      complained: outlookDeliveryEvidence.complained,
+      suppressed: outlookDeliveryEvidence.suppressed,
+      failed: outlookDeliveryEvidence.failed,
+      badRate: outlookDeliveryEvidence.badRate,
+      threshold: null,
+      circuitOpen: outlookControlBlocked,
+      reason: outlookOperationalReason,
     },
     mailbox: {
       configured: mailboxReadiness.ready,

@@ -42,6 +42,7 @@ import type { BuyerBuyBoxRecord, BuyerRecord, PropertyBuyerMatchInput } from '@/
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { hashHunterVerificationEmail } from '@/lib/outreach/hunterSendVerificationCore'
 import { buildDiscoveryCooldownMessage, findRecentDiscoveryRun } from '@/lib/partners/discoveryCooldown'
 
 function envInt(name: string, fallback: number) {
@@ -295,6 +296,9 @@ export async function enrichAndScoreBuyer(
         claimId: hunterClaimId,
         reservationId: hunterReservation?.reservationId || null,
         accepted: Boolean(verifiedHunterContact),
+        acceptedRecipientHash: verifiedHunterContact
+          ? hashHunterVerificationEmail(verifiedHunterContact.email)
+          : null,
         acceptedConfidence: verifiedHunterContact?.confidence ?? null,
         acceptedVerificationStatus: verifiedHunterContact?.verificationStatus ?? null,
         topCandidateConfidence: hunterResult.primaryCandidate?.confidence ?? null,

@@ -23,6 +23,7 @@ import {
   allocateDailyStrategyOutput,
   configuredDailyStrategyOutputTarget,
 } from '@/lib/outreach/dailyStrategyOutputCore'
+import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
 import { logEvent } from '@/lib/system/logEvent'
 import { isPaidSourceBudgetSkipError } from '@/lib/leads/paidSourceBudget'
 
@@ -177,21 +178,25 @@ export async function runDailyInvestorDiscovery(options: { dryRun?: boolean; mod
 export async function runDailyInvestorPipeline(
   options: {
     dryRun?: boolean
+    deliveryEnabled?: boolean
     sendLimit?: number
+    invocationId?: string
     sendExecutor?: <T>(task: () => Promise<T>) => Promise<T>
   } = {}
 ) {
+  const executionMode = resolvePipelineExecutionMode(options)
+  const { dryRun, deliveryEnabled, deliveryDryRun } = executionMode
   const dailyLaneTarget = investorDailyOutputTarget()
   const sendLimit = Math.min(options.sendLimit ?? dailyLaneTarget, dailyLaneTarget)
   const run = await startInvestorAutomationRun({
     runType: 'pipeline',
     sourceKey: 'investor_relationship_engine',
-    requestParams: { dryRun: options.dryRun || false },
+    requestParams: { dryRun, deliveryEnabled },
   })
 
   try {
-    const discovery = await runDailyInvestorDiscovery({ dryRun: options.dryRun })
-    const enrichment = options.dryRun
+    const discovery = await runDailyInvestorDiscovery({ dryRun })
+    const enrichment = dryRun
       ? {
           ok: true,
           partial: false,
@@ -220,14 +225,14 @@ export async function runDailyInvestorPipeline(
             error: message,
           }
         })
-    const scoring = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(dailyLaneTarget)
-    const outreach = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(dailyLaneTarget)
-    const followup = await runDailyInvestorFollowup(dailyLaneTarget, { dryRun: options.dryRun })
-    const approval = await runDailyInvestorApproval(dailyLaneTarget, { dryRun: options.dryRun })
+    const scoring = dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorScoring(dailyLaneTarget)
+    const outreach = dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorOutreach(dailyLaneTarget)
+    const followup = await runDailyInvestorFollowup(dailyLaneTarget, { dryRun })
+    const approval = await runDailyInvestorApproval(dailyLaneTarget, { dryRun })
     const executeSend = () =>
-      runDailyInvestorSend(sendLimit, { dryRun: options.dryRun })
+      runDailyInvestorSend(sendLimit, { dryRun: deliveryDryRun, invocationId: options.invocationId })
     const send = options.sendExecutor ? await options.sendExecutor(executeSend) : await executeSend()
-    const performance = options.dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
+    const performance = dryRun ? { ok: true, count: 0, results: [] } : await runDailyInvestorPerformanceRollup()
 
     const count = discovery.count + enrichment.count + scoring.count + outreach.count + followup.count + approval.count + send.count + performance.count
     const stages = [discovery, enrichment, scoring, outreach, followup, approval, send, performance]

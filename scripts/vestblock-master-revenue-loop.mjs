@@ -99,19 +99,18 @@ function skippedStep(name, reason, required = false) {
 
 function envAudit() {
   const checks = [
-    ["DealMachine API", ["DEALMACHINE_API_KEY", "DEALMACHINE_TOKEN"]],
-    ["Outscraper", ["OUTSCRAPER_API_KEY"]],
-    ["Supabase", ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE"]],
-    ["Resend email", ["RESEND_API_KEY"]],
-    ["Google Maps", ["GOOGLE_MAPS_API_KEY", "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"]],
-    ["OpenAI", ["OPENAI_API_KEY"]],
-    ["Vercel", ["VERCEL_TOKEN"]],
-    ["Instantly", ["INSTANTLY_API_KEY"]],
+    ["DealMachine API", [["DEALMACHINE_API_KEY", "DEALMACHINE_TOKEN"]]],
+    ["Outscraper", [["OUTSCRAPER_API_KEY"]]],
+    ["Supabase", [["NEXT_PUBLIC_SUPABASE_URL"], ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE"]]],
+    ["Outlook / Microsoft Graph", [["MICROSOFT_TENANT_ID"], ["MICROSOFT_GRAPH_CLIENT_ID"], ["MICROSOFT_GRAPH_CLIENT_SECRET"], ["OUTLOOK_ACQUISITIONS_MAILBOX"]]],
+    ["Google Maps", [["GOOGLE_MAPS_API_KEY", "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"]]],
+    ["OpenAI", [["OPENAI_API_KEY"]]],
+    ["Vercel", [["VERCEL_TOKEN"]]],
   ]
-  return checks.map(([label, keys]) => ({
+  return checks.map(([label, requiredGroups]) => ({
     label,
-    keys,
-    wired: keys.some((key) => Boolean(process.env[key])),
+    keys: requiredGroups.flat(),
+    wired: requiredGroups.every((group) => group.some((key) => Boolean(process.env[key]))),
   }))
 }
 
@@ -262,7 +261,6 @@ async function main() {
 
   steps.push(runStep("boss-daily-loop", "npm", ["run", "boss:daily-loop"], { required: false }))
   steps.push(runStep("command-scorecard", "npm", ["run", "revenue:command"], { required: false }))
-  steps.push(runStep("instantly-doctor", "npm", ["run", "instantly:doctor"], { required: false }))
 
   const latestStackCsv = findLatestTaxCodeStackCsv()
   if (includeStackRouter && latestStackCsv) {

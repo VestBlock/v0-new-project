@@ -24,16 +24,25 @@ export type MailboxClassification =
 export type OutboundCorrelation = {
   matched: boolean
   matchType?: 'correlation_id' | 'message_reference' | 'thread' | 'recipient'
+  source?: OutlookOutboundEvidence['source']
   leadId?: string | null
   strategyKey?: string | null
   outboundMessageId?: string | null
   provider?: string | null
   providerMessageId?: string | null
   occurredAt?: string | null
+  entityScope?: 'lead' | 'buyer' | 'lender' | 'investor' | 'buyer_packet' | null
+  entityId?: string | null
+  sourceMessageTable?: string | null
+  sourceMessageId?: string | null
+  sourceEventId?: string | null
+  dispatchId?: string | null
+  dispatchState?: string | null
+  internetMessageId?: string | null
 }
 
 export type OutlookOutboundEvidence = {
-  source: 'enrollment' | 'send_event'
+  source: 'enrollment' | 'send_event' | 'source_message' | 'dispatch_ledger'
   leadId: string | null
   strategyKey: string | null
   recipient: string | null
@@ -160,14 +169,28 @@ function normalizeMessageIdentifier(value: string | null | undefined) {
   return cleanText(value).replace(/^mailto:/i, '').replace(/^<|>$/g, '').toLowerCase()
 }
 
-function replyReferenceValues(message: OutlookInboundMessage) {
+export function getOutlookReplyReferenceCandidates(message: OutlookInboundMessage) {
   return (message.internetMessageHeaders || [])
     .filter((header) => /^(in-reply-to|references)$/i.test(cleanText(header.name)))
     .flatMap((header) => {
       const value = cleanText(header.value)
-      const bracketed = Array.from(value.matchAll(/<([^>]+)>/g), (match) => normalizeMessageIdentifier(match[1]))
-      return [normalizeMessageIdentifier(value), ...bracketed].filter(Boolean)
+      const bracketed = Array.from(value.matchAll(/<([^>]+)>/g), (match) => `<${match[1].trim()}>`)
+      const tokens = value
+        .split(/\s+/)
+        .map((token) => token.replace(/^[,;]+|[,;]+$/g, '').trim())
+        .filter((token) => token.includes('@'))
+      return [value, ...bracketed, ...tokens].filter(Boolean)
     })
+    .filter((value, index, values) => values.indexOf(value) === index)
+}
+
+function replyReferenceValues(message: OutlookInboundMessage) {
+  return getOutlookReplyReferenceCandidates(message)
+    .flatMap((value) => {
+      const bracketed = Array.from(value.matchAll(/<([^>]+)>/g), (match) => normalizeMessageIdentifier(match[1]))
+      return [normalizeMessageIdentifier(value), ...bracketed]
+    })
+    .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index)
 }
 
 function identifiersMatch(reference: string, candidate: string) {
@@ -244,6 +267,7 @@ function correlationFromEvidence(
   return {
     matched: true,
     matchType,
+    source: item.source,
     leadId: item.leadId,
     strategyKey: item.strategyKey,
     outboundMessageId: item.outboundMessageId,
@@ -252,6 +276,16 @@ function correlationFromEvidence(
       item.providerMessageId ||
       metadataString(item.metadata, ['providerMessageId', 'provider_message_id']),
     occurredAt,
+    entityScope: metadataString(item.metadata, ['entityScope', 'entity_scope']) as OutboundCorrelation['entityScope'],
+    entityId: metadataString(item.metadata, ['entityId', 'entity_id']),
+    sourceMessageTable: metadataString(item.metadata, ['sourceMessageTable', 'source_message_table']),
+    sourceMessageId:
+      metadataString(item.metadata, ['sourceMessageId', 'source_message_id']) ||
+      item.outboundMessageId,
+    sourceEventId: metadataString(item.metadata, ['sourceEventId', 'source_event_id']),
+    dispatchId: metadataString(item.metadata, ['dispatchId', 'dispatch_id']),
+    dispatchState: metadataString(item.metadata, ['dispatchState', 'dispatch_state']),
+    internetMessageId: metadataString(item.metadata, ['internetMessageId', 'internet_message_id']),
   }
 }
 
@@ -378,8 +412,9 @@ export function shouldProcessMailboxSideEffects(input: {
   metadata: Record<string, unknown> | null | undefined
   actionableReply: boolean
   allowSuppression: boolean
+  allowDeliveryFailure?: boolean
 }) {
-  if (!input.actionableReply && !input.allowSuppression) return false
+  if (!input.actionableReply && !input.allowSuppression && !input.allowDeliveryFailure) return false
   const marker = input.metadata?.mailboxSideEffects
   if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return true
   return (marker as Record<string, unknown>).status !== 'completed'
@@ -409,11 +444,29 @@ function isKnownSpam(message: OutlookInboundMessage) {
   )
 }
 
+export function isOutlookDeliveryFailureMessage(message: OutlookInboundMessage) {
+  const subject = cleanText(message.subject).toLowerCase()
+  const preview = cleanText(message.bodyPreview).toLowerCase()
+  const sender = cleanText(message.from?.emailAddress?.address).toLowerCase()
+  const contentType = headerValue(message, 'content-type').toLowerCase()
+  const failedRecipients = headerValue(message, 'x-failed-recipients')
+  const diagnosticCode = headerValue(message, 'diagnostic-code')
+  const systemSender = /^(?:mailer-daemon|postmaster|microsoftexchange|mail-daemon|maildelivery|mail-delivery)(?:[+._-][^@]*)?@/i.test(sender)
+  const deliveryStatusReport = /report-type\s*=\s*delivery-status/i.test(contentType)
+  const strongSubject = /\b(?:undeliverable|delivery (?:status notification \(failure\)|failure|failed)|mail delivery failed|returned mail|failure notice|message (?:was )?not delivered)\b/i.test(subject)
+  const diagnosticPreview = /\b(?:recipient address rejected|address not found|mailbox unavailable|permanent failure|delivery has failed|couldn(?:'|’)t be delivered|could not be delivered|550\s+5\.)\b/i.test(preview)
+  return Boolean(
+    strongSubject &&
+    (systemSender || deliveryStatusReport || failedRecipients || diagnosticCode || diagnosticPreview)
+  )
+}
+
 function isOperationalMessage(message: OutlookInboundMessage) {
   const combined = `${cleanText(message.subject)} ${cleanText(message.bodyPreview)}`.toLowerCase()
   return (
     isAutomaticReply(message) ||
-    /dealmachine|export complete|contacts export|delivery failure|undeliverable|mail delivery/.test(combined)
+    isOutlookDeliveryFailureMessage(message) ||
+    /dealmachine|export complete|contacts export/.test(combined)
   )
 }
 

@@ -48,6 +48,11 @@ assert.match(helper, /source: 'followup_evidence'/)
 assert.match(helper, /evaluateOutreachThroughputGovernor/)
 assert.match(helper, /readOutreachDispatchCapacity/)
 assert.match(helper, /ensureFreshHunterSendVerificationForEntity/)
+assert.match(helper, /assertPurposeBoundBreakerProvider\(input\.provider, input\.deliveryCircuitBreaker\)/)
+assert.ok(
+  helper.indexOf('assertPurposeBoundBreakerProvider') < helper.lastIndexOf('ensureFreshHunterSendVerificationForEntity'),
+  'Breaker/provider alignment must be evaluated before a live Hunter lookup'
+)
 assert.ok(
   helper.indexOf('getOperationalReplyCaptureReadiness') < helper.lastIndexOf('ensureFreshHunterSendVerificationForEntity'),
   'Operational reply capture must be evaluated before a live Hunter lookup'
@@ -79,22 +84,23 @@ for (const [file, scope, strategy] of [
   ['lib/investors/outbound.ts', 'investor', 'investors'],
 ] as const) {
   const outbound = source(file)
-  assert.match(outbound, new RegExp(`preflightPartnerHunterSendVerification\\(\\{[\\s\\S]*?scope: '${scope}'`))
+  assert.match(outbound, new RegExp(`ensureFreshHunterSendVerificationForEntity\\(\\{[\\s\\S]*?scope: '${scope}'`))
   assert.match(outbound, new RegExp(`strategyKey: '${strategy}'`))
-  assert.match(outbound, /hunterPreflight\.deferredScope \|\| 'record'/)
+  assert.match(outbound, /!hunter\.sendable \|\| hunter\.status !== 'valid' \|\| !hunter\.cache/)
+  assert.match(outbound, /sendGuardedOutlookEmail/)
   assert.ok(
-    outbound.indexOf('preflightPartnerHunterSendVerification({') < outbound.indexOf('acquireGuardedDeliveryAttempt({'),
-    `${file} must verify before reserving a provider attempt`
+    outbound.indexOf('ensureFreshHunterSendVerificationForEntity({') < outbound.indexOf('sendGuardedOutlookEmail({'),
+    `${file} must verify with Hunter before the Outlook provider call`
   )
 }
 
 const buyerOutbound = source('lib/buyers/outbound.ts')
-assert.equal((buyerOutbound.match(/preflightPartnerHunterSendVerification\(\{/g) || []).length, 2)
+assert.equal((buyerOutbound.match(/ensureFreshHunterSendVerificationForEntity\(\{/g) || []).length, 2)
 assert.match(
   buyerOutbound,
-  /sendBuyerPacketEmail[\s\S]*?preflightPartnerHunterSendVerification\(\{[\s\S]*?messageId: input\.messageId/
+  /sendBuyerPacketEmail[\s\S]*?confirmedTransactionalRelationship[\s\S]*?effectivePurpose === 'cold_outreach'[\s\S]*?ensureFreshHunterSendVerificationForEntity\(\{[\s\S]*?messageId: input\.messageId/
 )
-assert.match(buyerOutbound, /A packet may follow an accepted introduction/)
+assert.match(buyerOutbound, /hasConfirmedBuyerPacketRelationship\(input\.buyer\.id\)/)
 
 for (const [file, listFunction, claimFunction, downgradeFunction] of [
   ['lib/buyers/automation.ts', 'listApprovedBuyerEmailOutreach', 'claimBuyerOutreachMessageForSend', 'downgradeBuyerOutreachMessageIfApproved'],
@@ -109,16 +115,12 @@ for (const [file, listFunction, claimFunction, downgradeFunction] of [
   )
   assert.match(
     automation,
-    /allowNetwork:\s*hunterVerificationAttempts < hunterVerificationReplacementScanLimit\(effectiveLimit\)/,
-    `${file} must use a bounded replacement-verification pool instead of one lookup per send slot`
+    /restore(?:Buyer|Lender|Investor)OutreachMessageAfterQuotaDenial/,
+    `${file} must restore a claimed message when the guarded Outlook admission defers it`
   )
   assert.match(automation, new RegExp(`${downgradeFunction}\\(row\\.id`))
-  assert.match(automation, /shouldQuarantineHunterVerificationStatus\(hunterPreflight\.status\)/)
-  assert.match(automation, /if \(hunterPreflight\.deferredScope !== 'record'\) break/)
-  assert.ok(
-    automation.indexOf('preflightPartnerHunterSendVerification({') < automation.indexOf(`${claimFunction}(row.id`),
-    `${file} must avoid consuming a send reservation before Hunter rejects a candidate`
-  )
+  assert.match(automation, new RegExp(`${claimFunction}\\(row\\.id`))
+  assert.match(automation, /sent\.deferredScope !== 'record'/)
 }
 assert.match(source('lib/buyers/automation.ts'), /providerAttemptCount >= effectiveLimit/)
 assert.match(source('lib/investors/service.ts'), /providerAttemptCount >= effectiveLimit/)
@@ -138,16 +140,11 @@ for (const file of [
 }
 
 const leadOutbound = source('lib/leads/outbound.ts')
-assert.match(leadOutbound, /hasPriorAcceptedLeadEmailEvidence/)
-assert.match(leadOutbound, /normalizeEmailAddress\(event\.recipient\) === currentRecipient/)
-assert.match(leadOutbound, /sequenceStep <= 1 \|\| !hasAcceptedFollowupEvidence/)
+assert.match(leadOutbound, /purpose === 'cold_outreach'[\s\S]*?ensureFreshHunterSendVerification/)
+assert.match(leadOutbound, /!hunter\.sendable \|\| hunter\.status !== 'valid' \|\| !hunter\.cache/)
 assert.ok(
-  leadOutbound.indexOf('hasPriorAcceptedLeadEmailEvidence') < leadOutbound.indexOf('ensureFreshHunterSendVerification({'),
-  'Seller follow-up exemption must be checked before deciding whether Hunter is required'
+  leadOutbound.indexOf('ensureFreshHunterSendVerification({') < leadOutbound.indexOf('sendGuardedOutlookEmail({'),
+  'Hunter verification must complete before the guarded Outlook provider call'
 )
-
-const leadRepository = source('lib/leads/repository.ts')
-assert.match(leadRepository, /completedFollowupRecipientKeys/)
-assert.match(leadRepository, /normalizeEmailAddress\(event\.recipient\)/)
 
 console.log('partner-hunter-send-verification: ok')

@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { DEFAULT_BUYER_DISCOVERY_MARKETS, DEFAULT_BUYER_DISCOVERY_NICHES } from '@/lib/buyers/constants'
 import { listMarketsForExpansionLane, pickDiscoveryTermsForMarket } from '@/lib/leads/marketExpansion'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { sendBuyerOutreachEmail } from '@/lib/buyers/outbound'
 import {
   claimBuyerOutreachMessageForSend,
@@ -27,24 +28,21 @@ import {
   runDailyBuyerScoring,
 } from '@/lib/buyers/service'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
 import { getOperationalReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
-import { getConfiguredOutboundProvider } from '@/lib/outreach/provider-preference'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
 import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import {
   allocateDailyStrategyOutput,
   configuredDailyStrategyOutputTarget,
 } from '@/lib/outreach/dailyStrategyOutputCore'
-import { reserveAutomaticEmailLaneAttempt } from '@/lib/outreach/laneAttemptQuota'
+import { hasMicrosoftGraphApplicationCredentials } from '@/lib/email/microsoftGraphSend'
 import { runQualifiedSellerBuyerRouting } from '@/lib/buyers/qualifiedSellerRouting'
 import type { BuyerOutreachMessageRecord, BuyerRecord } from '@/lib/buyers/types'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
-import { preflightPartnerHunterSendVerification } from '@/lib/outreach/partnerHunterSendVerification'
 import {
   hashHunterVerificationEmail,
   hunterVerificationReplacementScanLimit,
-  shouldQuarantineHunterVerificationStatus,
 } from '@/lib/outreach/hunterSendVerificationCore'
 
 function envInt(name: string, fallback: number) {
@@ -142,35 +140,26 @@ export async function runDailyBuyerDiscovery(options: { dryRun?: boolean } = {})
   }
 }
 
-export async function runDailyBuyerSend(limit?: number, options: { dryRun?: boolean } = {}) {
+export async function runDailyBuyerSend(
+  limit?: number,
+  options: { dryRun?: boolean; invocationId?: string } = {}
+) {
   const autoSendRequested = envBool('BUYER_AUTO_SEND_ENABLED', false)
-  const outboundProvider = getConfiguredOutboundProvider()
-  const deliveryCircuitBreaker = autoSendRequested
-    ? await getDeliveryCircuitBreaker({ provider: outboundProvider, allowControlledTrial: true })
-    : null
+  const invocationId = options.invocationId || `buyer-send:${randomUUID()}`
+  const outlookConfigured = hasMicrosoftGraphApplicationCredentials()
   const replyCapture = await getOperationalReplyCaptureReadiness()
   const mailingAddressConfigured = Boolean(getCommercialOutreachMailingAddress())
-  const sendGateOpen = autoSendRequested && deliveryCircuitBreaker?.allowed === true && replyCapture.ready && mailingAddressConfigured
+  const sendGateOpen = autoSendRequested && outlookConfigured && replyCapture.ready && mailingAddressConfigured
   const autoSend = sendGateOpen && !options.dryRun
   const sendBlockedReasons = [
     !autoSendRequested ? 'buyer_auto_send_disabled' : null,
-    deliveryCircuitBreaker?.allowed !== true ? 'delivery_not_permitted' : null,
+    autoSendRequested && !outlookConfigured ? 'outlook_graph_not_configured' : null,
     !replyCapture.ready ? 'reply_capture_not_configured' : null,
     !mailingAddressConfigured ? 'mailing_address_not_configured' : null,
   ].filter((reason): reason is string => Boolean(reason))
   const dailyLimit = buyerDailyOutputTarget()
-  const admin = createAdminClient()
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { count: sentLast24h, error: countError } = await admin
-    .from('buyer_outreach_messages')
-    .select('id', { count: 'exact', head: true })
-    .not('sent_at', 'is', null)
-    .gte('sent_at', since)
-  if (countError) throw countError
-
-  const remaining = Math.max(0, dailyLimit - (sentLast24h || 0))
-  const circuitLimit = deliveryCircuitBreaker?.maxBatchSize ?? Number.POSITIVE_INFINITY
-  const effectiveLimit = Math.min(limit ?? dailyLimit, remaining, circuitLimit)
+  // The durable Outlook budget is authoritative; each invocation may request at most two.
+  const effectiveLimit = Math.max(0, Math.min(limit ?? dailyLimit, dailyLimit, 2))
   const approved = effectiveLimit > 0
     ? await listApprovedBuyerEmailOutreach(hunterVerificationReplacementScanLimit(effectiveLimit))
     : []
@@ -178,12 +167,10 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
   const providerFailureStopThreshold = envInt('OUTREACH_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
   let providerFailureCount = 0
   let providerAttemptCount = 0
-  let hunterVerificationAttempts = 0
-  let hunterVerificationBlocked = 0
 
   for (const row of approved) {
     if (providerAttemptCount >= effectiveLimit) break
-    let buyer = row.buyers as BuyerRecord | null
+    const buyer = row.buyers as BuyerRecord | null
     if (!buyer?.id) continue
 
     const approvalDecision = evaluateBuyerAutoApproval({
@@ -245,101 +232,17 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
       continue
     }
 
-    const hunterPreflight = await preflightPartnerHunterSendVerification({
-      scope: 'buyer',
-      entity: buyer,
-      messageId: row.id,
-      strategyKey: 'buyers',
-      provider: outboundProvider,
-      isFollowup: row.channel === 'email_followup',
-      deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
-      allowNetwork:
-        hunterVerificationAttempts < hunterVerificationReplacementScanLimit(effectiveLimit),
-    })
-    if (hunterPreflight.creditReserved) hunterVerificationAttempts += 1
-    if (hunterPreflight.cache) {
-      buyer = {
-        ...buyer,
-        metadata_json: {
-          ...(buyer.metadata_json || {}),
-          hunterSendVerification: hunterPreflight.cache,
-        },
-      }
-    }
-    if (!hunterPreflight.allowed) {
-      hunterVerificationBlocked += 1
-      if (
-        hunterPreflight.deferredScope === 'record' &&
-        shouldQuarantineHunterVerificationStatus(hunterPreflight.status)
-      ) {
-        await downgradeBuyerOutreachMessageIfApproved(row.id, {
-          send_error: `hunter_verification:${hunterPreflight.status}`,
-          metadata_json: {
-            ...(row.metadata_json || {}),
-            hunterSendVerificationBlocked: hunterPreflight.cache || {
-              status: hunterPreflight.status,
-              reason: hunterPreflight.reason,
-            },
-          },
-        }).catch(() => null)
-      }
-      results.push({
-        buyerId: buyer.id,
-        name: buyer.name,
-        status: `hunter_preflight_blocked:${hunterPreflight.reason}`,
-      })
-      if (hunterPreflight.deferredScope !== 'record') break
-      continue
-    }
-
     const claimed = await claimBuyerOutreachMessageForSend(row.id, row.updated_at)
     if (!claimed) {
       results.push({ buyerId: buyer.id, name: buyer.name, status: 'duplicate_claim_blocked' })
       continue
     }
 
-    let laneAttemptReservation
-    try {
-      laneAttemptReservation = await reserveAutomaticEmailLaneAttempt({
-        lane: 'buyer',
-        messageId: claimed.id,
-        claimId: `${claimed.id}:${claimed.updated_at}`,
-        dailyLimit,
-      })
-    } catch {
-      const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
-        claimed.id,
-        claimed.updated_at
-      ).catch(() => null)
-      results.push({
-        buyerId: buyer.id,
-        name: buyer.name,
-        status: restored
-          ? 'automatic_email_attempt_quota_unavailable'
-          : 'automatic_email_attempt_quota_restore_failed',
-      })
-      break
-    }
-    if (!laneAttemptReservation.allowed) {
-      const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
-        claimed.id,
-        claimed.updated_at
-      ).catch(() => null)
-      results.push({
-        buyerId: buyer.id,
-        name: buyer.name,
-        status: restored
-          ? laneAttemptReservation.reason || 'automatic_email_attempt_quota_denied'
-          : 'automatic_email_attempt_quota_restore_failed',
-      })
-      break
-    }
-
     providerAttemptCount += 1
     const sent = await sendBuyerOutreachEmail({
       buyer,
       message: claimed,
-      deliveryCircuitBreaker: deliveryCircuitBreaker || undefined,
+      invocationId,
     })
     if (!sent.ok && sent.deferred) {
       const restored = await restoreBuyerOutreachMessageAfterQuotaDenial(
@@ -352,6 +255,25 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
         status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
       })
       if (!restored || sent.deferredScope !== 'record') break
+      continue
+    }
+    if (sent.reconciliationRequired && !sent.ok) {
+      await updateBuyerOutreachMessage(row.id, {
+        status: 'queued',
+        send_provider: 'outlook',
+        send_error: sent.error || 'Outlook acceptance is unknown; reconciliation is required.',
+        metadata_json: {
+          ...(claimed.metadata_json || {}),
+          idempotencyKey: sent.idempotencyKey,
+          correlationId: sent.correlationId,
+          dispatchId: sent.dispatchId,
+          providerMessageId: sent.providerMessageId,
+          internetMessageId: sent.internetMessageId,
+          acceptanceStatus: sent.acceptanceStatus,
+          reconciliationRequired: true,
+        },
+      })
+      results.push({ buyerId: buyer.id, name: buyer.name, status: 'reconciliation_required' })
       continue
     }
     if (!sent.ok) {
@@ -393,9 +315,14 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
       metadata_json: {
         ...(claimed.metadata_json || {}),
         providerMessageId: sent.providerMessageId || null,
+        internetMessageId: sent.internetMessageId,
+        dispatchId: sent.dispatchId,
         providerAcceptedAt: new Date().toISOString(),
         idempotencyKey: sent.idempotencyKey || null,
         correlationId: sent.correlationId || null,
+        acceptanceStatus: sent.acceptanceStatus,
+        ledgerFinalized: sent.ledgerFinalized,
+        reconciliationRequired: sent.reconciliationRequired,
         acceptedRecipientHash: hashHunterVerificationEmail(buyer.contact_email || ''),
       },
     })
@@ -430,8 +357,13 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
         buyerCategory: buyer.category,
         provider: sent.provider,
         providerMessageId: sent.providerMessageId || null,
+        internetMessageId: sent.internetMessageId,
+        dispatchId: sent.dispatchId,
         idempotencyKey: sent.idempotencyKey || null,
         correlationId: sent.correlationId || null,
+        acceptanceStatus: sent.acceptanceStatus,
+        ledgerFinalized: sent.ledgerFinalized,
+        reconciliationRequired: sent.reconciliationRequired,
       },
     }).catch(() => null)
     results.push({ buyerId: buyer.id, name: buyer.name, status: 'accepted' })
@@ -452,14 +384,12 @@ export async function runDailyBuyerSend(limit?: number, options: { dryRun?: bool
     sendGateOpen,
     sendBlockedReasons,
     providerAttemptCount,
-    hunterVerificationAttempts,
-    hunterVerificationBlocked,
     mailingAddressConfigured,
-    deliveryCircuitBreaker,
+    outlookConfigured,
     replyCapture,
     dailyLimit,
-    sentLast24h: sentLast24h || 0,
-    remainingBeforeRun: remaining,
+    effectiveLimit,
+    invocationId,
   }
 }
 
@@ -561,11 +491,14 @@ async function runBuyerStage<T>(name: string, task: () => Promise<T>) {
 export async function runDailyBuyerPipeline(
   options: {
     dryRun?: boolean
+    deliveryEnabled?: boolean
     sendLimit?: number
+    invocationId?: string
     sendExecutor?: <T>(task: () => Promise<T>) => Promise<T>
   } = {}
 ) {
-  const dryRun = Boolean(options.dryRun)
+  const executionMode = resolvePipelineExecutionMode(options)
+  const { dryRun, deliveryEnabled, deliveryDryRun } = executionMode
   const dailyLaneTarget = buyerDailyOutputTarget()
   const sendLimit = Math.min(options.sendLimit ?? dailyLaneTarget, dailyLaneTarget)
   const pipelineRun = await startBuyerOutreachRun({
@@ -573,6 +506,7 @@ export async function runDailyBuyerPipeline(
     sourceKey: 'vestblock_buyer_pipeline',
     requestParams: {
       dryRun,
+      deliveryEnabled,
       sendLimit,
       dailyLimit: dailyLaneTarget,
       strategyOutputTarget: configuredDailyStrategyOutputTarget(),
@@ -602,7 +536,7 @@ export async function runDailyBuyerPipeline(
       runDailyBuyerApproval(dailyLaneTarget, { dryRun })
     )
     const executeSend = () =>
-      runDailyBuyerSend(sendLimit, { dryRun })
+      runDailyBuyerSend(sendLimit, { dryRun: deliveryDryRun, invocationId: options.invocationId })
     const send = await runBuyerStage('send', () =>
       options.sendExecutor ? options.sendExecutor(executeSend) : executeSend()
     )
@@ -610,13 +544,13 @@ export async function runDailyBuyerPipeline(
       dryRun ? Promise.resolve({ ok: true, count: 0, results: [] }) : runDailyBuyerPerformanceRollup()
     )
     const sellerRouting = await runBuyerStage('seller_routing', () =>
-      runQualifiedSellerBuyerRouting(dailyLaneTarget, { dryRun })
+      runQualifiedSellerBuyerRouting(dailyLaneTarget, { dryRun, autoSend: deliveryEnabled })
     )
     const stages = { discovery, scoring, outreach, followup, approval, send, performance, sellerRouting }
     const ok = Object.values(stages).every((stage) => stage.ok)
     const partial = Object.values(stages).some((stage) => !stage.ok)
     const sendCount = send.ok
-      ? Number(send.result.results?.filter((result) => result.status === (dryRun ? 'would_send' : 'accepted')).length || 0)
+      ? Number(send.result.results?.filter((result) => result.status === (deliveryDryRun ? 'would_send' : 'accepted')).length || 0)
       : 0
     const failedStages = Object.values(stages)
       .filter((stage) => !stage.ok)

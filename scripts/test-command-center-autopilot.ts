@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import {
   DEFAULT_AUTOPILOT_JOBS,
@@ -45,8 +47,8 @@ const baseInput: AutopilotSnapshotInput = {
       reason: 'Paid scraper quarantined.',
     },
     {
-      provider: 'instantly',
-      label: 'Instantly network database and outreach',
+      provider: 'google_places',
+      label: 'Google Places',
       status: 'allowed',
       canRun: true,
       costTier: 'paid',
@@ -127,26 +129,26 @@ assert.deepEqual(
 assert.ok(batches.every((batch) => batch.targetEmailCount <= 100), 'No strategy should exceed 100 planned emails per batch')
 assert.ok(
   batches
-    .filter((batch) => batch.sourceProvider === 'instantly')
+    .filter((batch) => batch.sourceProvider === 'business_directory')
     .every((batch) => batch.targetSmsReviewCount === 0),
-  'Instantly network capture should stay email-first with no SMS review tasks'
+  'Verified business-network capture should stay email-first with no SMS review tasks'
 )
 assert.ok(
   batches
-    .filter((batch) => batch.sourceProvider !== 'instantly')
+    .filter((batch) => batch.sourceProvider !== 'business_directory')
     .every((batch) => batch.targetSmsReviewCount === batch.targetEmailCount),
   'Seller/property lanes should mirror email count as SMS review-only tasks'
 )
 assert.ok(batches.every((batch) => batch.feeThesis && batch.targetBuyerLane && batch.qualificationGate), 'Every strategy should explain fee thesis, buyer lane, and gate')
 assert.equal(batches[0]?.strategyKey, 'buyer-demand-capture', 'Buyer demand capture should be the first visible revenue lane')
-assert.equal(batches[0]?.sourceProvider, 'instantly')
-assert.ok(batches[0]?.command.includes('instantly:doctor'), 'Buyer demand capture should verify Instantly before scale-up')
-assert.ok(batches[0]?.command.includes('instantly:demand'), 'Buyer demand capture should use the Instantly demand adapter')
+assert.equal(batches[0]?.sourceProvider, 'business_directory')
+assert.ok(batches[0]?.command.includes('/api/cron/buyers-pipeline'), 'Buyer demand capture should use the governed buyer pipeline')
+assert.ok(batches[0]?.command.includes('Hunter verification'), 'Buyer demand capture should require fresh Hunter verification')
 assert.ok(
   batches
-    .filter((batch) => batch.sourceProvider === 'instantly')
-    .every((batch) => batch.command.includes(`--lane=${batch.strategyKey}`)),
-  'Instantly demand commands should stay lane-separated'
+    .filter((batch) => batch.sourceProvider === 'business_directory')
+    .every((batch) => batch.command.includes('Outlook')),
+  'Business-network pipelines should stay purpose-bound to Outlook delivery'
 )
 assert.ok(batches.find((batch) => batch.strategyKey === 'tax-code-stack')?.markets.includes('Cleveland, OH'), 'Tax/code stack should use refresh markets first')
 assert.equal(batches.find((batch) => batch.strategyKey === 'builder-infill-teardown')?.targetBuyerLane.includes('builders'), true)
@@ -173,13 +175,13 @@ assert.ok(
 assert.ok(
   snapshot.sourceDoctrine
     .find((lane) => lane.key === 'network_capture')
-    ?.dailyLoopRule.includes('Instantly'),
-  'Network doctrine should make Instantly the default buyer/lender/builder lead-capture source'
+    ?.dailyLoopRule.includes('Hunter verification'),
+  'Network doctrine should require governed discovery and Hunter recipient verification'
 )
 assert.equal(
-  snapshot.batches.filter((batch) => batch.sourceProvider === 'instantly').length,
+  snapshot.batches.filter((batch) => batch.sourceProvider === 'business_directory').length,
   4,
-  'Autopilot should include dedicated Instantly demand-capture lanes'
+  'Autopilot should include dedicated verified business-network capture lanes'
 )
 assert.equal(snapshot.guardrails.find((guardrail) => guardrail.label === 'Source doctrine')?.status, 'green')
 assert.equal(snapshot.durable.jobsConfigured, DEFAULT_AUTOPILOT_JOBS.length)
@@ -212,5 +214,18 @@ assert.equal(
   2,
   'Reply-first mode should only keep focus and challenger batches active'
 )
+
+const commandCenterSource = readFileSync(resolve(process.cwd(), 'lib/admin/commandCenter.ts'), 'utf8')
+assert.match(commandCenterSource, /inspectOutlookColdBudget/)
+assert.match(commandCenterSource, /outlook-cold-b2b-rolling-budget/)
+assert.match(commandCenterSource, /provider_delivery_events/)
+assert.match(commandCenterSource, /effectiveDailyLimit: outlookColdBudget\.globalAttemptCap/)
+assert.match(commandCenterSource, /rampStage: 'outlook_direct_guarded'/)
+assert.match(commandCenterSource, /strategyOutputPlan\.allocations\.map/)
+assert.match(commandCenterSource, /filter\(\(lane\) => lane\.group === 'business'\)/)
+assert.match(commandCenterSource, /threshold: null/)
+assert.doesNotMatch(commandCenterSource, /getDeliveryCircuitBreaker/)
+assert.doesNotMatch(commandCenterSource, /evaluateOutreachThroughputGovernor/)
+assert.doesNotMatch(commandCenterSource, /t\.outreachAttemptReservations/)
 
 console.log('command-center-autopilot: ok')

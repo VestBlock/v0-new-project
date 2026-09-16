@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { runDailyInvestorPipeline } from '@/lib/investors/automation'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -16,14 +17,17 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url)
-    const requestedDryRun = url.searchParams.get('dryRun')
-    const liveEnabled = enabled(process.env.INVESTORS_PIPELINE_CRON_SEND)
-    const dryRun = requestedDryRun === null
-      ? !liveEnabled
-      : enabled(requestedDryRun) || !liveEnabled
-    const result = await runDailyInvestorPipeline({ dryRun })
+    const dryRun = enabled(url.searchParams.get('dryRun'))
+    const deliveryEnabled = enabled(process.env.INVESTORS_PIPELINE_CRON_SEND) && !dryRun
+    const invocationId = `investors-pipeline:${randomUUID()}`
+    const result = await runDailyInvestorPipeline({
+      dryRun,
+      deliveryEnabled,
+      sendLimit: 2,
+      invocationId,
+    })
     return NextResponse.json(
-      { success: result.ok, dryRun, ...result },
+      { success: result.ok, dryRun, deliveryEnabled, invocationId, ...result },
       { status: result.ok ? 200 : 500 }
     )
   } catch (error) {

@@ -8,7 +8,6 @@ export type SourceCostProvider =
   | 'google_places'
   | 'outscraper'
   | 'apify'
-  | 'instantly'
   | 'public_records'
   | 'manual_csv'
 
@@ -114,16 +113,6 @@ const DEFAULT_POLICIES: Record<SourceCostProvider, SourcePolicy> = {
     requiresPaidApproval: true,
     requiresApiKey: 'APIFY_TOKEN',
     envEnableFlag: 'LEADS_ENABLE_APIFY_YELP',
-    defaultEnabled: false,
-  },
-  instantly: {
-    provider: 'instantly',
-    label: 'Instantly network database and outreach',
-    costTier: 'paid',
-    dailyLimit: 2,
-    cooldownHours: 0,
-    requiresApiKey: 'INSTANTLY_API_KEY',
-    envEnableFlag: 'LEADS_ENABLE_INSTANTLY',
     defaultEnabled: false,
   },
   public_records: {
@@ -349,7 +338,6 @@ function sourceKeyMatches(row: Record<string, any>, provider: SourceCostProvider
   if (provider === 'google_places') return source.includes('google_places')
   if (provider === 'outscraper') return source.includes('outscraper')
   if (provider === 'apify') return source.includes('apify')
-  if (provider === 'instantly') return source.includes('instantly')
   if (provider === 'public_records') return /code|tax|probate|preforeclosure|vacant|accela|cincinnati|milwaukee/.test(source)
   return source.includes('csv')
 }
@@ -384,7 +372,6 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
     'google_places',
     'outscraper',
     'apify',
-    'instantly',
     'manual_csv',
   ]
   const lanes = providers.map((provider) => {
@@ -410,7 +397,7 @@ export function buildSourceGovernorSnapshot(input: SourceGovernorInput = {}): So
   const nextActions = [
     paidSourcesBlocked > 0 ? 'Keep paid sources controlled until funded credits, explicit approval flags, and daily source limits are configured.' : null,
     cooldownsActive > 0 ? 'Do not rerun cooled-down markets; rotate into a different source or market first.' : null,
-    runnable > 0 ? 'Use allowed lanes first: DealMachine seller exports, public records, HomeHarvest/on-market sweeps, Instantly network building, or manual CSV.' : null,
+    runnable > 0 ? 'Use allowed lanes first: DealMachine seller exports, public records, HomeHarvest/on-market sweeps, governed business directories, or reviewed CSV imports.' : null,
   ].filter(Boolean) as string[]
 
   return {

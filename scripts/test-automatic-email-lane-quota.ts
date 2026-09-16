@@ -196,21 +196,18 @@ const laneChecks = [
     file: 'lib/buyers/automation.ts',
     scope: "scope: 'buyer'",
     claim: 'claimBuyerOutreachMessageForSend(row.id, row.updated_at)',
-    reserve: 'reserveAutomaticEmailLaneAttempt({',
     send: 'sendBuyerOutreachEmail({',
   },
   {
     file: 'lib/investors/service.ts',
     scope: "scope: 'investor'",
     claim: 'claimInvestorOutreachMessageForSend(row.id, row.updated_at)',
-    reserve: 'reserveAutomaticEmailLaneAttempt({',
     send: 'sendInvestorOutreachEmail({',
   },
   {
     file: 'lib/lenders/automation.ts',
     scope: "scope: 'lender'",
     claim: 'claimLenderOutreachMessageForSend(row.id, row.updated_at)',
-    reserve: 'reserveAutomaticEmailLaneAttempt({',
     send: 'sendLenderOutreachEmail({',
   },
 ]
@@ -219,12 +216,11 @@ for (const check of laneChecks) {
   const source = fs.readFileSync(path.join(repoRoot, check.file), 'utf8')
   const sendFunctionStart = source.indexOf(check.claim)
   const suppression = source.lastIndexOf(check.scope, sendFunctionStart)
-  const reserve = source.indexOf(check.reserve, sendFunctionStart)
-  const provider = source.indexOf(check.send, reserve)
+  const provider = source.indexOf(check.send, sendFunctionStart)
   assert.ok(suppression >= 0 && suppression < sendFunctionStart, `${check.file} suppresses before claim`)
-  assert.ok(sendFunctionStart < reserve, `${check.file} claims before quota reservation`)
-  assert.ok(reserve < provider, `${check.file} reserves before provider call`)
-  assert.match(source.slice(sendFunctionStart, provider), /restore[A-Za-z]+OutreachMessageAfterQuotaDenial/)
+  assert.ok(sendFunctionStart < provider, `${check.file} claims before the guarded Outlook call`)
+  assert.doesNotMatch(source, /reserveAutomaticEmailLaneAttempt/)
+  assert.match(source.slice(provider), /restore[A-Za-z]+OutreachMessageAfterQuotaDenial/)
 }
 
 for (const file of [

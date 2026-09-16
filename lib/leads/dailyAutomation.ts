@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { adminTaskDueDates, createAdminTask, createLeadFollowupTask } from '@/lib/admin/tasks'
 import { recordOutboundEnrollment } from '@/lib/admin/outboundEnrollment'
 import { getStrategyDeliveryAttribution, recordStrategyDeliveryOutcome } from '@/lib/admin/strategyDelivery'
@@ -14,7 +16,6 @@ import { searchSamOpportunities } from '@/lib/leads/connectors/sam'
 import { searchWeakWebPresenceBusinesses } from '@/lib/leads/connectors/weak-web-presence'
 import { searchWisconsinBusinesses } from '@/lib/leads/connectors/wisconsin-dfi'
 import { getOutboundProviderReadiness, sendLeadOutreachEmail } from '@/lib/leads/outbound'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { buildOutreachV2EmailDraft, evaluateOutreachV2Lead, isOutreachV2Enabled } from '@/lib/leads/outreachV2'
 import {
   paidSourceFailureDetail,
@@ -54,18 +55,17 @@ import type { LeadRecord, OutreachMessageRecord, TargetMarketRecord } from '@/li
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logEvent } from '@/lib/system/logEvent'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
+import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
 import { getOperationalReplyCaptureReadiness, getReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { buildOutboundSendIdentity, outboundIdentityMetadata } from '@/lib/outreach/deliveryIdentity'
 import { getOutreachRecipientGuard } from '@/lib/outreach/suppression'
-import { configuredDailyStrategyOutputTarget, DAILY_STRATEGY_OUTPUT_LANES, getDailyStrategyOutputLane } from '@/lib/outreach/dailyStrategyOutputCore'
+import { allocateDailyStrategyOutput, configuredDailyStrategyOutputTarget, DAILY_STRATEGY_OUTPUT_LANES, getDailyStrategyOutputLane } from '@/lib/outreach/dailyStrategyOutputCore'
 import { ensureFreshHunterSendVerification } from '@/lib/outreach/hunterSendVerification'
 import {
   classifyHunterVerificationFailureScope,
   deriveHunterSendVerificationLimits,
 } from '@/lib/outreach/hunterSendVerificationCore'
-import { readOutreachDispatchCapacity } from '@/lib/outreach/outreachDispatchCapacity'
 import { isControlledTrialAllowanceFilled } from '@/lib/outreach/outreachDispatchCore'
-import { evaluateOutreachThroughputGovernor } from '@/lib/outreach/throughputGovernorCore'
 
 type MarketConfig = {
   id?: string
@@ -80,6 +80,7 @@ type MarketConfig = {
 
 type LeadAutomationOptions = {
   dryRun?: boolean
+  deliveryEnabled?: boolean
   followupLimit?: number
   excludeSourcePatterns?: string[]
   scrapeLimitPerSource?: number
@@ -93,6 +94,8 @@ type LeadAutomationOptions = {
   refillNicheCount?: number
   refillMapTimeoutMs?: number
   weakWebPresenceOnly?: boolean
+  /** Shared cold-email budget identity for a single cron invocation. */
+  invocationId?: string
   suppressDigest?: boolean
 }
 
@@ -1672,70 +1675,101 @@ export async function runDailyLeadOutreach(options: LeadAutomationOptions = {}) 
 }
 
 export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {}) {
+  const executionMode = resolvePipelineExecutionMode(options)
+  return runDailyLeadSendQueueWithEffectiveMode({
+    ...options,
+    dryRun: executionMode.deliveryDryRun,
+  })
+}
+
+async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOptions = {}) {
   const startedAtMs = options.startedAtMs || Date.now()
   const budgetMs = options.budgetMs || envMs('LEADS_CRON_BUDGET_MS', 45000)
   const dailyTarget = getLeadDailyTarget()
   const requestedSendLimit = options.sendLimit ?? (isOutreachV2Enabled() ? dailyTarget : envInt('LEADS_DAILY_SEND_LIMIT', 500))
   const sentLast24h = isOutreachV2Enabled() ? await getLeadEmailSentCountLast24h() : 0
-  const targetGap24h = isOutreachV2Enabled() ? Math.max(0, dailyTarget - sentLast24h) : requestedSendLimit
+  const targetGap24h = isOutreachV2Enabled()
+    ? Math.max(0, dailyTarget - sentLast24h)
+    : requestedSendLimit
   const uncappedSendLimit = isOutreachV2Enabled() ? Math.min(requestedSendLimit, targetGap24h) : requestedSendLimit
   const autoSendApproved = envBool('AUTO_SEND_ENABLED', envBool('LEADS_AUTO_SEND_APPROVED', false))
+  const invocationId = options.invocationId || `lead-send:${randomUUID()}`
   const queueMultiplier = envInt('LEADS_DAILY_SEND_QUEUE_MULTIPLIER', 10)
   const manualContactFormTaskLimit = envInt('LEADS_CONTACT_FORM_TASK_LIMIT_PER_RUN', 15)
   const providerFailureStopThreshold = envInt('LEADS_PROVIDER_FAILURE_STOP_THRESHOLD', 5)
   const outboundReadiness = getOutboundProviderReadiness()
   const replyCaptureReadiness = await getOperationalReplyCaptureReadiness()
-  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
-    provider: outboundReadiness.defaultProvider,
-    allowControlledTrial: true,
-  })
-  const throughputDecision = evaluateOutreachThroughputGovernor({
-    mode: deliveryCircuitBreaker.mode,
-    sampleSize: deliveryCircuitBreaker.sampleSize,
-    complained: deliveryCircuitBreaker.complained,
-    badRate: deliveryCircuitBreaker.badRate,
-    globalFailureRate: deliveryCircuitBreaker.globalFailureRate,
-    terminalCompleteness: deliveryCircuitBreaker.terminalCompleteness,
+  const productionPlan = allocateDailyStrategyOutput(dailyTarget)
+  const businessLaneTargets = Object.fromEntries(
+    productionPlan.allocations.map((allocation) => [
+      allocation.key,
+      allocation.group === 'business' ? allocation.target : 0,
+    ])
+  ) as typeof productionPlan.byKey
+  // The database-backed Outlook budget enforces 25/day globally; a single
+  // scheduler invocation may request no more than two cold sends.
+  const outlookInvocationCapacity = 2
+  const sendLimit = Math.max(0, Math.min(uncappedSendLimit, outlookInvocationCapacity))
+  const throughputDecision = {
+    stage: outboundReadiness.outlook ? 'prove_25' as const : 'hold' as const,
+    stageCap: outlookInvocationCapacity,
     requestedDailyTarget: dailyTarget,
-  })
-  const preliminarySendLimit = Math.min(
-    uncappedSendLimit,
-    deliveryCircuitBreaker.maxBatchSize ?? Number.POSITIVE_INFINITY,
-    throughputDecision.effectiveDailyCap
-  )
-  const throughputCapacity = throughputDecision.effectiveDailyCap > 0
-    ? await readOutreachDispatchCapacity(throughputDecision)
-    : {
-        globalAttemptCount: 0,
-        globalRemaining: 0,
-        remainingByLane: {},
-        leadLaneRemaining: 0,
-        partnerLaneRemaining: 0,
-      }
-  const sendLimit = Math.min(
-    preliminarySendLimit,
-    throughputCapacity.globalRemaining,
-    throughputCapacity.leadLaneRemaining
-  )
+    effectiveDailyCap: outlookInvocationCapacity,
+    reason: outboundReadiness.outlook ? 'outlook_guarded_ready' : 'outlook_graph_not_configured',
+    allocationPlan: {
+      ...productionPlan,
+      byKey: businessLaneTargets,
+    },
+  }
+  const stagingGate = {
+    allowed: outboundReadiness.outlook,
+    broadSendingAllowed: outboundReadiness.outlook,
+    recoveryCanaryAllowed: false,
+    reason: outboundReadiness.outlook ? null : 'outlook_graph_not_configured',
+    mode: outboundReadiness.outlook ? 'healthy' : 'unavailable',
+    provider: 'outlook',
+    maxBatchSize: outlookInvocationCapacity,
+    windowDays: 1,
+    threshold: 0,
+    sampleSize: 0,
+    delivered: 0,
+    bounced: 0,
+    complained: 0,
+    suppressed: 0,
+    failed: 0,
+    badRate: 0,
+    globalSampleSize: 0,
+    globalFailed: 0,
+    globalFailureRate: 0,
+    providerGlobalHealthBlocked: false,
+    terminalCompleteness: null,
+  } as const
+  const throughputCapacity = {
+    globalAttemptCount: 0,
+    globalRemaining: outlookInvocationCapacity,
+    remainingByLane: businessLaneTargets,
+    leadLaneRemaining: outlookInvocationCapacity,
+    partnerLaneRemaining: 0,
+  }
   const hunterVerificationLimits = deriveHunterSendVerificationLimits({
-    effectiveDailyCap: throughputDecision.effectiveDailyCap,
+    effectiveDailyCap: outlookInvocationCapacity,
     requestedSendLimit: sendLimit,
     globalRemaining: throughputCapacity.globalRemaining,
     leadLaneRemaining: throughputCapacity.leadLaneRemaining,
     configuredDailyLimit: envNonNegativeInt(
       'LEADS_HUNTER_DAILY_VERIFY_LIMIT',
-      throughputDecision.effectiveDailyCap
+      outlookInvocationCapacity
     ),
     configuredPerRunLimit: envNonNegativeInt('LEADS_HUNTER_VERIFY_LIMIT_PER_RUN', sendLimit),
   })
   const queue = sendLimit > 0
     ? await listEmailOutreachForSendQueue(sendLimit * queueMultiplier, {
-        laneTargets: throughputDecision.allocationPlan.byKey,
+        laneTargets: businessLaneTargets,
         candidatesPerSlot: queueMultiplier,
       })
     : []
   const suppressions = await listSuppressions()
-  const autoSendEnabled = autoSendApproved && deliveryCircuitBreaker.allowed && replyCaptureReadiness.ready
+  const autoSendEnabled = autoSendApproved && outboundReadiness.outlook && replyCaptureReadiness.ready
   const sendResults: Array<{ leadId: string; status: string; provider?: string; detail?: string }> = []
   const skipReasonCounts = new Map<string, number>()
   const sentServiceCounts = new Map<string, number>()
@@ -1780,21 +1814,21 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         sendLimit,
         emailReadyQueueCount: emailReadyQueue.length,
         blockedReason: 'missing_mailing_address',
-        outboundProvider: outboundReadiness.defaultProvider,
+        outboundProvider: 'outlook',
       },
     })
   }
 
-  if (!options.dryRun && autoSendApproved && !deliveryCircuitBreaker.allowed) {
+  if (!options.dryRun && autoSendApproved && !outboundReadiness.outlook) {
     await createAdminTask({
-      title: 'Outbound email paused by delivery-quality circuit breaker',
-      description: `Provider evidence blocked autonomous outreach.\n\nReason: ${deliveryCircuitBreaker.reason || 'Delivery quality is outside the safe range.'}\nEvidence window: ${deliveryCircuitBreaker.windowDays} days\nFinalized messages: ${deliveryCircuitBreaker.sampleSize}\nDelivered: ${deliveryCircuitBreaker.delivered}\nBounced: ${deliveryCircuitBreaker.bounced}\nSuppressed: ${deliveryCircuitBreaker.suppressed}\nComplained: ${deliveryCircuitBreaker.complained}\nFailed: ${deliveryCircuitBreaker.failed}\nBad delivery rate: ${(deliveryCircuitBreaker.badRate * 100).toFixed(1)}%\n\nKeep autonomous sending paused until contact quality is repaired and a controlled test batch passes.`,
-      taskType: 'outreach_delivery_circuit_breaker',
+      title: 'Outlook dispatch paused by provider readiness',
+      description: 'Verified B2B outreach is paused because the Microsoft Graph application mailbox is not configured. Restore Graph credentials and reply capture before retrying; no fallback provider will be used.',
+      taskType: 'outlook_dispatch_readiness_blocker',
       priority: 'urgent',
       entityType: 'lead_send_queue',
-      entityId: `delivery-circuit-${new Date().toISOString().slice(0, 10)}`,
+      entityId: `outlook-dispatch-${new Date().toISOString().slice(0, 10)}`,
       dueAt: adminTaskDueDates.now(),
-      metadata: deliveryCircuitBreaker,
+      metadata: { outlookConfigured: outboundReadiness.outlook },
     })
   }
 
@@ -2091,8 +2125,8 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       const reason =
         !autoSendApproved
           ? 'auto_send_disabled'
-          : !deliveryCircuitBreaker.allowed
-            ? 'delivery_circuit_blocked'
+          : !outboundReadiness.outlook
+            ? 'outlook_graph_not_configured'
             : !replyCaptureReadiness.ready
               ? 'reply_capture_disconnected'
           : options.dryRun
@@ -2219,7 +2253,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
       lead: currentLead,
       message: currentRow,
       sequenceStep: 1,
-      deliveryCircuitBreaker,
+      invocationId,
     })
     if (!sendResult.ok && sendResult.deferred) {
       const restored = await restoreOutreachMessageAfterDeliveryDeferral(
@@ -2238,12 +2272,57 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         leadId: currentLead.id,
         status: restored ? 'delivery_deferred' : 'delivery_deferred_restore_failed',
         provider: sendResult.provider,
-        detail: sendResult.error,
+        detail: sendResult.error || undefined,
       })
       if (!restored || !['lane', 'record'].includes(String(sendResult.deferredScope || ''))) {
         truncated = true
         break
       }
+      continue
+    }
+    if (sendResult.reconciliationRequired && !sendResult.ok) {
+      await updateOutreachMessage(currentRow.id, {
+        status: 'queued',
+        send_provider: 'outlook',
+        send_error: sendResult.error || 'Outlook acceptance is unknown; reconciliation is required.',
+        metadata_json: {
+          idempotencyKey: sendResult.idempotencyKey,
+          correlationId: sendResult.correlationId,
+          dispatchId: sendResult.dispatchId,
+          providerMessageId: sendResult.providerMessageId,
+          internetMessageId: sendResult.internetMessageId,
+          acceptanceStatus: sendResult.acceptanceStatus,
+          reconciliationRequired: true,
+        },
+      })
+      await insertOutreachSendEvent({
+        leadId: currentLead.id,
+        outreachMessageId: currentRow.id,
+        channel: 'email',
+        provider: 'outlook',
+        status: 'queued',
+        recipient: currentLead.email,
+        subject: currentRow.subject,
+        errorMessage: sendResult.error,
+        idempotencyKey: `${sendIdentity.idempotencyKey}:reconciliation`,
+        correlationId: sendResult.correlationId,
+        metadata: {
+          ...outboundIdentityMetadata(sendIdentity),
+          dispatchId: sendResult.dispatchId,
+          providerMessageId: sendResult.providerMessageId,
+          internetMessageId: sendResult.internetMessageId,
+          acceptanceStatus: sendResult.acceptanceStatus,
+          reconciliationRequired: true,
+          campaignRunId: attribution?.campaign_run_id || null,
+          strategyKey,
+        },
+      })
+      sendResults.push({
+        leadId: currentLead.id,
+        status: 'reconciliation_required',
+        provider: 'outlook',
+        detail: sendResult.error || 'Reconcile Outlook before any retry.',
+      })
       continue
     }
     if (sendResult.ok) {
@@ -2253,6 +2332,15 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           sent_at: new Date().toISOString(),
           send_provider: sendResult.provider,
           send_error: null,
+          metadata_json: {
+            dispatchId: sendResult.dispatchId,
+            providerMessageId: sendResult.providerMessageId,
+            internetMessageId: sendResult.internetMessageId,
+            correlationId: sendResult.correlationId,
+            acceptanceStatus: sendResult.acceptanceStatus,
+            ledgerFinalized: sendResult.ledgerFinalized,
+            reconciliationRequired: sendResult.reconciliationRequired,
+          },
         }),
         updateLeadRecord(currentLead.id, {
           status: 'contacted',
@@ -2274,6 +2362,11 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           metadata: {
             ...outboundIdentityMetadata(sendIdentity),
             providerMessageId: sendResult.providerMessageId || null,
+            internetMessageId: sendResult.internetMessageId,
+            dispatchId: sendResult.dispatchId,
+            acceptanceStatus: sendResult.acceptanceStatus,
+            ledgerFinalized: sendResult.ledgerFinalized,
+            reconciliationRequired: sendResult.reconciliationRequired,
             campaignRunId: attribution?.campaign_run_id || null,
             strategyKey,
           },
@@ -2308,6 +2401,11 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
           metadata: {
             provider: sendResult.provider,
             providerMessageId: sendResult.providerMessageId || null,
+            internetMessageId: sendResult.internetMessageId,
+            dispatchId: sendResult.dispatchId,
+            acceptanceStatus: sendResult.acceptanceStatus,
+            ledgerFinalized: sendResult.ledgerFinalized,
+            reconciliationRequired: sendResult.reconciliationRequired,
             campaignLabel: revenueCampaign.label,
             ...outboundIdentityMetadata(sendIdentity),
           },
@@ -2379,7 +2477,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         leadId: currentLead.id,
         status: 'failed',
         provider: sendResult.provider,
-        detail: sendResult.error,
+        detail: sendResult.error || undefined,
       })
       await logEvent({
         eventType: 'email_failed',
@@ -2399,6 +2497,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     if (sentCount >= sendLimit) break
   }
 
+  const completedCount = sentCount
   const sendQueueDigestItems = [
     `Daily email target: ${dailyTarget}`,
     `Already sent in last 24 hours: ${sentLast24h}`,
@@ -2414,9 +2513,9 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     `Hunter fresh-cache hits: ${hunterVerificationCacheHits}`,
     `Hunter verification blocks replaced in queue: ${hunterVerificationBlocked}`,
     `Hunter daily verification budget: ${hunterVerificationLimits.dailyLimit}${hunterDailyBudgetRemaining === null ? '' : ` (${hunterDailyBudgetRemaining} remaining after this run)`}`,
-    `Emails sent: ${sentCount}`,
+    `Outlook provider acceptances this run: ${sentCount}`,
     `Provider failures this run: ${providerFailureCount}${circuitBreakerTripped ? ' (send queue stopped by circuit breaker)' : ''}`,
-    `Target status: ${sentCount >= sendLimit ? 'hit' : `behind by ${sendLimit - sentCount}`}`,
+    `Target status: ${completedCount >= sendLimit ? 'hit' : `behind by ${sendLimit - completedCount}`}`,
     `Email-ready service mix: ${formatCountMap(emailReadyServiceCounts)}`,
     `Email-ready city mix: ${formatCountMap(emailReadyMarketCounts)}`,
     `Email-ready source mix: ${formatCountMap(emailReadySourceCounts)}`,
@@ -2433,10 +2532,10 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     }`,
     `Auto-send enabled: ${autoSendEnabled ? 'Yes' : 'No'}`,
     `Reply capture ready: ${replyCaptureReadiness.ready ? 'Yes' : 'No'}${replyCaptureReadiness.reason ? ` (${replyCaptureReadiness.reason})` : ''}`,
-    `Delivery circuit breaker: ${deliveryCircuitBreaker.mode}${deliveryCircuitBreaker.reason ? ` (${deliveryCircuitBreaker.reason})` : ''}`,
-    `Provider-confirmed delivery: ${deliveryCircuitBreaker.delivered}/${deliveryCircuitBreaker.sampleSize}; bad rate ${(deliveryCircuitBreaker.badRate * 100).toFixed(1)}%`,
+    `Outlook Graph configured: ${outboundReadiness.outlook ? 'Yes' : 'No'}`,
+    `Outlook invocation cap: ${outlookInvocationCapacity}`,
     `Mailing address configured: ${outboundReadiness.mailingAddressConfigured ? 'Yes' : 'No'}`,
-    `Outbound provider: ${outboundReadiness.defaultProvider}`,
+    'Cold B2B provider: outlook',
   ]
 
   if (!options.dryRun && !options.suppressDigest) {
@@ -2449,7 +2548,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
   }
 
   const missingEmailSkips = skipReasonCounts.get('missing_email') || 0
-  const underfilledQueue = sentCount < sendLimit
+  const underfilledQueue = completedCount < sendLimit
 
   if (!options.dryRun && !options.suppressDigest && underfilledQueue) {
     const topSkipReasons = Array.from(skipReasonCounts.entries())
@@ -2460,7 +2559,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
 
     await createAdminTask({
       title: 'Lead send queue underfilled daily send target',
-      description: `Email send volume finished below the expected daily cap.\n\nSent: ${sentCount}\nTarget: ${sendLimit}\nRecovered by in-queue enrichment: ${enrichedInQueueCount}\nAuto-approved: ${autoApprovedCount}\nTop skip reasons: ${topSkipReasons}\n\nFix the dominant skip reason before the next send cycle.`,
+      description: `Guarded Outlook dispatch finished below the per-run cap.\n\nProvider acceptances: ${sentCount}\nTarget: ${sendLimit}\nRecovered by in-queue enrichment: ${enrichedInQueueCount}\nAuto-approved: ${autoApprovedCount}\nTop skip reasons: ${topSkipReasons}\n\nFix the dominant skip reason before the next cycle.`,
       taskType: 'lead_send_queue_breach',
       priority: 'urgent',
       entityType: 'lead_send_queue',
@@ -2472,6 +2571,7 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
         targetGap24h,
         sendLimit,
         sentCount,
+        completedCount,
         emailReadyQueueCount: emailReadyQueue.length,
         manualContactFormQueueCount: manualContactFormQueue.length,
         blockedEmailQueueCount: blockedEmailQueue.length,
@@ -2528,7 +2628,9 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     blockedEmailQueueCount: blockedEmailQueue.length,
     sentServiceCounts: Object.fromEntries(sentServiceCounts.entries()),
     emailReadyServiceCounts: Object.fromEntries(emailReadyServiceCounts.entries()),
-    sentCount: sendResults.filter((item) => item.status === 'sent').length,
+    sentCount: completedCount,
+    providerAcceptedCount: sendResults.filter((item) => item.status === 'sent').length,
+    stagedCount: 0,
     truncated,
     skipReasonCounts: Object.fromEntries(skipReasonCounts.entries()),
     providerFailureCount,
@@ -2542,16 +2644,20 @@ export async function runDailyLeadSendQueue(options: LeadAutomationOptions = {})
     autoSendRequested: autoSendApproved,
     autoSendEnabled,
     throughputDecision,
-    deliveryCircuitBreaker,
+    deliveryCircuitBreaker: stagingGate,
+    outlookConfigured: outboundReadiness.outlook,
+    invocationId,
     replyCaptureReadiness,
     mailingAddressConfigured: outboundReadiness.mailingAddressConfigured,
-    outboundProvider: outboundReadiness.defaultProvider,
+    outboundProvider: 'outlook' as const,
     digestPreview: options.dryRun ? sendQueueDigestItems : undefined,
     sendResults,
   }
 }
 
 export async function runLeadThroughputSprint(options: LeadAutomationOptions = {}) {
+  const executionMode = resolvePipelineExecutionMode(options)
+  const invocationId = options.invocationId || `lead-throughput:${randomUUID()}`
   const startedAtMs = options.startedAtMs || Date.now()
   const budgetMs = options.budgetMs || envMs('LEADS_CRON_BUDGET_MS', 45000)
   const target = options.sendLimit || getLeadThroughputTargetPerRun()
@@ -2567,13 +2673,17 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 
   const firstSend = await runDailyLeadSendQueue({
     ...options,
+    invocationId,
     sendLimit: target,
     budgetMs,
     startedAtMs,
   })
 
   const effectiveTarget = firstSend.effectiveSendLimit
-  const remainingAfterFirstSend = Math.max(0, effectiveTarget - firstSend.sentCount)
+  const preparationTarget = executionMode.dryRun || executionMode.deliveryEnabled
+    ? effectiveTarget
+    : target
+  const remainingAfterFirstSend = Math.max(0, preparationTarget - firstSend.sentCount)
   const controlledTrialCompleted = isControlledTrialAllowanceFilled({
     mode: firstSend.deliveryCircuitBreaker.mode,
     effectiveSendLimit: effectiveTarget,
@@ -2584,6 +2694,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     remainingAfterFirstSend > 0 && getRemainingBudgetMs(startedAtMs, budgetMs) > 12000
       ? await runDailyLeadOutreach({
           ...options,
+          invocationId,
           outreachGenerationLimit: Math.max(options.outreachGenerationLimit || 0, firstOutreachLimit),
           budgetMs,
           startedAtMs,
@@ -2597,13 +2708,17 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     getRemainingBudgetMs(startedAtMs, budgetMs) > 8000
       ? await runDailyLeadSendQueue({
           ...options,
+          invocationId,
           sendLimit: remainingAfterFirstSend,
           budgetMs,
           startedAtMs,
       })
       : null
 
-  const remainingAfterSecondSend = Math.max(0, effectiveTarget - firstSend.sentCount - (secondSend?.sentCount || 0))
+  const remainingAfterSecondSend = Math.max(
+    0,
+    preparationTarget - firstSend.sentCount - (secondSend?.sentCount || 0)
+  )
 
   const preDraftEnrichment =
     !options.dryRun &&
@@ -2644,6 +2759,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     if (getRemainingBudgetMs(startedAtMs, budgetMs) > 10000) {
       refillOutreach = await runDailyLeadOutreach({
         ...options,
+        invocationId,
         outreachGenerationLimit: Math.max(
           options.outreachGenerationLimit || 0,
           scaleLeadWorkset(outreachBase, remainingAfterSecondSend, 5, 750)
@@ -2656,6 +2772,7 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     if (getRemainingBudgetMs(startedAtMs, budgetMs) > 6000) {
       finalSend = await runDailyLeadSendQueue({
         ...options,
+        invocationId,
         sendLimit: remainingAfterSecondSend,
         budgetMs,
         startedAtMs,
@@ -2666,7 +2783,13 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
   const sentTotal = firstSend.sentCount + (secondSend?.sentCount || 0) + (finalSend?.sentCount || 0)
   const remainingTarget = Math.max(0, effectiveTarget - sentTotal)
 
-  if (!options.dryRun && remainingTarget > 0 && !firstSend.truncated && !(secondSend?.truncated) && !(finalSend?.truncated)) {
+  if (
+    executionMode.deliveryEnabled &&
+    remainingTarget > 0 &&
+    !firstSend.truncated &&
+    !(secondSend?.truncated) &&
+    !(finalSend?.truncated)
+  ) {
     await createAdminTask({
       title: 'Daily outreach target missed because qualified lead supply is short',
       description: `The throughput sprint could not safely reach the current email allowance.\n\nRequested per-run target: ${target}\nEffective guarded allowance: ${effectiveTarget}\nSent this sprint: ${sentTotal}\nRemaining gap: ${remainingTarget}\n\nThe system attempted safe send, email enrichment, draft generation, and email-ready lead refill. Keep the send guardrails; fix this by adding better email-ready sources or increasing enrichment coverage, not by sending weak/no-email leads.`,
@@ -2698,6 +2821,8 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
     ok: true,
     target,
     effectiveTarget,
+    preparationTarget,
+    deliveryEnabled: executionMode.deliveryEnabled,
     budgetMs,
     sentTotal,
     remainingTarget,
@@ -2736,12 +2861,20 @@ export async function runLeadThroughputSprint(options: LeadAutomationOptions = {
 
 export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) {
   const configuredLimit = options.followupLimit || envInt('LEADS_DAILY_FOLLOWUP_SEND_LIMIT', 30)
-  const outboundReadiness = getOutboundProviderReadiness()
-  const deliveryCircuitBreaker = await getDeliveryCircuitBreaker({
-    provider: outboundReadiness.defaultProvider,
-    allowControlledTrial: true,
-  })
-  const limit = Math.min(configuredLimit, deliveryCircuitBreaker.maxBatchSize || Number.POSITIVE_INFINITY)
+  const deliveryCircuitBreaker = {
+    allowed: false,
+    reason: 'seller_cold_email_prohibited',
+    provider: 'outlook' as const,
+    mode: 'held' as const,
+    maxBatchSize: 0,
+    windowDays: 0,
+    delivered: 0,
+    bounced: 0,
+    complained: 0,
+    suppressed: 0,
+    failed: 0,
+  }
+  const limit = 0
   const replyCaptureReadiness = getReplyCaptureReadiness()
   if (!options.dryRun && !replyCaptureReadiness.ready) {
     return {
@@ -2864,7 +2997,7 @@ export async function runDailyLeadFollowup(options: LeadAutomationOptions = {}) 
       lead,
       message,
       sequenceStep: 2,
-      deliveryCircuitBreaker,
+      invocationId: options.invocationId,
     })
     const now = new Date().toISOString()
     if (!sendResult.ok && sendResult.deferred) {

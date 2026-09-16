@@ -36,7 +36,6 @@ function run(name, command, args) {
 
 const steps = [
   ['boss-daily-loop', 'npm', ['run', 'boss:daily-loop']],
-  ['instantly-doctor', 'npm', ['run', 'instantly:doctor']],
   ['tax-code-rotation', 'npm', ['run', 'vestblock:tax-code-stack:rotation', '--', '--daily-cap=30']],
   ['sms-review-queue', 'npm', ['run', 'outreach:sms-review', '--', '--limit=100']],
 ]

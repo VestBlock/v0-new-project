@@ -6,6 +6,8 @@ import {
   correlateOutlookInbound,
   evaluateOutlookInboundIntegrity,
   evaluateOutlookSenderAuthentication,
+  getOutlookReplyReferenceCandidates,
+  isOutlookDeliveryFailureMessage,
   requireOutlookThroughputProjectionUpdated,
   selectCorrelatedLead,
   shouldProcessMailboxSideEffects,
@@ -49,7 +51,9 @@ assert.match(mailboxRuntime, /baseMessages\.push\(\.\.\.pageMessages\)/)
 assert.doesNotMatch(mailboxRuntime, /pageMessages\.slice\(/)
 assert.match(mailboxRuntime, /outreach_send_events'[\s\S]*\.select\('[^']*provider[^']*'\)/)
 assert.match(mailboxRuntime, /correlatedOutboundProvider: outboundCorrelation\.provider \|\| null/)
-assert.match(mailboxRuntime, /provider: correlatedOutboundProvider\.trim\(\)\.toLowerCase\(\)/)
+assert.match(mailboxRuntime, /const normalizedProvider = correlatedOutboundProvider\.trim\(\)\.toLowerCase\(\)/)
+assert.match(mailboxRuntime, /normalizedProvider === 'outlook'/)
+assert.match(mailboxRuntime, /outlook_mailbox_evidence_recorded/)
 assert.match(mailboxRuntime, /requireOutlookThroughputProjectionUpdated\(result\)/)
 assert.match(mailboxRuntime, /highWatermark/)
 assert.match(mailboxRuntime, /windowStartedAt/)
@@ -57,6 +61,35 @@ assert.match(mailboxRuntime, /overlapMinutes = 15/)
 assert.match(mailboxRuntime, /input\.metrics !== undefined/)
 assert.match(mailboxRuntime, /highWatermark: ingestionPending \? cursorState\.highWatermark : windowStartedAt/)
 assert.match(mailboxRuntime, /sideEffectClaimsDeferred > 0\s*\? runStartPageUrl\s*: continuationUrl/)
+assert.match(mailboxRuntime, /loadOutlookReferenceEvidence\(admin, messages\)/)
+assert.match(mailboxRuntime, /transactional_email_dispatches/)
+for (const ambiguousState of ['dispatching', 'acceptance_unknown', 'failed_dispatch']) {
+  assert.match(
+    mailboxRuntime,
+    new RegExp(`['"]${ambiguousState}['"]`),
+    `durable Graph reference correlation must include ${ambiguousState}`
+  )
+}
+assert.doesNotMatch(
+  mailboxRuntime,
+  /messages\.filter\(isOutlookDeliveryFailureMessage\)/,
+  'durable Graph reference lookup must run for ordinary replies as well as NDRs'
+)
+assert.match(mailboxRuntime, /deliveryFailureAuthorized/)
+assert.match(mailboxRuntime, /projectOutlookDeliveryFailure\(\{/)
+assert.match(mailboxRuntime, /reconcileAmbiguousOutlookDispatchFromInbound\(\{/)
+assert.match(mailboxRuntime, /projectReconciledOutlookSourceFromInbound\(\{ admin, row \}\)/)
+assert.match(mailboxRuntime, /sourceAcceptanceProjection/)
+assert.match(mailboxRuntime, /acceptanceStatus: 'accepted'/)
+assert.match(mailboxRuntime, /reconciliationRequired: false/)
+assert.match(mailboxRuntime, /status: 'sent'/)
+assert.match(mailboxRuntime, /status: 'replied'/)
+assert.match(mailboxRuntime, /reconcile_outlook_dispatch_from_inbound/)
+assert.match(mailboxRuntime, /p_internet_message_id: internetMessageId/)
+assert.match(mailboxRuntime, /p_inbound_message_id: input\.row\.message_id/)
+assert.match(mailboxRuntime, /status: 'bounced'/)
+assert.match(mailboxRuntime, /delivery_status: 'bounced'/)
+assert.match(mailboxRuntime, /sourceMessageTable/)
 const mailboxMigration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260915141718_create_outreach_throughput_governor.sql'),
   'utf8'
@@ -70,6 +103,135 @@ assert.match(mailboxMigration, /mailbox_side_effects_claim_active/)
 
 const inboundAt = '2026-09-10T14:00:00.000Z'
 const outboundAt = '2026-09-09T14:00:00.000Z'
+
+const outlookNdrMessage = {
+  id: 'outlook-ndr-1',
+  receivedDateTime: inboundAt,
+  subject: 'Undeliverable: Cleveland acquisition criteria',
+  bodyPreview: 'Delivery has failed. The recipient address was rejected with 550 5.1.1.',
+  from: { emailAddress: { address: 'postmaster@outlook.com', name: 'Microsoft Outlook' } },
+  internetMessageHeaders: [
+    { name: 'Content-Type', value: 'multipart/report; report-type=delivery-status' },
+    { name: 'References', value: '<graph-internet-id-1@outlook.office365.com>' },
+  ],
+}
+assert.equal(isOutlookDeliveryFailureMessage(outlookNdrMessage), true)
+assert.deepEqual(
+  getOutlookReplyReferenceCandidates(outlookNdrMessage),
+  [
+    '<graph-internet-id-1@outlook.office365.com>',
+    '<graph-internet-id-1@outlook.office365.com>',
+  ].filter((value, index, values) => values.indexOf(value) === index)
+)
+const outlookNdrCorrelation = correlateOutlookInbound(
+  outlookNdrMessage,
+  'postmaster@outlook.com',
+  [{
+    source: 'source_message',
+    leadId: null,
+    strategyKey: 'buyer-network',
+    recipient: 'buyer@example.com',
+    outboundMessageId: 'buyer-message-1',
+    provider: 'outlook',
+    providerMessageId: 'graph-draft-id-1',
+    occurredAt: outboundAt,
+    metadata: {
+      internetMessageId: '<graph-internet-id-1@outlook.office365.com>',
+      dispatchId: 'dispatch-1',
+      dispatchState: 'acceptance_unknown',
+      sourceMessageTable: 'buyer_outreach_messages',
+      sourceMessageId: 'buyer-message-1',
+      entityScope: 'buyer',
+      entityId: 'buyer-1',
+    },
+  }]
+)
+assert.equal(outlookNdrCorrelation.matchType, 'message_reference')
+assert.equal(outlookNdrCorrelation.provider, 'outlook')
+assert.equal(outlookNdrCorrelation.dispatchId, 'dispatch-1')
+assert.equal(outlookNdrCorrelation.dispatchState, 'acceptance_unknown')
+assert.equal(outlookNdrCorrelation.internetMessageId, '<graph-internet-id-1@outlook.office365.com>')
+assert.equal(outlookNdrCorrelation.sourceMessageTable, 'buyer_outreach_messages')
+assert.equal(outlookNdrCorrelation.entityScope, 'buyer')
+const outlookNdrIntegrity = evaluateOutlookInboundIntegrity({
+  message: outlookNdrMessage,
+  correlation: outlookNdrCorrelation,
+  relationships: {},
+})
+assert.equal(outlookNdrIntegrity.classification, 'operational_alert')
+assert.equal(outlookNdrIntegrity.stateChangeAuthorized, true)
+assert.equal(
+  shouldProcessMailboxSideEffects({
+    metadata: {},
+    actionableReply: false,
+    allowSuppression: false,
+    allowDeliveryFailure: true,
+  }),
+  true
+)
+assert.equal(
+  shouldProcessMailboxSideEffects({
+    metadata: { mailboxSideEffects: { status: 'completed' } },
+    actionableReply: false,
+    allowSuppression: false,
+    allowDeliveryFailure: true,
+  }),
+  false,
+  'an already-projected NDR must remain idempotent'
+)
+assert.equal(
+  isOutlookDeliveryFailureMessage({
+    ...outlookNdrMessage,
+    id: 'ordinary-message-about-failure',
+    subject: 'Question about a delivery failure report',
+    bodyPreview: 'Can you explain this report?',
+    from: { emailAddress: { address: 'customer@example.com' } },
+    internetMessageHeaders: [],
+  }),
+  false,
+  'ordinary human discussion of a delivery failure must not mutate outbound state'
+)
+
+const ordinaryGraphReply = {
+  id: 'outlook-reply-ledger-1',
+  receivedDateTime: inboundAt,
+  subject: 'Re: Cleveland acquisition criteria',
+  bodyPreview: 'Yes, send the details.',
+  from: { emailAddress: { address: 'buyer@example.com', name: 'Buyer' } },
+  internetMessageHeaders: [
+    { name: 'In-Reply-To', value: '<graph-normal-reply-1@outlook.office365.com>' },
+  ],
+}
+const ordinaryGraphCorrelation = correlateOutlookInbound(
+  ordinaryGraphReply,
+  'buyer@example.com',
+  [{
+    source: 'dispatch_ledger',
+    leadId: null,
+    strategyKey: null,
+    recipient: null,
+    outboundMessageId: 'dispatch-normal-1',
+    provider: 'outlook',
+    providerMessageId: 'graph-normal-draft-1',
+    occurredAt: outboundAt,
+    metadata: {
+      dispatchId: 'dispatch-normal-1',
+      internetMessageId: '<graph-normal-reply-1@outlook.office365.com>',
+    },
+  }]
+)
+assert.equal(ordinaryGraphCorrelation.matched, true)
+assert.equal(ordinaryGraphCorrelation.matchType, 'message_reference')
+assert.equal(ordinaryGraphCorrelation.dispatchId, 'dispatch-normal-1')
+assert.equal(
+  evaluateOutlookInboundIntegrity({
+    message: ordinaryGraphReply,
+    correlation: ordinaryGraphCorrelation,
+    relationships: { buyer: true },
+  }).actionableReply,
+  true,
+  'a normal reply must be authorized by the durable Graph internet message identity without enrollment'
+)
 
 const newsletterMessage = {
   id: 'newsletter-1',

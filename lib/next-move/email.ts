@@ -39,7 +39,6 @@ export async function sendNextMoveRoadmapEmail(input: {
     to: input.email,
     userEmail: input.email,
     eventType: 'user_next_move_roadmap',
-    providerPreference: 'resend',
     subject: `Your VestBlock ${input.roadmap.primaryPath} roadmap`,
     html: `
       <div style="margin:0;background:#070a08;color:#dce2d9;font-family:Arial,sans-serif">

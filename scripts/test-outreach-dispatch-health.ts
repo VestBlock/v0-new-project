@@ -252,10 +252,13 @@ const partnerRoute = readFileSync(
 )
 assert.match(partnerRoute, /taskType: 'partner_dispatch_operational_failure'/)
 assert.match(partnerRoute, /const ok = pipelineOk && dispatchOk/)
-assert.match(partnerRoute, /OUTREACH_AUTOMATED_RECOVERY_CANARY_ENABLED/)
-assert.match(partnerRoute, /recoveryExplicitlyRequested: true/)
-assert.match(partnerRoute, /const normalDispatchBlockedReason = throughputBlockedReason/)
-assert.doesNotMatch(partnerRoute, /automatedRecoveryCanary\?\.ok\s*\?\s*null/)
+assert.match(partnerRoute, /PARTNER_PIPELINE_CRON_SEND/)
+assert.match(partnerRoute, /BUYERS_PIPELINE_CRON_SEND/)
+assert.match(partnerRoute, /LENDERS_PIPELINE_CRON_SEND/)
+assert.match(partnerRoute, /INVESTORS_PIPELINE_CRON_SEND/)
+assert.match(partnerRoute, /evaluateOutreachDispatchHealth/)
+assert.match(partnerRoute, /throughputBlockedReason: null/)
+assert.match(partnerRoute, /perInvocationCap: 2/)
 assert.match(partnerRoute, /status: ok \? 200 : 500/)
 
 const leadAutomation = readFileSync(

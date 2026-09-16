@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { isStrategyMarketDue, STRATEGY_MARKET_STATE_SEED_OPTIONS } from '../lib/admin/strategyExecutionCore'
+import {
+  advanceStrategyLaneDraftCount,
+  strategyLaneDraftLimit,
+} from '../lib/admin/strategyDailyLaneQuotaCore'
 
 import {
   getStrategyLeadFreshness,
@@ -60,6 +66,88 @@ assert.ok(
   canonicalSellerAllocations.every((allocation) => allocation.target === 43 || allocation.target === 44),
   'A 1,000-output day must allocate either 43 or 44 drafts to each enabled seller lane'
 )
+
+const rotatedOutputPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-16T18:00:00.000Z'))
+assert.notDeepEqual(
+  rotatedOutputPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
+  canonicalOutputPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
+  'The eleven 44-draft lanes must rotate on the next Chicago business date'
+)
+const fullRotationBonusCounts = new Map<string, number>()
+for (let dayOffset = 0; dayOffset < canonicalOutputPlan.laneCount; dayOffset += 1) {
+  const plan = allocateDailyStrategyOutput(1_000, new Date(Date.UTC(2026, 8, 15 + dayOffset, 18)))
+  for (const allocation of plan.allocations) {
+    if (allocation.target === 44) {
+      fullRotationBonusCounts.set(allocation.key, (fullRotationBonusCounts.get(allocation.key) || 0) + 1)
+    }
+  }
+}
+assert.ok(
+  canonicalOutputPlan.allocations.every((allocation) => fullRotationBonusCounts.get(allocation.key) === 11),
+  'Every lane must receive the 44th slot exactly eleven times during a complete 23-day rotation'
+)
+
+const cappedLane = canonicalOutputPlan.allocations.find((allocation) => allocation.key === 'builder-infill-teardown')
+assert.ok(cappedLane)
+let persistedLaneDrafts = 0
+const firstStateLimit = strategyLaneDraftLimit({
+  target: cappedLane.target,
+  existing: persistedLaneDrafts,
+  perRunLimit: 30,
+})
+assert.equal(firstStateLimit, 30)
+persistedLaneDrafts = advanceStrategyLaneDraftCount(persistedLaneDrafts, firstStateLimit)
+const secondStateLimit = strategyLaneDraftLimit({
+  target: cappedLane.target,
+  existing: persistedLaneDrafts,
+  perRunLimit: 30,
+})
+assert.equal(secondStateLimit, cappedLane.target - 30)
+persistedLaneDrafts = advanceStrategyLaneDraftCount(persistedLaneDrafts, secondStateLimit)
+assert.equal(persistedLaneDrafts, cappedLane.target, 'Two market/provider states must not exceed the lane allocation')
+assert.equal(
+  strategyLaneDraftLimit({ target: cappedLane.target, existing: persistedLaneDrafts, perRunLimit: 30 }),
+  0,
+  'A later cron run must receive no drafting capacity after the durable daily count reaches its target'
+)
+
+const quotaMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260915212405_enforce_strategy_daily_lane_cap.sql'),
+  'utf8'
+)
+assert.match(quotaMigration, /pg_advisory_xact_lock/)
+assert.match(quotaMigration, /FROM public\.strategy_lead_memberships AS membership[\s\S]*?JOIN public\.command_center_strategy_runs AS run/)
+assert.match(quotaMigration, /IF v_existing_count >= p_lane_target[\s\S]*?daily_lane_allocation_exhausted/)
+assert.match(quotaMigration, /INSERT INTO public\.strategy_lead_memberships/)
+assert.match(quotaMigration, /membership\.status NOT IN \('rejected', 'failed'\)/)
+assert.match(quotaMigration, /membership\.created_at >= pg_catalog\.clock_timestamp\(\) - INTERVAL '15 minutes'/)
+assert.match(quotaMigration, /message\.generated_with = 'strategy_engine:' \|\| membership\.strategy_key/)
+assert.match(quotaMigration, /SECURITY DEFINER/)
+assert.match(quotaMigration, /REVOKE INSERT ON TABLE public\.strategy_lead_memberships FROM authenticated/)
+assert.match(quotaMigration, /REVOKE INSERT ON TABLE public\.strategy_lead_memberships FROM service_role/)
+assert.ok(
+  quotaMigration.indexOf('pg_advisory_xact_lock') <
+    quotaMigration.indexOf('SELECT COUNT(*)::INTEGER\n  INTO v_existing_count') &&
+    quotaMigration.indexOf('SELECT COUNT(*)::INTEGER\n  INTO v_existing_count') <
+      quotaMigration.indexOf('INSERT INTO public.strategy_lead_memberships'),
+  'The database reservation must lock before it counts and inserts'
+)
+
+const strategyEngineSource = readFileSync(resolve(process.cwd(), 'lib/admin/strategyExecutionEngine.ts'), 'utf8')
+assert.match(strategyEngineSource, /loadDailyLaneDraftCounts\(date\)/)
+assert.match(strategyEngineSource, /strategyLaneDraftLimit\([\s\S]*?existing: existingDraftCount/)
+assert.match(strategyEngineSource, /reserve_strategy_daily_lane_membership/)
+assert.match(strategyEngineSource, /advanceStrategyLaneDraftCount\(existingDraftCount, laneRun\.draftsCreated\)/)
+assert.match(strategyEngineSource, /getOperationalReplyCaptureReadiness\(\)/)
+assert.match(strategyEngineSource, /outlook_direct_guarded/)
+assert.doesNotMatch(strategyEngineSource, /getDeliveryCircuitBreaker/)
+assert.match(strategyEngineSource, /releasedDailyLaneReservation: true/)
+assert.ok(
+  strategyEngineSource.indexOf("status: 'needs_review'") <
+    strategyEngineSource.indexOf('await updateLeadRecord(candidate.lead.id'),
+  'A persisted draft must finalize its quota membership before secondary lead metadata work'
+)
+assert.doesNotMatch(strategyEngineSource, /from\('strategy_lead_memberships'\)[\s\S]{0,100}\.insert\(/)
 
 assert.deepEqual(
   STRATEGY_MARKET_STATE_SEED_OPTIONS,

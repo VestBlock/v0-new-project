@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { runDailyBuyerPipeline } from '@/lib/buyers/automation'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -17,12 +18,19 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url)
-    const requestedDryRun = url.searchParams.get('dryRun')
-    const dryRun = requestedDryRun === null
-      ? !enabled(process.env.BUYERS_PIPELINE_CRON_SEND)
-      : enabled(requestedDryRun)
-    const result = await runDailyBuyerPipeline({ dryRun })
-    return NextResponse.json({ success: result.ok, dryRun, ...result }, { status: result.ok ? 200 : 500 })
+    const dryRun = enabled(url.searchParams.get('dryRun'))
+    const deliveryEnabled = enabled(process.env.BUYERS_PIPELINE_CRON_SEND) && !dryRun
+    const invocationId = `buyers-pipeline:${randomUUID()}`
+    const result = await runDailyBuyerPipeline({
+      dryRun,
+      deliveryEnabled,
+      sendLimit: 2,
+      invocationId,
+    })
+    return NextResponse.json(
+      { success: result.ok, dryRun, deliveryEnabled, invocationId, ...result },
+      { status: result.ok ? 200 : 500 }
+    )
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Buyer pipeline failed.' },

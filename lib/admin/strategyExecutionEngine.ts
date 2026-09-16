@@ -13,16 +13,20 @@ import {
   type StrategySourceProvider,
 } from '@/lib/admin/strategyExecutionCatalog'
 import { isStrategyMarketDue, STRATEGY_MARKET_STATE_SEED_OPTIONS } from '@/lib/admin/strategyExecutionCore'
+import {
+  advanceStrategyLaneDraftCount,
+  strategyLaneDraftLimit,
+} from '@/lib/admin/strategyDailyLaneQuotaCore'
 import { buildStrategyEmailDraft } from '@/lib/admin/strategyOutreachTemplates'
 import { getStrategyLeadProvenance, strategySourceProviderForLead } from '@/lib/admin/strategyLeadProvenance'
 import { syncDealMachineLeadSource } from '@/lib/dealmachine/api'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { saveOutreachMessages, updateLeadRecord } from '@/lib/leads/repository'
-import { getDeliveryCircuitBreaker } from '@/lib/leads/deliveryHealth'
 import { getOutboundProviderReadiness } from '@/lib/leads/outbound'
 import type { LeadRecord } from '@/lib/leads/types'
 import { allocateDailyStrategyOutput, configuredDailyStrategyOutputTarget } from '@/lib/outreach/dailyStrategyOutputCore'
-import { getReplyCaptureReadiness, type ReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
+import { OUTLOOK_COLD_B2B_INVOCATION_CAP } from '@/lib/outreach/outlookColdBudgetCore'
+import { getOperationalReplyCaptureReadiness, type ReplyCaptureReadiness } from '@/lib/outreach/reply-capture'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatStructuredError } from '@/lib/system/errorMessage'
 
@@ -89,12 +93,14 @@ export type StrategyExecutionResult = {
   sourceSync: Awaited<ReturnType<typeof syncDealMachineLeadSource>>
   sourceAcquisition: StrategySourceOrchestrationResult
   outboundReadiness: {
-    provider: 'gmail' | 'resend' | 'none'
+    provider: 'outlook' | 'none'
     configured: boolean
     ready: boolean
     reason: string | null
   }
   replyCaptureReadiness: ReplyCaptureReadiness
+  /** Delivery diagnostics are reported separately and never downgrade preparation output. */
+  deliveryWarnings: string[]
   candidateLeads: number
   contactHistoryExcluded: number
   staleCandidateLeadsExcluded: number
@@ -188,15 +194,6 @@ function envInt(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-function reportDate(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now)
-}
-
 function normalizeMarket(value: string) {
   const { city, state } = splitMarket(value)
   return city && state ? `${city}, ${state}` : value.trim()
@@ -212,6 +209,22 @@ function runKey(date: string, strategyKey: string, market: string, provider: str
 
 function hashPayload(value: unknown) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+async function loadDailyLaneDraftCounts(date: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('get_strategy_daily_lane_membership_counts', {
+    p_business_date: date,
+  })
+  if (error) throw error
+
+  const counts = new Map<string, number>()
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return counts
+  for (const [strategyKey, rawCount] of Object.entries(data as Record<string, unknown>)) {
+    const count = Number(rawCount)
+    if (Number.isFinite(count) && count > 0) counts.set(strategyKey, Math.floor(count))
+  }
+  return counts
 }
 
 function emptySourceAcquisition(dryRun: boolean, blocker?: string): StrategySourceOrchestrationResult {
@@ -596,6 +609,7 @@ async function executeLane(input: {
   lane: StrategyLane
   pool: Candidate[]
   assigned: AssignedContacts
+  dailyLaneTarget: number
   draftLimit: number
   dryRun: boolean
 }): Promise<LaneRunResult> {
@@ -639,50 +653,80 @@ async function executeLane(input: {
   const admin = createAdminClient()
   let draftsCreated = 0
   let reviewOnly = 0
+  let laneAllocationExhausted = false
   const selected = candidates.slice(0, input.draftLimit)
 
   for (const candidate of selected) {
     const recipientKey = String(candidate.lead.email || '').trim().toLowerCase()
     const effectiveReviewOnly = candidate.reviewOnly
-    const { data: membership, error: membershipError } = await admin
-      .from('strategy_lead_memberships')
-      .insert({
-        lead_id: candidate.lead.id,
-        campaign_run_id: run.id,
-        strategy_key: input.lane.key,
-        market: input.state.market,
-        source_provider: input.state.source_provider,
-        recipient_key: recipientKey,
-        qualification_score: candidate.score,
-        qualification_reasons: candidate.reasons,
-        email_verification_status: 'unverified',
-        status: 'qualified',
-        metadata_json: {
+    const { data: reservationData, error: reservationError } = await admin.rpc(
+      'reserve_strategy_daily_lane_membership',
+      {
+        p_business_date: input.date,
+        p_lane_target: input.dailyLaneTarget,
+        p_lead_id: candidate.lead.id,
+        p_campaign_run_id: run.id,
+        p_strategy_key: input.lane.key,
+        p_market: input.state.market,
+        p_source_provider: input.state.source_provider,
+        p_recipient_key: recipientKey,
+        p_qualification_score: candidate.score,
+        p_qualification_reasons: candidate.reasons,
+        p_metadata: {
           reviewOnly: effectiveReviewOnly,
           qualificationReviewOnly: candidate.reviewOnly,
           matchedStrategyKeys: candidate.matchedStrategyKeys,
           hunterSendVerificationRequired: true,
         },
-      })
-      .select('id')
-      .single()
-    if (membershipError) {
-      if (membershipError.code === '23505') continue
-      throw membershipError
+      }
+    )
+    if (reservationError) throw reservationError
+    const reservation = (reservationData || {}) as {
+      reserved?: boolean
+      reason?: string | null
+      membershipId?: string
     }
+    if (reservation.reserved !== true || !reservation.membershipId) {
+      if (reservation.reason === 'lead_or_recipient_already_enrolled') continue
+      if (reservation.reason === 'daily_lane_allocation_exhausted') {
+        laneAllocationExhausted = true
+        break
+      }
+      throw new Error(`Strategy lane reservation failed: ${reservation.reason || 'invalid_reservation_response'}`)
+    }
+    const membership = { id: reservation.membershipId }
 
     const draft = buildStrategyEmailDraft(input.lane.key, candidate.lead)
-    const messages = await saveOutreachMessages(candidate.lead.id, [
-      {
-        channel: 'email',
-        subject: draft.subject,
-        body: draft.body,
-        cta: draft.cta,
-        language: 'en',
-        complianceNote: draft.complianceNote,
-        generatedWith: `strategy_engine:${input.lane.key}`,
-      },
-    ])
+    let messages: Awaited<ReturnType<typeof saveOutreachMessages>>
+    try {
+      messages = await saveOutreachMessages(candidate.lead.id, [
+        {
+          channel: 'email',
+          subject: draft.subject,
+          body: draft.body,
+          cta: draft.cta,
+          language: 'en',
+          complianceNote: draft.complianceNote,
+          generatedWith: `strategy_engine:${input.lane.key}`,
+        },
+      ])
+    } catch (error) {
+      // Release the short-lived quota reservation immediately when draft
+      // persistence definitively fails. A process crash is recovered by the
+      // database's 15-minute reservation expiry instead.
+      await admin
+        .from('strategy_lead_memberships')
+        .update({
+          status: 'rejected',
+          metadata_json: {
+            reason: 'Email draft persistence failed.',
+            releasedDailyLaneReservation: true,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', membership.id)
+      throw error
+    }
     const emailMessage = messages.find((message) => message.channel === 'email')
     if (!emailMessage || emailMessage.status === 'sent' || emailMessage.sent_at) {
       await admin
@@ -691,6 +735,25 @@ async function executeLane(input: {
         .eq('id', membership.id)
       continue
     }
+
+    // Finalize the counted output as soon as the draft exists. Lead metadata
+    // and enrollment bookkeeping can be repaired later without losing the
+    // fact that this lane produced a durable draft.
+    const { error: membershipUpdateError } = await admin
+      .from('strategy_lead_memberships')
+      .update({
+        status: 'needs_review',
+        metadata_json: {
+          reviewOnly: effectiveReviewOnly,
+          qualificationReviewOnly: candidate.reviewOnly,
+          outreachMessageId: emailMessage.id,
+          matchedStrategyKeys: candidate.matchedStrategyKeys,
+          hunterSendVerificationRequired: true,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', membership.id)
+    if (membershipUpdateError) throw membershipUpdateError
 
     const existingFlags = candidate.lead.automation_flags_json || {}
     const existingMetadata = candidate.lead.metadata_json || {}
@@ -724,22 +787,6 @@ async function executeLane(input: {
       },
     })
 
-    const { error: membershipUpdateError } = await admin
-      .from('strategy_lead_memberships')
-      .update({
-        status: 'needs_review',
-        metadata_json: {
-          reviewOnly: effectiveReviewOnly,
-          qualificationReviewOnly: candidate.reviewOnly,
-          outreachMessageId: emailMessage.id,
-          matchedStrategyKeys: candidate.matchedStrategyKeys,
-          hunterSendVerificationRequired: true,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', membership.id)
-    if (membershipUpdateError) throw membershipUpdateError
-
     await recordOutboundEnrollment({
       campaignRunId: run.id,
       strategyKey: input.lane.key,
@@ -767,8 +814,10 @@ async function executeLane(input: {
 
   const status = draftsCreated ? 'drafted' : 'awaiting_contacts'
   const message = draftsCreated
-    ? `Created ${draftsCreated} lane-specific email draft(s); ${reviewOnly} require sensitive-case review.`
-    : 'Candidates were already enrolled or had preserved sent messages; no new drafts were created.'
+    ? `Created ${draftsCreated} lane-specific email draft(s); ${reviewOnly} require sensitive-case review.${laneAllocationExhausted ? ' The Chicago-day lane allocation is now exhausted.' : ''}`
+    : laneAllocationExhausted
+      ? 'The canonical Chicago-day lane allocation is exhausted; no additional drafts were created.'
+      : 'Candidates were already enrolled or had preserved sent messages; no new drafts were created.'
   const { data: runMemberships, error: runMembershipError } = await admin
     .from('strategy_lead_memberships')
     .select('status')
@@ -1022,6 +1071,9 @@ async function sendStrategyExecutionReport(result: StrategyExecutionResult) {
   const blockers = result.report.blockers.length
     ? `<ul>${result.report.blockers.map((blocker) => `<li>${escapeReportHtml(blocker)}</li>`).join('')}</ul>`
     : '<p>None.</p>'
+  const deliveryWarnings = result.deliveryWarnings.length
+    ? `<ul>${result.deliveryWarnings.map((warning) => `<li>${escapeReportHtml(warning)}</li>`).join('')}</ul>`
+    : '<p>None.</p>'
 
   return sendEmail({
     to: recipient,
@@ -1038,9 +1090,12 @@ async function sendStrategyExecutionReport(result: StrategyExecutionResult) {
       <p>Property intelligence reviewed ${acquisition.propertiesSeen} record(s), found ${acquisition.candidatesStacked} contract-qualified stack(s), promoted ${acquisition.leadsPromoted} verified business-contact lead(s), and held ${acquisition.contactEnrichmentRequired} record(s) for compliant contact enrichment or mail/manual review.</p>
       <h3>DealMachine source progression</h3>
       <p>Cursor ${source.startAfter} to ${source.nextAfter}; ${source.fetched} property records fetched, ${source.contactable} already contactable, ${source.contactless} contactless, ${source.mailReady} mail-ready, ${source.queuedForExport} queued for contact export, and ${source.ingested} lead records ingested.</p>
-      <h3>Delivery gate</h3>
-      <p>Provider: ${escapeReportHtml(result.outboundReadiness.provider)}. Circuit: ${escapeReportHtml(result.deliveryCircuit.mode)}. Per-run cap: ${escapeReportHtml(result.deliveryCircuit.maxBatchSize ?? 'normal configured limit')}.</p>
+      <h3>Direct Outlook guard</h3>
+      <p>Provider: ${escapeReportHtml(result.outboundReadiness.provider)}. Mode: ${escapeReportHtml(result.deliveryCircuit.mode)}. Per-invocation cold-attempt cap: ${escapeReportHtml(result.deliveryCircuit.maxBatchSize ?? 'not available')}.</p>
+      <p>Accepted delivery and final delivery are not inferred from readiness; provider outcomes are recorded separately when evidence exists.</p>
       <p>Reply capture: ${result.replyCaptureReadiness.ready ? 'ready' : 'blocked'} for ${escapeReportHtml(result.replyCaptureReadiness.mailbox)}.</p>
+      <h3>Delivery warnings (do not block preparation)</h3>
+      ${deliveryWarnings}
       <h3>Lane results</h3>
       <ul>${laneRows}</ul>
       <h3>Blockers</h3>
@@ -1057,12 +1112,13 @@ export async function runStrategyExecutionEngine(options: {
 } = {}): Promise<StrategyExecutionResult> {
   const dryRun = options.dryRun !== false
   const executionStartedAt = new Date()
-  const date = reportDate(executionStartedAt)
   const dailyOutputPlan = allocateDailyStrategyOutput(
     configuredDailyStrategyOutputTarget(),
     executionStartedAt
   )
+  const date = dailyOutputPlan.businessDate
   const blockers: string[] = []
+  const deliveryWarnings: string[] = []
   const requestedSourceProviders = Array.from(new Set(
     options.sourceProviders?.length
       ? options.sourceProviders
@@ -1121,41 +1177,41 @@ export async function runStrategyExecutionEngine(options: {
       return provider ? sourceProviderSet.has(provider) : true
     })
   const providerReadiness = getOutboundProviderReadiness()
-  const replyCaptureReadiness = getReplyCaptureReadiness()
+  // This diagnostic represents the sole active email provider. Seller
+  // first-touch remains non-email; verified B2B uses the guarded Outlook path.
   const outboundProvider: StrategyExecutionResult['outboundReadiness']['provider'] =
-    providerReadiness.defaultProvider === 'gmail'
-      ? 'gmail'
-      : providerReadiness.defaultProvider === 'resend'
-        ? 'resend'
-        : 'none'
-  const [assigned, previouslyContactedLeadIds, deliveryEvidence] = await Promise.all([
+    providerReadiness.outlook ? 'outlook' : 'none'
+  const [assigned, previouslyContactedLeadIds, replyCaptureReadiness] = await Promise.all([
     loadAssignedContacts(),
     loadPreviouslyContactedLeadIds(),
-    getDeliveryCircuitBreaker({
-      provider: outboundProvider,
-      allowControlledTrial: true,
-    }),
+    getOperationalReplyCaptureReadiness(),
   ])
   const outboundReadiness: StrategyExecutionResult['outboundReadiness'] = {
     provider: outboundProvider,
     configured: outboundProvider !== 'none',
-    ready: outboundProvider !== 'none' && providerReadiness.mailingAddressConfigured,
+    ready:
+      outboundProvider !== 'none' &&
+      providerReadiness.mailingAddressConfigured &&
+      replyCaptureReadiness.ready,
     reason: outboundProvider === 'none'
-      ? 'No Google Workspace or Resend sender is configured for the guarded outreach queue.'
+      ? 'Microsoft Graph is not fully configured for the governed Outlook queue.'
       : !providerReadiness.mailingAddressConfigured
         ? 'The business mailing address required for compliant outreach is not configured.'
-        : null,
+        : !replyCaptureReadiness.ready
+          ? replyCaptureReadiness.reason || 'Operational Outlook reply capture is not ready.'
+          : null,
   }
-  if (!deliveryEvidence.allowed) {
-    blockers.push(`Delivery circuit is ${deliveryEvidence.mode}: ${deliveryEvidence.reason || 'provider evidence is not ready'}.`)
-  }
-  if (outboundReadiness.reason) blockers.push(outboundReadiness.reason)
-  if (!replyCaptureReadiness.ready && replyCaptureReadiness.reason) blockers.push(replyCaptureReadiness.reason)
+  if (outboundReadiness.reason) deliveryWarnings.push(outboundReadiness.reason)
   const candidatePools = buildCandidatePools(leads, assigned, previouslyContactedLeadIds)
   const pools = candidatePools.pools
   const marketsSeeded = await seedMarketStates(pools, sourceProviderSet)
+  const dailyLaneDraftCounts = await loadDailyLaneDraftCounts(date)
   const states = (await loadMarketStates())
     .filter((state) => sourceProviderSet.has(state.source_provider))
+    .filter((state) => {
+      const laneTarget = dailyOutputPlan.allocations.find((allocation) => allocation.key === state.strategy_key)?.target || 0
+      return (dailyLaneDraftCounts.get(state.strategy_key) || 0) < laneTarget
+    })
   const enabledLaneCount = STRATEGY_EXECUTION_LANES.filter((lane) => lane.enabled).length
   const targets = chooseTargets(
     states,
@@ -1170,15 +1226,28 @@ export async function runStrategyExecutionEngine(options: {
     const pool = pools.get(poolKey(lane.key, state.market, state.source_provider)) || []
     const canonicalDraftTarget = dailyOutputPlan.allocations.find((allocation) => allocation.key === lane.key)?.target
     if (!canonicalDraftTarget) continue
-    laneRuns.push(await executeLane({
+    const existingDraftCount = dailyLaneDraftCounts.get(lane.key) || 0
+    const draftLimit = strategyLaneDraftLimit({
+      target: canonicalDraftTarget,
+      existing: existingDraftCount,
+      perRunLimit: envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', canonicalDraftTarget),
+    })
+    if (draftLimit < 1) continue
+    const laneRun = await executeLane({
       date,
       state,
       lane,
       pool,
       assigned,
-      draftLimit: envInt('STRATEGY_ENGINE_MAX_DRAFTS_PER_LANE', canonicalDraftTarget),
+      dailyLaneTarget: canonicalDraftTarget,
+      draftLimit,
       dryRun,
-    }))
+    })
+    laneRuns.push(laneRun)
+    dailyLaneDraftCounts.set(
+      lane.key,
+      advanceStrategyLaneDraftCount(existingDraftCount, laneRun.draftsCreated)
+    )
   }
 
   const outcomes = await loadOutcomeTotals()
@@ -1204,19 +1273,20 @@ export async function runStrategyExecutionEngine(options: {
     sourceSyncSkipped,
     recoveredRuns,
     deliveryCircuit: {
-      allowed: deliveryEvidence.allowed,
-      mode: deliveryEvidence.mode,
-      provider: deliveryEvidence.provider,
-      reason: deliveryEvidence.reason,
-      maxBatchSize: deliveryEvidence.maxBatchSize,
-      badRate: deliveryEvidence.badRate,
-      threshold: deliveryEvidence.threshold,
-      sampleSize: deliveryEvidence.sampleSize,
+      allowed: outboundReadiness.ready,
+      mode: outboundReadiness.ready ? 'outlook_direct_guarded' : 'unavailable',
+      provider: outboundReadiness.provider,
+      reason: outboundReadiness.reason,
+      maxBatchSize: outboundReadiness.ready ? OUTLOOK_COLD_B2B_INVOCATION_CAP : 0,
+      badRate: 0,
+      threshold: 0,
+      sampleSize: 0,
     },
     sourceSync,
     sourceAcquisition,
     outboundReadiness,
     replyCaptureReadiness,
+    deliveryWarnings,
     candidateLeads: candidatePools.provenanceEligibleLeads,
     contactHistoryExcluded: leads.filter((lead) => previouslyContactedLeadIds.has(lead.id)).length,
     staleCandidateLeadsExcluded: candidatePools.staleCandidateLeadsExcluded,

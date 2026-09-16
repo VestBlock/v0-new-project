@@ -26,14 +26,24 @@
 - `PAYPAL_CLIENT_SECRET`
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL` (or `RESEND_EMAIL`, `OUTREACH_FROM_EMAIL`, then `FROM_EMAIL`)
-  Verified VestBlock sender address. The selected provider and the throughput-reservation ledger resolve this identity in the same order.
+  Dormant emergency infrastructure only. Production `sendEmail` defaults to Outlook even when `TRANSACTIONAL_EMAIL_PROVIDER` is missing or mistyped, and never falls back across providers. A Gmail/Resend branch can be exercised only with `ALLOW_LEGACY_EMAIL_PROVIDER_OVERRIDE=true` in an explicit `development` or `test` process.
+- `TRANSACTIONAL_EMAIL_PROVIDER=outlook`
+  Outlook is the sole active email provider for transactional, consented marketing, and strictly verified B2B email. Every Graph attempt first claims a durable `transactional_email_dispatches` identity. Accepted and dispatch-ambiguous identities cannot send again; reconcile by the stored dispatch, Graph message, internet-message, and correlation IDs before retrying. There is no automatic provider fallback.
+- `MICROSOFT_GRAPH_CLIENT_ID`, `MICROSOFT_GRAPH_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`
+  Application credentials for Outlook delivery. The Entra application requires Microsoft Graph `Mail.Send` and `Mail.ReadWrite` application permissions with admin consent.
+- `OUTLOOK_ACQUISITIONS_MAILBOX`
+  Exact mailbox used to create a draft with `POST /users/{mailbox}/messages`, durably record the returned Graph message ID and `internetMessageId`, and send that draft with `POST /users/{mailbox}/messages/{id}/send`. Graph `202 Accepted` means provider acceptance only, never delivery.
 
 ## Guarded outreach
 
-- `OUTREACH_PROVIDER_PREFERENCE=resend`
-  Resend is required for delivery, bounce, suppression, and complaint telemetry.
+- `OUTREACH_PROVIDER_PREFERENCE`
+  Legacy compatibility setting only; it does not change the governed provider. Active email delivery is Outlook-only.
+- Instantly is retired from the application: there is no enrollment cron, enqueue callsite, campaign command, source-governor lane, or automatic delivery dependency.
+- Verified B2B Outlook delivery requires fresh, recipient-bound Hunter `status=valid` evidence (maximum age 72 hours) plus fresh affirmative business-contact evidence (maximum age 30 days). Hunter addresses must match the canonical business website domain. Free/webmail is eligible only when the exact address is visibly sourced on the canonical public business website with fresh source URL and confidence evidence. Seller/consumer cold-email lanes remain prohibited.
+- The database-backed Outlook cold budget enforces at most 25 accepted/reserved attempts per rolling 24 hours, at most 2 per scheduler invocation, at most 2 per recipient domain per rolling 24 hours, deterministic fair shares across the seven eligible B2B lanes, weekdays from 15:00 through 21:59 UTC, and stable idempotency. A Graph `202` is provider acceptance, never delivery.
 - `RESEND_WEBHOOK_SECRET`
-  Verifies delivery events before they update records or suppression state.
+  Dormant Resend webhook verification only; it is not an active Outlook delivery dependency.
+- Marketing delivery cannot be authorized by a request boolean. The sender must load a current `next_move_questionnaires` consent record, including its consent timestamp and recipient match, immediately before routing. Deleted, revoked, stale, mismatched, boolean-only, and unavailable evidence fails closed.
 - `OUTREACH_REPLY_TO_EMAIL`
   Monitored Outlook address used to correlate replies with the originating message. After trimming and lowercasing, this must exactly match `OUTLOOK_ACQUISITIONS_MAILBOX`; a mismatch blocks every live send even if the legacy reply-capture override is enabled.
 - `MICROSOFT_GRAPH_CLIENT_ID`
@@ -42,24 +52,24 @@
 - `OUTLOOK_ACQUISITIONS_MAILBOX`
   Outlook mailbox address read by Microsoft Graph for reply capture. Configure the actual mailbox explicitly; unverified reply-to aliases are not accepted as equivalent.
 - `OUTREACH_MAILING_ADDRESS`
-  Physical business mailing address appended to commercial outreach.
+  Physical business mailing address that must render in every marketing or cold email. The guarded Outlook adapter also requires a rendered opt-out instruction before reserving or sending.
 - `OUTREACH_REQUIRE_REPLY_CAPTURE=true`
 - `OUTREACH_ALLOW_WITHOUT_REPLY_CAPTURE=false`
   These two settings fail closed if the monitored reply path is unavailable.
 - `OUTREACH_REPLY_CAPTURE_MAX_AGE_MINUTES=120`
   Maximum age of a successful whole-mailbox sync before live sending closes.
 - `VESTBLOCK_DAILY_OUTREACH_TARGET=1000`
-  Canonical daily attempt target shared across all 23 strategy lanes. Allocation is 43 per lane plus one rotating attempt for 11 lanes each business day. The delivery-health governor can only lower this target while evidence is insufficient or unhealthy.
-- `OUTREACH_DISPATCH_CRON_SEND=true`
+  Canonical daily production-output target shared across all 23 strategy lanes. Allocation is 43 per lane plus one rotating output for 11 lanes each Chicago business day. It governs sourcing, qualification, and draft preparation; it is not a promise that 1,000 emails will be accepted or delivered. Provider capacity, consent, channel policy, and delivery health independently cap delivery.
+- `OUTREACH_DISPATCH_CRON_SEND`
 - `AUTO_SEND_ENABLED=true`
 - `LEADS_AUTO_SEND_APPROVED=true`
-  Required lead-dispatch gates. Review-only strategies still require a recorded human approval before scheduled delivery.
+  The cron switch controls provider delivery, not sourcing, enrichment, scoring, or drafting. Keep it `false` until a compliant provider pool has proven capacity; preparation continues live. Review-only strategies still require a recorded human approval before scheduled delivery.
 - `OUTREACH_DISPATCH_PER_RUN=30`
   Maximum lead attempts requested by each admitted 15-minute dispatch run. The database governor applies the lower global, lane, sender-stage, and trailing-24-hour limits.
-- `PARTNER_PIPELINE_CRON_SEND=true`
-  Master switch for the scheduled partner pipeline. A lane still requires its own switch.
+- `PARTNER_PIPELINE_CRON_SEND`
+  Master provider-delivery switch for the scheduled partner pipeline. Discovery, enrichment, scoring, and drafting continue when it is `false`; a lane still requires its own switch before delivery.
 - `BUYERS_PIPELINE_CRON_SEND`, `LENDERS_PIPELINE_CRON_SEND`, `INVESTORS_PIPELINE_CRON_SEND`
-  Independent buyer, lender, and investor pipeline switches.
+  Independent buyer, lender, and investor provider-delivery switches. They do not disable preparation work.
 - `BUYER_AUTO_SEND_ENABLED`, `LENDER_AUTO_SEND_ENABLED`, `INVESTOR_AUTO_SEND_ENABLED`
   Independent send gates. Delivery health, suppression, content validation, and daily caps still apply.
 - `OUTREACH_DELIVERY_MIN_SAMPLE`, `OUTREACH_MAX_BAD_DELIVERY_RATE`
@@ -67,7 +77,7 @@
 - `OUTREACH_CANARY_ENABLED`
   Enables only the explicitly requested manual recovery canary. Do not schedule this route automatically.
 - `HUNTER_API_KEY`
-  Domain contact enrichment for buyers, lenders, and investors.
+  Domain contact enrichment for buyers, lenders, and investors. A `valid` deliverability result is required for B2B enrollment but does not by itself prove consent or that an address is a business contact.
 - `BUYER_ENRICHMENT_PREFER_FREE=false`
   Explicitly enables paid Hunter only after public website analysis fails to find a usable buyer address. Missing or any value other than `false` fails closed to free enrichment.
 - `BUYERS_DAILY_HUNTER_LOOKUP_LIMIT`, `BUYERS_SCORING_CONCURRENCY`

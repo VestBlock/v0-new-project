@@ -233,20 +233,25 @@ assert.doesNotMatch(runtimeSource, /payload|apiKey|HUNTER_API_KEY/)
 assert.match(runtimeSource, /hunterSendVerification: input\.cache/)
 
 const outboundSource = readFileSync(resolve(process.cwd(), 'lib/leads/outbound.ts'), 'utf8')
-assert.match(outboundSource, /sequenceStep <= 1 \|\| !hasAcceptedFollowupEvidence[\s\S]*?ensureFreshHunterSendVerification/)
-assert.match(outboundSource, /!hunterVerification\.sendable \|\| hunterVerification\.status !== 'valid'/)
+assert.match(outboundSource, /purpose === 'cold_outreach'[\s\S]*?ensureFreshHunterSendVerification/)
+assert.match(outboundSource, /!hunter\.sendable \|\| hunter\.status !== 'valid' \|\| !hunter\.cache/)
 assert.ok(
-  outboundSource.indexOf('ensureFreshHunterSendVerification') < outboundSource.indexOf('sendWithResend(preparedInput)'),
+  outboundSource.indexOf('ensureFreshHunterSendVerification') < outboundSource.indexOf('sendGuardedOutlookEmail({'),
   'The universal first-touch Hunter gate must execute before the provider call'
 )
 assert.match(outboundSource, /deferredScope\?: 'record' \| 'lane' \| 'global' \| 'infrastructure'/)
 
-for (const file of [
-  'app/api/cron/seller-targeted-send/route.ts',
-  'app/api/admin/leads/[id]/outreach/route.ts',
-]) {
-  const source = readFileSync(resolve(process.cwd(), file), 'utf8')
-  assert.match(source, /sendLeadOutreachEmail\([\s\S]*?sequenceStep: 1/)
-}
+const adminLeadRoute = readFileSync(
+  resolve(process.cwd(), 'app/api/admin/leads/[id]/outreach/route.ts'),
+  'utf8'
+)
+assert.match(adminLeadRoute, /sendLeadOutreachEmail\([\s\S]*?sequenceStep: 1/)
+
+const sellerTargetedRoute = readFileSync(
+  resolve(process.cwd(), 'app/api/cron/seller-targeted-send/route.ts'),
+  'utf8'
+)
+assert.match(sellerTargetedRoute, /seller_cold_email_prohibited/)
+assert.doesNotMatch(sellerTargetedRoute, /sendLeadOutreachEmail/)
 
 console.log('lead-hunter-send-verification: ok')

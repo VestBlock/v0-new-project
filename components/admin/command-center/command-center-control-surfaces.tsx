@@ -1049,7 +1049,7 @@ export function CommandCenterOutreachPanel({
               <p className="text-sm font-semibold text-white">Daily outbound governor</p>
             </div>
             <p className="mt-1 text-xs leading-5 text-slate-400">
-              {outboundControl.sender} · {outboundControl.provider} · {outboundControl.laneCount} equal strategy lanes · SMS {outboundControl.smsMode.replace("_", " ")}
+              {outboundControl.sender} · {outboundControl.provider} · {outboundControl.laneCount} output lanes · SMS {outboundControl.smsMode.replace("_", " ")}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -1078,11 +1078,11 @@ export function CommandCenterOutreachPanel({
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
           {[
-            { label: "Daily target", value: outboundControl.dailyLimit, status: "text-white" },
-            { label: `Live cap · ${outboundControl.rampStage.replaceAll("_", " ")}`, value: outboundControl.effectiveDailyLimit, status: outboundControl.effectiveDailyLimit ? "text-cyan-200" : "text-rose-300" },
-            { label: "Attempts 24h", value: outboundControl.attempted24h, status: outboundControl.attempted24h ? "text-cyan-200" : "text-amber-300" },
+            { label: "Daily output target", value: outboundControl.dailyLimit, status: "text-white" },
+            { label: `Cold Outlook cap · ${outboundControl.rampStage.replaceAll("_", " ")}`, value: outboundControl.effectiveDailyLimit, status: outboundControl.effectiveDailyLimit ? "text-cyan-200" : "text-rose-300" },
+            { label: "Cold attempts 24h", value: outboundControl.attempted24h, status: outboundControl.attempted24h ? "text-cyan-200" : "text-amber-300" },
             { label: "Accepted 24h", value: outboundControl.sent24h, status: outboundControl.sent24h ? "text-emerald-300" : "text-amber-300" },
-            { label: "Safe remaining", value: outboundControl.safeRemainingToday, status: outboundControl.safeRemainingToday ? "text-cyan-200" : "text-emerald-300" },
+            { label: "Cold attempts left", value: outboundControl.safeRemainingToday, status: outboundControl.safeRemainingToday ? "text-cyan-200" : "text-emerald-300" },
             { label: "Email ready", value: outboundControl.emailReady, status: outboundControl.emailReady ? "text-emerald-300" : "text-rose-300" },
             { label: "Needs review", value: outboundControl.needsReview, status: outboundControl.needsReview ? "text-amber-300" : "text-slate-300" },
           ].map((metric) => (
@@ -1099,7 +1099,7 @@ export function CommandCenterOutreachPanel({
             <p>
               {dataIntegrityHold
                 ? "Data-integrity hold is active. Automatic sends are paused until live source reads recover."
-                : `Auto-send ${outboundControl.autoSendEnabled ? "on" : "off"} · mailing address ${outboundControl.mailingAddressConfigured ? "set" : "missing"} · equal allocation ${outboundControl.laneBaseAllocation} each plus ${outboundControl.laneRemainder} rotating extras`}
+                : `Auto-send ${outboundControl.autoSendEnabled ? "on" : "off"} · mailing address ${outboundControl.mailingAddressConfigured ? "set" : "missing"} · output allocation ${outboundControl.laneBaseAllocation} each plus ${outboundControl.laneRemainder} rotating extras`}
             </p>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-slate-950/45 px-3 py-2">
@@ -1109,7 +1109,7 @@ export function CommandCenterOutreachPanel({
 
         <details className="mt-3 rounded-xl border border-white/[0.06] bg-slate-950/45">
           <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-slate-200">
-            Strategy allocation ledger · {outboundControl.leadLaneSafeRemaining} seller/business slots safely available
+            Daily output allocation · {outboundControl.leadLaneSafeRemaining} business-prospect draft slots remaining
           </summary>
           <div className="max-h-80 overflow-auto border-t border-white/[0.06]">
             <div className="grid min-w-[760px] grid-cols-[minmax(220px,1fr)_90px_repeat(5,72px)] gap-2 px-3 py-2 vb-mono text-[0.55rem] uppercase tracking-[0.12em] text-slate-500">

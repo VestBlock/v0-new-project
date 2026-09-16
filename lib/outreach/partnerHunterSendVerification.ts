@@ -19,6 +19,7 @@ import { configuredDailyStrategyOutputTarget, type DailyStrategyOutputLaneKey } 
 import { evaluateOutreachThroughputGovernor } from '@/lib/outreach/throughputGovernorCore'
 import { getCommercialOutreachMailingAddress } from '@/lib/outreach/commercialCompliance'
 import type { OutboundEmailProvider } from '@/lib/outreach/provider-preference'
+import { assertPurposeBoundBreakerProvider } from '@/lib/outreach/deliveryRuntime'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type PartnerHunterVerificationScope = Exclude<OutreachRecipientScope, 'lead'>
@@ -154,6 +155,7 @@ export async function preflightPartnerHunterSendVerification(input: {
   now?: Date
 }): Promise<PartnerHunterSendPreflightResult> {
   try {
+    assertPurposeBoundBreakerProvider(input.provider, input.deliveryCircuitBreaker)
     const replyCapture = await getOperationalReplyCaptureReadiness({ now: input.now })
     if (!replyCapture.ready) {
       return blocked({ reason: 'hunter_preflight_reply_capture_not_operational', deferredScope: 'infrastructure' })
