@@ -107,7 +107,7 @@ function homeHarvestExternalId(listing) {
 }
 
 async function ingestHomeHarvestListings(listings) {
-  if (!INGEST) return { attempted: 0, inserted: 0, existing: 0, suppressed: 0, invalid: 0 }
+  if (!INGEST) return { attempted: 0, inserted: 0, existing: 0, refreshed: 0, suppressed: 0, invalid: 0 }
   if (SOURCE !== "homeharvest") {
     throw new Error("--ingest currently supports only --source=homeharvest.")
   }
@@ -126,16 +126,16 @@ async function ingestHomeHarvestListings(listings) {
   const externalIds = contactable.map(homeHarvestExternalId)
   const emails = [...new Set(contactable.map((listing) => String(listing.agent_email).trim().toLowerCase()))]
 
-  const existingIds = new Set()
+  const existingLeads = new Map()
   for (let index = 0; index < externalIds.length; index += 250) {
     const batch = externalIds.slice(index, index + 250)
     const { data, error } = await admin
       .from("leads")
-      .select("external_id")
+      .select("id,external_id,email,metadata_json")
       .eq("source", "homeharvest_stale_listing")
       .in("external_id", batch)
     if (error) throw error
-    for (const row of data || []) if (row.external_id) existingIds.add(row.external_id)
+    for (const row of data || []) if (row.external_id) existingLeads.set(row.external_id, row)
   }
 
   const suppressedEmails = new Set()
@@ -152,13 +152,45 @@ async function ingestHomeHarvestListings(listings) {
 
   const rows = []
   let existing = 0
+  let refreshed = 0
   let suppressed = 0
-  let invalid = listings.length - contactable.length
+  const invalid = listings.length - contactable.length
   for (const listing of contactable) {
     const externalId = homeHarvestExternalId(listing)
     const email = String(listing.agent_email).trim().toLowerCase()
-    if (existingIds.has(externalId)) {
+    const existingLead = existingLeads.get(externalId)
+    if (existingLead) {
       existing += 1
+      const persistedEmail = String(existingLead.email || "").trim().toLowerCase()
+      if (persistedEmail === email && !suppressedEmails.has(email)) {
+        const previousMetadata = existingLead.metadata_json && typeof existingLead.metadata_json === "object"
+          ? existingLead.metadata_json
+          : {}
+        const { data: refreshedLead, error: refreshError } = await admin
+          .from("leads")
+          .update({
+            source_url: listing.listing_url || null,
+            metadata_json: {
+              ...previousMetadata,
+              sourceObservedAt: now,
+              strategyPrimary: "active-stale-creative",
+              strategyStackMatches: ["active-stale-creative"],
+              strategySourceFamilies: ["homeharvest"],
+              strategySourceRecordId: `homeharvest:${externalId}`,
+              strategySourceContractVersion: 1,
+              listingFetchedAt: now,
+              listingUrl: listing.listing_url || null,
+              listingAgentEmailHash: createHash("sha256").update(email).digest("hex"),
+              sourceProvider: "homeharvest",
+            },
+          })
+          .eq("id", existingLead.id)
+          .eq("email", existingLead.email)
+          .select("id")
+          .maybeSingle()
+        if (refreshError) throw refreshError
+        if (refreshedLead?.id) refreshed += 1
+      }
       continue
     }
     if (suppressedEmails.has(email)) {
@@ -218,6 +250,7 @@ async function ingestHomeHarvestListings(listings) {
         strategySourceContractVersion: 1,
         listingFetchedAt: now,
         listingUrl: listing.listing_url || null,
+        listingAgentEmailHash: createHash("sha256").update(email).digest("hex"),
         daysOnMarket: listing.days_on_market || null,
         listPrice: listing.price || null,
         mls: listing.mls || null,
@@ -249,6 +282,7 @@ async function ingestHomeHarvestListings(listings) {
     contactable: contactable.length,
     inserted,
     existing,
+    refreshed,
     suppressed,
     invalid,
     sourceObservedAt: now,
@@ -274,7 +308,7 @@ async function ingestHomeHarvestListings(listings) {
   }, { onConflict: "provider,external_event_id" })
   if (eventError) throw eventError
 
-  return { attempted: listings.length, inserted, existing, suppressed, invalid }
+  return { attempted: listings.length, inserted, existing, refreshed, suppressed, invalid }
 }
 
 function esc(value) {

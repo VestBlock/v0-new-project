@@ -43,6 +43,7 @@ export const DAILY_STRATEGY_OUTPUT_LANES = [
   { key: 'funding_prep', label: 'Funding Prep', group: 'business' },
   { key: 'search_visibility', label: 'AI / Search Visibility', group: 'business' },
   { key: 'ai_receptionist', label: 'Website / AI Receptionist', group: 'business' },
+  { key: 'listing_agents', label: 'Listing Agent Network', group: 'partner' },
   { key: 'buyers', label: 'Buyer Network', group: 'partner' },
   { key: 'lenders', label: 'Lender Network', group: 'partner' },
   { key: 'investors', label: 'Investor Network', group: 'partner' },

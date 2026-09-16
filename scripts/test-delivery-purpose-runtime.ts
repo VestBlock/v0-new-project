@@ -47,6 +47,7 @@ for (const strategyKey of [
   'funding_prep',
   'search_visibility',
   'ai_receptionist',
+  'listing_agents',
   'buyers',
   'lenders',
   'investors',
@@ -112,6 +113,18 @@ const adapter = fs.readFileSync(
   path.join(process.cwd(), 'lib/outreach/outlookDelivery.ts'),
   'utf8'
 )
+const leadAutomation = fs.readFileSync(
+  path.join(process.cwd(), 'lib/leads/dailyAutomation.ts'),
+  'utf8'
+)
+const leadRepository = fs.readFileSync(
+  path.join(process.cwd(), 'lib/leads/repository.ts'),
+  'utf8'
+)
+const leadOutbound = fs.readFileSync(
+  path.join(process.cwd(), 'lib/leads/outbound.ts'),
+  'utf8'
+)
 assert.match(adapter, /sendGuardedOutlookEmail/)
 assert.match(adapter, /deriveRecipientBoundBusinessContactEvidence/)
 assert.match(adapter, /assessVerifiedBusinessColdEmailAdmission/)
@@ -120,5 +133,9 @@ assert.match(adapter, /getOperationalReplyCaptureReadiness/)
 assert.match(adapter, /reserveOutlookColdEmailAttempt/)
 assert.match(adapter, /sendTransactionalEmailWithMicrosoftGraphIdempotently/)
 assert.doesNotMatch(adapter, /sendWithResend|acquireGuardedDeliveryAttempt|getDeliveryCircuitBreaker/)
+assert.match(leadAutomation, /allocation\.group === 'business' \|\| allocation\.key === 'listing_agents'/)
+assert.match(leadAutomation, /isListingAgentIntermediaryLead\(currentLead\)/)
+assert.match(leadRepository, /isListingAgentIntermediaryLead\(lead\).*return 'listing_agents'/)
+assert.match(leadOutbound, /isListingAgentIntermediaryLead\(lead\).*return 'listing_agents'/)
 
 console.log('Delivery-purpose runtime tests passed for Outlook-only fail-closed routing.')

@@ -43,6 +43,8 @@ export type GuardedOutlookEntity = {
   scope: OutreachRecipientScope
   id: string
   recipientEmail: string
+  /** Canonical persisted source used by source-specific delivery gates. */
+  source?: string | null
   /** Current persisted entity metadata, reloaded immediately before dispatch. */
   metadataJson?: Record<string, unknown> | null
   /** Current persisted contact discovery evidence, when stored separately. */
@@ -224,6 +226,7 @@ export async function sendGuardedOutlookEmail(
   let coldAdmission: ReturnType<typeof assessVerifiedBusinessColdEmailAdmission> | null = null
   if (input.purpose === 'cold_outreach') {
     const businessContactEvidence = deriveRecipientBoundBusinessContactEvidence({
+      source: input.entity.source,
       metadataJson,
       contactInfo: cleanRecord(input.entity.contactInfo),
       recipientEmail,

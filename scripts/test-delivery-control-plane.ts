@@ -22,8 +22,11 @@ import {
 import { evaluateDeliveryCircuitBreaker, providerHasDeliveryTelemetry } from '../lib/leads/deliveryHealthCore'
 import {
   classifyDealMachineAcquisitionOutcome,
+  dealMachineCreditsUsedByEvents,
   dealMachineAcquisitionHttpStatus,
   dealMachineAcquisitionPersistenceStatus,
+  dealMachineRunCreditCap,
+  dealMachineSourceEventCredits,
   shouldPersistDealMachineCursor,
 } from '../lib/n8n/dealMachineSourceAcquisitionCore'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '../lib/outreach/commercialCompliance'
@@ -108,6 +111,30 @@ assert.equal(shouldPersistDealMachineCursor({
   creditsReserved: 0,
   fetched: 0,
 }), false)
+
+const completedSourceEvents = [
+  { payload_json: { result: { creditsReserved: 51 } } },
+  { payload_json: { result: { creditsReserved: 44 } } },
+]
+assert.equal(dealMachineSourceEventCredits(completedSourceEvents[0]), 51)
+assert.equal(dealMachineCreditsUsedByEvents(completedSourceEvents), 95)
+assert.equal(
+  dealMachineRunCreditCap({ dailyCap: 500, configuredRunCap: 100, usedBeforeRun: 95 }),
+  100
+)
+assert.equal(
+  dealMachineRunCreditCap({ dailyCap: 500, configuredRunCap: 100, usedBeforeRun: 480 }),
+  20
+)
+assert.equal(
+  dealMachineRunCreditCap({ dailyCap: 500, configuredRunCap: 100, usedBeforeRun: 500 }),
+  0
+)
+assert.equal(
+  dealMachineSourceEventCredits({ payload_json: { creditsReserved: 12 } }),
+  12,
+  'legacy top-level credit ledgers must remain countable'
+)
 const runId = 'run-test-001'
 const runningPayload = buildRevenueLoopJobPayload({
   status: 'running',

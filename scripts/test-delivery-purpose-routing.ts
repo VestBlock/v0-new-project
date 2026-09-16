@@ -43,6 +43,7 @@ const expectedLanePolicyCases = [
   ['funding_prep', 'business', 'b2b_business_contact_required'],
   ['search_visibility', 'business', 'b2b_business_contact_required'],
   ['ai_receptionist', 'business', 'b2b_business_contact_required'],
+  ['listing_agents', 'partner', 'partner_business_contact_required'],
   ['buyers', 'partner', 'partner_business_contact_required'],
   ['lenders', 'partner', 'partner_business_contact_required'],
   ['investors', 'partner', 'partner_business_contact_required'],
@@ -69,8 +70,8 @@ function assertHeldDecision(
   assert.equal(decision.reason, reason)
 }
 
-assert.equal(expectedLanePolicyCases.length, 23, 'Every canonical lane must have an independent expected policy.')
-assert.equal(DELIVERY_LANE_POLICIES.length, 23)
+assert.equal(expectedLanePolicyCases.length, 24, 'Every canonical lane must have an independent expected policy.')
+assert.equal(DELIVERY_LANE_POLICIES.length, 24)
 assert.deepEqual(
   expectedLanePolicyCases.map(([key]) => key),
   DAILY_STRATEGY_OUTPUT_LANES.map((lane) => lane.key),
@@ -143,7 +144,7 @@ assert.equal(
 )
 assert.equal(
   DELIVERY_LANE_POLICIES.filter((policy) => policy.coldOutreach === 'partner_business_contact_required').length,
-  3
+  4
 )
 assert.ok(
   allColdDecisions.every((decision) => decision.provider === 'outlook' || decision.provider === null),
@@ -227,10 +228,40 @@ assert.equal(
 )
 assert.equal(
   isLeadColdEmailProhibited({
+    strategyKey: 'listing_agents',
+    lead: {
+      category: 'seller_lead',
+      lead_type: 'sell_house',
+      source: 'homeharvest_stale_listing',
+      contact_info: {
+        contactRole: 'listing_agent',
+        publicBusinessContact: true,
+      },
+      metadata_json: {
+        strategySourceFamilies: ['homeharvest'],
+        strategyPrimary: 'active-stale-creative',
+        listingUrl: 'https://listing.example.test/property/123',
+        listingAgentEmailHash: 'a'.repeat(64),
+      },
+    },
+  }),
+  false,
+  'A listing-agent recipient must reach the downstream recipient-bound business-evidence gate.'
+)
+assert.equal(
+  isLeadColdEmailProhibited({
+    strategyKey: 'listing_agents',
+    lead: { category: 'seller_lead', lead_type: 'sell_house' },
+  }),
+  true,
+  'Listing-agent attribution alone cannot bypass the seller cold-email hold.'
+)
+assert.equal(
+  isLeadColdEmailProhibited({
     strategyKey: 'dealvault_records',
     lead: { category: 'small_business', lead_type: 'business_funding' },
   }),
   false
 )
 
-console.log('Delivery-purpose routing tests passed for all 23 canonical strategy lanes.')
+console.log('Delivery-purpose routing tests passed for all 24 canonical strategy lanes.')

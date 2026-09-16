@@ -40,7 +40,7 @@
   Legacy compatibility setting only; it does not change the governed provider. Active email delivery is Outlook-only.
 - Instantly is retired from the application: there is no enrollment cron, enqueue callsite, campaign command, source-governor lane, or automatic delivery dependency.
 - Verified B2B Outlook delivery requires fresh, recipient-bound Hunter `status=valid` evidence (maximum age 72 hours) plus fresh affirmative business-contact evidence (maximum age 30 days). Hunter addresses must match the canonical business website domain. Free/webmail is eligible only when the exact address is visibly sourced on the canonical public business website with fresh source URL and confidence evidence. Seller/consumer cold-email lanes remain prohibited.
-- The database-backed Outlook cold budget enforces at most 25 accepted/reserved attempts per rolling 24 hours, at most 2 per scheduler invocation, at most 2 per recipient domain per rolling 24 hours, deterministic fair shares across the seven eligible B2B lanes, weekdays from 15:00 through 21:59 UTC, and stable idempotency. A Graph `202` is provider acceptance, never delivery.
+- The database-backed Outlook cold budget enforces at most 25 accepted/reserved attempts per rolling 24 hours, at most 2 per scheduler invocation, at most 2 per recipient domain per rolling 24 hours, deterministic fair shares across the eight eligible B2B/partner lanes, weekdays from 15:00 through 21:59 UTC, and stable idempotency. A Graph `202` is provider acceptance, never delivery.
 - `RESEND_WEBHOOK_SECRET`
   Dormant Resend webhook verification only; it is not an active Outlook delivery dependency.
 - Marketing delivery cannot be authorized by a request boolean. The sender must load a current `next_move_questionnaires` consent record, including its consent timestamp and recipient match, immediately before routing. Deleted, revoked, stale, mismatched, boolean-only, and unavailable evidence fails closed.
@@ -59,7 +59,7 @@
 - `OUTREACH_REPLY_CAPTURE_MAX_AGE_MINUTES=120`
   Maximum age of a successful whole-mailbox sync before live sending closes.
 - `VESTBLOCK_DAILY_OUTREACH_TARGET=1000`
-  Canonical daily production-output target shared across all 23 strategy lanes. Allocation is 43 per lane plus one rotating output for 11 lanes each Chicago business day. It governs sourcing, qualification, and draft preparation; it is not a promise that 1,000 emails will be accepted or delivered. Provider capacity, consent, channel policy, and delivery health independently cap delivery.
+  Canonical daily production-output target shared across all 24 strategy lanes. Allocation is 41 per lane plus one rotating output for 16 lanes each Chicago business day. Sixteen seller lanes plus the listing-agent intermediary lane direct roughly 70% of the plan toward real-estate acquisition. It governs sourcing, qualification, and draft preparation; it is not a promise that 1,000 emails will be accepted or delivered. Provider capacity, consent, channel policy, and delivery health independently cap delivery.
 - `OUTREACH_DISPATCH_CRON_SEND`
 - `AUTO_SEND_ENABLED=true`
 - `LEADS_AUTO_SEND_APPROVED=true`

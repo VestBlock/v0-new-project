@@ -19,6 +19,10 @@ import {
   advanceDealMachineCursor,
   decideDealMachineSearchBudget,
 } from '@/lib/dealmachine/budget'
+import {
+  extractDealMachinePhoneRecords,
+  usableDealMachinePhoneRecords,
+} from '@/lib/dealmachine/phoneEvidence'
 
 type RawRecord = Record<string, any>
 
@@ -68,12 +72,6 @@ function labelValue(value: unknown) {
   return String(value ?? '').trim()
 }
 
-function normalizePhone(value: unknown) {
-  const digits = String(value || '').replace(/\D/g, '')
-  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1)
-  return digits.length === 10 ? digits : ''
-}
-
 function contactEmails(contact: RawRecord) {
   const rows = Array.isArray(contact?.emails)
     ? contact.emails
@@ -90,22 +88,7 @@ function contactEmails(contact: RawRecord) {
 }
 
 function contactPhones(contact: RawRecord) {
-  const rows = Array.isArray(contact?.phones)
-    ? contact.phones
-    : Array.isArray(contact?.phone_numbers)
-      ? contact.phone_numbers
-      : [contact?.phone, contact?.phone_number]
-  return Array.from(new Set(
-    rows
-      .filter((entry) => {
-        if (!entry || typeof entry !== 'object') return true
-        return entry.do_not_call !== true && entry.dnc !== true && !/do not call|\bdnc\b/i.test(String(entry.status || ''))
-      })
-      .map((entry) => normalizePhone(
-        typeof entry === 'string' ? entry : entry?.number || entry?.phone || entry?.phone_number || entry?.value
-      ))
-      .filter(Boolean)
-  ))
+  return usableDealMachinePhoneRecords(extractDealMachinePhoneRecords(contact)).map((record) => record.number)
 }
 
 function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: string): NormalizedLeadInput | null {
@@ -116,7 +99,9 @@ function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: stri
   const contacts = peopleAnchor ? [raw] : Array.isArray(raw.contacts) ? raw.contacts : []
   const contact = contacts.find((row) => contactEmails(row).length || contactPhones(row).length) || contacts[0] || {}
   const emails = contactEmails(contact)
-  const phones = contactPhones(contact)
+  const phoneRecords = extractDealMachinePhoneRecords(contact)
+  const usablePhoneRecords = usableDealMachinePhoneRecords(phoneRecords)
+  const phones = usablePhoneRecords.map((record) => record.number)
   const propertyId = String(property.dm_property_id || property.property_id || '').trim()
   const personId = String(contact.dm_person_id || contact.person_id || '').trim()
   const propertyAddress = String(property.full_address || property.property_address_full || '').trim()
@@ -168,6 +153,13 @@ function normalizeSearchRecord(raw: RawRecord, plan: RawRecord, observedAt: stri
       ownerName,
       emails,
       phones,
+      phoneRecords,
+      dncClearPhones: usablePhoneRecords
+        .filter((record) => record.doNotCall === false)
+        .map((record) => record.number),
+      mobilePhones: usablePhoneRecords
+        .filter((record) => record.type === 'mobile')
+        .map((record) => record.number),
       smsConsent: false,
       smsOutreachAllowed: false,
       phoneUse: 'manual_review_only',

@@ -114,9 +114,9 @@ for (const source of [partnerRouteSource, buyerRouteSource, investorPipelineRout
 
 const partnerPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-15T17:00:00.000Z'))
 const partnerTargets = [partnerPlan.byKey.buyers, partnerPlan.byKey.lenders, partnerPlan.byKey.investors]
-assert.ok(partnerTargets.every((target) => target === 43 || target === 44))
+assert.ok(partnerTargets.every((target) => target === 41 || target === 42))
 assert.equal(
-  partnerTargets.reduce((sum, target) => sum + target, 0),
+  partnerTargets.reduce((sum, target) => sum + target, 0) + partnerPlan.byKey.listing_agents,
   partnerPlan.groupTotals.partner
 )
 for (const source of [buyerAutomationSource, lenderAutomationSource, investorAutomationSource]) {
@@ -129,7 +129,7 @@ assert.match(investorAutomationSource, /runDailyInvestorSend\(sendLimit/)
 assert.doesNotMatch(
   investorServiceSource,
   /INVESTORS_DAILY_SEND_LIMIT/,
-  'legacy investor caps must not override the canonical 23-lane allocation'
+  'legacy investor caps must not override the canonical lane allocation'
 )
 assert.match(partnerRouteSource, /canonicalSendAllocations/)
 assert.match(partnerRouteSource, /let invocationRemaining = 2/)

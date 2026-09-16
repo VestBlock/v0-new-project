@@ -26,6 +26,7 @@ import {
   normalizeStrategyLeadMemberships,
   type StrategyLeadMembershipShape,
 } from '@/lib/outreach/strategyMembershipShape'
+import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 import {
   chicagoBusinessDate,
   DAILY_STRATEGY_OUTPUT_LANES,
@@ -1070,6 +1071,7 @@ export async function listEmailOutreachForSendQueue(
         | StrategyLeadMembershipShape[]
         | null
     }) | null
+    if (lead && isListingAgentIntermediaryLead(lead)) return 'listing_agents'
     const memberships = normalizeStrategyLeadMemberships(lead?.strategy_lead_memberships).sort(
       (left, right) => Date.parse(String(right.created_at || '')) - Date.parse(String(left.created_at || ''))
     )
@@ -1080,7 +1082,7 @@ export async function listEmailOutreachForSendQueue(
     ]
     for (const candidate of candidates) {
       const lane = getDailyStrategyOutputLane(String(candidate || ''))
-      if (lane && lane.group !== 'partner') return lane.key
+      if (lane && (lane.group !== 'partner' || lane.key === 'listing_agents')) return lane.key
     }
     return null
   }
@@ -1115,7 +1117,7 @@ export async function listEmailOutreachForSendQueue(
   while (balanced.length < limit) {
     let progressed = false
     for (const lane of DAILY_STRATEGY_OUTPUT_LANES) {
-      if (lane.group === 'partner') continue
+      if (lane.group === 'partner' && lane.key !== 'listing_agents') continue
       const bucket = buckets.get(lane.key)
       const row = bucket?.shift()
       if (!row) continue

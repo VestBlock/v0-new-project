@@ -3,6 +3,10 @@ import {
   type DailyStrategyOutputGroup,
   type DailyStrategyOutputLaneKey,
 } from '@/lib/outreach/dailyStrategyOutputCore'
+import {
+  isListingAgentIntermediaryLead,
+  type ListingAgentIntermediaryRecord,
+} from '@/lib/outreach/listingAgentCore'
 import { assessDurableMarketingConsentEvidence } from '@/lib/outreach/marketingConsentCore'
 
 export const DELIVERY_PURPOSES = ['transactional', 'marketing', 'cold_outreach'] as const
@@ -27,7 +31,7 @@ export type DeliveryLanePolicy = {
 }
 
 /**
- * Delivery classification is derived from the canonical 23-lane catalog so a
+ * Delivery classification is derived from the canonical lane catalog so a
  * new strategy cannot silently inherit an email provider. Adding or moving a
  * canonical group requires an explicit policy above and corresponding tests.
  */
@@ -100,17 +104,27 @@ export function getDeliveryLanePolicy(strategyKey: string) {
 
 /**
  * Entity classification is an independent safety boundary. Strategy
- * attribution is mutable, so a seller record must remain in the non-email
- * channel even when it is accidentally attached to a B2B lane.
+ * attribution is mutable, so a seller record remains in the non-email channel
+ * unless the dedicated listing-agent intermediary lane is selected. That lane
+ * still fails closed downstream without recipient-bound business evidence.
  */
 export function isLeadColdEmailProhibited(input: {
   strategyKey: string
-  lead: { category?: string | null; lead_type?: string | null }
+  lead: ListingAgentIntermediaryRecord & {
+    category?: string | null
+    lead_type?: string | null
+  }
 }) {
   const category = String(input.lead.category || '').trim().toLowerCase()
   const leadType = String(input.lead.lead_type || '').trim().toLowerCase()
   const entityIsSeller = category === 'seller_lead' || leadType === 'sell_house'
-  return entityIsSeller || getDeliveryLanePolicy(input.strategyKey)?.group === 'seller'
+  const lane = getDeliveryLanePolicy(input.strategyKey)
+  // The listing-agent lane addresses a verified business intermediary. It is
+  // still subject to recipient-bound business evidence in the Outlook adapter;
+  // every direct-owner seller lane remains held from cold email.
+  const verifiedIntermediaryLane =
+    lane?.key === 'listing_agents' && isListingAgentIntermediaryLead(input.lead)
+  return (entityIsSeller && !verifiedIntermediaryLane) || lane?.group === 'seller'
 }
 
 function decisionContext(

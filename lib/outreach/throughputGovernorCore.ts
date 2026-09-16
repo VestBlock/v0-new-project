@@ -136,7 +136,7 @@ function allocateVerifiedCanaryOutput(target: number, now?: Date): DailyStrategy
  * five-message allowance for the verified lender path. Concentrating the
  * sender-health test prevents human-review seller lanes, or an empty rotating
  * lane, from starving the evidence needed to progress. Normal ramp stages keep
- * the even 23-lane allocation. This function is intentionally side-effect free
+ * the even canonical-lane allocation. This function is intentionally side-effect free
  * so every sender can use the same decision before an atomic reservation.
  */
 export function evaluateOutreachThroughputGovernor(

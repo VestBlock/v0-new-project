@@ -9,6 +9,7 @@ import {
   HUNTER_SEND_VERIFICATION_DEFAULT_MAX_AGE_MS,
   type HunterSendVerificationCache,
 } from '@/lib/outreach/hunterSendVerificationCore'
+import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 
 export const VERIFIED_BUSINESS_CONTACT_EVIDENCE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000
 const FUTURE_EVIDENCE_SKEW_MS = 5 * 60 * 1_000
@@ -142,6 +143,7 @@ export function assessVerifiedBusinessContactEvidence(
  * booleans or persisted evidence blobs cannot authorize a new cold send.
  */
 export function deriveRecipientBoundBusinessContactEvidence(input: {
+  source?: string | null
   metadataJson?: Record<string, unknown> | null
   contactInfo?: Record<string, unknown> | null
   recipientEmail?: string | null
@@ -188,6 +190,29 @@ export function deriveRecipientBoundBusinessContactEvidence(input: {
       }, now)
       if (assessed.evidence) return assessed.evidence
     }
+  }
+
+  const listingUrl = httpUrl(metadata.listingUrl || metadata.sourceUrl)
+  const listingObservedAt = metadata.sourceObservedAt || metadata.listingFetchedAt
+  const listingAgentEmailHash = String(metadata.listingAgentEmailHash || '').trim().toLowerCase()
+  if (
+    isListingAgentIntermediaryLead({
+      source: input.source,
+      contact_info: contactInfo,
+      metadata_json: metadata,
+    }) &&
+    listingUrl &&
+    listingAgentEmailHash === recipientHash
+  ) {
+    const assessed = assessVerifiedBusinessContactEvidence({
+      confirmed: true,
+      contactType: 'business',
+      source: 'verified_listing_feed_agent_contact',
+      observedAt: listingObservedAt,
+      recipientHash,
+      sourceUrl: listingUrl,
+    }, now)
+    if (assessed.evidence) return assessed.evidence
   }
 
   const hunter = metadata.hunterContactEnrichment

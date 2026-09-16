@@ -268,7 +268,10 @@ export async function runCommandCenterAutopilot(
   const requestedSend = Boolean(options.send && !dryRun)
   const snapshot = buildCommandCenterAutopilotSnapshot(data)
   const execution = dispatch || dryRun
-    ? await runStrategyExecutionEngine({ dryRun: !dispatch, syncDealMachine: true })
+    // Paid DealMachine acquisition has one idempotent owner with a shared
+    // cursor and daily credit ledger: /api/cron/dealmachine-v2-acquisition.
+    // Autopilot still qualifies and drafts from stored seller inventory.
+    ? await runStrategyExecutionEngine({ dryRun: !dispatch, syncDealMachine: false })
     : null
   const persist = dispatch || dryRun ? await persistAutopilotRun(data, snapshot, {
     dryRun,

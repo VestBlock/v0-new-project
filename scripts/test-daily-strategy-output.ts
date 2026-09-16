@@ -34,10 +34,10 @@ const expectedBusinessKeys = [
   'search_visibility',
   'ai_receptionist',
 ]
-const expectedPartnerKeys = ['buyers', 'lenders', 'investors']
+const expectedPartnerKeys = ['listing_agents', 'buyers', 'lenders', 'investors']
 const expectedKeys = [...expectedSellerKeys, ...expectedBusinessKeys, ...expectedPartnerKeys]
 
-assert.equal(DAILY_STRATEGY_OUTPUT_LANES.length, 23)
+assert.equal(DAILY_STRATEGY_OUTPUT_LANES.length, 24)
 assert.equal(configuredDailyStrategyOutputTarget({}), 1_000)
 assert.equal(
   configuredDailyStrategyOutputTarget({
@@ -59,7 +59,7 @@ assert.deepEqual(DAILY_STRATEGY_OUTPUT_LANES.map((lane) => lane.key), expectedKe
 assert.equal(new Set(expectedKeys).size, expectedKeys.length, 'Every canonical strategy key must be unique')
 assert.equal(DAILY_STRATEGY_OUTPUT_LANES.filter((lane) => lane.group === 'seller').length, 16)
 assert.equal(DAILY_STRATEGY_OUTPUT_LANES.filter((lane) => lane.group === 'business').length, 4)
-assert.equal(DAILY_STRATEGY_OUTPUT_LANES.filter((lane) => lane.group === 'partner').length, 3)
+assert.equal(DAILY_STRATEGY_OUTPUT_LANES.filter((lane) => lane.group === 'partner').length, 4)
 
 const firstDay = new Date('2026-09-15T17:00:00.000Z')
 const nextDay = new Date('2026-09-16T17:00:00.000Z')
@@ -68,16 +68,16 @@ const defaultTargets = defaultPlan.allocations.map((allocation) => allocation.ta
 
 assert.equal(defaultPlan.target, 1_000)
 assert.equal(defaultTargets.reduce((sum, target) => sum + target, 0), 1_000)
-assert.equal(defaultTargets.filter((target) => target === 44).length, 11)
-assert.equal(defaultTargets.filter((target) => target === 43).length, 12)
+assert.equal(defaultTargets.filter((target) => target === 42).length, 16)
+assert.equal(defaultTargets.filter((target) => target === 41).length, 8)
 assert.ok(Math.max(...defaultTargets) - Math.min(...defaultTargets) <= 1)
 assert.deepEqual(defaultPlan.allocations.map((allocation) => allocation.key), expectedKeys, 'Allocation output order must stay canonical')
 
 const nextPlan = allocateDailyStrategyOutput(1_000, nextDay)
 assert.notEqual(nextPlan.rotationOffset, defaultPlan.rotationOffset)
 assert.notDeepEqual(
-  nextPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
-  defaultPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
+  nextPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
+  defaultPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
   'The remainder lanes must rotate on the next Chicago business date'
 )
 
@@ -89,7 +89,7 @@ const smallPlan = allocateDailyStrategyOutput(5, firstDay)
 const smallTargets = smallPlan.allocations.map((allocation) => allocation.target)
 assert.equal(smallTargets.reduce((sum, target) => sum + target, 0), 5)
 assert.equal(smallTargets.filter((target) => target === 1).length, 5)
-assert.equal(smallTargets.filter((target) => target === 0).length, 18)
+assert.equal(smallTargets.filter((target) => target === 0).length, 19)
 assert.ok(Math.max(...smallTargets) - Math.min(...smallTargets) <= 1)
 
 const zeroPlan = allocateDailyStrategyOutput(0, firstDay)

@@ -6,7 +6,9 @@ import { syncDealMachineLeadSource, type DealMachineSyncResult } from '@/lib/dea
 import { hasDealMachineCredentials } from '@/lib/dealmachine/v2-client.mjs'
 import {
   classifyDealMachineAcquisitionOutcome,
+  dealMachineCreditsUsedByEvents,
   dealMachineAcquisitionPersistenceStatus,
+  dealMachineRunCreditCap,
   shouldPersistDealMachineCursor,
   type DealMachineAcquisitionOutcome,
 } from '@/lib/n8n/dealMachineSourceAcquisitionCore'
@@ -108,11 +110,6 @@ function dayBounds(date: string) {
 function numericValue(value: unknown) {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-function sourceEventCredits(row: SourceEventRow) {
-  const payload = row.payload_json || {}
-  return numericValue(payload.creditsReserved ?? payload.creditsUsed ?? payload.credits_used)
 }
 
 function compactResult(input: {
@@ -254,8 +251,8 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     .gte('occurred_at', bounds.start)
     .lt('occurred_at', bounds.end)
   if (today.error) throw today.error
-  const usedBeforeRun = ((today.data as SourceEventRow[] | null) || []).reduce((sum, row) => sum + sourceEventCredits(row), 0)
-  const runCap = Math.min(configuredRunCap, Math.max(0, dailyCap - usedBeforeRun))
+  const usedBeforeRun = dealMachineCreditsUsedByEvents((today.data as SourceEventRow[] | null) || [])
+  const runCap = dealMachineRunCreditCap({ dailyCap, configuredRunCap, usedBeforeRun })
   const receivedAt = new Date().toISOString()
   const receivedPayload = { trigger: 'n8n', date, slot, dailyCap, usedBeforeRun, runCap, startedAt: receivedAt }
   const { error: insertError } = await admin.from('strategy_source_events').insert({
@@ -294,8 +291,10 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     pageSize: envInt('DEALMACHINE_DAILY_ROWS_PER_STRATEGY', 10, 50),
     maxCredits: runCap,
     startAfter: cursor,
-    includeLowball: true,
-    maxLowballShare: 0.05,
+    // Lowball remains a manual-review experiment and must not consume the
+    // autonomous paid-source budget.
+    includeLowball: false,
+    maxLowballShare: 0,
   })
   const completedAt = new Date().toISOString()
   const payload = {

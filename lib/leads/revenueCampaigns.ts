@@ -1,4 +1,5 @@
 import type { LeadRecord, OutreachMessageRecord } from '@/lib/leads/types'
+import { OUTREACH_UNSUBSCRIBE_NOTES } from '@/lib/leads/constants'
 import { getOutreachV2FitIssue, isOutreachV2Enabled, validateOutreachV2Copy } from '@/lib/leads/outreachV2'
 
 export type RevenueCampaignKey =
@@ -177,6 +178,24 @@ export const REVENUE_CAMPAIGNS: RevenueCampaign[] = [
     terms: [],
   },
 ]
+
+const EMAIL_OPT_OUT_PATTERN = /opt out|unsubscribe|do not contact/i
+
+/**
+ * Repairs the compliance metadata without rewriting approved, personalized
+ * message copy. Older drafts can predate the required opt-out field, so the
+ * live dispatcher must be able to make that narrow, deterministic repair.
+ */
+export function repairMissingEmailOptOutNote<
+  T extends { compliance_note?: string | null },
+>(message: T): T {
+  const complianceNote = String(message.compliance_note || '').trim()
+  if (EMAIL_OPT_OUT_PATTERN.test(complianceNote)) return message
+  return {
+    ...message,
+    compliance_note: OUTREACH_UNSUBSCRIBE_NOTES.email,
+  }
+}
 
 export const PRIMARY_REVENUE_CAMPAIGNS = REVENUE_CAMPAIGNS.filter((campaign) => campaign.primary)
 export const REVENUE_CAMPAIGN_ORDER = REVENUE_CAMPAIGNS.map((campaign) => campaign.label)

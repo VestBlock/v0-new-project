@@ -18,7 +18,10 @@ import {
   getStrategyLeadProvenance,
   isStrategyEngineAutoApprovalAllowed,
 } from '../lib/admin/strategyLeadProvenance'
-import { validateOutreachMessageQuality } from '../lib/leads/revenueCampaigns'
+import {
+  repairMissingEmailOptOutNote,
+  validateOutreachMessageQuality,
+} from '../lib/leads/revenueCampaigns'
 import type { LeadRecord } from '../lib/leads/types'
 import { allocateDailyStrategyOutput } from '../lib/outreach/dailyStrategyOutputCore'
 
@@ -63,28 +66,28 @@ assert.deepEqual(
   'The strategy-engine catalog must stay aligned with the canonical daily seller allocation'
 )
 assert.ok(
-  canonicalSellerAllocations.every((allocation) => allocation.target === 43 || allocation.target === 44),
-  'A 1,000-output day must allocate either 43 or 44 drafts to each enabled seller lane'
+  canonicalSellerAllocations.every((allocation) => allocation.target === 41 || allocation.target === 42),
+  'A 1,000-output day must allocate either 41 or 42 drafts to each enabled seller lane'
 )
 
 const rotatedOutputPlan = allocateDailyStrategyOutput(1_000, new Date('2026-09-16T18:00:00.000Z'))
 assert.notDeepEqual(
-  rotatedOutputPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
-  canonicalOutputPlan.allocations.filter((allocation) => allocation.target === 44).map((allocation) => allocation.key),
-  'The eleven 44-draft lanes must rotate on the next Chicago business date'
+  rotatedOutputPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
+  canonicalOutputPlan.allocations.filter((allocation) => allocation.target === 42).map((allocation) => allocation.key),
+  'The sixteen 42-draft lanes must rotate on the next Chicago business date'
 )
 const fullRotationBonusCounts = new Map<string, number>()
 for (let dayOffset = 0; dayOffset < canonicalOutputPlan.laneCount; dayOffset += 1) {
   const plan = allocateDailyStrategyOutput(1_000, new Date(Date.UTC(2026, 8, 15 + dayOffset, 18)))
   for (const allocation of plan.allocations) {
-    if (allocation.target === 44) {
+    if (allocation.target === 42) {
       fullRotationBonusCounts.set(allocation.key, (fullRotationBonusCounts.get(allocation.key) || 0) + 1)
     }
   }
 }
 assert.ok(
-  canonicalOutputPlan.allocations.every((allocation) => fullRotationBonusCounts.get(allocation.key) === 11),
-  'Every lane must receive the 44th slot exactly eleven times during a complete 23-day rotation'
+  canonicalOutputPlan.allocations.every((allocation) => fullRotationBonusCounts.get(allocation.key) === 16),
+  'Every lane must receive the 42nd slot exactly sixteen times during a complete 24-day rotation'
 )
 
 const cappedLane = canonicalOutputPlan.allocations.find((allocation) => allocation.key === 'builder-infill-teardown')
@@ -251,6 +254,44 @@ assert.equal(
     },
   }),
   null
+)
+
+const staleDraftWithoutCompliance = {
+  subject: creativeDraft.subject,
+  body: `${creativeDraft.body}\n\nIf this is not relevant, reply opt out.`,
+  compliance_note: null,
+}
+assert.equal(
+  validateOutreachMessageQuality({ lead: staleListing, message: staleDraftWithoutCompliance }),
+  'missing_opt_out_note'
+)
+const complianceRepairedDraft = repairMissingEmailOptOutNote(staleDraftWithoutCompliance)
+assert.equal(complianceRepairedDraft.subject, staleDraftWithoutCompliance.subject)
+assert.equal(complianceRepairedDraft.body, staleDraftWithoutCompliance.body)
+assert.match(String(complianceRepairedDraft.compliance_note), /opt out/i)
+assert.equal(
+  validateOutreachMessageQuality({ lead: staleListing, message: complianceRepairedDraft }),
+  null,
+  'The dispatcher must repair legacy compliance metadata without rewriting seller copy'
+)
+const customCompliantDraft = {
+  ...staleDraftWithoutCompliance,
+  compliance_note: 'Please reply do not contact and we will close the conversation.',
+}
+assert.equal(
+  repairMissingEmailOptOutNote(customCompliantDraft),
+  customCompliantDraft,
+  'A compliant custom note must be preserved byte-for-byte'
+)
+const stillInvalidAfterComplianceRepair = repairMissingEmailOptOutNote({
+  subject: '',
+  body: staleDraftWithoutCompliance.body,
+  compliance_note: null,
+})
+assert.equal(
+  validateOutreachMessageQuality({ lead: staleListing, message: stillInvalidAfterComplianceRepair }),
+  'missing_subject',
+  'Adding the compliance note must not bypass an unrelated copy-quality blocker'
 )
 
 const staleOnMarketLead = lead({

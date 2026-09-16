@@ -8,9 +8,11 @@ import {
   assessVerifiedBusinessColdEmailAdmission,
   deriveRecipientBoundBusinessContactEvidence,
 } from '../lib/outreach/verifiedBusinessColdEmail'
+import { isListingAgentIntermediaryLead } from '../lib/outreach/listingAgentCore'
 
 const now = new Date('2026-09-15T18:00:00.000Z')
 const recipientEmail = 'vestblock.partner@gmail.com'
+const listingAgentEmailHash = hashHunterVerificationEmail(recipientEmail)
 const publicContactInfo = {
   publicEmailEnrichment: {
     provider: 'public_website',
@@ -88,6 +90,100 @@ assert.equal(
   }),
   null,
   'a caller-provided evidence blob cannot authorize a new cold send'
+)
+
+const listingAgentEvidence = deriveRecipientBoundBusinessContactEvidence({
+  source: 'homeharvest_stale_listing',
+  metadataJson: {
+    strategyPrimary: 'active-stale-creative',
+    strategySourceFamilies: ['homeharvest'],
+    sourceObservedAt: now.toISOString(),
+    listingUrl: 'https://listing.example.test/property/123',
+    listingAgentEmailHash,
+  },
+  contactInfo: {
+    contactRole: 'listing_agent',
+    publicBusinessContact: true,
+  },
+  recipientEmail,
+  now,
+})
+assert.equal(
+  isListingAgentIntermediaryLead({
+    source: 'homeharvest_stale_listing',
+    metadata_json: {
+      strategyPrimary: 'active-stale-creative',
+      strategySourceFamilies: ['homeharvest'],
+      listingUrl: 'https://listing.example.test/property/123',
+      listingAgentEmailHash,
+    },
+    contact_info: { contactRole: 'listing_agent', publicBusinessContact: true },
+  }),
+  true
+)
+assert.ok(listingAgentEvidence, 'a current listing-feed agent contact is admissible business evidence')
+assert.equal(listingAgentEvidence.source, 'verified_listing_feed_agent_contact')
+assert.equal(
+  assessVerifiedBusinessColdEmailAdmission({
+    strategyKey: 'listing_agents',
+    recipientEmail,
+    hunterEvidence,
+    businessContactEvidence: listingAgentEvidence,
+    now,
+  }).allowed,
+  true,
+  'fresh listing-agent evidence and exact-recipient Hunter verification may enter the partner lane'
+)
+assert.equal(
+  deriveRecipientBoundBusinessContactEvidence({
+    source: 'homeharvest_stale_listing',
+    metadataJson: {
+      strategyPrimary: 'active-stale-creative',
+      strategySourceFamilies: ['homeharvest'],
+      sourceObservedAt: now.toISOString(),
+      listingUrl: 'https://listing.example.test/property/123',
+      listingAgentEmailHash,
+    },
+    contactInfo: { contactRole: 'listing_agent', publicBusinessContact: true },
+    recipientEmail: 'changed-recipient@example.test',
+    now,
+  }),
+  null,
+  'a recipient changed after source observation must not inherit listing-agent business evidence'
+)
+assert.equal(
+  deriveRecipientBoundBusinessContactEvidence({
+    source: 'csv_import',
+    metadataJson: {
+      strategyPrimary: 'active-stale-creative',
+      strategySourceFamilies: ['homeharvest'],
+      sourceObservedAt: now.toISOString(),
+      listingUrl: 'https://listing.example.test/property/123',
+      listingAgentEmailHash,
+    },
+    contactInfo: { contactRole: 'listing_agent', publicBusinessContact: true },
+    recipientEmail,
+    now,
+  }),
+  null,
+  'lookalike metadata from a non-HomeHarvest lead source must not authorize outreach'
+)
+assert.equal(
+  deriveRecipientBoundBusinessContactEvidence({
+    source: 'homeharvest_stale_listing',
+    metadataJson: {
+      strategyPrimary: 'active-stale-creative',
+      strategySourceFamilies: ['homeharvest'],
+      sourceObservedAt: '2026-07-01T00:00:00.000Z',
+      listingUrl: 'https://listing.example.test/property/old',
+      listingAgentEmailHash,
+    },
+    contactInfo: { contactRole: 'listing_agent', publicBusinessContact: true },
+    recipientEmail,
+    now,
+  }),
+  null,
+  'stale listing-feed evidence must not authorize new agent outreach'
 )
 
 const corporateRecipient = 'ops@example-business.test'

@@ -2,6 +2,50 @@ export type DealMachineAcquisitionOutcome = 'completed' | 'partial' | 'blocked' 
 
 type StrategyRunLike = { status?: string | null }
 
+type SourceEventLike = {
+  payload_json?: Record<string, unknown> | null
+}
+
+function positiveCreditValue(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+/**
+ * Completed acquisition events persist the authoritative charge inside
+ * payload.result. Legacy events used a top-level field, so both shapes must be
+ * counted before another paid slot is admitted.
+ */
+export function dealMachineSourceEventCredits(row: SourceEventLike) {
+  const payload = row.payload_json || {}
+  const nestedResult = payload.result && typeof payload.result === 'object'
+    ? payload.result as Record<string, unknown>
+    : {}
+  return positiveCreditValue(
+    nestedResult.creditsReserved ??
+      nestedResult.creditsUsed ??
+      nestedResult.credits_used ??
+      payload.creditsReserved ??
+      payload.creditsUsed ??
+      payload.credits_used
+  )
+}
+
+export function dealMachineCreditsUsedByEvents(rows: readonly SourceEventLike[]) {
+  return rows.reduce((sum, row) => sum + dealMachineSourceEventCredits(row), 0)
+}
+
+export function dealMachineRunCreditCap(input: {
+  dailyCap: number
+  configuredRunCap: number
+  usedBeforeRun: number
+}) {
+  return Math.min(
+    Math.max(0, input.configuredRunCap),
+    Math.max(0, input.dailyCap - input.usedBeforeRun)
+  )
+}
+
 export function classifyDealMachineAcquisitionOutcome(result: {
   ok: boolean
   fetched?: number | null

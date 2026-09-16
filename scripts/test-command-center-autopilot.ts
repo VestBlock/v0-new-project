@@ -216,6 +216,25 @@ assert.equal(
 )
 
 const commandCenterSource = readFileSync(resolve(process.cwd(), 'lib/admin/commandCenter.ts'), 'utf8')
+const autonomousOperatingSystemSource = readFileSync(
+  resolve(process.cwd(), 'lib/admin/autonomousOperatingSystem.ts'),
+  'utf8'
+)
+const strategyEngineRouteSource = readFileSync(
+  resolve(process.cwd(), 'app/api/cron/strategy-engine/route.ts'),
+  'utf8'
+)
+assert.match(autonomousOperatingSystemSource, /syncDealMachine:\s*false/)
+assert.doesNotMatch(
+  autonomousOperatingSystemSource,
+  /syncDealMachine:\s*true/,
+  'Command-center autopilot must not bypass the sole paid DealMachine acquisition owner'
+)
+assert.match(strategyEngineRouteSource, /syncDealMachine:\s*false/)
+assert.match(
+  strategyEngineRouteSource,
+  /Paid DealMachine acquisition is owned exclusively by \/api\/cron\/dealmachine-v2-acquisition/
+)
 assert.match(commandCenterSource, /inspectOutlookColdBudget/)
 assert.match(commandCenterSource, /outlook-cold-b2b-rolling-budget/)
 assert.match(commandCenterSource, /provider_delivery_events/)

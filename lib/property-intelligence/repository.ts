@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizePropertyAddressKey } from '@/lib/property-intelligence/address'
+import { cleanupPartialPropertyImport } from '@/lib/property-intelligence/importCleanup'
 import { detectVacantLot } from '@/lib/property-intelligence/scoring'
 import { generateSafeOutreachSummary } from '@/lib/property-intelligence/outreach'
 import { buildAttomSignals, finalizeAttomFacts, type AttomPropertyFacts, type AttomStrategyRoute } from '@/lib/property-intelligence/attom-strategy'
@@ -13,6 +14,11 @@ import type {
 function nullIfBlank(value?: string | null) {
   const cleaned = String(value || '').trim()
   return cleaned || null
+}
+
+function importFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || 'Property intelligence import failed.')
+  return message.slice(0, 2000)
 }
 
 function ownerPayload(input: NormalizedPropertyInput) {
@@ -146,75 +152,105 @@ export async function importPropertyIntelligenceRows(input: {
   let signalsCreated = 0
   const scoreCounts = { high: 0, medium: 0, low: 0 }
 
-  for (const row of rows) {
-    const duplicate = await findDuplicateProperty(row.input)
-    if (duplicate?.id) {
-      deduped += 1
-      continue
-    }
+  try {
+    for (const row of rows) {
+      const duplicate = await findDuplicateProperty(row.input)
+      if (duplicate?.id) {
+        deduped += 1
+        continue
+      }
 
-    const owner = ownerPayload(row.input)
-    const { data: ownerRecord, error: ownerError } = await admin.from('owner_entities').insert(owner).select('id').single()
-    if (ownerError) throw ownerError
+      let ownerId: string | null = null
+      let propertyId: string | null = null
+      try {
+        const owner = ownerPayload(row.input)
+        const { data: ownerRecord, error: ownerError } = await admin.from('owner_entities').insert(owner).select('id').single()
+        if (ownerError) throw ownerError
+        ownerId = ownerRecord.id
 
-    const { data: property, error: propertyError } = await admin
-      .from('property_intelligence_records')
-      .insert(propertyPayload(row.input, source.id, importRun.id, ownerRecord.id))
-      .select('id')
-      .single()
-    if (propertyError) throw propertyError
+        const { data: property, error: propertyError } = await admin
+          .from('property_intelligence_records')
+          .insert(propertyPayload(row.input, source.id, importRun.id, ownerRecord.id))
+          .select('id')
+          .single()
+        if (propertyError) throw propertyError
+        propertyId = property.id
 
-    if (row.signals.length) {
-      const { error: signalError } = await admin.from('property_signals').insert(
-        row.signals.map((signal) => ({
+        if (row.signals.length) {
+          const { error: signalError } = await admin.from('property_signals').insert(
+            row.signals.map((signal) => ({
+              property_intelligence_record_id: property.id,
+              signal_type: signal.signal_type,
+              signal_label: signal.signal_label,
+              signal_value: signal.signal_value || null,
+              confidence_score: signal.confidence_score,
+              source_name: signal.source_name || input.sourceName,
+              source_url: signal.source_url || input.sourceUrl || null,
+              raw_fields: signal.raw_fields || row.input.rawFields,
+            }))
+          )
+          if (signalError) throw signalError
+        }
+
+        if (row.input.geometry) {
+          const { error: geometryError } = await admin.from('parcel_geometries').insert({
+            property_intelligence_record_id: property.id,
+            geojson: row.input.geometry,
+            source_name: input.sourceName,
+            confidence_score: input.confidenceLevel || 70,
+          })
+          if (geometryError) throw geometryError
+        }
+
+        const { error: scoreError } = await admin.from('deal_scores').insert({
           property_intelligence_record_id: property.id,
-          signal_type: signal.signal_type,
-          signal_label: signal.signal_label,
-          signal_value: signal.signal_value || null,
-          confidence_score: signal.confidence_score,
-          source_name: signal.source_name || input.sourceName,
-          source_url: signal.source_url || input.sourceUrl || null,
-          raw_fields: signal.raw_fields || row.input.rawFields,
-        }))
-      )
-      if (signalError) throw signalError
+          score: row.dealScore.score,
+          reason_codes: row.dealScore.reason_codes,
+          explanation: row.dealScore.explanation,
+          recommended_next_action: row.dealScore.recommended_next_action,
+          scoring_version: row.dealScore.scoring_version || 'phase1-v1',
+        })
+        if (scoreError) throw scoreError
+      } catch (rowError) {
+        try {
+          await cleanupPartialPropertyImport(admin, { propertyId, ownerId })
+        } catch (cleanupError) {
+          throw new Error(`${importFailureMessage(rowError)} Cleanup failed: ${importFailureMessage(cleanupError)}`)
+        }
+        throw rowError
+      }
+
+      imported += 1
       signalsCreated += row.signals.length
+      if (row.dealScore.score >= 75) scoreCounts.high += 1
+      else if (row.dealScore.score >= 55) scoreCounts.medium += 1
+      else scoreCounts.low += 1
     }
 
-    if (row.input.geometry) {
-      const { error: geometryError } = await admin.from('parcel_geometries').insert({
-        property_intelligence_record_id: property.id,
-        geojson: row.input.geometry,
-        source_name: input.sourceName,
-        confidence_score: input.confidenceLevel || 70,
+    const { error: completionError } = await admin
+      .from('property_intelligence_imports')
+      .update({
+        import_status: 'completed',
+        records_created: imported,
+        records_deduped: deduped,
       })
-      if (geometryError) throw geometryError
+      .eq('id', importRun.id)
+    if (completionError) throw completionError
+  } catch (error) {
+    const { error: failureUpdateError } = await admin
+      .from('property_intelligence_imports')
+      .update({
+        import_status: 'failed',
+        records_created: imported,
+        records_deduped: deduped,
+        error_message: importFailureMessage(error),
+      })
+      .eq('id', importRun.id)
+    if (failureUpdateError) {
+      throw new Error(`${importFailureMessage(error)} Failed to record import failure: ${importFailureMessage(failureUpdateError)}`)
     }
-
-    const { error: scoreError } = await admin.from('deal_scores').insert({
-      property_intelligence_record_id: property.id,
-      score: row.dealScore.score,
-      reason_codes: row.dealScore.reason_codes,
-      explanation: row.dealScore.explanation,
-      recommended_next_action: row.dealScore.recommended_next_action,
-      scoring_version: row.dealScore.scoring_version || 'phase1-v1',
-    })
-    if (scoreError) throw scoreError
-
-    if (row.dealScore.score >= 75) scoreCounts.high += 1
-    else if (row.dealScore.score >= 55) scoreCounts.medium += 1
-    else scoreCounts.low += 1
-    imported += 1
+    throw error
   }
-
-  await admin
-    .from('property_intelligence_imports')
-    .update({
-      import_status: 'completed',
-      records_created: imported,
-      records_deduped: deduped,
-    })
-    .eq('id', importRun.id)
 
   return { imported, deduped, signalsCreated, dataSourceId: source.id as string, importId: importRun.id as string, scoreCounts }
 }

@@ -52,13 +52,21 @@ export async function GET(request: Request) {
     if (!sourceProviders.length) {
       return NextResponse.json({ error: 'At least one valid source provider is required.' }, { status: 400 })
     }
+    if (syncDealMachine === true) {
+      return NextResponse.json(
+        {
+          error: 'Paid DealMachine acquisition is owned exclusively by /api/cron/dealmachine-v2-acquisition.',
+        },
+        { status: 409 }
+      )
+    }
     // Paid DealMachine acquisition is owned by the authenticated n8n source
     // loop. This engine continues qualifying and drafting across all sources
     // without issuing a duplicate lower-budget DealMachine query.
     const result = await runStrategyExecutionEngine({
       dryRun: !execute,
       maxLaneRuns: Number.isFinite(maxLaneRuns) && maxLaneRuns > 0 ? maxLaneRuns : undefined,
-      syncDealMachine: syncDealMachine === true,
+      syncDealMachine: false,
       sourceProviders,
     })
     return NextResponse.json({ success: true, executionEnabled: execute, ...result })

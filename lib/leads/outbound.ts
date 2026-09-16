@@ -11,6 +11,7 @@ import {
 } from '@/lib/outreach/dailyStrategyOutputCore'
 import { isUsableContactEmail } from '@/lib/outreach/email-quality'
 import { ensureFreshHunterSendVerification } from '@/lib/outreach/hunterSendVerification'
+import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 import { sendGuardedOutlookEmail } from '@/lib/outreach/outlookDelivery'
 
 type SendLeadEmailInput = {
@@ -88,6 +89,7 @@ async function resolveLeadStrategy(
   lead: LeadRecord,
   message: OutreachMessageRecord
 ): Promise<DailyStrategyOutputLaneKey | null> {
+  if (isListingAgentIntermediaryLead(lead)) return 'listing_agents'
   const attribution = await getStrategyDeliveryAttribution(lead.id).catch(() => null)
   const evaluation = evaluateOutreachV2Lead(lead, message.subject || '')
   for (const candidate of [attribution?.strategy_key, lead.market_segment, evaluation.segmentKey]) {
@@ -199,6 +201,7 @@ export async function sendLeadOutreachEmail(
       scope: 'lead',
       id: lead.id,
       recipientEmail: lead.email || '',
+      source: lead.source,
       metadataJson: lead.metadata_json,
       contactInfo: lead.contact_info,
       website: lead.website,

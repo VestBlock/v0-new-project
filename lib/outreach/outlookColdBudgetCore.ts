@@ -86,20 +86,22 @@ export function seedOutlookColdBudget(): OutlookColdBudgetMetrics {
   }
 }
 
-/** Three attempts per lane plus four rotating fourth slots = 25 total. */
+/** Distributes the global cap exactly across every eligible lane with rotating remainder slots. */
 export function allocateOutlookColdLaneCaps(now: Date = new Date()) {
   const businessDate = chicagoBusinessDate(now)
   const [year, month, day] = businessDate.split('-').map(Number)
   const dayIndex = Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
   const rotationOffset = ((dayIndex % OUTLOOK_COLD_B2B_LANE_KEYS.length) + OUTLOOK_COLD_B2B_LANE_KEYS.length) % OUTLOOK_COLD_B2B_LANE_KEYS.length
+  const baseCap = Math.floor(OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP / OUTLOOK_COLD_B2B_LANE_KEYS.length)
+  const remainder = OUTLOOK_COLD_B2B_GLOBAL_DAILY_CAP % OUTLOOK_COLD_B2B_LANE_KEYS.length
   const laneCaps = Object.fromEntries(
-    OUTLOOK_COLD_B2B_LANE_KEYS.map((strategyKey) => [strategyKey, 3])
+    OUTLOOK_COLD_B2B_LANE_KEYS.map((strategyKey) => [strategyKey, baseCap])
   ) as Record<DailyStrategyOutputLaneKey, number>
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < remainder; index += 1) {
     const strategyKey = OUTLOOK_COLD_B2B_LANE_KEYS[
       (rotationOffset + index) % OUTLOOK_COLD_B2B_LANE_KEYS.length
     ]
-    laneCaps[strategyKey] = 4
+    laneCaps[strategyKey] = baseCap + 1
   }
   return { businessDate, rotationOffset, laneCaps }
 }

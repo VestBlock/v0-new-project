@@ -234,5 +234,15 @@ assert.match(
   /envInt\('DEALMACHINE_SYNC_MAX_CREDITS', 75\)/,
   'The production source-acquisition fail-closed 75-credit default must remain intact.'
 )
+const autonomousAcquisitionSource = fs.readFileSync(
+  new URL('../lib/n8n/dealMachineSourceAcquisition.ts', import.meta.url),
+  'utf8'
+)
+assert.match(
+  autonomousAcquisitionSource,
+  /includeLowball:\s*false/,
+  'Autonomous DealMachine acquisition must not spend credits on the disabled lowball lane.'
+)
+assert.match(autonomousAcquisitionSource, /maxLowballShare:\s*0/)
 
 console.log('DealMachine v2 strategy tests passed.')

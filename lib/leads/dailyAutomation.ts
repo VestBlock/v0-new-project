@@ -27,7 +27,11 @@ import {
   buildApifyYelpPaidWorkPlan,
   buildOutscraperPaidWorkPlan,
 } from '@/lib/leads/paidSourceBudgetCore'
-import { classifyLeadRevenueCampaign, validateOutreachMessageQuality } from '@/lib/leads/revenueCampaigns'
+import {
+  classifyLeadRevenueCampaign,
+  repairMissingEmailOptOutNote,
+  validateOutreachMessageQuality,
+} from '@/lib/leads/revenueCampaigns'
 import {
   isApifyApproved,
   isGooglePlacesApproved,
@@ -66,6 +70,7 @@ import {
   deriveHunterSendVerificationLimits,
 } from '@/lib/outreach/hunterSendVerificationCore'
 import { isControlledTrialAllowanceFilled } from '@/lib/outreach/outreachDispatchCore'
+import { isListingAgentIntermediaryLead } from '@/lib/outreach/listingAgentCore'
 
 type MarketConfig = {
   id?: string
@@ -1700,10 +1705,12 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
   const outboundReadiness = getOutboundProviderReadiness()
   const replyCaptureReadiness = await getOperationalReplyCaptureReadiness()
   const productionPlan = allocateDailyStrategyOutput(dailyTarget)
-  const businessLaneTargets = Object.fromEntries(
+  const leadEmailLaneTargets = Object.fromEntries(
     productionPlan.allocations.map((allocation) => [
       allocation.key,
-      allocation.group === 'business' ? allocation.target : 0,
+      allocation.group === 'business' || allocation.key === 'listing_agents'
+        ? allocation.target
+        : 0,
     ])
   ) as typeof productionPlan.byKey
   // The database-backed Outlook budget enforces 25/day globally; a single
@@ -1718,7 +1725,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     reason: outboundReadiness.outlook ? 'outlook_guarded_ready' : 'outlook_graph_not_configured',
     allocationPlan: {
       ...productionPlan,
-      byKey: businessLaneTargets,
+      byKey: leadEmailLaneTargets,
     },
   }
   const stagingGate = {
@@ -1747,7 +1754,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
   const throughputCapacity = {
     globalAttemptCount: 0,
     globalRemaining: outlookInvocationCapacity,
-    remainingByLane: businessLaneTargets,
+    remainingByLane: leadEmailLaneTargets,
     leadLaneRemaining: outlookInvocationCapacity,
     partnerLaneRemaining: 0,
   }
@@ -1764,7 +1771,7 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
   })
   const queue = sendLimit > 0
     ? await listEmailOutreachForSendQueue(sendLimit * queueMultiplier, {
-        laneTargets: businessLaneTargets,
+        laneTargets: leadEmailLaneTargets,
         candidatesPerSlot: queueMultiplier,
       })
     : []
@@ -1939,6 +1946,22 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     const effectiveEligible = decision.eligible || allowVerifiedPublicEmail
 
     let qualityIssue = validateOutreachMessageQuality({ lead: currentLead, message: currentRow })
+    if (qualityIssue === 'missing_opt_out_note') {
+      const repairedRow = repairMissingEmailOptOutNote(currentRow)
+      const repairIssue = validateOutreachMessageQuality({ lead: currentLead, message: repairedRow })
+      if (!repairIssue) {
+        if (!options.dryRun) {
+          const updatedRow = await updateOutreachMessage(currentRow.id, {
+            compliance_note: repairedRow.compliance_note,
+          })
+          currentRow = { ...currentRow, ...updatedRow }
+        } else {
+          currentRow = repairedRow
+        }
+        autoRepairedMessageCount += 1
+        qualityIssue = null
+      }
+    }
     if (qualityIssue && isOutreachV2Enabled()) {
       const draft = buildOutreachV2EmailDraft(currentLead)
       const repairedRow = {
@@ -2218,7 +2241,9 @@ async function runDailyLeadSendQueueWithEffectiveMode(options: LeadAutomationOpt
     currentRow = { ...currentRow, ...claimedMessage }
     const revenueCampaign = classifyLeadRevenueCampaign(currentLead, currentRow.subject || '')
     const attribution = await getStrategyDeliveryAttribution(currentLead.id).catch(() => null)
-    const strategyKey = attribution?.strategy_key || revenueCampaign.key
+    const strategyKey = isListingAgentIntermediaryLead(currentLead)
+      ? 'listing_agents'
+      : attribution?.strategy_key || revenueCampaign.key
     const sendIdentity = buildOutboundSendIdentity({
       scope: 'lead',
       entityId: currentLead.id,
