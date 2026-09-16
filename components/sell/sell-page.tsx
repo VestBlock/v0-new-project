@@ -31,6 +31,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { analyticsEvents } from "@/lib/analytics/events"
 import { captureClientEvent } from "@/lib/analytics/client"
 import { sendGoogleAdsConversion } from "@/components/providers/google-ads-provider"
+import { SELLER_SMS_CONSENT_DISCLOSURE } from "@/lib/outreach/sellerSmsConsent"
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
@@ -110,6 +111,7 @@ function getInitialFormData(market?: SellPageMarket) {
     name: "",
     email: "",
     phone: "",
+    smsMarketingConsent: false,
     propertyType: "",
     bedrooms: "",
     bathrooms: "",
@@ -504,6 +506,29 @@ export function SellPage({ market }: SellPageProps) {
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <div className="flex items-start gap-3">
+                          <input
+                            id="smsMarketingConsent"
+                            type="checkbox"
+                            checked={formData.smsMarketingConsent}
+                            onChange={(event) => setFormData((current) => ({
+                              ...current,
+                              smsMarketingConsent: event.target.checked,
+                            }))}
+                            className="mt-1 h-5 w-5 shrink-0 accent-cyan-400"
+                          />
+                          <div className="space-y-2">
+                            <Label htmlFor="smsMarketingConsent" className="block cursor-pointer text-sm leading-6 text-slate-200">
+                              {SELLER_SMS_CONSENT_DISCLOSURE}
+                            </Label>
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              Optional. Review the <a className="underline underline-offset-4 hover:text-white" href="/terms">Terms</a> and <a className="underline underline-offset-4 hover:text-white" href="/privacy">Privacy Policy</a>.
+                            </p>
+                          </div>
                         </div>
                       </div>
 

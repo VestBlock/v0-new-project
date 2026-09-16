@@ -121,4 +121,45 @@ assert.equal(
   'probate lane must not qualify without probate evidence'
 )
 
+const portfolioCandidate = lead({
+  strategyCandidate: 'portfolio-landlord',
+  strategyCandidateReason: 'Repeated ownership evidence is required before treating this lead as a portfolio owner.',
+  strategySignals: ['absentee_owner'],
+})
+portfolioCandidate.niche = 'dealmachine_v2_portfolio-landlord_candidate'
+portfolioCandidate.market_segment = 'portfolio-landlord_candidate'
+portfolioCandidate.outreach_angle = 'Hold until portfolio evidence is attached.'
+portfolioCandidate.pain_signal = 'Verified DealMachine v2 signals: absentee_owner.'
+assert.equal(
+  evaluateLeadStrategyStack(portfolioCandidate, 'portfolio-landlord').eligible,
+  false,
+  'Generated portfolio candidate labels must not manufacture portfolio-owner evidence'
+)
+
+const multifamilyCandidate = lead({
+  strategyCandidate: 'small-multifamily-portfolio',
+  strategyCandidateReason: 'Repeated ownership evidence is required before treating the owner as a portfolio operator.',
+  strategySignals: ['multifamily'],
+})
+multifamilyCandidate.niche = 'dealmachine_v2_small-multifamily-portfolio_candidate'
+multifamilyCandidate.market_segment = 'small-multifamily-portfolio_candidate'
+multifamilyCandidate.outreach_angle = 'Hold until repeated ownership is corroborated.'
+multifamilyCandidate.pain_signal = 'Verified DealMachine v2 signals: multifamily.'
+multifamilyCandidate.form_data = { propertyType: 'Multi Family', units: 4 }
+assert.equal(
+  evaluateLeadStrategyStack(multifamilyCandidate, 'small-multifamily-portfolio').eligible,
+  false,
+  'A multifamily property must not self-qualify as a portfolio from generated labels'
+)
+
+multifamilyCandidate.metadata_json = {
+  ...multifamilyCandidate.metadata_json,
+  portfolioCount: 4,
+}
+assert.equal(
+  evaluateLeadStrategyStack(multifamilyCandidate, 'small-multifamily-portfolio').eligible,
+  true,
+  'Independent repeated-ownership evidence may qualify a multifamily portfolio'
+)
+
 console.log(`Validated ${STRATEGY_EXECUTION_LANES.filter((row) => row.enabled).length} enabled strategy source contracts.`)

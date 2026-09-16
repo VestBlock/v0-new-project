@@ -3,13 +3,14 @@
 /**
  * Build an SMS-ready review queue from raw DealMachine contact exports.
  *
- * DealMachine contact exports mark blocked numbers as "DO NOT CALL"; blank DNC
- * values are treated as not flagged by DealMachine. This script still does not
- * send messages. It prepares a queue for scripts/send-messages-batch.mjs.
+ * A mobile number and a clear DNC result are screening signals, not permission
+ * to send marketing texts. This script only prepares rows that also carry a
+ * durable, affirmative SMS-consent record. It never sends messages.
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 
 const args = process.argv.slice(2)
 const ROOT = process.cwd()
@@ -140,8 +141,36 @@ function isDnc(value) {
   return /do\s*not\s*call|^dnc$|^true$|^yes$|^y$|^1$/i.test(String(value || '').trim())
 }
 
+function isDncClear(value) {
+  return /^(false|no|n|0|not[_ -]?dnc|clear|not[_ -]?flagged)$/i.test(String(value || '').trim())
+}
+
 function isWireless(value) {
   return /wireless|mobile|cell|\bw\b/i.test(String(value || '').trim())
+}
+
+function yes(value) {
+  return /^(1|true|yes|y|granted)$/i.test(String(value || '').trim())
+}
+
+function phoneFingerprint(phone) {
+  const normalized = normalizePhone(phone)
+  return normalized ? createHash('sha256').update(`1${normalized}`).digest('hex') : ''
+}
+
+function hasDurableSmsConsent(row, phone) {
+  if (!yes(row.sms_consent) || !yes(row.sms_outreach_allowed)) return false
+  if (!String(row.sms_consent_version || row.consent_version || '').trim()) return false
+  const consentedAt = Date.parse(String(row.sms_consented_at || row.consented_at || ''))
+  const expectedFingerprint = String(
+    row.sms_consent_phone_fingerprint || row.phone_fingerprint || ''
+  ).trim().toLowerCase()
+  return (
+    Number.isFinite(consentedAt) &&
+    consentedAt <= Date.now() &&
+    /^[a-f0-9]{64}$/.test(expectedFingerprint) &&
+    expectedFingerprint === phoneFingerprint(phone)
+  )
 }
 
 function isResidentLike(row) {
@@ -294,8 +323,17 @@ for (const file of files) {
         reject('already_sent_phone')
         continue
       }
-      if (isDnc(row[`phone_${index}_do_not_call`])) {
+      if (!hasDurableSmsConsent(row, phone)) {
+        reject('missing_or_mismatched_sms_consent')
+        continue
+      }
+      const dncStatus = row[`phone_${index}_do_not_call`]
+      if (isDnc(dncStatus)) {
         reject('do_not_call')
+        continue
+      }
+      if (!isDncClear(dncStatus)) {
+        reject('missing_dnc_status')
         continue
       }
       if (!isWireless(row[`phone_${index}_type`])) {
@@ -311,9 +349,14 @@ for (const file of files) {
         property_address_full: propertyAddress,
         owner_name: ownerName(row),
         phone,
-        do_not_call: 'not_flagged_by_dealmachine',
+        do_not_call: 'false',
         phone_type: row[`phone_${index}_type`] || 'Wireless',
         can_text: 'true',
+        sms_consent: 'true',
+        sms_outreach_allowed: 'true',
+        sms_consented_at: row.sms_consented_at || row.consented_at,
+        sms_consent_version: row.sms_consent_version || row.consent_version,
+        sms_consent_phone_fingerprint: phoneFingerprint(phone),
         source_file: path.relative(ROOT, file),
         text_message: messageFor(row, propertyAddress),
       })
@@ -337,6 +380,11 @@ const columns = [
   'do_not_call',
   'phone_type',
   'can_text',
+  'sms_consent',
+  'sms_outreach_allowed',
+  'sms_consented_at',
+  'sms_consent_version',
+  'sms_consent_phone_fingerprint',
   'source_file',
   'text_message',
 ]

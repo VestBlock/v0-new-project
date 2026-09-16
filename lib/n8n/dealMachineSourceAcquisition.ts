@@ -7,6 +7,7 @@ import { hasDealMachineCredentials } from '@/lib/dealmachine/v2-client.mjs'
 import {
   classifyDealMachineAcquisitionOutcome,
   dealMachineAcquisitionPersistenceStatus,
+  shouldPersistDealMachineCursor,
   type DealMachineAcquisitionOutcome,
 } from '@/lib/n8n/dealMachineSourceAcquisitionCore'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -205,12 +206,11 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     envInt('DEALMACHINE_DAILY_CREDIT_BUDGET', 250, 5_000),
     5_000
   )
-  // DealMachine estimates the smallest useful property-search page at roughly
-  // 60 credits. Splitting a 250-credit daily allowance into six equal pieces
-  // yields 41, which would block every eligible search before it is sent. Use
-  // the established 75-credit search ceiling as a floor; the remaining daily
-  // allowance is still enforced below, so a 250-credit day can never exceed it.
-  const minimumViableRunCap = envInt('DEALMACHINE_AUTOMATION_MIN_RUN_CREDITS', 75, dailyCap)
+  // DealMachine estimates a useful owner/property query at roughly 60 credits.
+  // A 100-credit slot normally fits a second query after the first search's
+  // deduplicated actual charge is known, while the daily cap below still keeps
+  // total spend bounded.
+  const minimumViableRunCap = envInt('DEALMACHINE_AUTOMATION_MIN_RUN_CREDITS', 100, dailyCap)
   const defaultRunCap = Math.min(
     dailyCap,
     Math.max(minimumViableRunCap, Math.floor(dailyCap / Math.max(1, Math.floor(24 / slotHours))))
@@ -328,7 +328,14 @@ export async function runN8nDealMachineSourceAcquisition(now = new Date()): Prom
     updated_at: completedAt,
   }).eq('provider', 'dealmachine').eq('external_event_id', externalEventId)
   if (completionError) throw completionError
-  if (result.creditsReserved > 0 || result.fetched > 0) await saveCursor(result.nextAfter, date, slot)
+  if (shouldPersistDealMachineCursor({
+    cursorBefore: cursor,
+    nextAfter: result.nextAfter,
+    creditsReserved: result.creditsReserved,
+    fetched: result.fetched,
+  })) {
+    await saveCursor(result.nextAfter, date, slot)
+  }
 
   return compactResult({ ok: result.ok, date, slot, dailyCap, usedBeforeRun, runCap, result })
 }

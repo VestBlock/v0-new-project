@@ -2,12 +2,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runNewLeadAutomation } from '@/lib/leads/leadAutomation';
 import { persistPropertyBuyerMatches } from '@/lib/buyers/service';
 import { buildRoughPropertyEstimate, parseCurrencyAmount } from '@/lib/property/roughEstimate';
 import { guardPublicMutation } from '@/lib/security/public-mutation';
+import { sellerSmsConsentEvidence } from '@/lib/outreach/sellerSmsConsent';
 
 const sellerText = (max: number) => z.string().trim().max(max).optional().default('');
 
@@ -18,6 +20,7 @@ const sellLeadSchema = z.object({
   name: z.string().trim().min(2).max(140),
   email: z.string().trim().email().max(320).optional().or(z.literal('')),
   phone: z.string().trim().min(7).max(40),
+  smsMarketingConsent: z.boolean().optional().default(false),
   propertyType: sellerText(120),
   bedrooms: sellerText(20),
   bathrooms: sellerText(20),
@@ -64,6 +67,25 @@ export async function POST(request: NextRequest) {
       );
     }
     const data = parsed.data;
+    const submittedAt = new Date().toISOString();
+    const clientIp = String(request.headers.get('x-forwarded-for') || '')
+      .split(',')[0]
+      .trim();
+    const phoneDigits = data.phone.replace(/\D/g, '');
+    const normalizedSmsPhone = phoneDigits.length === 10
+      ? `1${phoneDigits}`
+      : phoneDigits;
+    const smsConsentEvidence = sellerSmsConsentEvidence({
+      consented: data.smsMarketingConsent,
+      consentedAt: submittedAt,
+      sourcePath: '/sell',
+      phoneFingerprint: createHash('sha256').update(normalizedSmsPhone).digest('hex'),
+      phoneLast4: normalizedSmsPhone.slice(-4),
+      userAgent: request.headers.get('user-agent'),
+      networkFingerprint: clientIp
+        ? createHash('sha256').update(clientIp).digest('hex')
+        : null,
+    });
 
     const supabaseAdmin = createAdminClient();
     const normalizedPropertyAddress = buildPropertyAddress(
@@ -145,7 +167,11 @@ export async function POST(request: NextRequest) {
           name: data.name,
           email: data.email,
           phone: data.phone,
-          bestTimeToCall: data.bestTimeToCall
+          bestTimeToCall: data.bestTimeToCall,
+          smsConsent: Boolean(smsConsentEvidence),
+          smsOutreachAllowed: Boolean(smsConsentEvidence),
+          phoneUse: smsConsentEvidence ? 'consented_seller_follow_up' : 'manual_review_only',
+          smsConsentEvidence,
         },
         form_data: {
           propertyAddress: normalizedPropertyAddress,
@@ -168,6 +194,8 @@ export async function POST(request: NextRequest) {
           attribution: data.attribution || {},
           notes: data.notes,
           reasonForSelling: data.reasonForSelling,
+          smsMarketingConsent: Boolean(smsConsentEvidence),
+          smsConsentEvidence,
           roughEstimate,
           legacyId: legacyLeadId
         },

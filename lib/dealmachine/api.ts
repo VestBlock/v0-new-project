@@ -15,6 +15,10 @@ import {
   hydrateStrategyPlan,
   mergeDealMachineCatalogMetadata,
 } from '@/lib/dealmachine/v2-strategy-catalog.mjs'
+import {
+  advanceDealMachineCursor,
+  decideDealMachineSearchBudget,
+} from '@/lib/dealmachine/budget'
 
 type RawRecord = Record<string, any>
 
@@ -300,8 +304,7 @@ export async function syncDealMachineLeadSource(options: {
   const selectedPlans = Array.from({ length: Math.min(maxPlans, plans.length) }, (_, offset) =>
     plans[(startAfter + offset) % plans.length]
   )
-  const wrapped = startAfter + selectedPlans.length >= plans.length
-  const nextAfter = wrapped ? (startAfter + selectedPlans.length) % plans.length : startAfter + selectedPlans.length
+  let advancedPlanCount = 0
   const rawRows: Array<{ raw: RawRecord; plan: RawRecord }> = []
   const blockers: string[] = []
   const strategyRuns: DealMachineSyncResult['strategyRuns'] = []
@@ -347,19 +350,39 @@ export async function syncDealMachineLeadSource(options: {
         const estimate = await client.estimateRecordSearch(hydrated.searchSourceType, requestBody)
         const cost = estimatedPageCredits(estimate)
         strategyRun.estimatedCredits = cost
-        const wouldExceedRunBudget = creditsReserved + cost > maxCredits
-        const wouldExceedBalance = creditBalance !== null && creditsReserved + cost > creditBalance
-        if (wouldExceedRunBudget || wouldExceedBalance) {
-          blockers.push(
-            `${plan.key}/${plan.market} skipped: estimated ${cost} credits would exceed ${
-              wouldExceedBalance ? 'the reported balance' : `the ${maxCredits}-credit run budget`
-            }.`
-          )
+        const budgetDecision = decideDealMachineSearchBudget({
+          estimatedCost: cost,
+          creditsReserved,
+          maxCredits,
+          creditBalance,
+        })
+        if (budgetDecision === 'block_balance') {
           strategyRun.status = 'skipped_budget'
+          blockers.push(
+            `${plan.key}/${plan.market} requires an estimated ${cost} credits, but the reported DealMachine balance cannot cover this run.`
+          )
+          break
+        }
+        if (budgetDecision === 'defer_run_cap') {
+          strategyRun.status = 'skipped_budget'
+          // Preserve the first unrun strategy as the next cursor. Reaching the
+          // per-run ceiling after useful work is a normal deferral, not a
+          // provider failure.
+          break
+        }
+        if (budgetDecision === 'block_run_cap') {
+          strategyRun.status = 'skipped_budget'
+          // A first plan that can never fit the configured cap is advanced and
+          // reported as a blocker so it cannot deadlock the rotation.
+          blockers.push(
+            `${plan.key}/${plan.market} requires an estimated ${cost} credits, above the ${maxCredits}-credit run budget.`
+          )
+          advancedPlanCount += 1
           continue
         }
         if (options.dryRun !== false) {
           strategyRun.status = 'estimated'
+          advancedPlanCount += 1
           continue
         }
 
@@ -369,11 +392,13 @@ export async function syncDealMachineLeadSource(options: {
         strategyRun.fetched = rows.length
         strategyRun.status = 'searched'
         for (const raw of rows) rawRows.push({ raw, plan: hydrated })
+        advancedPlanCount += 1
       } catch (error) {
         const message = formatDealMachineThrownError(error)
         strategyRun.status = 'failed'
         strategyRun.error = message
         blockers.push(`${plan.key}/${plan.market}: ${message}`)
+        advancedPlanCount += 1
       }
     }
 
@@ -386,6 +411,12 @@ export async function syncDealMachineLeadSource(options: {
       : []
     const contactable = normalized.filter((lead) => isUsableContactEmail(lead.email) || Boolean(lead.phone)).length
     const contactless = normalized.length - contactable
+
+    const { nextAfter, wrapped } = advanceDealMachineCursor({
+      startAfter,
+      advancedPlanCount,
+      planCount: plans.length,
+    })
 
     return {
       configured: true,

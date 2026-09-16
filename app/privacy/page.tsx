@@ -3,7 +3,7 @@ import { LegalPageShell } from '@/components/legal/legal-page-shell';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How VestBlock LLC collects, uses, shares, and protects personal information.',
+  description: 'How Vestblock LLC collects, uses, shares, and protects personal information.',
   alternates: { canonical: '/privacy' },
 };
 
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <section>
         <h2>Scope</h2>
         <p>
-          This policy applies to VestBlock LLC websites, questionnaires, workspaces, communications, and related services. It does not control an independent lender, buyer, seller, payment processor, credit bureau, or other third party that publishes its own policy.
+          This policy applies to Vestblock LLC websites, questionnaires, workspaces, communications, and related services. It does not control an independent lender, buyer, seller, payment processor, credit bureau, or other third party that publishes its own policy.
         </p>
       </section>
 
@@ -79,7 +79,7 @@ export default function PrivacyPage() {
       <section>
         <h2>Your choices</h2>
         <p>
-          You can unsubscribe from non-transactional email through the message link or ask us to stop contacting you. Depending on where you live, you may also request access, correction, deletion, a portable copy, or an opt-out from certain processing. We may need to verify your identity and may retain records when law, security, or a suppression obligation requires it.
+          You can unsubscribe from non-transactional email through the message link or ask us to stop contacting you. For a separately requested SMS program, reply STOP to opt out or HELP for help. Depending on where you live, you may also request access, correction, deletion, a portable copy, or an opt-out from certain processing. We may need to verify your identity and may retain records when law, security, or a suppression obligation requires it.
         </p>
       </section>
 

@@ -3,7 +3,7 @@ import { LegalPageShell } from '@/components/legal/legal-page-shell';
 
 export const metadata: Metadata = {
   title: 'Terms of Use',
-  description: 'Terms that apply when you access or use VestBlock LLC services.',
+  description: 'Terms that apply when you access or use Vestblock LLC services.',
   alternates: { canonical: '/terms' },
 };
 
@@ -52,7 +52,7 @@ export default function TermsPage() {
       <section>
         <h2>Communications</h2>
         <p>
-          You agree to receive service messages needed for your account or requested workflow. Marketing and business-development email must include an available opt-out, and VestBlock records suppression requests. Consent to receive marketing is not a condition of purchase. Carrier message and data rates may apply to any SMS feature you separately request.
+          You agree to receive service messages needed for your account or requested workflow. Marketing and business-development email must include an available opt-out, and VestBlock records suppression requests. If you separately check an SMS consent box, Vestblock LLC may send recurring marketing and property-review text messages to the number you provide, including with automated technology. Consent is not a condition of purchase. Message frequency varies; message and data rates may apply. Reply STOP to opt out or HELP for help.
         </p>
       </section>
 

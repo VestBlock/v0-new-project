@@ -167,16 +167,30 @@ function evaluateContract(strategyKey: string, signals: Set<StrategySignalKey>, 
 export function evaluateLeadStrategyStack(lead: LeadRecord, strategyKey: string): StrategyStackEvidence {
   const metadata = lead.metadata_json || {}
   const form = lead.form_data || {}
+  const signalText = [
+    metadata.signals,
+    metadata.strategySignals,
+    metadata.verifiedSignals,
+    metadata.sourceSignals,
+    form.signals,
+    form.verifiedSignals,
+    form.sourceSignals,
+  ]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
   const text = [
-    lead.source,
-    lead.niche,
-    lead.market_segment,
     lead.pain_signal,
-    lead.outreach_angle,
     lead.notes,
-    JSON.stringify(metadata),
-    JSON.stringify(form),
-    JSON.stringify(lead.contact_info || {}),
+    ...signalText,
+    form.propertyType,
+    form.foreclosureStatus,
+    form.marketStatus,
+    form.buildingCondition,
+    metadata.propertyType,
+    metadata.foreclosureStatus,
+    metadata.marketStatus,
+    metadata.buildingCondition,
   ].filter(Boolean).join(' ').toLowerCase()
   const signals = new Set<StrategySignalKey>()
   const sources = new Set<string>()

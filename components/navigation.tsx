@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { isClientAdmin } from '@/lib/auth/client-admin';
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { BrandLogo } from '@/components/brand-logo';
 
 export function Navigation() {
@@ -136,7 +137,7 @@ export function Navigation() {
     <header className="vb-site-header sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/95 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/88">
       <div className="container flex h-16 items-center">
         <div className="mr-4 flex min-w-0 items-center">
-          <Link href="/" className="group mr-7 flex items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <Link href="/" className="group mr-7 flex min-h-11 items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
@@ -173,7 +174,7 @@ export function Navigation() {
               <Menu className="h-6 w-6" />
               <span className="sr-only">Toggle Menu</span>
             </Button>
-            {isMobileMenuOpen ? (
+            {isMobileMenuOpen ? createPortal(
               <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label="Site navigation">
                 <button
                   type="button"
@@ -191,7 +192,7 @@ export function Navigation() {
                     type="button"
                     aria-label="Close navigation"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
+                    className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -204,7 +205,7 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.06]"
                     >
                       {link.label}
                     </Link>
@@ -212,14 +213,14 @@ export function Navigation() {
                   <hr className="my-2" />
                   {!isAuthenticated ? (
                     <>
-                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className={cn('rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]', isLoading && 'invisible')} aria-hidden={isLoading || undefined}>
+                      <Link href="/login?redirect=/workspace" onClick={() => setIsMobileMenuOpen(false)} className={cn('flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]', isLoading && 'invisible')} aria-hidden={isLoading || undefined}>
                         Sign In
                       </Link>
                       <Link
                         href="/next-move"
                         data-home-primary-cta
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
+                        className="flex min-h-11 items-center rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
                         Start free questionnaire
                       </Link>
@@ -231,13 +232,13 @@ export function Navigation() {
                           key={link.href}
                           href={link.href}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
+                          className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]"
                         >
                           {link.label}
                         </Link>
                       ))}
                       {(userProfile?.role === 'admin' || isAdmin) && (
-                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
+                        <Link href="/admin/command-center" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-xl px-3 py-2 text-foreground transition-colors hover:bg-white/[0.05]">
                           Admin Panel
                         </Link>
                       )}
@@ -246,7 +247,7 @@ export function Navigation() {
                           setIsMobileMenuOpen(false);
                           await signOut();
                         }}
-                        className="text-left text-foreground"
+                        className="min-h-11 rounded-xl px-3 py-2 text-left text-foreground transition-colors hover:bg-white/[0.05]"
                       >
                         Sign Out
                       </button>
@@ -254,7 +255,8 @@ export function Navigation() {
                   )}
                 </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             ) : null}
           </div>
 

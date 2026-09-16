@@ -35,3 +35,16 @@ export function dealMachineAcquisitionPersistenceStatus(
   if (outcome === 'partial') return 'failed' as const
   return 'blocked' as const
 }
+
+export function shouldPersistDealMachineCursor(input: {
+  cursorBefore: number
+  nextAfter: number
+  creditsReserved?: number | null
+  fetched?: number | null
+}) {
+  return (
+    input.nextAfter !== input.cursorBefore ||
+    Number(input.creditsReserved || 0) > 0 ||
+    Number(input.fetched || 0) > 0
+  )
+}

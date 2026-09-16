@@ -3,6 +3,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
+import { createHash } from "node:crypto"
 
 const RESULTS_DIR = path.resolve("tmp/outreach")
 
@@ -83,6 +84,41 @@ function isMobileRow(row) {
   const type = String(row.phone_type || row.type || "").trim().toLowerCase()
   if (/(landline|home|voip)/.test(type)) return false
   return /(mobile|wireless|cell|\bw\b)/.test(type)
+}
+
+function yes(value) {
+  return /^(1|true|yes|y|granted)$/i.test(String(value || '').trim())
+}
+
+function isDncRow(row) {
+  return /do\s*not\s*call|^dnc$|^(1|true|yes|y)$/i.test(
+    String(row.do_not_call || row.dnc || row.dnc_status || '').trim(),
+  )
+}
+
+function isDncClearRow(row) {
+  return /^(false|no|n|0|not[_ -]?dnc|clear|not[_ -]?flagged(?:[_ -]?by[_ -]?dealmachine)?)$/i.test(
+    String(row.do_not_call || row.dnc || row.dnc_status || '').trim(),
+  )
+}
+
+function hasDurableSmsConsent(row) {
+  if (!yes(row.can_text) || !yes(row.sms_consent) || !yes(row.sms_outreach_allowed)) return false
+  if (!String(row.sms_consent_version || row.consent_version || '').trim()) return false
+  const consentedAt = Date.parse(String(row.sms_consented_at || row.consented_at || ''))
+  const expectedFingerprint = String(
+    row.sms_consent_phone_fingerprint || row.phone_fingerprint || ''
+  ).trim().toLowerCase()
+  const phone = normalizePhone(row.phone)
+  const actualFingerprint = phone
+    ? createHash('sha256').update(phone.replace(/^\+/, '')).digest('hex')
+    : ''
+  return (
+    Number.isFinite(consentedAt) &&
+    consentedAt <= Date.now() &&
+    /^[a-f0-9]{64}$/.test(expectedFingerprint) &&
+    expectedFingerprint === actualFingerprint
+  )
 }
 
 function sleep(ms) {
@@ -183,6 +219,11 @@ function main() {
   if (!args.queue) {
     throw new Error("Missing --queue=/absolute/or/relative/path.csv")
   }
+  if (!args.dryRun) {
+    throw new Error(
+      "Live Apple Messages outreach is disabled. Use a registered two-way SMS provider with consent lookup, STOP/HELP webhooks, delivery receipts, quiet hours, and suppression enforcement.",
+    )
+  }
   fs.mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = buildRunStamp()
   const outPath = path.join(RESULTS_DIR, `dealmachine-export-phone-send-results-${stamp}.json`)
@@ -191,7 +232,7 @@ function main() {
   const excludedPhones = new Set(args.excludePhones)
   const seenPhones = new Set()
   const candidates = queue
-    .filter((row) => String(row.can_text).toLowerCase() === "true")
+    .filter((row) => hasDurableSmsConsent(row) && !isDncRow(row) && isDncClearRow(row))
     .map((row) => ({
       ...row,
       phone: normalizePhone(row.phone),

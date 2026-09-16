@@ -81,6 +81,13 @@ const numberFilter = (filterId, sourceType, allowedOperators = ['range']) => ({
   options: [],
   allowed_operators: allowedOperators,
 })
+const multiSelectFilter = (filterId, sourceType, labels) => ({
+  filter_id: filterId,
+  type: 'MULTI_SELECT',
+  source_type: sourceType,
+  options: labels.map((label, index) => ({ option_id: index + 1, label })),
+  allowed_operators: ['contains_any', 'contains_none', 'contains_all'],
+})
 const routingClient = {
   resolveCity: async () => ({ location_id: 'loc_city_123', type: 'city', code: '123', name: 'Tulsa', state: 'OK' }),
 }
@@ -88,6 +95,8 @@ const catalogMetadata = mergeDealMachineCatalogMetadata(
   [
     booleanFilter('has_absentee_owners'),
     numberFilter('estimated_value'),
+    numberFilter('num_units'),
+    multiSelectFilter('property_type', 'properties', ['Multi Family', 'Apartment']),
     booleanFilter('property_only_filter'),
   ],
   [booleanFilter('has_investment_property_additional_investment_flag')]
@@ -95,7 +104,7 @@ const catalogMetadata = mergeDealMachineCatalogMetadata(
 
 assert.deepEqual(
   catalogMetadata.map((row) => row.source_type),
-  ['properties', 'properties', 'properties', 'people'],
+  ['properties', 'properties', 'properties', 'properties', 'properties', 'people'],
   'Catalog merge must retain endpoint provenance.'
 )
 
@@ -146,9 +155,64 @@ const portfolioPlan = buildDailyStrategyPlans({
   strategyKeys: ['portfolio-landlord'],
 })[0]
 const portfolio = await hydrateStrategyPlan(routingClient, portfolioPlan, catalogMetadata)
-assert.equal(portfolio.searchSourceType, 'people')
-assert.equal(portfolio.searchBody.property_match, 'owner')
-assert.equal('anchor' in portfolio.searchBody, false)
+assert.equal(portfolio.searchSourceType, 'properties')
+assert.equal(portfolio.searchBody.anchor, 'properties')
+assert.equal(portfolio.searchBody.contact_audience, 'owners')
+assert.equal('property_match' in portfolio.searchBody, false)
+assert.deepEqual(portfolio.peopleOnlyFilterIds, [])
+assert.deepEqual(portfolio.propertyFilterIds, ['has_absentee_owners', 'estimated_value'])
+assert.equal(portfolio.reviewOnly, true)
+assert.equal(portfolio.candidateOnly, true)
+assert.deepEqual(portfolio.variant.signals, ['absentee_owner'])
+
+const smallMultifamilyPlan = buildDailyStrategyPlans({
+  date: '2026-08-01',
+  strategyKeys: ['small-multifamily-portfolio'],
+})[0]
+const smallMultifamily = await hydrateStrategyPlan(routingClient, smallMultifamilyPlan, catalogMetadata)
+assert.equal(smallMultifamily.searchSourceType, 'properties')
+assert.equal(smallMultifamily.searchBody.anchor, 'properties')
+assert.equal(smallMultifamily.searchBody.contact_audience, 'owners')
+assert.equal('property_match' in smallMultifamily.searchBody, false)
+assert.deepEqual(smallMultifamily.peopleOnlyFilterIds, [])
+assert.deepEqual(smallMultifamily.propertyFilterIds, ['property_type', 'num_units', 'estimated_value'])
+assert.deepEqual(smallMultifamily.variant.signals, ['multifamily'])
+assert.equal(smallMultifamily.reviewOnly, true)
+assert.equal(smallMultifamily.candidateOnly, true)
+
+const activeFilterSpecs = allPlans.flatMap((plan) => plan.variant.filters)
+const knownPeopleOnlyFilterIds = new Set(['has_investment_property_additional_investment_flag'])
+const activeFilterMetadata = Array.from(
+  activeFilterSpecs.reduce((byId, spec) => {
+    const current = byId.get(spec.filterId) || {
+      filterId: spec.filterId,
+      optionLabels: new Set(),
+      operators: new Set(),
+      isBoolean: typeof spec.value === 'boolean',
+    }
+    for (const label of spec.optionLabels || []) current.optionLabels.add(label)
+    if (spec.operator) current.operators.add(spec.operator)
+    byId.set(spec.filterId, current)
+    return byId
+  }, new Map()).values()
+).map((entry) => ({
+  filter_id: entry.filterId,
+  type: entry.optionLabels.size ? 'MULTI_SELECT' : entry.isBoolean ? 'BOOLEAN' : 'NUMBER',
+  options: Array.from(entry.optionLabels).map((label, index) => ({ option_id: index + 1, label })),
+  allowed_operators: Array.from(entry.operators),
+}))
+const activeCatalogMetadata = mergeDealMachineCatalogMetadata(
+  activeFilterMetadata.filter((entry) => !knownPeopleOnlyFilterIds.has(entry.filter_id)),
+  activeFilterMetadata.filter((entry) => knownPeopleOnlyFilterIds.has(entry.filter_id))
+)
+for (const plan of allPlans) {
+  const hydrated = await hydrateStrategyPlan(routingClient, plan, activeCatalogMetadata)
+  assert.equal(
+    hydrated.peopleOnlyFilterIds.length > 0 && hydrated.propertyFilterIds.length > 0,
+    false,
+    `${plan.key} must not mix people-only and property-only filters in one provider request`
+  )
+}
 
 const activeSources = [
   fs.readFileSync(new URL('../lib/dealmachine/v2-client.mjs', import.meta.url), 'utf8'),

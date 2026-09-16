@@ -24,6 +24,7 @@ import {
   classifyDealMachineAcquisitionOutcome,
   dealMachineAcquisitionHttpStatus,
   dealMachineAcquisitionPersistenceStatus,
+  shouldPersistDealMachineCursor,
 } from '../lib/n8n/dealMachineSourceAcquisitionCore'
 import { buildCommercialOutreachBody, getCommercialOutreachMailingAddress } from '../lib/outreach/commercialCompliance'
 import { buildOutboundSendIdentity, buildResendOutreachTags } from '../lib/outreach/deliveryIdentity'
@@ -95,6 +96,18 @@ assert.equal(
   dealMachineAcquisitionHttpStatus({ ok: true, deferred: true, outcome: 'deferred' }),
   200
 )
+assert.equal(shouldPersistDealMachineCursor({
+  cursorBefore: 4,
+  nextAfter: 5,
+  creditsReserved: 0,
+  fetched: 0,
+}), true, 'A cursor advanced past an over-cap plan must be persisted even without spend.')
+assert.equal(shouldPersistDealMachineCursor({
+  cursorBefore: 4,
+  nextAfter: 4,
+  creditsReserved: 0,
+  fetched: 0,
+}), false)
 const runId = 'run-test-001'
 const runningPayload = buildRevenueLoopJobPayload({
   status: 'running',
