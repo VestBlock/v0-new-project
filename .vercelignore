@@ -7,6 +7,7 @@
 node_modules/
 tsconfig.tsbuildinfo
 .git.broken-*/
+.venv-homeharvest/
 
 # Local QA, generated artifacts, and temporary outputs
 /artifacts/
