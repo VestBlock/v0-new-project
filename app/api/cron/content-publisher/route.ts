@@ -1,9 +1,11 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
 
 import { getDailyPublisherConfigFromEnv, runDailyContentPublisher } from '@/lib/content/dailyPublisher'
+import { runVideoContentPilot } from '@/lib/content/video/automation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -36,21 +38,53 @@ export async function GET(request: Request) {
       .map((item) => item.trim())
       .filter(Boolean) as ReturnType<typeof getDailyPublisherConfigFromEnv>['clusters']
     const config = getDailyPublisherConfigFromEnv()
-    const result = await runDailyContentPublisher({
-      supabase: createAdminClient(),
-      actorUserId: null,
-      dryRun,
-      ...config,
-      limit: parsePositiveIntParam(url.searchParams.get('limit')) ?? config.limit,
-      preferSpanish: parseBoolParam(url.searchParams.get('preferSpanish')) ?? config.preferSpanish,
-      clusters: clusters?.length ? clusters : config.clusters,
-    })
-
-    return NextResponse.json({
-      success: true,
-      dryRun,
-      ...result,
-    })
+    const admin = createAdminClient()
+    // Start the SEO and private-video lanes independently. A failure or timeout
+    // in one must not prevent the scheduler from exercising the other.
+    const [seoOutcome, videoOutcome] = await Promise.allSettled([
+      runDailyContentPublisher({
+        supabase: admin,
+        actorUserId: null,
+        dryRun,
+        ...config,
+        limit: parsePositiveIntParam(url.searchParams.get('limit')) ?? config.limit,
+        preferSpanish:
+          parseBoolParam(url.searchParams.get('preferSpanish')) ?? config.preferSpanish,
+        clusters: clusters?.length ? clusters : config.clusters,
+      }),
+      dryRun
+        ? Promise.resolve({ status: 'skipped' as const, reason: 'dry_run' as const })
+        : runVideoContentPilot({ supabase: admin }),
+    ])
+    const seoPublisherSucceeded = seoOutcome.status === 'fulfilled'
+    const videoContentPilot =
+      videoOutcome.status === 'fulfilled'
+        ? videoOutcome.value
+        : {
+            status: 'failed',
+            error:
+              videoOutcome.reason instanceof Error
+                ? videoOutcome.reason.message
+                : 'Video content pilot failed.',
+          }
+    const videoLaneHealthy =
+      dryRun || !['blocked', 'failed'].includes(videoContentPilot.status)
+    return NextResponse.json(
+      {
+        success: seoPublisherSucceeded && videoLaneHealthy,
+        seoPublisherSucceeded,
+        seoPublisherError:
+          seoOutcome.status === 'rejected'
+            ? seoOutcome.reason instanceof Error
+              ? seoOutcome.reason.message
+              : 'Daily content publisher failed.'
+            : null,
+        dryRun,
+        ...(seoOutcome.status === 'fulfilled' ? seoOutcome.value : {}),
+        videoContentPilot,
+      },
+      { status: seoPublisherSucceeded && videoLaneHealthy ? 200 : 503 }
+    )
   } catch (error) {
     return NextResponse.json(
       {

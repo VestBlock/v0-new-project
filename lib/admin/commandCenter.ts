@@ -2365,7 +2365,9 @@ export function buildDealPipelineSnapshot(input: {
   propertyBuyerPacketSends?: AnyRow[]
 }): CommandCenterDealPipeline {
   const stageOrder = [
-    { key: 'diligence_required', label: 'Diligence Required' },
+    { key: 'new_lead', label: 'New Lead' },
+    { key: 'contacted', label: 'Owner Contacted' },
+    { key: 'replied', label: 'Seller Replied' },
     { key: 'analyzed', label: 'Analyzed' },
     { key: 'offer_sent', label: 'Offer Sent' },
     { key: 'under_contract', label: 'Under Contract' },

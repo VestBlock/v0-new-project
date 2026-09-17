@@ -163,13 +163,13 @@ export function BuyerSignupPage() {
   }
 
   return (
-    <main className="premium-page px-4 py-24">
+    <main className="premium-page vb-buyers-ledger px-4 py-24">
       <div className="container mx-auto max-w-7xl space-y-12">
         <section className="grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-start">
           <div className="space-y-7">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-sm text-cyan-100">
               <Users className="h-4 w-4 text-cyan-200" />
-              Buyer network
+              Private Ledger · buyer criteria
             </div>
             <div>
               <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-white md:text-6xl">

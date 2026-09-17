@@ -15,6 +15,10 @@ import {
   type VideoPerformanceSnapshot,
 } from '@/lib/content/video/contentSystem'
 import { seedVestBlockVideoPilots } from '@/lib/content/video/pilotSeed'
+import {
+  createPrivateVideoRender,
+  refreshHeyGenPrivateRenderUrl,
+} from '@/lib/content/video/privateRender'
 import { logEvent } from '@/lib/system/logEvent'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -85,64 +89,17 @@ async function registerPrivateRender(input: {
     .single()
 
   if (scriptError) throw scriptError
-  if (script.content_type !== 'video_script' || script.approval_status !== 'approved') {
-    throw new Error('A private render can only be registered from an approved video script.')
-  }
-
-  const parsedMetadata = videoMetadataSchema.safeParse(script.metadata_json || {})
-  if (!parsedMetadata.success || !parsedMetadata.data.renderer_prompt) {
-    throw new Error('The approved script does not have a valid renderer prompt.')
-  }
-
-  const now = new Date().toISOString()
-  const metadata = videoMetadataSchema.parse({
-    ...parsedMetadata.data,
-    asset_kind: 'video_render',
-    generator: 'heygen_video_agent',
-    render_status: 'completed',
-    publication_status: 'private',
-    render_url: input.renderUrl,
-    heygen_video_id: input.heygenVideoId || null,
-    heygen_session_id: input.heygenSessionId || null,
-    actual_duration_seconds: input.actualDurationSeconds ?? null,
-    thumbnail_variants: input.thumbnailUrls || [],
-    cost_estimate: input.costEstimate ?? null,
-  })
-  const renderSlug = `${script.slug}-render-${Date.now().toString(36)}`
-  const { data, error } = await admin
-    .from('content_assets')
-    .insert({
-      parent_content_id: script.id,
-      created_by: input.actorUserId,
-      title: String(script.title).replace(/ — Script$/, ' — Private Render'),
-      slug: renderSlug,
-      content_type: 'video_render',
-      service_key: script.service_key,
-      language: script.language,
-      audience: script.audience,
-      prompt: metadata.renderer_prompt,
-      status: 'draft',
-      approval_status: 'review_required',
-      platform: script.platform,
-      post_type: script.post_type,
-      body_markdown: `Private render created ${now}. Review the video, captions, claims, rights, disclosure, CTA, and destination before approval.`,
-      cta_label: script.cta_label,
-      cta_url: script.cta_url,
-      metadata_json: metadata,
-      updated_at: now,
-    })
-    .select(videoSelect)
-    .single()
-
-  if (error) throw error
-  await logEvent({
-    eventType: 'content_generated',
+  return createPrivateVideoRender({
+    supabase: admin,
+    script: script as VideoContentAssetRow,
+    renderUrl: input.renderUrl,
+    heygenVideoId: input.heygenVideoId,
+    heygenSessionId: input.heygenSessionId,
+    actualDurationSeconds: input.actualDurationSeconds,
+    thumbnailUrls: input.thumbnailUrls,
+    costEstimate: input.costEstimate,
     actorUserId: input.actorUserId,
-    entityType: 'video_render',
-    entityId: data.id,
-    metadata: { source: 'heygen', visibility: 'private', publicPublishing: false },
   })
-  return data as VideoContentAssetRow
 }
 
 async function recordPerformance(input: {
@@ -318,7 +275,7 @@ async function recordPerformance(input: {
   return { snapshot: input.snapshot, learning: proposal || null }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const adminCheck = await checkAdminAccess()
   if (!adminCheck.isAdmin) {
     return NextResponse.json(
@@ -329,6 +286,38 @@ export async function GET() {
 
   try {
     const rows = await loadVideoRows()
+    const renderId = new URL(request.url).searchParams.get('renderId')
+    if (renderId) {
+      const parsedRenderId = z.string().uuid().safeParse(renderId)
+      if (!parsedRenderId.success) {
+        return NextResponse.json({ error: 'A valid renderId is required.' }, { status: 400 })
+      }
+      const render = rows.find((row) => row.id === parsedRenderId.data)
+      if (!render || render.content_type !== 'video_render') {
+        return NextResponse.json({ error: 'Private video render not found.' }, { status: 404 })
+      }
+
+      const metadata = videoMetadataSchema.safeParse(render.metadata_json || {})
+      if (!metadata.success) {
+        return NextResponse.json({ error: 'The private render metadata is invalid.' }, { status: 409 })
+      }
+      if (metadata.data.generator === 'heygen_video_agent' && metadata.data.heygen_video_id) {
+        if (!process.env.HEYGEN_API_KEY) {
+          return NextResponse.json(
+            { error: 'HEYGEN_API_KEY is required to refresh this private render URL.' },
+            { status: 503 }
+          )
+        }
+        const refreshed = await refreshHeyGenPrivateRenderUrl({
+          supabase: createAdminClient(),
+          render,
+          apiKey: process.env.HEYGEN_API_KEY,
+        })
+        return NextResponse.json({ render: refreshed, urlDurability: 'provider_ephemeral' })
+      }
+      return NextResponse.json({ render, urlDurability: 'external' })
+    }
+
     return NextResponse.json({ videoContent: buildVideoContentSnapshot(rows) })
   } catch (error) {
     return NextResponse.json(
@@ -433,6 +422,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'The video asset metadata is invalid.' }, { status: 409 })
     }
 
+    if (
+      asset.content_type === 'video_script' &&
+      ['queued', 'rendering'].includes(parsedMetadata.data.render_status)
+    ) {
+      return NextResponse.json(
+        { error: 'This script is locked while its private render is in flight.' },
+        { status: 409 }
+      )
+    }
+
     let metadata = parsedMetadata.data
     const now = new Date().toISOString()
     const notes = parsed.data.reviewNotes
@@ -440,6 +439,7 @@ export async function PATCH(request: Request) {
       : metadata.review_notes
 
     if (parsed.data.decision === 'approve' && asset.content_type === 'video_script') {
+      const startsNewRenderAttempt = currentApproval !== 'approved'
       metadata = videoMetadataSchema.parse({
         ...metadata,
         compliance_review_status: 'approved',
@@ -449,6 +449,13 @@ export async function PATCH(request: Request) {
           metadata,
           approvalStatus: 'approved',
         }),
+        render_status: startsNewRenderAttempt ? 'not_started' : metadata.render_status,
+        heygen_video_id: startsNewRenderAttempt ? null : metadata.heygen_video_id,
+        heygen_session_id: startsNewRenderAttempt ? null : metadata.heygen_session_id,
+        render_started_at: startsNewRenderAttempt ? null : metadata.render_started_at,
+        render_completed_at: startsNewRenderAttempt ? null : metadata.render_completed_at,
+        render_error: startsNewRenderAttempt ? null : metadata.render_error,
+        render_attempt_key: startsNewRenderAttempt ? null : metadata.render_attempt_key,
         review_notes: notes,
       })
     } else if (parsed.data.decision === 'approve' && asset.content_type === 'video_render') {
@@ -493,12 +500,24 @@ export async function PATCH(request: Request) {
         : nextApproval === 'rejected'
           ? 'archived'
           : 'draft'
+    const preservesExistingApproval =
+      currentApproval === 'approved' && nextApproval === 'approved'
     const { data, error } = await admin
       .from('content_assets')
       .update({
         approval_status: nextApproval,
-        approved_by: nextApproval === 'approved' ? adminCheck.user?.id || null : null,
-        approved_at: nextApproval === 'approved' ? now : null,
+        approved_by:
+          nextApproval === 'approved'
+            ? preservesExistingApproval
+              ? asset.approved_by || adminCheck.user?.id || null
+              : adminCheck.user?.id || null
+            : null,
+        approved_at:
+          nextApproval === 'approved'
+            ? preservesExistingApproval
+              ? asset.approved_at || now
+              : now
+            : null,
         status,
         metadata_json: metadata,
         updated_at: now,

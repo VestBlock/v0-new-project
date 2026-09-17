@@ -3,7 +3,7 @@ import type { HomepageOutcomeId } from "./homepage-directory"
 
 const proofByOutcome = {
   capital: {
-    label: "Capital",
+    label: "Prepare for funding",
     document: "Capital readiness brief",
     objective: "Prepare an expansion funding request",
     path: "Business funding readiness review",
@@ -15,19 +15,20 @@ const proofByOutcome = {
     ],
   },
   deals: {
-    label: "Deals",
-    document: "Real estate criteria brief",
-    objective: "Source a small multifamily property",
-    path: "Buyer profile and property review path",
+    label: "Real estate",
+    document: "Acquisition criteria and action brief",
+    objective: "Acquire an off-market 2–8 unit property",
+    path: "Criteria-driven sourcing, seller outreach, and contract pursuit",
     boundary: "Participants control offers, diligence, financing, and closing",
     steps: [
-      ["First 7 days", "Define the buy box", "Record the market, asset type, range, timing, capacity, and conditions that make a property unsuitable."],
-      ["Next 30 days", "Validate the criteria", "Confirm proof of capacity, decision speed, diligence needs, and who must participate."],
-      ["When ready", "Submit the criteria for review", "Use the stated criteria for relevant sourcing, possible introductions, and participant review."],
+      ["Step 01", "Define the buy box", "Record the market, property type, price range, condition, timing, capacity, and clear reasons to pass."],
+      ["Step 02", "Source and evaluate", "Use approved property sources and the stated criteria to identify possible matches worth a closer review."],
+      ["Step 03", "Begin compliant outreach", "Contact eligible owners or representatives with clear identity, truthful language, and an easy way to opt out."],
+      ["Step 04", "Offer, negotiate, and secure the agreement", "When interest and fit are confirmed, document the offer assumptions, protect follow-up, preserve negotiation history, and coordinate diligence, financing, and the signed-contract handoff."],
     ],
   },
   opportunity: {
-    label: "Opportunity",
+    label: "Business growth",
     document: "Opportunity starting plan",
     objective: "Strengthen financial readiness and start a service business",
     path: "Educational roadmap and business-setup path",
@@ -55,10 +56,10 @@ export function DecisionProofSection({ outcomeId }: { outcomeId: HomepageOutcome
       <div className="vb-home-shell vb-home-proof__layout">
         <div className="vb-home-proof__intro">
           <p className="vb-home-kicker">Tangible output · {proof.label}</p>
-          <h2 id="roadmap-proof-title">A starting plan you can use.</h2>
+          <h2 id="roadmap-proof-title">A plan built to move.</h2>
           <p>
-            The selected path changes what VestBlock asks, what it helps you prepare, and the result you receive. This
-            example shows a clear sequence without presenting an approval or guarantee.
+            Your selected goal changes what VestBlock asks, what the platform prepares, and which operating path comes
+            next. The result is specific enough to act on without presenting an approval or guarantee.
           </p>
         </div>
 

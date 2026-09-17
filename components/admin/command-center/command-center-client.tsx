@@ -69,6 +69,30 @@ const MODE_TO_DOCK: Record<CommandCenterModeKey, OperationsViewKey> = {
   authority: "strategy",
 }
 
+const DEAL_PIPELINE_ADVANCE: Record<string, string | undefined> = {
+  new_lead: "contacted",
+  contacted: "replied",
+  replied: "analyzed",
+  analyzed: "offer_sent",
+  offer_sent: "under_contract",
+  under_contract: "buyer_packet_sent",
+  buyer_packet_sent: "buyer_interested",
+  buyer_interested: "assignment_drafted",
+  assignment_drafted: "closed_won",
+}
+
+const DEAL_PIPELINE_LABELS: Record<string, string> = {
+  contacted: "Owner Contacted",
+  replied: "Seller Replied",
+  analyzed: "Analyzed",
+  offer_sent: "Offer Sent",
+  under_contract: "Under Contract",
+  buyer_packet_sent: "Packet Sent",
+  buyer_interested: "Buyer Interested",
+  assignment_drafted: "Assignment Drafted",
+  closed_won: "Closed Won",
+}
+
 const DOCK_COPY: Record<
   OperationsViewKey,
   { title: string; detail: string; hint: string }
@@ -89,9 +113,9 @@ const DOCK_COPY: Record<
     hint: "deploy and learn",
   },
   lanes: {
-    title: "Lane diagnostics",
-    detail: "Core operator lanes and support systems in one place so you can see which part of the machine is carrying or slipping.",
-    hint: "lane pressure",
+    title: "Acquisition desk",
+    detail: "Work qualified properties from seller response through analysis, offer, contract, and disposition without losing the next action.",
+    hint: "source to contract",
   },
   intel: {
     title: "Market watch",
@@ -487,7 +511,7 @@ function RevenueFunnelPanel({ funnel }: { funnel: CommandCenterData["revenueFunn
         <div className="min-w-0">
           <PanelTitle
             icon={Crosshair}
-            title="Revenue evidence funnel"
+            title="Commercial evidence funnel"
             hint={funnel.lastVerifiedAt ? `${timeAgo(funnel.lastVerifiedAt)} since evidence` : "no verified movement"}
           />
           <p className="mt-2 text-sm leading-6 text-slate-300">{funnel.headline}</p>
@@ -523,6 +547,35 @@ function RevenueFunnelPanel({ funnel }: { funnel: CommandCenterData["revenueFunn
           ))}
         </div>
       ) : null}
+    </PanelShell>
+  )
+}
+
+function AcquisitionToContractPanel({ pipeline }: { pipeline: CommandCenterData["dealPipeline"] }) {
+  const visibleStageKeys = ["replied", "offer_sent", "under_contract", "closed_won"]
+  const stages = visibleStageKeys.map((key) => pipeline.stages.find((stage) => stage.key === key)).filter(Boolean)
+
+  return (
+    <PanelShell className="vb-command-center__acquisition-funnel">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <PanelTitle icon={Crosshair} title="Acquisition to contract" hint="property evidence" />
+          <p className="mt-2 text-sm leading-6 text-slate-300">{pipeline.summary}</p>
+        </div>
+        <a href="#lane-diagnostics" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:border-cyan-300/35 hover:text-white">
+          Open contract board <ArrowUpRight className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {stages.map((stage) => stage ? (
+          <a key={stage.key} href="#lane-diagnostics" className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-3 transition-colors hover:border-cyan-300/30">
+            <p className="vb-mono text-[0.62rem] uppercase tracking-[0.14em] text-slate-500">{stage.label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{stage.count}</p>
+            <p className="mt-1 text-[0.68rem] leading-5 text-slate-500">{stage.items[0]?.nextAction || "No property at this stage yet."}</p>
+          </a>
+        ) : null)}
+      </div>
+      <p className="mt-3 border-l border-cyan-300/25 pl-3 text-xs leading-5 text-slate-400">Next move: {pipeline.nextMove}</p>
     </PanelShell>
   )
 }
@@ -829,6 +882,59 @@ export function CommandCenterClient({
       }
     },
     [refresh]
+  )
+
+  const advanceDealStage = useCallback(
+    async (itemId: string, currentStage: string, propertyAddress: string) => {
+      const nextStage = DEAL_PIPELINE_ADVANCE[currentStage]
+      if (!nextStage) return
+
+      const contractWarning =
+        nextStage === "under_contract"
+          ? "Confirm a signed agreement exists before marking this property Under Contract. "
+          : ""
+      const note = window.prompt(
+        `${contractWarning}Add the operator note for ${propertyAddress} → ${DEAL_PIPELINE_LABELS[nextStage] || nextStage}.`,
+      )
+      if (note === null) return
+      if (!note.trim()) {
+        toast({
+          title: "Review note required",
+          description: "Every acquisition-stage change needs an operator note for the Private Ledger.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const actionId = `deal-stage-${itemId}`
+      setRunningActionId(actionId)
+      try {
+        const response = await fetch(`/api/admin/deal-pipeline/${itemId}/stage`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ stage: nextStage, note: note.trim() }),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          if (handleCommandCenterAuthFailure(response.status, payload?.error)) return
+          throw new Error(payload?.error || "The deal stage could not be updated.")
+        }
+        toast({
+          title: `Moved to ${DEAL_PIPELINE_LABELS[nextStage] || nextStage}`,
+          description: `${propertyAddress} now has an audited acquisition-stage record.`,
+        })
+        await refresh()
+      } catch (error) {
+        toast({
+          title: "Stage update failed",
+          description: error instanceof Error ? error.message : "The deal stage could not be updated.",
+          variant: "destructive",
+        })
+      } finally {
+        setRunningActionId(null)
+      }
+    },
+    [handleCommandCenterAuthFailure, refresh, toast],
   )
 
   const runInlineAction = useCallback(
@@ -1382,9 +1488,9 @@ export function CommandCenterClient({
     <div className="vb-command-center space-y-6">
       <div className="vb-command-center__masthead">
         <div className="vb-command-center__heading">
-          <p className="vb-command-center__eyebrow vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-cyan-300/80">VestBlock · Operating system</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">Command Center</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">A decision desk for disciplined acquisition, capital, routing, and measured outreach—not a dashboard of decorative activity.</p>
+          <p className="vb-command-center__eyebrow vb-mono text-[0.65rem] uppercase tracking-[0.3em] text-cyan-300/80">Private Ledger · Acquisition desk</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">Move qualified properties into contract.</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">Work the seller, the deal math, the offer, and the next deadline from one controlled operating record.</p>
         </div>
         <div className="vb-command-center__decision">
           <span className="vb-mono text-[0.58rem] uppercase tracking-[0.18em] text-slate-500">Next decision</span>
@@ -1443,22 +1549,20 @@ export function CommandCenterClient({
         </div>
       </div>
 
-      <AutomationHealthPanel health={data.automationHealth} strategyExecution={data.strategyExecution} dataIntegrityHold={dataIntegrityHold} />
-      <ResearchSourceHealthPanel health={data.researchSourceHealth} />
-      <RevenueFunnelPanel funnel={data.revenueFunnel} />
+      <AcquisitionToContractPanel pipeline={data.dealPipeline} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div id="command-deck">
           <PanelShell>
             <PanelTitle icon={ListChecks} title="Today’s operating board" hint="simple view" />
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Keep this surface focused: work replies, run analysis, push clean outreach, and move deals through buyer or capital routing.
+              Start with the seller and the property: work replies, run the math, prepare the offer, and keep every contract deadline visible.
             </p>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {[
                 { label: "New leads", value: data.summary.newLeads24h, helper: "24h" },
                 { label: "Outreach", value: `${data.summary.outreach24h}/${data.summary.outreachTarget}`, helper: "24h" },
-                { label: "Replies", value: data.summary.replySignals7d, helper: "7d" },
+                { label: "Reply signals", value: data.summary.replySignals7d, helper: "seller + partner · 7d" },
                 { label: "Open tasks", value: data.summary.openTasks, helper: `${data.summary.urgentTasks} urgent` },
               ].map((metric) => (
                 <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
@@ -1470,9 +1574,9 @@ export function CommandCenterClient({
             </div>
             <div className="mt-4 grid gap-2">
               {[
-                { label: "Open replies", detail: "Work hot seller and partner replies.", target: "inbox-command", mode: "outreach" as CommandCenterModeKey },
+                { label: "Work seller replies", detail: "Prioritize owners showing intent and protect the next follow-up.", target: "inbox-command", mode: "outreach" as CommandCenterModeKey },
                 { label: "Analyze property", detail: "Run MAO, ARV, repair, rent, and creative paths.", target: "property-command", mode: "analyze" as CommandCenterModeKey },
-                { label: "Start outreach", detail: "Use separated seller, buyer, lender, and builder lanes.", target: "outreach-command", mode: "outreach" as CommandCenterModeKey },
+                { label: "Advance an offer", detail: "Move a qualified property toward offer sent or under contract.", target: "lane-diagnostics", mode: "acquire" as CommandCenterModeKey },
                 { label: "Choose strategy", detail: "Let the Boss rank the next lane before sending.", target: "strategy-engine", mode: "authority" as CommandCenterModeKey },
               ].map((item) => (
                 <button
@@ -1517,6 +1621,13 @@ export function CommandCenterClient({
         runningActionId={runningActionId}
         onAction={(action) => void runInlineAction(action)}
       />
+
+      <RevenueFunnelPanel funnel={data.revenueFunnel} />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <AutomationHealthPanel health={data.automationHealth} strategyExecution={data.strategyExecution} dataIntegrityHold={dataIntegrityHold} />
+        <ResearchSourceHealthPanel health={data.researchSourceHealth} />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <PanelShell>
@@ -1656,28 +1767,28 @@ export function CommandCenterClient({
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">{dockCopy.detail}</p>
               </div>
 
-              <TabsList className="h-auto flex-wrap justify-start rounded-2xl border border-white/10 bg-slate-950/70 p-1">
-                <TabsTrigger value="copilot" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+              <TabsList className="h-auto max-w-full justify-start overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/70 p-1">
+                <TabsTrigger value="lanes" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                  Acquisition
+                </TabsTrigger>
+                <TabsTrigger value="copilot" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
                   <Bot className="mr-1.5 h-3.5 w-3.5" />
                   Codex
                 </TabsTrigger>
-                <TabsTrigger value="property" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+                <TabsTrigger value="property" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
                   <Crosshair className="mr-1.5 h-3.5 w-3.5" />
                   Property
                 </TabsTrigger>
-                <TabsTrigger value="strategy" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+                <TabsTrigger value="strategy" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
                   <Flame className="mr-1.5 h-3.5 w-3.5" />
                   Strategy
                 </TabsTrigger>
-                <TabsTrigger value="lanes" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
-                  <ListChecks className="mr-1.5 h-3.5 w-3.5" />
-                  Lanes
-                </TabsTrigger>
-                <TabsTrigger value="intel" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+                <TabsTrigger value="intel" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
                   <Flame className="mr-1.5 h-3.5 w-3.5" />
                   Intel
                 </TabsTrigger>
-                <TabsTrigger value="activity" className="rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
+                <TabsTrigger value="activity" className="shrink-0 rounded-xl px-3 py-2 text-xs data-[state=active]:bg-cyan-300/15 data-[state=active]:text-cyan-100">
                   <Activity className="mr-1.5 h-3.5 w-3.5" />
                   Activity
                 </TabsTrigger>
@@ -1755,7 +1866,7 @@ export function CommandCenterClient({
                     {data.dealPipeline.nextMove}
                   </span>
                 </div>
-                <div className="grid gap-3 xl:grid-cols-7">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                   {data.dealPipeline.stages.map((stage) => (
                     <div key={stage.key} className="min-h-[172px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
@@ -1775,6 +1886,17 @@ export function CommandCenterClient({
                                 <span>{item.priority}</span>
                                 <span>{item.sentCount} sent · {item.replyCount} replies</span>
                               </div>
+                              {DEAL_PIPELINE_ADVANCE[stage.key] ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void advanceDealStage(item.id, stage.key, item.propertyAddress)}
+                                  disabled={runningActionId === `deal-stage-${item.id}`}
+                                  className="mt-2 inline-flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5 text-left text-[0.62rem] font-medium text-slate-300 transition-colors hover:border-cyan-300/35 hover:text-white disabled:opacity-50"
+                                >
+                                  <span>{runningActionId === `deal-stage-${item.id}` ? "Updating…" : `Move to ${DEAL_PIPELINE_LABELS[DEAL_PIPELINE_ADVANCE[stage.key] || ""] || "next stage"}`}</span>
+                                  <ArrowUpRight className="h-3 w-3" />
+                                </button>
+                              ) : null}
                             </div>
                           ))
                         ) : (

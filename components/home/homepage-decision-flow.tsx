@@ -5,7 +5,7 @@ import { DecisionProofSection } from "./decision-proof-section"
 import { HomepageDirectory, type HomepageOutcomeId, homepageOutcomes } from "./homepage-directory"
 
 export function HomepageDecisionFlow() {
-  const [selectedId, setSelectedId] = useState<HomepageOutcomeId>("capital")
+  const [selectedId, setSelectedId] = useState<HomepageOutcomeId>("deals")
   const selected = homepageOutcomes.find((outcome) => outcome.id === selectedId) || homepageOutcomes[0]
 
   return (

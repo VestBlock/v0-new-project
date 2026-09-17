@@ -1,16 +1,15 @@
 import { ImageResponse } from 'next/og';
-import { absoluteUrl } from '@/lib/seo/site';
 
 export const runtime = 'edge';
 export const alt =
-  'VestBlock - connect real estate opportunities with the right partners';
+  'VestBlock — capital, property, and business growth in one connected private ledger';
 export const size = {
   width: 1200,
   height: 630,
 };
 export const contentType = 'image/png';
 
-const pillars = ['Sell', 'Buy', 'Fund', 'Build'];
+const acquisitionStages = ['Source', 'Underwrite', 'Contact', 'Offer', 'Under contract'];
 
 export default function OpenGraphImage() {
   return new ImageResponse(
@@ -22,62 +21,54 @@ export default function OpenGraphImage() {
           width: '100%',
           display: 'flex',
           overflow: 'hidden',
-          background: '#030712',
-          color: '#f8fafc',
+          background: '#123128',
+          color: '#f4f0e7',
           fontFamily: 'sans-serif',
         }}
       >
-        <img
-          src={absoluteUrl('/vestblock-city-hero-poster.png')}
-          alt=""
-          width={1200}
-          height={630}
+        <div
           style={{
             position: 'absolute',
             top: 0,
             right: 0,
             bottom: 0,
             left: 0,
-            width: '100%',
+            display: 'flex',
+            background:
+              'radial-gradient(circle at 88% 8%, rgba(168,135,82,0.28), transparent 28%), linear-gradient(115deg, #10130f 0%, #123128 62%, #1d4438 100%)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 28,
+            right: 28,
+            bottom: 28,
+            left: 28,
+            display: 'flex',
+            border: '1px solid rgba(244,240,231,0.22)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 14,
             height: '100%',
-            objectFit: 'cover',
-            opacity: 0.58,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
             display: 'flex',
-            background:
-              'linear-gradient(90deg, rgba(3,7,18,0.96) 0%, rgba(3,7,18,0.78) 48%, rgba(3,7,18,0.45) 100%)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            display: 'flex',
-            background:
-              'radial-gradient(circle at 74% 22%, rgba(34,211,238,0.22), transparent 34%), radial-gradient(circle at 86% 72%, rgba(168,85,247,0.2), transparent 36%)',
+            background: '#a88752',
           }}
         />
 
         <div
           style={{
             position: 'relative',
-            zIndex: 1,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             width: '100%',
-            padding: '54px 64px 50px',
+            padding: '60px 70px 54px 80px',
           }}
         >
           <div
@@ -89,36 +80,35 @@ export default function OpenGraphImage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-              <img
-                src={absoluteUrl('/vestblock-mark.png')}
-                alt=""
-                width={74}
-                height={74}
-                style={{
-                  borderRadius: '18px',
-                  boxShadow: '0 0 38px rgba(34,211,238,0.4)',
-                }}
-              />
               <div
                 style={{
+                  width: 70,
+                  height: 70,
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '7px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(16,19,15,0.28)',
+                  background: '#a88752',
+                  color: '#10130f',
+                  fontSize: 24,
+                  fontWeight: 900,
+                  letterSpacing: '-0.08em',
                 }}
               >
-                <div style={{ fontSize: '35px', lineHeight: 1, fontWeight: 800 }}>
-                  VestBlock
-                </div>
+                VB
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                <div style={{ fontSize: 35, lineHeight: 1, fontWeight: 800 }}>VestBlock</div>
                 <div
                   style={{
-                    fontSize: '15px',
-                    letterSpacing: '0.22em',
-                    textTransform: 'uppercase',
-                    color: '#a5f3fc',
+                    color: '#d4ba8d',
+                    fontSize: 14,
                     fontWeight: 700,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
                   }}
                 >
-                  Real estate opportunity platform
+                  The private growth ledger
                 </div>
               </div>
             </div>
@@ -126,87 +116,94 @@ export default function OpenGraphImage() {
             <div
               style={{
                 display: 'flex',
-                gap: '10px',
-                padding: '11px 15px',
-                borderRadius: '999px',
-                border: '1px solid rgba(255,255,255,0.18)',
-                background: 'rgba(15,23,42,0.56)',
-                color: '#e0f2fe',
-                fontSize: '18px',
+                padding: '11px 16px',
+                border: '1px solid rgba(212,186,141,0.5)',
+                color: '#f4f0e7',
+                fontSize: 16,
                 fontWeight: 700,
               }}
             >
-              <span>DealVault</span>
-              <span style={{ color: '#67e8f9' }}>+</span>
-              <span>Partner network</span>
+              DealVault · auditable execution
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-              maxWidth: '890px',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: 980 }}>
             <div
               style={{
-                display: 'flex',
-                padding: '11px 17px',
-                borderRadius: '999px',
-                border: '1px solid rgba(103,232,249,0.22)',
-                background: 'rgba(255,255,255,0.07)',
-                color: '#cffafe',
-                fontSize: '19px',
+                color: '#d4ba8d',
+                fontSize: 18,
                 fontWeight: 800,
-                letterSpacing: '0.18em',
+                letterSpacing: '0.12em',
                 textTransform: 'uppercase',
               }}
             >
-              Sell · Buy · Fund · Build
+              Capital · Property · Business growth
             </div>
             <div
               style={{
-                fontSize: '70px',
-                lineHeight: 0.96,
-                letterSpacing: '-0.045em',
-                fontWeight: 900,
-              }}
-            >
-              Connect real estate opportunities with the right partners.
-            </div>
-            <div
-              style={{
-                maxWidth: '780px',
-                fontSize: '27px',
-                lineHeight: 1.28,
-                color: '#dbeafe',
+                maxWidth: 990,
+                fontFamily: 'serif',
+                fontSize: 70,
                 fontWeight: 500,
+                letterSpacing: '-0.045em',
+                lineHeight: 0.98,
               }}
             >
-              Sellers, buyers, lenders, developers, contractors, operators, and
-              capital partners connected through DealVault records and
-              funding-ready next steps.
+              Turn the right next move into a recorded outcome.
+            </div>
+            <div
+              style={{
+                maxWidth: 850,
+                color: '#dcd7cd',
+                fontSize: 24,
+                fontWeight: 500,
+                lineHeight: 1.35,
+              }}
+            >
+              Find opportunities, prepare capital, connect the right parties, and preserve the work in one connected platform.
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '13px', flexWrap: 'wrap' }}>
-            {pillars.map((item) => (
-              <div
-                key={item}
-                style={{
-                  display: 'flex',
-                  padding: '12px 20px',
-                  borderRadius: '999px',
-                  background: 'rgba(15, 23, 42, 0.72)',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  color: '#f8fafc',
-                  fontSize: '22px',
-                  fontWeight: 700,
-                }}
-              >
-                {item}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            {acquisitionStages.map((stage, index) => (
+              <div key={stage} style={{ display: 'flex', alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    color: '#f4f0e7',
+                    fontSize: 16,
+                    fontWeight: 700,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 23,
+                      height: 23,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(212,186,141,0.65)',
+                      color: '#d4ba8d',
+                      fontSize: 11,
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                  {stage}
+                </div>
+                {index < acquisitionStages.length - 1 ? (
+                  <div
+                    style={{
+                      width: 40,
+                      height: 1,
+                      display: 'flex',
+                      margin: '0 13px',
+                      background: 'rgba(244,240,231,0.24)',
+                    }}
+                  />
+                ) : null}
               </div>
             ))}
           </div>

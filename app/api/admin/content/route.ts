@@ -7,6 +7,8 @@ import {
   type ContentAssetStatus,
 } from '@/lib/content/contentGenerator';
 import { isVideoPublishReady } from '@/lib/content/video/contentSystem';
+import type { VideoContentAssetRow } from '@/lib/content/video/contentSystem';
+import { refreshHeyGenPrivateRenderUrl } from '@/lib/content/video/privateRender';
 import {
   vestblockMarketingServices,
   type VestBlockServiceKey,
@@ -183,14 +185,31 @@ export async function PATCH(request: Request) {
     if (nextStatus === 'published') {
       const { data: currentAsset, error: currentAssetError } = await supabase
         .from('content_assets')
-        .select('id,title,slug,content_type,status,approval_status,metadata_json')
+        .select('id,title,slug,content_type,status,approval_status,metadata_json,updated_at')
         .eq('id', parsed.data.id)
         .single();
 
       if (currentAssetError) throw new Error(currentAssetError.message);
+      let videoAsset = currentAsset as VideoContentAssetRow;
+      if (currentAsset.content_type === 'video_render') {
+        const metadata = currentAsset.metadata_json as Record<string, unknown> | null;
+        if (metadata?.generator === 'heygen_video_agent' && metadata.heygen_video_id) {
+          if (!process.env.HEYGEN_API_KEY) {
+            return NextResponse.json(
+              { error: 'HEYGEN_API_KEY is required to refresh the private render before publishing.' },
+              { status: 503 },
+            );
+          }
+          videoAsset = await refreshHeyGenPrivateRenderUrl({
+            supabase,
+            render: videoAsset,
+            apiKey: process.env.HEYGEN_API_KEY,
+          });
+        }
+      }
       if (
         String(currentAsset.content_type || '').startsWith('video_') &&
-        !isVideoPublishReady(currentAsset)
+        !isVideoPublishReady(videoAsset)
       ) {
         return NextResponse.json(
           {

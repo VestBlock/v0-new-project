@@ -26,29 +26,27 @@ No approval is guaranteed. The better first move is a clearer file.
 
 Find your next move with VestBlock.
 
-## 2. An Address Is Not a Deal
+## 2. Your Property Is Not a Generic Offer
 
 - Pillar: Deals
-- Audience: property owners, buyers, and operators evaluating an opportunity
+- Audience: property owners deciding whether and how to sell
 - Format: 55-second drawn Short
 - Frame: portrait, 9:16
 - Recommended HeyGen style: [Journal preview](https://dynamic.heygen.ai/video/transcode/a7d2cc8d4f114a0f9c625ff33a9c495b/vff5c948895f84805ae804278130590d2/720x1280.mp4?tr=orig-true)
 - Disclosure: not applicable unless realistic generated footage is added
-- CTA: Start with the situation → `/sell`
+- CTA: Submit your property → `/sell`
 
 ### Script
 
-An address is not a deal.
+Your property is more than an address—and selling it is not one-size-fits-all.
 
-A serious opportunity needs context: the property, the owner’s goal, the timeline, the condition, the numbers, the buyer criteria, and the capital path.
+VestBlock starts with the situation: the property, its condition, your timeline, existing debt, and what a useful outcome would look like for you.
 
-Without that context, people forward noise. With it, the right person can decide whether the opportunity deserves a closer review.
+That context helps determine whether a direct cash purchase, structured terms, a novation path, a licensed listing referral, or no immediate action deserves review.
 
-VestBlock helps organize the situation and route the next conversation. It does not force every property into the same answer.
+We do not promise that every property receives an offer, and we do not force every owner into the same answer. When the criteria align, the next steps are underwriting, a direct conversation, and an accountable offer decision.
 
-The goal is not more deal flow. It is clearer deal flow.
-
-Find your next move with VestBlock.
+Submit the property and start with a clearer review.
 
 ## 3. The Screenshot Problem
 
@@ -72,10 +70,10 @@ DealVault is VestBlock’s supporting trust layer for clearer records, milestone
 
 Clearer records. Cleaner handoffs. A better next move.
 
-## 4. What VestBlock Actually Does
+## 4. One Platform for the Work Behind the Next Move
 
 - Pillar: Master brand
-- Audience: people and businesses evaluating capital, deals, or growth opportunities
+- Audience: people and businesses evaluating capital, property, or business growth
 - Format: 70-second drawn master explainer
 - Frame: landscape, 16:9
 - Recommended HeyGen style: [Blueprint preview](https://dynamic.heygen.ai/video/transcode/4c9025a3b9734c6ea6c122fc00e04767/va362825b3b1e4c52a61e9e9926a07f1d/1280x720.mp4?tr=orig-true)
@@ -88,13 +86,13 @@ VestBlock is built around one question: what is your clearest next move?
 
 Sometimes that move is about capital—understanding readiness, organizing the file, and reviewing realistic paths.
 
-Sometimes it is about a deal—bringing the property, people, criteria, and capital context into one serious conversation.
+Sometimes it is about property—bringing owners, buyers, criteria, underwriting, and capital into one serious process.
 
-And sometimes it is about opportunity—helping a business become easier to find, contact, trust, and grow.
+And sometimes it is about business growth—helping a company become easier to find, fund, operate, and grow.
 
 DealVault supports those moves with clearer records when introductions, agreements, milestones, and payouts matter.
 
-Capital. Deals. Opportunity. One coordinated platform helping people and businesses move with better context.
+Capital. Property. Business growth. One connected platform for the work behind the next move.
 
 VestBlock. Find your next move.
 

@@ -1,8 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database, AnalysisJob, AiDetailedAnalysis, RoadmapData } from "@/types/supabase"
-// Removed PDF.co specific imports: checkPdfCoJobStatus, downloadTextFile
-// import { isLikelyCreditReport } from "@/lib/text-utils"; // This is now in pdf-extraction-service or handled client side
 import { getComprehensiveAnalysisPrompt } from "@/lib/prompt-utils"
 import { getOpenAIClient } from "@/lib/openai-server"
 import { enrichCreditAnalysisResults } from "@/lib/credit/recommendation-engine"

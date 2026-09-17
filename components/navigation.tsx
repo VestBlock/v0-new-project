@@ -98,9 +98,9 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/capital', label: 'Capital' },
-    { href: '/real-estate', label: 'Deals' },
-    { href: '/opportunity', label: 'Opportunity' },
+    { href: '/capital', label: 'Get Funding Ready' },
+    { href: '/real-estate', label: 'Real Estate' },
+    { href: '/opportunity', label: 'Grow a Business' },
     { href: '/dealvault', label: 'DealVault' },
   ];
 
@@ -134,10 +134,10 @@ export function Navigation() {
   };
 
   return (
-    <header className="vb-site-header sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d0f]/95 shadow-[0_10px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#090d0f]/88">
+    <header className="vb-site-header sticky top-0 z-50 w-full border-b backdrop-blur-xl">
       <div className="container flex h-16 items-center">
         <div className="mr-4 flex min-w-0 items-center">
-          <Link href="/" className="group mr-7 flex min-h-11 items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#d7f80b] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <Link href="/" className="group mr-7 flex min-h-11 items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#b08d57] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             <BrandLogo showTagline />
           </Link>
           {/* Desktop Navigation */}
@@ -147,9 +147,9 @@ export function Navigation() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'border-b border-transparent px-3 py-2 transition-[color,border-color] duration-200 ease-out hover:border-[#d7f80b]/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7f80b]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'border-b border-transparent px-3 py-2 transition-[color,border-color] duration-200 ease-out hover:border-[#b08d57]/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b08d57]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActiveLink(link.href)
-                    ? 'border-[#d7f80b] text-foreground'
+                    ? 'border-[#b08d57] text-foreground'
                     : 'text-foreground/60'
                 )}
               >
@@ -318,8 +318,8 @@ export function Navigation() {
               <Button variant="ghost" asChild className={cn(isLoading && 'invisible')}>
                 <Link href="/login?redirect=/workspace" aria-hidden={isLoading || undefined} tabIndex={isLoading ? -1 : undefined}>Sign In</Link>
               </Button>
-              <Button asChild className="rounded-none border border-[#d7f80b]/70 bg-[#d7f80b] text-[#111707] shadow-none transition-colors hover:bg-[#efff87] hover:text-[#111707]">
-                <Link href="/next-move" data-home-primary-cta>Get my free plan</Link>
+              <Button asChild className="vb-nav-primary rounded-none border shadow-none transition-colors">
+                <Link href="/next-move" data-home-primary-cta>Start here</Link>
               </Button>
             </nav>
           )}

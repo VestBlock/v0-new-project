@@ -1,7 +1,8 @@
 import type React from 'react';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Manrope, Newsreader } from 'next/font/google';
 import './globals.css';
+import '@/styles/private-ledger.css';
 import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -16,7 +17,17 @@ import {
 } from '@/lib/seo/site';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/structuredData';
 
-const inter = Inter({ subsets: ['latin'] });
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-vb-sans',
+  display: 'swap',
+});
+
+const newsreader = Newsreader({
+  subsets: ['latin'],
+  variable: '--font-vb-display',
+  display: 'block',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
@@ -87,7 +98,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${manrope.variable} ${newsreader.variable} ${manrope.className}`}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

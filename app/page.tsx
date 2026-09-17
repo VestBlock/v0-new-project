@@ -11,9 +11,9 @@ import {
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Find Your Next Move Across Capital, Deals, and Opportunity',
+  title: 'Capital, Property & Business Growth in One Platform',
   description:
-    'VestBlock helps people prepare for capital, evaluate real estate deals, and build or grow opportunities—with a clear next-step plan and DealVault support for active work.',
+    'VestBlock connects funding readiness, business growth, and active property acquisition—from sourcing and owner outreach through offer, negotiation, and signed-contract coordination.',
   keywords: [
     'business capital preparation',
     'capital readiness',
@@ -34,31 +34,31 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Find Your Next Move Across Capital, Deals, and Opportunity | VestBlock',
+    title: 'Capital, Property & Business Growth | VestBlock',
     description:
-      'Prepare for capital, evaluate deals, and build or grow opportunities from one coordinated starting point.',
+      'One connected platform for funding readiness, business growth, and active property acquisition from criteria to signed contract.',
     url: absoluteUrl('/'),
     images: [
       {
         url: absoluteUrl('/opengraph-image'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock pathways for capital, deals, opportunity, and DealVault',
+        alt: 'VestBlock Private Ledger for capital, property acquisition, business growth, and DealVault records',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Find Your Next Move Across Capital, Deals, and Opportunity | VestBlock',
+    title: 'Capital, Property & Business Growth | VestBlock',
     description:
-      'Prepare for capital, evaluate deals, and build or grow opportunities from one coordinated starting point.',
+      'One connected platform for funding readiness, business growth, and active property acquisition from criteria to signed contract.',
     images: [absoluteUrl('/opengraph-image')],
   },
 };
 
 export default function HomePage() {
   return (
-    <div className="premium-page">
+    <div className="premium-page vb-private-ledger">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

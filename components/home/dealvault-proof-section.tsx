@@ -31,11 +31,11 @@ export function DealVaultProofSection() {
       <div className="vb-home-shell">
         <div className="vb-home-continuity__layout">
           <div className="vb-home-continuity__intro">
-            <p className="vb-home-kicker">DealVault</p>
-            <h2 id="continuity-title">Keep important work connected.</h2>
+          <p className="vb-home-kicker">DealVault · controlled record inside Private Ledger</p>
+            <h2 id="continuity-title">Keep the decisions, documents, and next steps together.</h2>
             <p>
-              When a VestBlock path becomes active work, DealVault can keep agreements, milestones, permissions, and
-              payout references together in one controlled record.
+              When a VestBlock path becomes active work, DealVault keeps agreements, milestones, permissions, and
+              payout references in one controlled record instead of scattering them across inboxes and folders.
             </p>
             <div>
               <Link href="/dealvault/demo" className="vb-home-button vb-home-button--primary">
@@ -68,8 +68,8 @@ export function DealVaultProofSection() {
 
         <div className="vb-home-trust" aria-labelledby="trust-title">
           <div className="vb-home-trust__heading">
-            <p className="vb-home-kicker">Clear before you continue</p>
-            <h2 id="trust-title">Know the scope before you share information.</h2>
+            <p className="vb-home-kicker">Clarity before information</p>
+            <h2 id="trust-title">Know what VestBlock does—and what remains your decision.</h2>
           </div>
           <div className="vb-home-trust__grid">
             {trustPoints.map(({ icon: Icon, title, body }) => (

@@ -255,7 +255,7 @@ export function SellPage({ market }: SellPageProps) {
   }
 
   return (
-    <div className="premium-page text-slate-100">
+    <div className="premium-page vb-sell-ledger text-slate-100">
         {/* Hero Section */}
         <section className="relative overflow-hidden px-4 pb-12 pt-10 md:pb-14 md:pt-14">
           <div className="absolute inset-0 bg-gradient-to-b from-cyan-950/45 via-slate-950/20 to-cyan-950/35" />
@@ -276,19 +276,19 @@ export function SellPage({ market }: SellPageProps) {
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-5 text-white">
                 <span className="text-cyan-200">
-                  {market ? `Sell a Property in ${market.regionLabel || market.city}?` : "Submit Your Property"}
+                  {market ? `Submit a Property in ${market.regionLabel || market.city}.` : "Submit your property."}
                 </span>
                 <br />
                 {" "}
                 <span className="text-white">
-                  {market ? "Get a Clear Cash, Creative, or Partner Review" : "For Fast Cash, Creative, or Novation Review"}
+                  {market ? "Review the clearest path to a sale." : "Review the clearest path to a sale."}
                 </span>
               </h1>
 
               <p className="text-lg md:text-xl text-slate-200 mb-7 max-w-2xl mx-auto">
                 {market
-                  ? `Share the address, condition, timeline, occupancy, and seller situation for a ${market.regionLabel || market.city} property review. VestBlock reviews the details for a practical next conversation: cash buyer, creative structure, novation, or another partner path.`
-                  : "Share the property details, timeline, occupancy, and selling situation so VestBlock can route the submission to our acquisitions review for fast cash, creative structure, novation, or a partner path."}
+                  ? `Share the address, condition, timeline, occupancy, and selling situation for a ${market.regionLabel || market.city} property review. VestBlock records the facts, compares eligible paths, and routes the next conversation without promising an offer or outcome.`
+                  : "Share the property facts, timeline, occupancy, and selling situation. VestBlock records the submission in the Private Ledger, compares eligible paths, and routes the next acquisition conversation."}
               </p>
 
               <Button
@@ -297,7 +297,7 @@ export function SellPage({ market }: SellPageProps) {
                 onClick={scrollToForm}
               >
                 <Home className="mr-2 h-5 w-5" />
-                Review My Sale Options
+                Start the property review
               </Button>
               <p className="mt-4 text-sm text-slate-300">
                 No upfront review fee. No promised offer. Just a clearer path before you commit to anything.
@@ -311,7 +311,7 @@ export function SellPage({ market }: SellPageProps) {
             <div className="grid gap-4 md:grid-cols-3">
               <Card className="premium-card border-cyan-500/10">
                 <CardHeader>
-                  <CardTitle className="text-lg text-white">Share the sale situation</CardTitle>
+                  <CardTitle className="text-lg text-white">Share the property facts</CardTitle>
                   <p className="text-sm text-slate-300">
                     Add the address, condition, timeline, payoff context, preferred sale path, and any issues affecting the deal.
                   </p>
@@ -319,7 +319,7 @@ export function SellPage({ market }: SellPageProps) {
               </Card>
               <Card className="premium-card border-cyan-500/10">
                 <CardHeader>
-                  <CardTitle className="text-lg text-white">Compare three paths</CardTitle>
+                  <CardTitle className="text-lg text-white">Compare possible paths</CardTitle>
                   <p className="text-sm text-slate-300">
                     Your submission is reviewed for fast cash, creative structure, novation, or a partner conversation as the cleaner next step.
                   </p>
@@ -327,7 +327,7 @@ export function SellPage({ market }: SellPageProps) {
               </Card>
               <Card className="premium-card border-cyan-500/10">
                 <CardHeader>
-                  <CardTitle className="text-lg text-white">Route the right conversation</CardTitle>
+                  <CardTitle className="text-lg text-white">Protect the next decision</CardTitle>
                   <p className="text-sm text-slate-300">
                     The goal is clarity first, then the best-fit sale conversation based on the property and seller situation.
                   </p>
@@ -349,7 +349,7 @@ export function SellPage({ market }: SellPageProps) {
               <Card className="premium-card border-cyan-500/20">
                 <CardHeader className="text-center pb-6">
                   <CardTitle className="text-3xl font-bold gradient-text">
-                    Request Your Property Review
+                    Start the Private Ledger review
                   </CardTitle>
                   <p className="text-muted-foreground mt-2">
                     Fill out the form below so your property can be routed for fast cash, creative, novation, or partner review.
@@ -981,7 +981,7 @@ export function SellPage({ market }: SellPageProps) {
                 <BrandMark className="h-10 w-10" />
                 <div>
                   <span className="block text-lg font-semibold leading-none text-white">VestBlock</span>
-                  <span className="mt-1 block text-xs uppercase tracking-[0.18em] text-cyan-200/70">Real estate partner network</span>
+                  <span className="mt-1 block text-xs uppercase tracking-[0.18em] text-cyan-200/70">Private Ledger · acquisition desk</span>
                 </div>
               </div>
 

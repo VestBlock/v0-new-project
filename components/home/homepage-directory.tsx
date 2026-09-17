@@ -8,51 +8,52 @@ export type HomepageOutcomeId = "capital" | "deals" | "opportunity"
 export const homepageOutcomes = [
   {
     id: "capital",
-    label: "Capital",
-    title: "Prepare a business or real estate funding request",
+    label: "Prepare for funding",
+    title: "Build a funding request that is ready for a real review",
     href: "/capital",
-    action: "Review capital pathways",
+    action: "Start the funding path",
     access: "Free to explore · Provider review may be required",
-    summary: "Organize the purpose, amount, timing, and evidence behind a request before it reaches an independent provider.",
+    summary: "Clarify the amount, purpose, timing, and supporting information behind a business or real-estate request before it reaches an independent provider.",
     prepare: "Use of funds, requested amount, timing, business or property context, and supporting records.",
     boundary: "VestBlock is not a lender and does not guarantee approval. Independent providers set eligibility, pricing, limits, and terms.",
     shortcuts: [
-      ["Business funding", "/capital?path=business-funding#capital-intake"],
-      ["Real estate funding", "/real-estate-funding"],
+      ["Fund a business", "/capital?path=business-funding#capital-intake"],
+      ["Fund a property", "/real-estate-funding"],
     ],
     icon: Landmark,
   },
   {
     id: "deals",
-    label: "Deals",
-    title: "Evaluate, finance, buy, or sell real estate",
+    label: "Find, buy, or sell property",
+    title: "Move a property from criteria to a signed agreement",
     href: "/real-estate",
-    action: "Explore real estate deals",
+    action: "Open the real-estate path",
     access: "Free profiles and submissions · Routing requires review",
-    summary: "Start with your role and criteria, then use the relevant property, analysis, financing, buyer, seller, or lender path.",
+    summary: "Sellers can submit a property. Buyers define their criteria. VestBlock uses approved sources, underwriting, and compliant owner outreach to qualify possible matches, support offer decisions, preserve negotiation history, and coordinate the path to a signed agreement.",
     prepare: "Market, role, asset type, price range, timing, property details, capacity, and clear no-go criteria.",
     boundary: "VestBlock is not a broker or guarantor. Licensed and independent parties control regulated services, offers, underwriting, and closings.",
     shortcuts: [
-      ["Buyer profile", "/buyers"],
+      ["Find a property", "/buyers"],
       ["Sell a property", "/sell"],
-      ["Lender profile", "/lenders"],
+      ["Fund a deal", "/real-estate-funding"],
+      ["Join as a lender", "/lenders"],
     ],
     icon: Building2,
   },
   {
     id: "opportunity",
-    label: "Opportunity",
-    title: "Strengthen your position and build what comes next",
+    label: "Build or grow a business",
+    title: "Turn a business goal into an ordered growth plan",
     href: "/opportunity",
-    action: "Explore opportunities",
+    action: "Start the business-growth path",
     access: "Free starting plan · Some tools require an account · Paid services are identified upfront",
     summary: "Build a personal or business starting plan, improve financial readiness, set up a business, or explore practical growth and AI support.",
     prepare: "Your goal, current position, available time, main obstacle, and—when relevant—your business offer and operating needs.",
     boundary: "Roadmaps are educational, and growth support does not guarantee credit, rankings, leads, revenue, or profitability.",
     shortcuts: [
       ["Free next-step plan", "/next-move"],
-      ["Business setup", "/business-setup"],
-      ["Growth + AI", "/services"],
+      ["Set up a business", "/business-setup"],
+      ["Growth and AI support", "/services"],
     ],
     icon: TrendingUp,
   },
@@ -83,10 +84,10 @@ export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryPro
       <div className="vb-home-shell">
         <div className="vb-home-heading vb-home-heading--split">
           <div>
-            <p className="vb-home-kicker">Three paths · one coordinated platform</p>
-            <h2 id="path-selector-title">Where do you want to move forward?</h2>
+            <p className="vb-home-kicker">One platform · three clear outcomes</p>
+            <h2 id="path-selector-title">What are you working toward?</h2>
           </div>
-          <p>Choose the closest path. VestBlock will show what to prepare, what you can do next, and where another provider or participant makes the decision.</p>
+          <p>Choose the closest goal. VestBlock shows what to prepare, what deserves attention first, and the next action that can move the work forward.</p>
         </div>
 
         <div className="vb-home-paths__workspace">
@@ -112,7 +113,7 @@ export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryPro
             })}
           </div>
 
-          <article id="selected-path" className="vb-home-paths__preview">
+          <article id="selected-path" className="vb-home-paths__preview" aria-live="polite" aria-atomic="true">
             <header><span>Selected outcome</span><strong>{selected.label}</strong></header>
             <h3>{selected.title}</h3>
             <p className="vb-home-paths__summary">{selected.summary}</p>

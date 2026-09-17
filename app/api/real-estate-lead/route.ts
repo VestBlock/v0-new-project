@@ -210,7 +210,10 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     } else {
-      void Promise.allSettled([
+      // A serverless invocation may end as soon as the response is returned.
+      // Keep routing and operator-task creation in the request lifecycle so a
+      // successful intake does not silently lose its acquisition follow-up.
+      const followUpResults = await Promise.allSettled([
         runNewLeadAutomation({
           leadId: lead.id,
           leadType: 'real_estate',
@@ -252,12 +255,11 @@ export async function POST(request: NextRequest) {
           languagePreference: /spanish|espanol/i.test(notes || '') ? 'es' : 'en',
           marketTag: parsedLocation.marketTag,
         }),
-      ]).then((results) => {
-        const rejected = results.filter((result) => result.status === 'rejected')
-        if (rejected.length > 0) {
-          console.error('Real estate lead follow-up tasks failed:', rejected)
-        }
-      })
+      ])
+      const rejected = followUpResults.filter((result) => result.status === 'rejected')
+      if (rejected.length > 0) {
+        console.error('Real estate lead follow-up tasks failed:', rejected)
+      }
     }
 
     return NextResponse.json({ success: true })

@@ -145,7 +145,8 @@ for (const size of sizes) {
 
   const outcomes = []
   await page.locator('#choose-your-path').scrollIntoViewIfNeeded()
-  for (let index = 0; index < 4; index += 1) {
+  const outcomeCount = await page.locator('.vb-home-paths__choices button').count()
+  for (let index = 0; index < outcomeCount; index += 1) {
     const button = page.locator('.vb-home-paths__choices button').nth(index)
     await button.evaluate((element) => element.click())
     await page.waitForTimeout(80)

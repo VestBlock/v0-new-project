@@ -5,6 +5,10 @@ import {
   FOLLOWUP_AUTOMATION_REVIEWABLE_STATUSES,
   isMessageGenerationProtected,
 } from '@/lib/outreach/messageState'
+import {
+  buildDealPipelineUpsertPayload,
+  type DealPipelineUpsertInput,
+} from '@/lib/deals/pipelineUpsert'
 import type {
   BuyerBuyBoxRecord,
   BuyerContactRecord,
@@ -811,74 +815,63 @@ export async function updateBuyerMatchStatus(
   return data as BuyerMatchRecord
 }
 
-function dealStageLabel(stage: DealPipelineItemRecord['current_stage']) {
-  return stage
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-export async function upsertDealPipelineItem(input: {
-  propertyAnalysisRunId?: string | null
-  buyerPacketId?: string | null
-  leadId?: string | null
-  propertyAddress: string
-  city?: string | null
-  state?: string | null
-  zipCode?: string | null
-  currentStage?: DealPipelineItemRecord['current_stage']
-  priority?: DealPipelineItemRecord['priority']
-  dealGrade?: string | null
-  dealStrengthScore?: number | null
-  buyerPacketSentCount?: number
-  buyerReplyCount?: number
-  estimatedAssignmentFee?: number | null
-  expectedProfit?: number | null
-  nextAction?: string | null
-  nextActionAt?: string | null
-  metadata?: Record<string, unknown>
-}) {
+export async function upsertDealPipelineItem(input: DealPipelineUpsertInput) {
   const admin = createAdminClient()
-  const stage = input.currentStage || 'analyzed'
-  const payload = {
-    property_analysis_run_id: input.propertyAnalysisRunId || null,
-    buyer_packet_id: input.buyerPacketId || null,
-    lead_id: input.leadId || null,
-    property_address: input.propertyAddress,
-    city: input.city || null,
-    state: input.state || null,
-    zip_code: input.zipCode || null,
-    current_stage: stage,
-    stage_label: dealStageLabel(stage),
-    priority: input.priority || 'normal',
-    deal_grade: input.dealGrade || null,
-    deal_strength_score: input.dealStrengthScore ?? null,
-    buyer_packet_sent_count: input.buyerPacketSentCount ?? 0,
-    buyer_reply_count: input.buyerReplyCount ?? 0,
-    estimated_assignment_fee: input.estimatedAssignmentFee ?? null,
-    expected_profit: input.expectedProfit ?? null,
-    next_action: input.nextAction || null,
-    next_action_at: input.nextActionAt || null,
-    metadata_json: input.metadata || {},
-    updated_at: new Date().toISOString(),
-  }
 
-  const existingQuery = input.buyerPacketId
-    ? admin.from('deal_pipeline_items').select('id').eq('buyer_packet_id', input.buyerPacketId).limit(1)
-    : input.propertyAnalysisRunId
-      ? admin.from('deal_pipeline_items').select('id').eq('property_analysis_run_id', input.propertyAnalysisRunId).limit(1)
-      : admin.from('deal_pipeline_items').select('id').eq('property_address', input.propertyAddress).limit(1)
+  const loadExisting = async () => {
+    const query = input.buyerPacketId
+      ? admin
+          .from('deal_pipeline_items')
+          .select('*')
+          .eq('buyer_packet_id', input.buyerPacketId)
+          .limit(1)
+      : input.propertyAnalysisRunId
+        ? admin
+            .from('deal_pipeline_items')
+            .select('*')
+            .eq('property_analysis_run_id', input.propertyAnalysisRunId)
+            .limit(1)
+        : admin
+            .from('deal_pipeline_items')
+            .select('*')
+            .eq('property_address', input.propertyAddress)
+            .limit(1)
 
-  const { data: existing } = await existingQuery.maybeSingle()
-  if (existing?.id) {
-    const { data, error } = await admin.from('deal_pipeline_items').update(payload).eq('id', existing.id).select('*').single()
+    const { data, error } = await query.maybeSingle()
     if (error) throw error
-    return data as DealPipelineItemRecord
+    return (data as DealPipelineItemRecord | null) ?? null
   }
 
-  const { data, error } = await admin.from('deal_pipeline_items').insert(payload).select('*').single()
-  if (error) throw error
-  return data as DealPipelineItemRecord
+  // Compare-and-swap prevents a packet replay from winning a race with an
+  // operator stage transition. A retry reloads and preserves the newer stage.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const existing = await loadExisting()
+    const payload = buildDealPipelineUpsertPayload(input, new Date(), existing)
+
+    if (!existing) {
+      const { data, error } = await admin
+        .from('deal_pipeline_items')
+        .insert(payload)
+        .select('*')
+        .single()
+      if (error) throw error
+      return data as DealPipelineItemRecord
+    }
+
+    const { data, error } = await admin
+      .from('deal_pipeline_items')
+      .update(payload)
+      .eq('id', existing.id)
+      .eq('updated_at', existing.updated_at)
+      .select('*')
+      .maybeSingle()
+    if (error) throw error
+    if (data) return data as DealPipelineItemRecord
+  }
+
+  throw new Error(
+    'Deal pipeline item changed repeatedly during upsert; retry after the active stage update completes.'
+  )
 }
 
 export async function listDealPipelineItems(limit = 100) {

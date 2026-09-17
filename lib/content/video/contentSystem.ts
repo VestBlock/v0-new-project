@@ -67,8 +67,23 @@ export const videoMetadataSchema = z.object({
   style_name: z.string().max(160).nullable().default(null),
   renderer: z.string().max(160).nullable().default(null),
   render_url: z.string().max(2000).nullable().default(null),
+  render_url_source: z
+    .enum(['provider_ephemeral', 'external', 'private_storage'])
+    .nullable()
+    .default(null),
+  render_url_refreshed_at: z.string().datetime().nullable().default(null),
   heygen_video_id: z.string().max(240).nullable().default(null),
   heygen_session_id: z.string().max(240).nullable().default(null),
+  render_started_at: z.string().datetime().nullable().default(null),
+  render_completed_at: z.string().datetime().nullable().default(null),
+  render_error: z.string().max(1000).nullable().default(null),
+  render_attempt_key: z.string().max(255).nullable().default(null),
+  provider_submission_status: z
+    .enum(['not_started', 'submitting', 'accepted', 'ambiguous'])
+    .default('not_started'),
+  provider_recovery_status: z
+    .enum(['none', 'manual_review_required'])
+    .default('none'),
   actual_duration_seconds: z.number().min(0).max(3600).nullable().default(null),
   thumbnail_variants: z.array(z.string().max(2000)).max(10).default([]),
   cost_estimate: z.number().min(0).nullable().default(null),
@@ -103,6 +118,15 @@ export type VideoContentAssetRow = {
   published_at?: string | null
   created_at?: string | null
   updated_at?: string | null
+}
+
+export function buildVideoRenderAttemptKey(
+  row: Pick<VideoContentAssetRow, 'id' | 'approved_at' | 'updated_at' | 'created_at'>
+) {
+  const revision = row.approved_at || row.updated_at || row.created_at || 'initial'
+  return `vestblock-video:${row.id}:${revision}`
+    .replace(/[^A-Za-z0-9_:.-]/g, '-')
+    .slice(0, 255)
 }
 
 export type VideoPilotDefinition = {
@@ -142,6 +166,8 @@ export const VESTBLOCK_HEYGEN_STYLE_ASPECTS: Record<string, '16:9' | '9:16'> = {
   '4c9025a3b9734c6ea6c122fc00e04767': '16:9', // Blueprint
 }
 
+export const VESTBLOCK_VIDEO_PILOT_BATCH = 'vestblock-video-pilot-002'
+
 export const VESTBLOCK_VIDEO_PILOTS: VideoPilotDefinition[] = [
   {
     key: 'capital-application-spiral',
@@ -158,7 +184,7 @@ export const VESTBLOCK_VIDEO_PILOTS: VideoPilotDefinition[] = [
     hypothesis: 'Naming the application spiral and replacing it with a readiness sequence will earn attention and drive qualified next-move visits.',
     hookFamily: 'contrarian correction',
     formatFamily: 'hyper_real_scenario',
-    visualFamily: 'Material Ledger cinematic realism',
+    visualFamily: 'Private Ledger cinematic realism',
     durationTargetSeconds: 45,
     sourceUrls: ['/funding', '/next-move'],
     claimNotes: [
@@ -182,41 +208,39 @@ Find your next move with VestBlock.`,
   },
   {
     key: 'deals-address-is-not-a-deal',
-    title: 'An Address Is Not a Deal',
+    title: 'Your Property Is Not a Generic Offer',
     slug: 'video-pilot-address-is-not-a-deal',
     pillar: 'deals',
     serviceKey: 'sell_property',
-    audience: 'property owners, buyers, and operators evaluating an opportunity',
-    persona: 'operator who received a property address without enough context',
+    audience: 'property owners deciding whether and how to sell',
+    persona: 'property owner who needs a serious review instead of a one-size-fits-all pitch',
     buyerStage: 'awareness',
     platform: 'youtube_shorts',
     orientation: 'portrait',
-    questionOrPain: 'Property opportunities are passed around with an address but without the context required for a serious review.',
-    hypothesis: 'A simple drawn model of deal context will make VestBlock routing easy to understand and highly shareable.',
-    hookFamily: 'category reframe',
+    questionOrPain: 'Property owners receive generic pitches before anyone understands the condition, timing, debt, or desired outcome.',
+    hypothesis: 'Explaining VestBlock’s review sequence will attract owners who want a credible path to an offer or next step.',
+    hookFamily: 'owner expectation reset',
     formatFamily: 'drawn_explainer',
-    visualFamily: 'Material Ledger marker-and-paper diagram',
+    visualFamily: 'Private Ledger marker-and-paper diagram',
     durationTargetSeconds: 55,
     sourceUrls: ['/sell', '/buyers', '/lenders'],
     claimNotes: [
-      'Keep every route conditional on verified property, seller, buyer, and capital context.',
-      'Do not promise an offer, match, closing, financing, or return.',
+      'Keep every route conditional on verified property, owner, title, buyer, and capital context.',
+      'Do not promise an offer, contract, closing, financing, or specific sale outcome.',
     ],
-    criticalOnScreenText: ['ADDRESS ≠ DEAL', 'PROPERTY', 'OWNER GOAL', 'TIMELINE', 'CONDITION', 'BUYER FIT', 'CAPITAL FIT', 'NEXT MOVE'],
+    criticalOnScreenText: ['YOUR PROPERTY ≠ A GENERIC OFFER', 'CONDITION', 'TIMELINE', 'DEBT', 'OWNER GOAL', 'REVIEW', 'OFFER DECISION', 'NEXT STEP'],
     styleName: 'Journal',
     styleId: 'a7d2cc8d4f114a0f9c625ff33a9c495b',
-    scriptText: `An address is not a deal.
+    scriptText: `Your property is more than an address—and selling it is not one-size-fits-all.
 
-A serious opportunity needs context: the property, the owner’s goal, the timeline, the condition, the numbers, the buyer criteria, and the capital path.
+VestBlock starts with the situation: the property, its condition, your timeline, existing debt, and what a useful outcome would look like for you.
 
-Without that context, people forward noise. With it, the right person can decide whether the opportunity deserves a closer review.
+That context helps determine whether a direct cash purchase, structured terms, a novation path, a licensed listing referral, or no immediate action deserves review.
 
-VestBlock helps organize the situation and route the next conversation. It does not force every property into the same answer.
+We do not promise that every property receives an offer, and we do not force every owner into the same answer. When the criteria align, the next steps are underwriting, a direct conversation, and an accountable offer decision.
 
-The goal is not more deal flow. It is clearer deal flow.
-
-Find your next move with VestBlock.`,
-    ctaLabel: 'Start with the situation',
+Submit the property and start with a clearer review.`,
+    ctaLabel: 'Submit your property',
     ctaUrl: '/sell',
   },
   {
@@ -234,7 +258,7 @@ Find your next move with VestBlock.`,
     hypothesis: 'A realistic handoff failure followed by a clean record view will make DealVault’s trust-layer role immediately legible.',
     hookFamily: 'recognizable failure',
     formatFamily: 'hybrid',
-    visualFamily: 'Material Ledger cinematic-to-interface transition',
+    visualFamily: 'Private Ledger cinematic-to-interface transition',
     durationTargetSeconds: 60,
     sourceUrls: ['/dealvault'],
     claimNotes: [
@@ -258,40 +282,40 @@ Clearer records. Cleaner handoffs. A better next move.`,
   },
   {
     key: 'master-brand-three-doors',
-    title: 'What VestBlock Actually Does',
+    title: 'One Platform for the Work Behind the Next Move',
     slug: 'video-pilot-what-vestblock-does',
     pillar: 'master_brand',
     serviceKey: 'visibility_expansion',
-    audience: 'people and businesses deciding what to do next with capital, deals, or growth opportunities',
+    audience: 'people and businesses deciding what to do next with capital, property, or business growth',
     persona: 'new visitor who sees several VestBlock capabilities and needs one clear mental model',
     buyerStage: 'awareness',
     platform: 'youtube',
     orientation: 'landscape',
     questionOrPain: 'The breadth of VestBlock can feel disconnected without a simple master explanation.',
-    hypothesis: 'A three-door drawn explanation will make the platform understandable without narrowing it to one product or market.',
+    hypothesis: 'A connected-ledger explanation will make the platform understandable without narrowing it to one product or market.',
     hookFamily: 'master mental model',
     formatFamily: 'drawn_explainer',
-    visualFamily: 'Material Ledger blueprint',
+    visualFamily: 'Private Ledger blueprint',
     durationTargetSeconds: 70,
     sourceUrls: ['/', '/next-move', '/dealvault'],
     claimNotes: [
-      'Preserve Capital + Deals + Opportunity as the public structure.',
+      'Preserve Capital + Property + Business Growth as the public structure.',
       'Describe the Brain and Command Center only as supporting intelligence, not as a fourth public pillar.',
     ],
-    criticalOnScreenText: ['CAPITAL', 'DEALS', 'OPPORTUNITY', 'DealVault', 'Find your next move.'],
+    criticalOnScreenText: ['CAPITAL', 'PROPERTY', 'BUSINESS GROWTH', 'DealVault', 'Find your next move.'],
     styleName: 'Blueprint',
     styleId: '4c9025a3b9734c6ea6c122fc00e04767',
     scriptText: `VestBlock is built around one question: what is your clearest next move?
 
 Sometimes that move is about capital—understanding readiness, organizing the file, and reviewing realistic paths.
 
-Sometimes it is about a deal—bringing the property, people, criteria, and capital context into one serious conversation.
+Sometimes it is about property—bringing owners, buyers, criteria, underwriting, and capital into one serious process.
 
-And sometimes it is about opportunity—helping a business become easier to find, contact, trust, and grow.
+And sometimes it is about business growth—helping a company become easier to find, fund, operate, and grow.
 
 DealVault supports those moves with clearer records when introductions, agreements, milestones, and payouts matter.
 
-Capital. Deals. Opportunity. One coordinated platform helping people and businesses move with better context.
+Capital. Property. Business growth. One connected platform for the work behind the next move.
 
 VestBlock. Find your next move.`,
     ctaLabel: 'Find your next move',
@@ -306,7 +330,7 @@ function metadataForPilot(
   return videoMetadataSchema.parse({
     contract_version: 'vestblock-video-v1',
     asset_kind: assetKind,
-    pilot_batch: 'vestblock-video-pilot-001',
+    pilot_batch: VESTBLOCK_VIDEO_PILOT_BATCH,
     content_id: pilot.key,
     pillar: pilot.pillar,
     persona: pilot.persona,
@@ -343,6 +367,10 @@ function metadataForPilot(
     render_url: null,
     heygen_video_id: null,
     heygen_session_id: null,
+    render_started_at: null,
+    render_completed_at: null,
+    render_error: null,
+    render_attempt_key: null,
     actual_duration_seconds: null,
     thumbnail_variants: [],
     cost_estimate: null,
@@ -494,8 +522,8 @@ This script is a concept and theme to convey — not a verbatim transcript. You 
 
 ${mediaDirection}
 
-STYLE — VESTBLOCK MATERIAL LEDGER
-Graphite, warm ivory, and restrained electric lime. Premium paper, dossier, ledger, blueprint, and tabbed-record motifs. Typography is part of the composition. Use one strong focal point per scene, deliberate pacing, clean cuts, and readable captions. Keep Capital, Deals, Opportunity, and DealVault visually connected when they appear. Avoid generic blue fintech visuals, fake dashboards, fake customer proof, money rain, approval stamps, or exaggerated success imagery.
+STYLE — VESTBLOCK PRIVATE LEDGER
+Deep evergreen, warm ivory, limestone, graphite, and restrained brass. Premium paper, dossier, ledger, blueprint, and tabbed-record motifs. Typography is part of the composition. Use one strong focal point per scene, deliberate pacing, clean cuts, and readable captions. Keep Capital, Property, Business Growth, and DealVault visually connected when they appear. Avoid generic blue fintech visuals, fake dashboards, fake customer proof, money rain, approval stamps, or exaggerated success imagery.
 
 Preferred HeyGen style: ${input.metadata.style_name || 'Blueprint'}.`
 }
