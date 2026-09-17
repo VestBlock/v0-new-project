@@ -9,6 +9,7 @@ import {
   OUTLOOK_COLD_B2B_INVOCATION_CAP,
   OUTLOOK_COLD_B2B_LANE_KEYS,
   allocateOutlookColdLaneCaps,
+  getOutlookColdSendWindow,
   inspectOutlookColdBudget,
   isOutlookColdSendWindow,
   reserveOutlookColdBudget,
@@ -31,9 +32,17 @@ assert.equal(Object.values(allocation.laneCaps).filter((cap) => cap === 3).lengt
 assert.deepEqual(allocateOutlookColdLaneCaps(now), allocation, 'lane allocation must be deterministic')
 
 assert.equal(isOutlookColdSendWindow(now), true)
-assert.equal(isOutlookColdSendWindow(new Date('2026-09-15T14:59:59.000Z')), false)
+assert.equal(isOutlookColdSendWindow(new Date('2026-09-15T13:59:59.000Z')), false)
+assert.equal(isOutlookColdSendWindow(new Date('2026-09-15T14:00:00.000Z')), true)
 assert.equal(isOutlookColdSendWindow(new Date('2026-09-15T22:00:00.000Z')), false)
 assert.equal(isOutlookColdSendWindow(new Date('2026-09-13T16:00:00.000Z')), false)
+assert.equal(isOutlookColdSendWindow(new Date('2026-01-05T15:00:00.000Z')), true)
+assert.equal(isOutlookColdSendWindow(new Date('2026-01-05T23:00:00.000Z')), false)
+assert.deepEqual(
+  getOutlookColdSendWindow(new Date('2026-09-15T14:00:00.000Z')),
+  { allowed: true, weekday: 'Tue', hour: 9 },
+  'the observable cron window must use the same Chicago predicate as provider admission'
+)
 
 function reserve(input: {
   metrics: OutlookColdBudgetMetrics
@@ -179,9 +188,20 @@ const repositorySource = fs.readFileSync(
   path.join(process.cwd(), 'lib/outreach/outlookColdBudget.ts'),
   'utf8'
 )
+const deliverySource = fs.readFileSync(
+  path.join(process.cwd(), 'lib/outreach/outlookDelivery.ts'),
+  'utf8'
+)
+const environmentDocs = fs.readFileSync(
+  path.join(process.cwd(), 'docs/ENV_VARS_REQUIRED.md'),
+  'utf8'
+)
 assert.match(repositorySource, /command_center_jobs/)
 assert.match(repositorySource, /\.eq\('updated_at', row\.updated_at\)/)
 assert.match(repositorySource, /recipientDomainHash/)
 assert.doesNotMatch(repositorySource, /attemptMarkers:[\s\S]{0,200}recipientEmail/)
+assert.match(deliverySource, /09:00–16:59 America\/Chicago/)
+assert.match(environmentDocs, /09:00 through 16:59 America\/Chicago/)
+assert.doesNotMatch(`${deliverySource}\n${environmentDocs}`, /15:00(?:–| through )21:59 UTC/)
 
 console.log('Outlook cold budget, fairness, domain, invocation, and send-window tests passed.')

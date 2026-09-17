@@ -106,12 +106,34 @@ export function allocateOutlookColdLaneCaps(now: Date = new Date()) {
   return { businessDate, rotationOffset, laneCaps }
 }
 
-/** Direct cold dispatch is restricted to weekdays from 15:00 through 21:59 UTC. */
+const CHICAGO_COLD_SEND_WINDOW_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago',
+  weekday: 'short',
+  hour: '2-digit',
+  hour12: false,
+})
+
+/** Canonical direct cold-email window: weekdays from 09:00 through 16:59 America/Chicago. */
+export function getOutlookColdSendWindow(now: Date = new Date()) {
+  if (!Number.isFinite(now.getTime())) {
+    return { allowed: false, weekday: '', hour: Number.NaN }
+  }
+  const parts = Object.fromEntries(
+    CHICAGO_COLD_SEND_WINDOW_FORMATTER.formatToParts(now)
+      .filter((part) => part.type === 'weekday' || part.type === 'hour')
+      .map((part) => [part.type, part.value])
+  )
+  const weekday = String(parts.weekday || '')
+  const hour = Number.parseInt(String(parts.hour || ''), 10)
+  return {
+    allowed: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(weekday) && hour >= 9 && hour < 17,
+    weekday,
+    hour,
+  }
+}
+
 export function isOutlookColdSendWindow(now: Date = new Date()) {
-  if (!Number.isFinite(now.getTime())) return false
-  const weekday = now.getUTCDay()
-  const hour = now.getUTCHours()
-  return weekday >= 1 && weekday <= 5 && hour >= 15 && hour < 22
+  return getOutlookColdSendWindow(now).allowed
 }
 
 function normalizeOutlookColdBudget(

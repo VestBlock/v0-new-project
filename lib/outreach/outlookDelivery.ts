@@ -337,7 +337,7 @@ export async function sendGuardedOutlookEmail(
   if (input.purpose === 'cold_outreach') {
     if (!isOutlookColdSendWindow(now)) {
       return held({
-        reason: 'Direct cold Outlook dispatch is outside the weekday 15:00–21:59 UTC send window.',
+        reason: 'Direct cold Outlook dispatch is outside the weekday 09:00–16:59 America/Chicago send window.',
         policyReason: 'outlook_cold_send_window_closed',
         correlationId: identity.correlationId,
         deferredScope: 'global',

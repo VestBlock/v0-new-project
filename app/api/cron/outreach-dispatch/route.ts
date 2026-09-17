@@ -9,6 +9,7 @@ import { runLeadThroughputSprint } from '@/lib/leads/dailyAutomation'
 import { chicagoBusinessDate } from '@/lib/outreach/dailyStrategyOutputCore'
 import { readOutreachDispatchCapacity } from '@/lib/outreach/outreachDispatchCapacity'
 import { evaluateOutreachDispatchHealth } from '@/lib/outreach/outreachDispatchCore'
+import { getOutlookColdSendWindow } from '@/lib/outreach/outlookColdBudgetCore'
 import { reconcileStaleOutreachReservations } from '@/lib/outreach/throughputGovernor'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
 
@@ -19,26 +20,6 @@ function enabled(value: string | null | undefined) {
 function positiveInt(value: string | null | undefined, fallback: number, maximum: number) {
   const parsed = Number.parseInt(String(value || ''), 10)
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(maximum, parsed) : fallback
-}
-
-function chicagoDispatchWindow(now = new Date()) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',
-      weekday: 'short',
-      hour: '2-digit',
-      hour12: false,
-    })
-      .formatToParts(now)
-      .filter((part) => part.type === 'weekday' || part.type === 'hour')
-      .map((part) => [part.type, part.value])
-  )
-  const hour = Number.parseInt(String(parts.hour || ''), 10)
-  return {
-    allowed: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(String(parts.weekday)) && hour >= 9 && hour < 17,
-    weekday: String(parts.weekday || ''),
-    hour,
-  }
 }
 
 async function persistDispatchFailure(input: {
@@ -71,7 +52,7 @@ export async function GET(request: Request) {
   // persistent pipeline unless the caller explicitly requests a full dry run.
   const dryRun = forcedDryRun
   const deliveryEnabled = liveEnabled && !forcedDryRun
-  const window = chicagoDispatchWindow()
+  const window = getOutlookColdSendWindow()
   const sendLimit = positiveInt(
     url.searchParams.get('limit') || process.env.OUTREACH_DISPATCH_PER_RUN,
     30,

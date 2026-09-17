@@ -119,6 +119,10 @@ const quotaMigration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260915212405_enforce_strategy_daily_lane_cap.sql'),
   'utf8'
 )
+const quotaAlignmentMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260917184912_align_strategy_lane_quota_with_weighted_plan.sql'),
+  'utf8'
+)
 assert.match(quotaMigration, /pg_advisory_xact_lock/)
 assert.match(quotaMigration, /FROM public\.strategy_lead_memberships AS membership[\s\S]*?JOIN public\.command_center_strategy_runs AS run/)
 assert.match(quotaMigration, /IF v_existing_count >= p_lane_target[\s\S]*?daily_lane_allocation_exhausted/)
@@ -129,6 +133,20 @@ assert.match(quotaMigration, /message\.generated_with = 'strategy_engine:' \|\| 
 assert.match(quotaMigration, /SECURITY DEFINER/)
 assert.match(quotaMigration, /REVOKE INSERT ON TABLE public\.strategy_lead_memberships FROM authenticated/)
 assert.match(quotaMigration, /REVOKE INSERT ON TABLE public\.strategy_lead_memberships FROM service_role/)
+const maximumCanonicalLaneTarget = Math.max(
+  ...canonicalOutputPlan.allocations.map((allocation) => allocation.target)
+)
+const alignedDatabaseMaximum = Number(
+  quotaAlignmentMigration.match(/p_lane_target > (\d+)/)?.[1] || Number.NaN
+)
+assert.equal(
+  alignedDatabaseMaximum,
+  maximumCanonicalLaneTarget,
+  'The database reservation guard must accept the largest canonical weighted lane target'
+)
+assert.match(quotaAlignmentMigration, /SECURITY DEFINER[\s\S]*?SET search_path = ''/)
+assert.match(quotaAlignmentMigration, /pg_advisory_xact_lock[\s\S]*?FROM public\.strategy_lead_memberships AS membership/)
+assert.match(quotaAlignmentMigration, /GRANT EXECUTE ON FUNCTION public\.reserve_strategy_daily_lane_membership[\s\S]*?TO service_role/)
 assert.ok(
   quotaMigration.indexOf('pg_advisory_xact_lock') <
     quotaMigration.indexOf('SELECT COUNT(*)::INTEGER\n  INTO v_existing_count') &&
