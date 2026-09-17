@@ -13,6 +13,7 @@ tsconfig.tsbuildinfo
 /artifacts/
 /cache/
 /tmp/
+/tmp
 /test-results/
 /.playwright-cli/
 /reports/
