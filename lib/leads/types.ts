@@ -264,6 +264,7 @@ export type OutreachMessageRecord = {
   send_provider?: string | null
   send_error?: string | null
   last_generated_at?: string | null
+  metadata_json: Record<string, unknown>
   created_at: string
   updated_at: string
 }

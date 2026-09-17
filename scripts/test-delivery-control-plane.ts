@@ -853,6 +853,23 @@ assert.match(throughputMigrationSource, /INTERVAL '23 hours'/)
 assert.match(throughputMigrationSource, /ADD COLUMN IF NOT EXISTS sender_email TEXT/)
 assert.match(throughputMigrationSource, /idx_provider_delivery_events_sender_time/)
 assert.match(source('lib/outreach/throughputGovernor.ts'), /reconcileStaleOutreachReservations/)
+const leadMessageMetadataMigration = source(
+  'supabase/migrations/20260917211800_add_lead_outreach_delivery_metadata.sql'
+)
+assert.match(
+  leadMessageMetadataMigration,
+  /ALTER TABLE public\.outreach_messages[\s\S]*?ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '\{\}'::jsonb/
+)
+assert.match(
+  leadMessageMetadataMigration,
+  /event\.status = 'accepted'[\s\S]*?event\.provider = 'outlook'[\s\S]*?message\.status = 'queued'[\s\S]*?message\.sent_at IS NULL/
+)
+assert.match(
+  leadMessageMetadataMigration,
+  /membership\.status IN \('qualified', 'needs_review', 'approved'\)/
+)
+assert.match(leadMessageMetadataMigration, /sent_count = totals\.accepted_count/)
+assert.match(source('app/api/cron/outreach-dispatch/route.ts'), /formatStructuredError/)
 
 for (const approvalRoute of [
   'app/api/admin/leads/[id]/outreach/route.ts',

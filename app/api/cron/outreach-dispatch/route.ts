@@ -12,6 +12,7 @@ import { evaluateOutreachDispatchHealth } from '@/lib/outreach/outreachDispatchC
 import { getOutlookColdSendWindow } from '@/lib/outreach/outlookColdBudgetCore'
 import { reconcileStaleOutreachReservations } from '@/lib/outreach/throughputGovernor'
 import { isCronAuthorized } from '@/lib/system/cronAuth'
+import { formatStructuredError } from '@/lib/system/errorMessage'
 
 function enabled(value: string | null | undefined) {
   return /^(1|true|yes|on)$/i.test(String(value || '').trim())
@@ -161,7 +162,8 @@ export async function GET(request: Request) {
       { status: ok ? 200 : 500 }
     )
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Outreach dispatch failed.'
+    const message = formatStructuredError(error, 'Outreach dispatch failed.')
+    console.error('[outreach-dispatch] failed:', message)
     const operationalAlert = dryRun
       ? null
       : await persistDispatchFailure({
