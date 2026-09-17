@@ -13,6 +13,14 @@ import { logEvent } from '@/lib/system/logEvent'
 
 type SupabaseLike = SupabaseClient<any, 'public', any>
 
+export const EXTERNAL_VIDEO_RENDER_PROVIDERS = [
+  'creative_claw',
+  'invideo',
+  'manual',
+] as const
+
+export type ExternalVideoRenderProvider = (typeof EXTERNAL_VIDEO_RENDER_PROVIDERS)[number]
+
 function renderSlugToken(input: {
   heygenVideoId?: string | null
   heygenSessionId?: string | null
@@ -28,6 +36,7 @@ function renderSlugToken(input: {
 export function buildPrivateVideoRenderPayload(input: {
   script: VideoContentAssetRow
   renderUrl: string
+  provider?: ExternalVideoRenderProvider | 'heygen_video_agent'
   heygenVideoId?: string | null
   heygenSessionId?: string | null
   actualDurationSeconds?: number | null
@@ -55,11 +64,19 @@ export function buildPrivateVideoRenderPayload(input: {
     throw new Error('The private render URL must use HTTPS.')
   }
 
+  const provider =
+    input.provider ||
+    (input.heygenVideoId || input.heygenSessionId ? 'heygen_video_agent' : 'manual')
+  if (provider !== 'heygen_video_agent' && (input.heygenVideoId || input.heygenSessionId)) {
+    throw new Error('HeyGen identifiers may only be registered with the HeyGen provider.')
+  }
+
   const now = (input.now || new Date()).toISOString()
   const metadata = videoMetadataSchema.parse({
     ...parsedMetadata.data,
     asset_kind: 'video_render',
-    generator: 'heygen_video_agent',
+    generator: provider,
+    renderer: provider,
     render_status: 'completed',
     publication_status: 'private',
     render_url: parsedRenderUrl.toString(),
@@ -102,6 +119,7 @@ export async function createPrivateVideoRender(input: {
   supabase: SupabaseLike
   script: VideoContentAssetRow
   renderUrl: string
+  provider?: ExternalVideoRenderProvider | 'heygen_video_agent'
   heygenVideoId?: string | null
   heygenSessionId?: string | null
   actualDurationSeconds?: number | null
@@ -132,7 +150,11 @@ export async function createPrivateVideoRender(input: {
     actorUserId: input.actorUserId || null,
     entityType: 'video_render',
     entityId: data.id,
-    metadata: { source: 'heygen', visibility: 'private', publicPublishing: false },
+    metadata: {
+      source: payload.metadata_json.generator,
+      visibility: 'private',
+      publicPublishing: false,
+    },
   })
 
   return data as VideoContentAssetRow

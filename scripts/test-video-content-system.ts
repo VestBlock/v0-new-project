@@ -252,6 +252,8 @@ assert.equal(privateRenderPayload.metadata_json.render_status, 'completed')
 assert.equal(privateRenderPayload.metadata_json.render_completed_at, '2026-09-16T18:00:00.000Z')
 assert.equal(privateRenderPayload.metadata_json.render_url_source, 'provider_ephemeral')
 assert.equal(privateRenderPayload.metadata_json.render_url_refreshed_at, '2026-09-16T18:00:00.000Z')
+assert.equal(privateRenderPayload.metadata_json.generator, 'heygen_video_agent')
+assert.equal(privateRenderPayload.metadata_json.renderer, 'heygen_video_agent')
 assert.match(privateRenderPayload.slug, /video-123$/)
 const manualRenderPayload = buildPrivateVideoRenderPayload({
   script: {
@@ -265,6 +267,9 @@ const manualRenderPayload = buildPrivateVideoRenderPayload({
   },
   renderUrl: 'https://example.test/manually-registered.mp4',
 })
+assert.equal(manualRenderPayload.metadata_json.generator, 'manual')
+assert.equal(manualRenderPayload.metadata_json.renderer, 'manual')
+assert.equal(manualRenderPayload.metadata_json.render_url_source, 'external')
 assert.equal(
   manualRenderPayload.slug,
   buildPrivateVideoRenderPayload({
@@ -280,6 +285,41 @@ assert.equal(
     renderUrl: 'https://example.test/manually-registered.mp4',
   }).slug,
   'Retrying a manual render registration must resolve to the same ledger slug.'
+)
+const creativeClawRenderPayload = buildPrivateVideoRenderPayload({
+  script: {
+    id: '9a9bbfaf-aa63-4297-b46b-f6274f87fd44',
+    title: firstScript.title,
+    slug: firstScript.slug,
+    content_type: 'video_script',
+    status: 'ready',
+    approval_status: 'approved',
+    metadata_json: { ...firstMetadata, renderer_prompt: rendererPrompt },
+  },
+  renderUrl: 'https://assets.creativeclaw.test/vestblock-property-teaser.mp4',
+  provider: 'creative_claw',
+})
+assert.equal(creativeClawRenderPayload.metadata_json.generator, 'creative_claw')
+assert.equal(creativeClawRenderPayload.metadata_json.renderer, 'creative_claw')
+assert.equal(creativeClawRenderPayload.metadata_json.publication_status, 'private')
+assert.equal(creativeClawRenderPayload.approval_status, 'review_required')
+assert.throws(
+  () =>
+    buildPrivateVideoRenderPayload({
+      script: {
+        id: '9a9bbfaf-aa63-4297-b46b-f6274f87fd44',
+        title: firstScript.title,
+        slug: firstScript.slug,
+        content_type: 'video_script',
+        status: 'ready',
+        approval_status: 'approved',
+        metadata_json: { ...firstMetadata, renderer_prompt: rendererPrompt },
+      },
+      renderUrl: 'https://assets.creativeclaw.test/vestblock-property-teaser.mp4',
+      provider: 'creative_claw',
+      heygenVideoId: 'must-not-cross-providers',
+    }),
+  /only be registered with the HeyGen provider/i
 )
 assert.throws(
   () =>

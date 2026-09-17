@@ -17,6 +17,7 @@ import {
 import { seedVestBlockVideoPilots } from '@/lib/content/video/pilotSeed'
 import {
   createPrivateVideoRender,
+  EXTERNAL_VIDEO_RENDER_PROVIDERS,
   refreshHeyGenPrivateRenderUrl,
 } from '@/lib/content/video/privateRender'
 import { logEvent } from '@/lib/system/logEvent'
@@ -31,6 +32,7 @@ const postSchema = z.discriminatedUnion('action', [
     action: z.literal('register_render'),
     scriptId: z.string().uuid(),
     renderUrl: z.string().url().max(2000),
+    provider: z.enum(EXTERNAL_VIDEO_RENDER_PROVIDERS).optional(),
     heygenVideoId: z.string().max(240).optional(),
     heygenSessionId: z.string().max(240).optional(),
     actualDurationSeconds: z.number().min(0).max(3600).optional(),
@@ -74,6 +76,7 @@ async function loadVideoRows() {
 async function registerPrivateRender(input: {
   scriptId: string
   renderUrl: string
+  provider?: (typeof EXTERNAL_VIDEO_RENDER_PROVIDERS)[number]
   heygenVideoId?: string
   heygenSessionId?: string
   actualDurationSeconds?: number
@@ -93,6 +96,7 @@ async function registerPrivateRender(input: {
     supabase: admin,
     script: script as VideoContentAssetRow,
     renderUrl: input.renderUrl,
+    provider: input.provider,
     heygenVideoId: input.heygenVideoId,
     heygenSessionId: input.heygenSessionId,
     actualDurationSeconds: input.actualDurationSeconds,
