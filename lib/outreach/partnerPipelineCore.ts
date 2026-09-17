@@ -23,3 +23,21 @@ export function partnerPipelineRotationOffset(now = new Date()) {
   )
   return utcDay % PARTNER_PIPELINE_LANES.length
 }
+
+const PARTNER_PIPELINE_INVOCATION_BUCKET_MS = 3 * 60 * 60 * 1000
+
+/**
+ * Advance the first partner lane for each scheduled three-hour invocation.
+ * A date-only offset can starve the same third lane for an entire day because
+ * the shared Outlook budget permits only two partner sends per invocation.
+ */
+export function partnerPipelineInvocationRotationOffset(
+  dailyOffset: number,
+  now = new Date()
+) {
+  const safeDailyOffset =
+    ((Math.floor(dailyOffset) % PARTNER_PIPELINE_LANES.length) + PARTNER_PIPELINE_LANES.length) %
+    PARTNER_PIPELINE_LANES.length
+  const invocationBucket = Math.floor(now.getTime() / PARTNER_PIPELINE_INVOCATION_BUCKET_MS)
+  return (safeDailyOffset + invocationBucket) % PARTNER_PIPELINE_LANES.length
+}

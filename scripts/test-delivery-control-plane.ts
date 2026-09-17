@@ -40,6 +40,7 @@ import {
 } from '../lib/outreach/deliveryBudgetCore'
 import {
   allocatePartnerPipelineSendCap,
+  partnerPipelineInvocationRotationOffset,
   partnerPipelineRotationOffset,
 } from '../lib/outreach/partnerPipelineCore'
 import { evaluateOutreachRecipientSnapshot } from '../lib/outreach/suppressionCore'
@@ -413,6 +414,40 @@ assert.deepEqual(allocatePartnerPipelineSendCap(5, 1, ['buyers', 'investors']), 
 assert.deepEqual(allocatePartnerPipelineSendCap(5, 0, []), { buyers: 0, lenders: 0, investors: 0 })
 assert.equal(Object.values(allocatePartnerPipelineSendCap(14)).reduce((sum, value) => sum + value, 0), 14)
 assert.equal(partnerPipelineRotationOffset(new Date('2026-09-14T23:59:59.000Z')), partnerPipelineRotationOffset(new Date('2026-09-14T00:00:00.000Z')))
+const partnerInvocationTimes = [
+  new Date('2026-09-17T15:15:00.000Z'),
+  new Date('2026-09-17T18:15:00.000Z'),
+  new Date('2026-09-17T21:15:00.000Z'),
+]
+const partnerInvocationAllocations = partnerInvocationTimes.map((invocationTime) =>
+  allocatePartnerPipelineSendCap(
+    2,
+    partnerPipelineInvocationRotationOffset(1, invocationTime)
+  )
+)
+assert.equal(
+  new Set(
+    partnerInvocationTimes.map((invocationTime) =>
+      partnerPipelineInvocationRotationOffset(1, invocationTime)
+    )
+  ).size,
+  3
+)
+assert.deepEqual(
+  partnerInvocationAllocations.reduce(
+    (totals, allocation) => ({
+      buyers: totals.buyers + allocation.buyers,
+      lenders: totals.lenders + allocation.lenders,
+      investors: totals.investors + allocation.investors,
+    }),
+    { buyers: 0, lenders: 0, investors: 0 }
+  ),
+  { buyers: 2, lenders: 2, investors: 2 }
+)
+assert.equal(
+  partnerPipelineInvocationRotationOffset(1, new Date('2026-09-17T15:15:00.000Z')),
+  partnerPipelineInvocationRotationOffset(1, new Date('2026-09-17T16:59:59.000Z'))
+)
 assert.equal(
   getConfiguredOutboundProvider({
     RESEND_API_KEY: 'resend-key',

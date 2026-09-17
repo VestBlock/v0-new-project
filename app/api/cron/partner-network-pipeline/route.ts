@@ -15,6 +15,7 @@ import {
 } from '@/lib/outreach/dailyStrategyOutputCore'
 import { resolvePipelineExecutionMode } from '@/lib/outreach/pipelineExecutionCore'
 import { evaluateOutreachDispatchHealth } from '@/lib/outreach/outreachDispatchCore'
+import { partnerPipelineInvocationRotationOffset } from '@/lib/outreach/partnerPipelineCore'
 
 function enabled(value: string | null | undefined) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase())
@@ -161,7 +162,7 @@ export async function GET(request: Request) {
   const sharedSendLimit = Object.values(canonicalSendAllocations).reduce((sum, value) => sum + value, 0)
   const invocationId = `partner-network:${randomUUID()}`
   const partnerLaneOrder = (['buyers', 'lenders', 'investors'] as const)
-  const rotationOffset = productionPlan.rotationOffset % partnerLaneOrder.length
+  const rotationOffset = partnerPipelineInvocationRotationOffset(productionPlan.rotationOffset)
   const rotatedLanes = partnerLaneOrder.map(
     (_, index) => partnerLaneOrder[(rotationOffset + index) % partnerLaneOrder.length]
   )
@@ -274,7 +275,8 @@ export async function GET(request: Request) {
       strategyOutputTarget,
       sharedSendLimit,
       effectiveSendLimit,
-      rotationOffset: productionPlan.rotationOffset,
+      rotationOffset,
+      dailyRotationOffset: productionPlan.rotationOffset,
       canonicalSendAllocations,
       sendAllocations,
       throughput: {
