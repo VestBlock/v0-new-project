@@ -98,9 +98,9 @@ export function Navigation() {
 
   // Main public navigation links
   const mainNavLinks = [
-    { href: '/capital', label: 'Get Funding Ready' },
-    { href: '/real-estate', label: 'Real Estate' },
-    { href: '/opportunity', label: 'Grow a Business' },
+    { href: '/capital', label: 'Capital' },
+    { href: '/real-estate', label: 'Real Estate Deals' },
+    { href: '/opportunity', label: 'Opportunity' },
     { href: '/dealvault', label: 'DealVault' },
   ];
 
@@ -138,7 +138,7 @@ export function Navigation() {
       <div className="container flex h-16 items-center">
         <div className="mr-4 flex min-w-0 items-center">
           <Link href="/" className="group mr-7 flex min-h-11 items-center outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#b08d57] focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-            <BrandLogo showTagline />
+            <BrandLogo />
           </Link>
           {/* Desktop Navigation */}
           <nav className="hidden items-center space-x-1 text-sm font-medium xl:flex">
@@ -197,7 +197,7 @@ export function Navigation() {
                     <X className="h-4 w-4" />
                   </button>
                 <Link href="/" className="group mb-6 flex items-center">
-                  <BrandLogo showTagline />
+                  <BrandLogo />
                 </Link>
                 <div className="flex flex-col space-y-2">
                   {mainNavLinks.map((link) => (
@@ -222,7 +222,7 @@ export function Navigation() {
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="flex min-h-11 items-center rounded-xl px-3 py-2 font-medium text-foreground transition-colors hover:bg-white/[0.05]"
                       >
-                        Get my free plan
+                        Build my free roadmap
                       </Link>
                     </>
                   ) : (
@@ -319,7 +319,7 @@ export function Navigation() {
                 <Link href="/login?redirect=/workspace" aria-hidden={isLoading || undefined} tabIndex={isLoading ? -1 : undefined}>Sign In</Link>
               </Button>
               <Button asChild className="vb-nav-primary rounded-none border shadow-none transition-colors">
-                <Link href="/next-move" data-home-primary-cta>Start here</Link>
+                <Link href="/next-move" data-home-primary-cta>Build my free roadmap</Link>
               </Button>
             </nav>
           )}

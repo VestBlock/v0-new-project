@@ -14,6 +14,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { absoluteUrl } from '@/lib/seo/site'
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata'
 
 export const metadata: Metadata = {
   title: 'VestBlock Deal Record Library',
@@ -23,18 +27,25 @@ export const metadata: Metadata = {
     canonical: '/proof',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Deal Record Library',
     description:
       'Sample trust snapshot, verified buy-box, lender criteria, DealVault, and deal-review records for real estate operators.',
     url: absoluteUrl('/proof'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock deal record library preview',
       },
     ],
+  },
+  twitter: {
+    ...vestBlockTwitterDefaults,
+    title: 'VestBlock Deal Record Library',
+    description:
+      'Sample trust snapshot, verified buy-box, lender criteria, DealVault, and deal-review records for real estate operators.',
   },
 }
 

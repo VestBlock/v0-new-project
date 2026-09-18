@@ -23,6 +23,10 @@ import { getFundingPaymentPlans } from '@/lib/funding/payment-plans';
 import { pricedVestBlockOffers } from '@/lib/services/pricedOffers';
 import { vestBlockServiceDirectory } from '@/lib/services/serviceDirectory';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 import { MarketingReveal } from '@/components/marketing/reveal';
 import { RevenuePathLinks } from '@/components/marketing/revenue-path-links';
 import { FaqSection } from '@/components/marketing/faq-section';
@@ -37,13 +41,14 @@ export const metadata: Metadata = {
     canonical: '/pricing',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Real Estate Deal Pricing',
     description:
       'See VestBlock pricing and starting points for seller property review, real estate funding review, DealVault, and support services.',
     url: absoluteUrl('/pricing'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock pricing preview',
@@ -51,11 +56,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Real Estate Deal Pricing',
     description:
       'See VestBlock pricing and starting points for seller property review, real estate funding review, DealVault, and support services.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 
 export const metadata: Metadata = {
   title: 'Real Estate Funding For DSCR, Rental, Flip, And Deal Review',
@@ -10,13 +14,14 @@ export const metadata: Metadata = {
     canonical: '/real-estate-funding',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Real Estate Funding',
     description:
       'Real estate funding lead intake for investors and property owners who need DSCR, rental, flip, hard-money, or deal review follow-up.',
     url: absoluteUrl('/real-estate-funding'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock real estate funding preview',
@@ -24,11 +29,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Real Estate Funding',
     description:
       'Real estate funding lead intake for investors and property owners who need DSCR, rental, flip, hard-money, or deal review follow-up.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

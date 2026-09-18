@@ -23,6 +23,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 
 export const metadata: Metadata = {
   title: 'DealFlow Growth Support For Real Estate Operators',
@@ -32,13 +36,14 @@ export const metadata: Metadata = {
     canonical: '/dealflow-growth-system',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'DealFlow Growth Support | VestBlock',
     description:
       'High-touch support for real estate teams that need cleaner intake, partner review, deal records, and lead response.',
     url: absoluteUrl('/dealflow-growth-system'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock DealFlow Growth Support preview',
@@ -46,11 +51,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'DealFlow Growth Support | VestBlock',
     description:
       'Seller intake, buyer and lender criteria review, DealVault records, AI response, and follow-through support for real estate operators.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

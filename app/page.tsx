@@ -7,65 +7,62 @@ import { absoluteUrl } from '@/lib/seo/site';
 import {
   organizationJsonLd,
   websiteJsonLd,
-  homepageFaqJsonLd,
 } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
-  title: 'Capital, Property & Business Growth in One Platform',
+  title: 'Find Your Next Move',
   description:
-    'VestBlock connects funding readiness, business growth, and active property acquisition—from sourcing and owner outreach through offer, negotiation, and signed-contract coordination.',
+    'Turn a capital, real-estate, or business goal into a focused roadmap. VestBlock shows you what to prepare and where to go next.',
   keywords: [
-    'business capital preparation',
     'capital readiness',
-    'business acquisition opportunities',
-    'deal evaluation',
-    'business growth resources',
-    'strategic opportunities',
-    'real estate opportunity network',
-    'seller property review',
-    'buyer buy box network',
-    'private lender network',
-    'developer contractor partner network',
+    'deal pathways',
+    'property opportunities',
+    'business growth planning',
     'DealVault records',
-    'real estate funding review',
-    'cash buyer network',
+    'next-move roadmap',
   ],
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Capital, Property & Business Growth | VestBlock',
+    title: 'Find Your Next Move | VestBlock',
     description:
-      'One connected platform for funding readiness, business growth, and active property acquisition from criteria to signed contract.',
+      'Capital preparation, real-estate deals, and practical business growth in one coordinated place.',
     url: absoluteUrl('/'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Private Ledger for capital, property acquisition, business growth, and DealVault records',
+        alt: 'VestBlock — find your next move across funding, real estate, and business growth',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Capital, Property & Business Growth | VestBlock',
+    title: 'Find Your Next Move | VestBlock',
     description:
-      'One connected platform for funding readiness, business growth, and active property acquisition from criteria to signed contract.',
-    images: [absoluteUrl('/opengraph-image')],
+      'Capital preparation, real-estate deals, and practical business growth in one coordinated place.',
+    images: [
+      {
+        url: absoluteUrl('/twitter-image?v=3'),
+        width: 1200,
+        height: 630,
+        alt: 'VestBlock — find your next move across funding, real estate, and business growth',
+      },
+    ],
   },
 };
 
 export default function HomePage() {
   return (
-    <div className="premium-page vb-private-ledger">
+    <div className="premium-page vb-home-v3">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify([
             organizationJsonLd(),
             websiteJsonLd(),
-            homepageFaqJsonLd(),
           ]),
         }}
       />

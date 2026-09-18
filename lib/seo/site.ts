@@ -1,7 +1,7 @@
 export const vestBlockSiteName = 'VestBlock';
 
 export const vestBlockDefaultDescription =
-  'VestBlock brings capital access, deal pathways, and opportunities to build, acquire, or grow into one coordinated place, with DealVault records supporting active work.';
+  'VestBlock brings capital preparation, real-estate deals, and practical business growth into one place, then shows you what to prepare and where to go next.';
 
 export function getSiteUrl() {
   const configured = (

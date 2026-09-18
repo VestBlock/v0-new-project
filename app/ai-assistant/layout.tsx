@@ -1,5 +1,9 @@
 import type { Metadata } from "next"
 import { absoluteUrl } from "@/lib/seo/site"
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from "@/lib/seo/socialMetadata"
 import { aiAssistantServiceJsonLd } from "@/lib/seo/structuredData"
 
 export const metadata: Metadata = {
@@ -14,6 +18,7 @@ export const metadata: Metadata = {
     follow: false,
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: "AI Receptionist, Booking, And Website Upgrades | VestBlock",
     description:
       "AI receptionist, booking, and website-upgrade services for service businesses that want stronger lead capture and more booked conversations.",
@@ -21,7 +26,7 @@ export const metadata: Metadata = {
     url: absoluteUrl("/ai-assistant"),
     images: [
       {
-        url: absoluteUrl("/opengraph-image"),
+        url: absoluteUrl("/opengraph-image?v=3"),
         width: 1200,
         height: 630,
         alt: "VestBlock AI assistant service preview",
@@ -37,11 +42,10 @@ export const metadata: Metadata = {
     "AI receptionist for local business",
   ],
   twitter: {
-    card: "summary_large_image",
+    ...vestBlockTwitterDefaults,
     title: "AI Receptionist, Booking, And Website Upgrades | VestBlock",
     description:
       "AI receptionist, booking, and website-upgrade services for service businesses that want stronger lead capture and more booked conversations.",
-    images: [absoluteUrl("/opengraph-image")],
   },
 }
 

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
     'AI receptionist visibility',
   ],
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Visibility Case Study',
     description:
       'How VestBlock is documenting its own climb from blocked site to crawlable search-ready brand.',
@@ -31,7 +33,7 @@ export const metadata: Metadata = {
     type: 'article',
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock visibility case study preview',
@@ -39,11 +41,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Visibility Case Study',
     description:
       'A live proof log for the VestBlock Search Visibility process.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

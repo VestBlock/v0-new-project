@@ -30,9 +30,9 @@ export function PublicSiteFooter() {
     <footer className="border-t border-white/10 bg-[#090d0f] text-white/60">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-9 text-sm sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="font-medium text-white">Vestblock LLC</p>
+          <p className="font-medium text-white">VestBlock LLC</p>
           <p className="mt-1 text-xs leading-5 text-white/45">
-            Plan your next move across capital, deals, and opportunity. Independent providers make their own decisions; results are not guaranteed.
+            Find your next move across funding, real estate, and business growth. Independent providers make their own decisions; results are not guaranteed.
           </p>
         </div>
         <nav aria-label="Legal" className="flex flex-wrap gap-x-6 gap-y-3">
@@ -41,7 +41,7 @@ export function PublicSiteFooter() {
           <Link className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/terms">Terms</Link>
           <Link className="inline-flex min-h-11 items-center transition-colors hover:text-white" href="/accessibility">Accessibility</Link>
         </nav>
-        <p className="text-xs text-white/40">© {new Date().getFullYear()} Vestblock LLC</p>
+        <p className="text-xs text-white/40">© {new Date().getFullYear()} VestBlock LLC</p>
       </div>
     </footer>
   );

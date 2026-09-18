@@ -1,266 +1,268 @@
+import assert from 'node:assert/strict'
+import { mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { chromium } from '@playwright/test'
 
 const baseUrl = process.env.HOMEPAGE_QA_URL || 'http://127.0.0.1:3417'
-const browser = await chromium.launch({ headless: true })
+const artifactDirectory = resolve(process.cwd(), 'output/playwright/homepage-v3')
+
+mkdirSync(artifactDirectory, { recursive: true })
+
 const sizes = [
-  { name: 'desktop', width: 1280, height: 720 },
-  { name: 'tablet', width: 1024, height: 768 },
+  { name: 'wide', width: 1440, height: 1000 },
+  { name: 'tablet', width: 1024, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
 ]
 
+const paths = [
+  { id: 'funding', label: 'Funding', href: '/capital' },
+  { id: 'real-estate', label: 'Deals', href: '/real-estate' },
+  { id: 'opportunity', label: 'Opportunity', href: '/opportunity' },
+]
+
+const formatConsoleMessage = (message) => ({
+  type: message.type(),
+  text: message.text(),
+  location: message.location(),
+})
+
+const readPageContract = async (page) => page.evaluate(() => {
+  const root = document.documentElement
+  const heroTitle = document.querySelector('#homepage-hero-title')
+  const hero = heroTitle?.closest('section') || heroTitle?.parentElement
+  const pathDirectory = document.querySelector('#choose-your-path')
+  const steps = document.querySelector('[data-home-steps]')
+  const trust = document.querySelector('[data-home-trust]')
+  const dealVault = document.querySelector('[data-home-dealvault]')
+  const finalCta = document.querySelector('[data-home-final-cta]')
+  const visible = (node) => {
+    if (!(node instanceof HTMLElement)) return false
+    const style = getComputedStyle(node)
+    const rect = node.getBoundingClientRect()
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number.parseFloat(style.opacity) > 0.01 && rect.width > 0 && rect.height > 0
+  }
+  const hrefOf = (node) => node?.getAttribute('href') || null
+  const boxOf = (node) => {
+    if (!(node instanceof HTMLElement)) return null
+    const rect = node.getBoundingClientRect()
+    return {
+      width: Number(rect.width.toFixed(1)),
+      height: Number(rect.height.toFixed(1)),
+    }
+  }
+
+  const expectedHrefs = {
+    funding: '/capital',
+    'real-estate': '/real-estate',
+    opportunity: '/opportunity',
+  }
+  const pathCards = ['funding', 'real-estate', 'opportunity'].map((id) => {
+    const card = pathDirectory?.querySelector(`[data-home-path="${id}"]`)
+    const link = card?.matches(`a[href="${expectedHrefs[id]}"]`)
+      ? card
+      : card?.querySelector(`a[href="${expectedHrefs[id]}"]`)
+    return {
+      id,
+      visible: visible(card),
+      href: hrefOf(link),
+      heading: card?.querySelector('h2, h3')?.textContent?.replace(/\s+/g, ' ').trim() || null,
+      text: card?.textContent?.replace(/\s+/g, ' ').trim() || null,
+    }
+  })
+
+  const primaryCtas = Array.from(document.querySelectorAll('main a[data-home-primary-cta]')).map((node) => ({
+    text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
+    href: hrefOf(node),
+    visible: visible(node),
+  }))
+
+  const tapTargets = Array.from(document.querySelectorAll('main a[href], main button'))
+    .filter((node) => visible(node) && !node.closest('[data-qa-inline-link]'))
+    .map((node) => ({
+      tag: node.tagName.toLowerCase(),
+      text: node.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) || '',
+      href: hrefOf(node),
+      ...boxOf(node),
+    }))
+
+  const undersizedTapTargets = tapTargets.filter(({ width, height }) => width < 44 || height < 44)
+  const visibleTextUnder12px = Array.from(document.querySelectorAll('main p, main li, main dt, main dd, main small'))
+    .filter((node) => visible(node) && Number.parseFloat(getComputedStyle(node).fontSize) < 12)
+    .map((node) => ({
+      px: Number.parseFloat(getComputedStyle(node).fontSize),
+      text: node.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) || '',
+    }))
+
+  const headings = Array.from(document.querySelectorAll('main h1, main h2, main h3'))
+    .filter(visible)
+    .map((node) => ({ level: Number(node.tagName.slice(1)), text: node.textContent?.replace(/\s+/g, ' ').trim() || '' }))
+
+  return {
+    title: document.title,
+    h1Count: document.querySelectorAll('main h1').length,
+    heroTitle: heroTitle?.textContent?.replace(/\s+/g, ' ').trim() || null,
+    heroPrimaryHref: hrefOf(hero?.querySelector('a[data-home-primary-cta]')),
+    overflow: root.scrollWidth - root.clientWidth,
+    pageHeight: root.scrollHeight,
+    headings,
+    pathCards,
+    pathDirectoryVisible: visible(pathDirectory),
+    primaryCtas,
+    stepCount: steps?.querySelectorAll('[data-home-step]').length
+      || steps?.querySelector('ol')?.querySelectorAll(':scope > li').length
+      || 0,
+    stepsVisible: visible(steps),
+    trustVisible: visible(trust),
+    dealVaultVisible: visible(dealVault),
+    dealVaultHref: hrefOf(dealVault?.querySelector('a[href^="/dealvault"]')),
+    finalCtaVisible: visible(finalCta),
+    finalCtaHref: hrefOf(finalCta?.querySelector('a[data-home-primary-cta], a[href="/next-move"]')),
+    sectionHeadings: [pathDirectory, steps, trust, dealVault, finalCta].map((section) => (
+      section?.querySelector('h2')?.textContent?.replace(/\s+/g, ' ').trim() || null
+    )),
+    undersizedTapTargets,
+    visibleTextUnder12px,
+  }
+})
+
+const browser = await chromium.launch({ headless: true })
 const report = []
-for (const size of sizes) {
-  const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'no-preference' })
-  const page = await context.newPage()
-  const pageErrors = []
-  page.on('pageerror', (error) => pageErrors.push(error.message))
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await page.locator('#homepage-hero-title').waitFor({ state: 'visible', timeout: 60_000 })
-  await page.locator('.vb-home-paths').waitFor({ state: 'attached', timeout: 60_000 })
 
-  const readPrimaryCta = async () => {
-    const cta = page.locator('.vb-site-header [data-home-primary-cta]').first()
-    return {
-      label: (await cta.textContent())?.trim(),
-      href: await cta.getAttribute('href'),
-    }
-  }
-  const primaryCtaBeforeAuthSettles = await readPrimaryCta()
-  await page.waitForTimeout(900)
-  const primaryCtaAfterAuthSettles = await readPrimaryCta()
-
-  await page.waitForFunction(
-    () => document.querySelector('.vb-decision-console')?.getAttribute('data-beat') === '0',
-    undefined,
-    { timeout: 5_000 },
-  )
-  const beatZeroComposition = await page.evaluate(() => {
-    const rectFor = (selector) => {
-      const rect = document.querySelector(selector)?.getBoundingClientRect()
-      return rect ? { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height } : null
-    }
-    const goal = rectFor('.vb-decision-console__goal')
-    const evidence = rectFor('.vb-decision-console__evidence')
-    const canvas = rectFor('.vb-decision-console__canvas')
-    const evidenceNode = document.querySelector('.vb-decision-console__evidence')
-    const evidenceHidden = Boolean(evidenceNode && (
-      getComputedStyle(evidenceNode).visibility === 'hidden' || Number.parseFloat(getComputedStyle(evidenceNode).opacity) <= 0.01
-    ))
-    const geometricOverlap = Boolean(goal && evidence &&
-      goal.bottom > evidence.top && goal.top < evidence.bottom && goal.right > evidence.left && goal.left < evidence.right)
-    return {
-      requestedBeat: 0,
-      renderedBeat: document.querySelector('.vb-decision-console')?.getAttribute('data-beat'),
-      goalWithinCanvas: Boolean(goal && canvas && goal.top >= canvas.top - 1 && goal.bottom <= canvas.bottom + 1),
-      evidenceHiddenOnMobile: window.innerWidth > 640 || evidenceHidden,
-      noVisibleOverlap: evidenceHidden || !geometricOverlap,
-      goal,
-      evidence,
-    }
-  })
-  if (
-    beatZeroComposition.renderedBeat !== '0' ||
-    !beatZeroComposition.goalWithinCanvas ||
-    !beatZeroComposition.evidenceHiddenOnMobile ||
-    !beatZeroComposition.noVisibleOverlap
-  ) {
-    throw new Error(`Invalid ${size.name} beat 0 composition: ${JSON.stringify(beatZeroComposition)}`)
-  }
-
-  const foldPath = `/tmp/vestblock-home-v2-${size.name}-fold.png`
-  const fullPath = `/tmp/vestblock-home-v2-${size.name}-full.png`
-  await page.screenshot({ path: foldPath })
-  await page.screenshot({ path: fullPath, fullPage: true })
-
-  const beatPaths = []
-  const beatCompositions = []
-  for (let beat = 1; beat <= 2; beat += 1) {
-    await page.evaluate((beatNumber) => {
-      const element = document.querySelector(`[data-operator-beat="${beatNumber}"]`)
-      if (!element) throw new Error(`Missing scroll beat ${beatNumber}`)
-      const rect = element.getBoundingClientRect()
-      const targetY = window.innerHeight * (window.innerWidth <= 1100 ? 0.72 : 0.81)
-      const center = rect.top + window.scrollY + rect.height / 2
-      window.scrollTo(0, Math.max(0, center - targetY))
-    }, beat)
-    await page.waitForFunction(
-      (beatNumber) => document.querySelector('.vb-decision-console')?.getAttribute('data-beat') === String(beatNumber),
-      beat,
-      { timeout: 5_000 },
-    )
-    await page.waitForTimeout(700)
-    const composition = await page.evaluate((beatNumber) => {
-      const getRect = (selector) => {
-        const rect = document.querySelector(selector)?.getBoundingClientRect()
-        return rect ? { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height } : null
-      }
-      const consoleRect = getRect('.vb-decision-console')
-      const canvasRect = getRect('.vb-decision-console__canvas')
-      const headerRect = getRect('.vb-site-header')
-      const selectors = beatNumber === 1
-        ? ['.vb-decision-console__evidence']
-        : ['.vb-decision-console__route', '.vb-decision-console__record']
-      const panels = selectors.map((selector) => ({ selector, rect: getRect(selector) }))
-      const staleSelectors = beatNumber === 1
-        ? ['.vb-decision-console__goal']
-        : ['.vb-decision-console__goal', '.vb-decision-console__evidence']
-      const stalePanelsHidden = window.innerWidth > 1100 || staleSelectors.every((selector) => {
-        const node = document.querySelector(selector)
-        return node && Number.parseFloat(getComputedStyle(node).opacity) <= 0.01
-      })
-      const withinCanvas = panels.every(({ rect }) => rect && canvasRect && rect.top >= canvasRect.top - 1 && rect.bottom <= canvasRect.bottom + 1)
-      const noPanelOverlap = panels.length < 2 || !(
-        panels[0].rect && panels[1].rect &&
-        panels[0].rect.bottom > panels[1].rect.top &&
-        panels[0].rect.top < panels[1].rect.bottom &&
-        panels[0].rect.right > panels[1].rect.left &&
-        panels[0].rect.left < panels[1].rect.right
-      )
-      return {
-        requestedBeat: beatNumber,
-        renderedBeat: document.querySelector('.vb-decision-console')?.getAttribute('data-beat'),
-        consoleBelowHeader: Boolean(consoleRect && headerRect && consoleRect.top >= headerRect.bottom - 1),
-        consoleWithinViewport: Boolean(consoleRect && consoleRect.bottom <= window.innerHeight + 1),
-        withinCanvas,
-        noPanelOverlap,
-        stalePanelsHidden,
-        panels,
-      }
-    }, beat)
-    if (
-      composition.renderedBeat !== String(beat) ||
-      !composition.consoleBelowHeader ||
-      !composition.consoleWithinViewport ||
-      !composition.withinCanvas ||
-      !composition.noPanelOverlap ||
-      !composition.stalePanelsHidden
-    ) {
-      throw new Error(`Invalid ${size.name} beat ${beat} composition: ${JSON.stringify(composition)}`)
-    }
-    const beatPath = `/tmp/vestblock-home-v2-${size.name}-beat-${beat + 1}.png`
-    await page.screenshot({ path: beatPath })
-    beatPaths.push(beatPath)
-    beatCompositions.push(composition)
-  }
-
-  const outcomes = []
-  await page.locator('#choose-your-path').scrollIntoViewIfNeeded()
-  const outcomeCount = await page.locator('.vb-home-paths__choices button').count()
-  for (let index = 0; index < outcomeCount; index += 1) {
-    const button = page.locator('.vb-home-paths__choices button').nth(index)
-    await button.evaluate((element) => element.click())
-    await page.waitForTimeout(80)
-    outcomes.push({
-      label: (await button.textContent())?.replace(/\s+/g, ' ').trim(),
-      pressed: await button.getAttribute('aria-pressed'),
-      proofOutcome: await page.locator('.vb-home-proof').getAttribute('data-outcome'),
-      proofObjective: (await page.locator('.vb-roadmap-sheet__summary > div').first().textContent())?.replace(/\s+/g, ' ').trim(),
+try {
+  for (const size of sizes) {
+    const context = await browser.newContext({
+      viewport: { width: size.width, height: size.height },
+      reducedMotion: 'no-preference',
     })
+    const page = await context.newPage()
+    const consoleErrors = []
+    const pageErrors = []
+    const failedRequests = []
+
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(formatConsoleMessage(message))
+    })
+    page.on('pageerror', (error) => pageErrors.push(error.message))
+    page.on('requestfailed', (request) => {
+      const error = request.failure()?.errorText || 'unknown request failure'
+      // Next.js may cancel a speculative RSC prefetch after the document is
+      // ready. That browser-side cancellation is not a production request
+      // failure and should not hide real DNS, HTTP, or asset errors.
+      if (error === 'net::ERR_ABORTED' && request.url().includes('_rsc=')) return
+      failedRequests.push({ url: request.url(), error })
+    })
+
+    const response = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    assert(response?.ok(), `${size.name}: homepage returned ${response?.status() || 'no response'}`)
+    await page.locator('#homepage-hero-title').waitFor({ state: 'visible', timeout: 60_000 })
+    await page.locator('#choose-your-path').waitFor({ state: 'visible', timeout: 60_000 })
+    await page.evaluate(() => document.fonts?.ready)
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+
+    const contract = await readPageContract(page)
+    const foldPath = resolve(artifactDirectory, `${size.name}-fold.png`)
+    const fullPath = resolve(artifactDirectory, `${size.name}-full.png`)
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+    await page.screenshot({ path: foldPath })
+    await page.screenshot({ path: fullPath, fullPage: true })
+
+    assert.equal(contract.h1Count, 1, `${size.name}: homepage must contain exactly one h1`)
+    assert.equal(contract.heroTitle, 'Find your next move.', `${size.name}: hero promise changed`)
+    assert.equal(contract.heroPrimaryHref, '/next-move', `${size.name}: hero primary CTA must route to /next-move`)
+    assert(contract.pathDirectoryVisible, `${size.name}: #choose-your-path must be visible`)
+    assert.equal(contract.pathCards.length, 3, `${size.name}: three path cards are required`)
+
+    for (const expectedPath of paths) {
+      const actualPath = contract.pathCards.find(({ id }) => id === expectedPath.id)
+      assert(actualPath?.visible, `${size.name}: ${expectedPath.label} card is not visible`)
+      assert.equal(actualPath?.href, expectedPath.href, `${size.name}: ${expectedPath.label} must link to ${expectedPath.href}`)
+      assert(actualPath?.text?.toLocaleLowerCase().includes(expectedPath.label.toLocaleLowerCase()), `${size.name}: ${expectedPath.label} label is missing`)
+
+      const destination = await context.request.get(new URL(expectedPath.href, baseUrl).toString())
+      assert(destination.ok(), `${size.name}: ${expectedPath.href} returned ${destination.status()}`)
+    }
+
+    assert(contract.stepsVisible, `${size.name}: compact three-step explanation is missing`)
+    assert.equal(contract.stepCount, 3, `${size.name}: explanation must contain exactly three steps`)
+    assert(contract.trustVisible, `${size.name}: trust-boundary section is missing`)
+    assert(contract.dealVaultVisible, `${size.name}: DealVault section is missing`)
+    assert(contract.dealVaultHref?.startsWith('/dealvault'), `${size.name}: DealVault section needs a DealVault link`)
+    assert(contract.finalCtaVisible, `${size.name}: final CTA section is missing`)
+    assert.equal(contract.finalCtaHref, '/next-move', `${size.name}: final primary CTA must route to /next-move`)
+    assert(contract.sectionHeadings.every(Boolean), `${size.name}: every major section needs a visible h2: ${JSON.stringify(contract.sectionHeadings)}`)
+    assert(contract.primaryCtas.length >= 2, `${size.name}: hero and final primary CTAs must be identifiable`)
+    assert(contract.primaryCtas.every(({ href, visible }) => href === '/next-move' && visible), `${size.name}: every primary CTA must be visible and route to /next-move`)
+    assert.equal(contract.visibleTextUnder12px.length, 0, `${size.name}: meaningful text is rendered below 12px: ${JSON.stringify(contract.visibleTextUnder12px)}`)
+    assert.equal(consoleErrors.length, 0, `${size.name}: console errors: ${JSON.stringify(consoleErrors)}`)
+    assert.equal(pageErrors.length, 0, `${size.name}: page errors: ${JSON.stringify(pageErrors)}`)
+    assert.equal(failedRequests.length, 0, `${size.name}: request failures: ${JSON.stringify(failedRequests)}`)
+
+    if (size.width === 390 || size.width === 1024) {
+      assert.equal(contract.overflow, 0, `${size.name}: horizontal overflow must be exactly zero`)
+      assert.equal(contract.undersizedTapTargets.length, 0, `${size.name}: tap targets below 44x44: ${JSON.stringify(contract.undersizedTapTargets)}`)
+    }
+
+    report.push({
+      ...size,
+      ...contract,
+      consoleErrors,
+      pageErrors,
+      failedRequests,
+      screenshots: { foldPath, fullPath },
+    })
+    await context.close()
   }
 
-  const metrics = await page.evaluate(() => {
-    const root = document.documentElement
-    const hero = document.querySelector('.vb-operator-hero')
-    const selector = document.querySelector('#choose-your-path')
-    const header = document.querySelector('.vb-site-header')
-    const meaningfulSelectors = [
-      '.vb-home-kicker',
-      '.vb-operator-hero__assurance',
-      '.vb-decision-console__bar',
-      '.vb-decision-console__panel-head',
-      '.vb-decision-console__panel p',
-      '.vb-decision-console__panel li',
-      '.vb-home-paths__preview header',
-      '.vb-home-paths__shortcuts a',
-      '.vb-home-paths__preview dt',
-      '.vb-roadmap-sheet__summary span',
-      '.vb-roadmap-sheet li p',
-      '.vb-deal-record li p',
-    ]
-    const undersized = meaningfulSelectors.flatMap((selectorText) =>
-      Array.from(document.querySelectorAll(selectorText))
-        .filter((node) => {
-          const style = getComputedStyle(node)
-          return style.display !== 'none' && style.visibility !== 'hidden' && Number.parseFloat(style.fontSize) < 12
-        })
-        .map((node) => ({ selector: selectorText, px: Number.parseFloat(getComputedStyle(node).fontSize), text: node.textContent?.trim().slice(0, 50) })),
-    )
+  const reducedContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    reducedMotion: 'reduce',
+  })
+  const reducedPage = await reducedContext.newPage()
+  const reducedErrors = []
+  reducedPage.on('pageerror', (error) => reducedErrors.push(error.message))
 
-    const parseColor = (value) => {
-      const values = value.match(/[\d.]+/g)?.map(Number) || []
-      return { r: values[0] || 0, g: values[1] || 0, b: values[2] || 0, a: values.length > 3 ? values[3] : 1 }
-    }
-    const luminance = ({ r, g, b }) => {
-      const linear = [r, g, b].map((channel) => {
-        const value = channel / 255
-        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  await reducedPage.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await reducedPage.locator('#homepage-hero-title').waitFor({ state: 'visible', timeout: 60_000 })
+  await reducedPage.waitForTimeout(250)
+
+  const reducedMotion = await reducedPage.evaluate(() => {
+    const main = document.querySelector('main')
+    const parseDurations = (value) => value.split(',').map((part) => {
+      const duration = Number.parseFloat(part)
+      return part.trim().endsWith('ms') ? duration : duration * 1000
+    })
+    const motionNodes = Array.from(document.querySelectorAll('main [data-motion], main [class*="motion"], main svg'))
+      .filter((node) => node instanceof HTMLElement || node instanceof SVGElement)
+      .map((node) => {
+        const style = getComputedStyle(node)
+        return {
+          tag: node.tagName.toLowerCase(),
+          className: typeof node.className === 'string' ? node.className : node.getAttribute('class') || '',
+          animationMs: Math.max(0, ...parseDurations(style.animationDuration)),
+          transitionMs: Math.max(0, ...parseDurations(style.transitionDuration)),
+        }
       })
-      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
-    }
-    const ratio = (foreground, background) => {
-      const fg = parseColor(foreground)
-      const bg = parseColor(background)
-      const composite = {
-        r: fg.r * fg.a + bg.r * (1 - fg.a),
-        g: fg.g * fg.a + bg.g * (1 - fg.a),
-        b: fg.b * fg.a + bg.b * (1 - fg.a),
-      }
-      const values = [luminance(composite), luminance(bg)].sort((a, b) => b - a)
-      return Number(((values[0] + 0.05) / (values[1] + 0.05)).toFixed(2))
-    }
-    const contrastProbe = (key, selectorText, background) => {
-      const node = document.querySelector(selectorText)
-      const color = node ? getComputedStyle(node).color : 'rgb(0, 0, 0)'
-      return { key, selector: selectorText, color, background, ratio: ratio(color, background) }
-    }
-    const contrastRelevant = [
-      contrastProbe('selected outcome header', '.vb-home-paths__preview header', 'rgb(236, 236, 228)'),
-      contrastProbe('definition label', '.vb-home-paths__preview dt', 'rgb(236, 236, 228)'),
-      contrastProbe('roadmap label', '.vb-roadmap-sheet__summary span', 'rgb(238, 239, 232)'),
-      contrastProbe('roadmap footer', '.vb-roadmap-sheet footer', 'rgb(238, 239, 232)'),
-      contrastProbe('DealVault footer', '.vb-deal-record footer', 'rgb(11, 16, 15)'),
-      contrastProbe('inactive hero step', '.vb-operator-hero__steps article:not([data-active]) > p', 'rgb(7, 11, 10)'),
-    ]
+    const activeAnimations = main?.getAnimations({ subtree: true })
+      .filter((animation) => animation.playState === 'running')
+      .map((animation) => ({
+        duration: animation.effect?.getTiming().duration,
+        iterations: animation.effect?.getTiming().iterations,
+      })) || []
+
     return {
-      overflow: root.scrollWidth - root.clientWidth,
-      pageHeight: root.scrollHeight,
-      heroHeight: Math.round(hero?.getBoundingClientRect().height || 0),
-      selectorStartPx: Math.round((selector?.getBoundingClientRect().top || 0) + window.scrollY),
-      selectorStartViewports: Number((((selector?.getBoundingClientRect().top || 0) + window.scrollY) / window.innerHeight).toFixed(2)),
-      headerBackground: header ? getComputedStyle(header).backgroundColor : null,
-      h1: document.querySelector('h1')?.textContent?.trim(),
-      navLabels: Array.from(document.querySelectorAll('.vb-site-header nav a')).slice(0, 4).map((node) => node.textContent?.trim()),
-      outcomeCount: document.querySelectorAll('.vb-home-paths__choices button').length,
-      meaningfulTextUnder12px: undersized,
-      contrastRelevant,
+      htmlScrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+      activeAnimations,
+      nonReducedMotionNodes: motionNodes.filter(({ animationMs, transitionMs }) => animationMs > 1 || transitionMs > 1),
     }
   })
 
-  report.push({
-    ...size,
-    ...metrics,
-    primaryCtaBeforeAuthSettles,
-    primaryCtaAfterAuthSettles,
-    primaryCtaStable: JSON.stringify(primaryCtaBeforeAuthSettles) === JSON.stringify(primaryCtaAfterAuthSettles),
-    screenshots: { foldPath, fullPath, beatPaths },
-    beatZeroComposition,
-    beatCompositions,
-    outcomes,
-    pageErrors,
-  })
-  await context.close()
+  assert.equal(reducedErrors.length, 0, `reduced motion: page errors: ${JSON.stringify(reducedErrors)}`)
+  assert.notEqual(reducedMotion.htmlScrollBehavior, 'smooth', 'reduced motion: smooth scrolling must be disabled')
+  assert.equal(reducedMotion.activeAnimations.length, 0, `reduced motion: active animations found: ${JSON.stringify(reducedMotion.activeAnimations)}`)
+  assert.equal(reducedMotion.nonReducedMotionNodes.length, 0, `reduced motion: animated elements retain motion: ${JSON.stringify(reducedMotion.nonReducedMotionNodes)}`)
+
+  await reducedContext.close()
+  console.log(JSON.stringify({ baseUrl, artifactDirectory, report, reducedMotion }, null, 2))
+} finally {
+  await browser.close()
 }
-
-const reduced = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
-const reducedPage = await reduced.newPage()
-await reducedPage.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-await reducedPage.locator('#homepage-hero-title').waitFor({ state: 'visible', timeout: 60_000 })
-const reducedMotion = await reducedPage.evaluate(() => ({
-  panelTransition: getComputedStyle(document.querySelector('.vb-decision-console__panel')).transitionDuration,
-  railTransition: getComputedStyle(document.querySelector('.vb-decision-console__rail span')).transitionDuration,
-  htmlScrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
-}))
-await reduced.close()
-await browser.close()
-
-console.log(JSON.stringify({ report, reducedMotion }, null, 2))

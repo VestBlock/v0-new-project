@@ -19,6 +19,7 @@ import {
   vestblockAeoTopics,
 } from '@/lib/aeo/topics';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/structuredData';
 
 type LearnTopicPageProps = {
@@ -67,6 +68,7 @@ export async function generateMetadata({
       canonical: `/learn/${topic.slug}`,
     },
     openGraph: {
+      ...vestBlockOpenGraphDefaults,
       title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
       description: topic.metaDescription,
       url: absoluteUrl(`/learn/${topic.slug}`),
@@ -74,7 +76,7 @@ export async function generateMetadata({
       locale: topic.language === 'es' ? 'es_US' : 'en_US',
       images: [
         {
-          url: absoluteUrl('/opengraph-image'),
+          url: absoluteUrl('/opengraph-image?v=3'),
           width: 1200,
           height: 630,
           alt: 'VestBlock guide preview',
@@ -82,10 +84,9 @@ export async function generateMetadata({
       ],
     },
     twitter: {
-      card: 'summary_large_image',
+      ...vestBlockTwitterDefaults,
       title: `${topic.title}${topic.language === 'es' ? '' : ' Guide'} | VestBlock`,
       description: topic.metaDescription,
-      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }

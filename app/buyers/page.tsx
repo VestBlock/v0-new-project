@@ -3,6 +3,10 @@ import { BuyerSignupPage } from '@/components/buyers/buyer-signup-page';
 import { FaqSection } from '@/components/marketing/faq-section';
 import { absoluteUrl } from '@/lib/seo/site';
 import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
+import {
   realEstatePartnerServiceJsonLd,
   faqPageJsonLd,
   breadcrumbJsonLd,
@@ -32,13 +36,14 @@ export const metadata: Metadata = {
     canonical: '/buyers',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Real Estate Buyer Network, Buy Box Criteria & Funding Access',
     description:
       'Submit your buyer criteria so VestBlock can introduce better-fit seller opportunities and organize funding review when needed.',
     url: absoluteUrl('/buyers'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock buyer network — share your buy box',
@@ -46,11 +51,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Real Estate Buyer Network, Buy Box Criteria & Funding Access',
     description:
       'Share your buy box criteria so VestBlock can introduce matching seller opportunities and organize funding review when needed.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

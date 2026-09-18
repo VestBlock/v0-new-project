@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { VisibilityExpansionPage } from '@/components/visibility-expansion-page';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import {
   breadcrumbJsonLd,
   organizationJsonLd,
@@ -32,13 +33,14 @@ export const metadata: Metadata = {
     'search visibility for service businesses',
   ],
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'AEO/SEO Booster Service',
     description:
       'VestBlock packages SEO, AEO, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
     url: absoluteUrl('/visibility-expansion'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock search visibility service preview',
@@ -46,11 +48,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'AEO/SEO Booster Service',
     description:
       'VestBlock packages SEO, AEO, local pages, content, and PR into productized offers that are easier to understand and easier to buy.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

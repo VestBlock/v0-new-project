@@ -73,5 +73,5 @@ export function getVestBlockSocialVisual(key: VestBlockSocialVisualKey) {
 }
 
 export function buildVestBlockSocialVisualUrl(key: VestBlockSocialVisualKey) {
-  return absoluteUrl(`/api/social-card/${key}?v=1`)
+  return absoluteUrl(`/api/social-card/${key}?v=2`)
 }

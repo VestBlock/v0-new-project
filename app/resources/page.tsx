@@ -7,6 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getVestBlockMarketingService } from '@/lib/content/marketingServices';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 import { breadcrumbJsonLd } from '@/lib/seo/structuredData';
 
 export const dynamic = 'force-dynamic';
@@ -64,11 +68,18 @@ export const metadata: Metadata = {
     canonical: '/resources',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Resources',
     description:
       'Practical VestBlock guides and checklists for visibility, proof records, and small business growth.',
     url: absoluteUrl('/resources'),
     type: 'website',
+  },
+  twitter: {
+    ...vestBlockTwitterDefaults,
+    title: 'VestBlock Resources',
+    description:
+      'Practical VestBlock guides and checklists for visibility, proof records, and small business growth.',
   },
 };
 

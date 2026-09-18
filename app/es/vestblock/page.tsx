@@ -24,6 +24,10 @@ import {
 } from '@/lib/business-readiness/fundingCompliance';
 import { vestblockAeoTopics } from '@/lib/aeo/topics';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 
 export const metadata: Metadata = {
   title: 'Financiamiento Para Negocios En Espanol',
@@ -37,6 +41,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Financiamiento Para Negocios En Espanol | VestBlock',
     description:
       'Prepara tu negocio para financiamiento comercial y credito de negocio con una ruta clara y segura.',
@@ -45,7 +50,7 @@ export const metadata: Metadata = {
     locale: 'es_US',
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock en español',
@@ -53,11 +58,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Financiamiento Para Negocios En Espanol | VestBlock',
     description:
       'Prepara tu negocio para financiamiento comercial y credito de negocio con una ruta clara y segura.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

@@ -3,6 +3,10 @@ import { RealEstateFundingPage } from '@/components/real-estate-funding/real-est
 import { FaqSection } from '@/components/marketing/faq-section'
 import { absoluteUrl } from '@/lib/seo/site'
 import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata'
+import {
   realEstatePartnerServiceJsonLd,
   faqPageJsonLd,
   breadcrumbJsonLd,
@@ -29,13 +33,14 @@ export const metadata: Metadata = {
     canonical: '/real-estate-funding',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Real Estate Funding Review — DSCR, Fix & Flip, Bridge, Ground Up',
     description:
       'Share your investor real estate deal so VestBlock can organize the context and route qualified files toward No Limit Capital or another better-fit lender for review.',
     url: absoluteUrl('/real-estate-funding'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock real estate funding review',
@@ -43,11 +48,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Real Estate Funding Review — DSCR, Fix & Flip, Bridge, Ground Up',
     description:
       'Share your investor real estate deal so VestBlock can organize the context and route qualified files toward No Limit Capital or another better-fit lender for review.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 }
 

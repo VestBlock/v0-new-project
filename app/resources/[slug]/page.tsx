@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getVestBlockMarketingService } from '@/lib/content/marketingServices';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/structuredData';
 
 export const dynamic = 'force-dynamic';
@@ -91,13 +92,14 @@ export async function generateMetadata({
       canonical: `/resources/${asset.slug}`,
     },
     openGraph: {
+      ...vestBlockOpenGraphDefaults,
       title: asset.seo_title || asset.title,
       description: asset.meta_description || asset.excerpt || undefined,
       url: absoluteUrl(`/resources/${asset.slug}`),
       type: 'article',
       images: [
         {
-          url: absoluteUrl('/opengraph-image'),
+          url: absoluteUrl('/opengraph-image?v=3'),
           width: 1200,
           height: 630,
           alt: 'VestBlock resource preview',
@@ -105,10 +107,9 @@ export async function generateMetadata({
       ],
     },
     twitter: {
-      card: 'summary_large_image',
+      ...vestBlockTwitterDefaults,
       title: asset.seo_title || asset.title,
       description: asset.meta_description || asset.excerpt || undefined,
-      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }

@@ -28,6 +28,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 import { serviceSeoPages } from '@/lib/seo/serviceSeoPages';
 import { servicesItemListJsonLd } from '@/lib/seo/structuredData';
 import {
@@ -62,13 +66,14 @@ export const metadata: Metadata = {
     canonical: '/services',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Services',
     description:
       'Find the right VestBlock service for seller property review, buyer and lender routing, developer and contractor partners, DealVault records, funding review, and member visibility support.',
     url: absoluteUrl('/services'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock services preview',
@@ -76,11 +81,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Services',
     description:
       'Find the right VestBlock service for seller property review, buyer and lender routing, developer and contractor partners, DealVault records, funding review, and member visibility support.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

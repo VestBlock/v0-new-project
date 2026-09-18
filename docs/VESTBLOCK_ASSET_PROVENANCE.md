@@ -1,26 +1,36 @@
 # VestBlock homepage asset provenance and copy ledger
 
+Updated for the Signal Ledger homepage identity and social-card release.
+
 ## Asset inventory
 
 | Asset | Use | Origin and rights | Generation details | Cost |
 | --- | --- | --- | --- | --- |
-| `public/hero/vestblock-property-intelligence-v2.webp` | Homepage property-intelligence hero | Original project-specific AI-generated image. Do not represent a specific real property or use it as a listing photograph. | Built-in image generation tool; prompt requested a blue-hour, aerial-oblique mixed-use property, parcel edges, restrained lime route signals, and left-side negative space. The provided VestBlock mark was a reference image only. Converted locally to WebP at quality 88. | Unavailable: the workspace image-generation tool does not expose pricing. |
-| `public/vestblock-mark-transparent.png` | DealVault record seal and hero record mark | User-provided VestBlock brand asset already in the repository. | No modification. | N/A |
+| `public/vestblock-mark.svg` | Canonical square VestBlock mark | Original VestBlock-specific vector artwork created for this repository. | A built-in OpenAI image-generation concept study explored six convergence-mark directions. The shipped mark was then redrawn as deterministic SVG paths and does not embed the generated raster. The concept study is retained outside the production repository at `/Users/mrsanders/.codex/generated_images/019fed70-52c6-7480-9e61-9d70ca1c28cc/exec-da26818a-75c5-41cc-bad2-b53c5d4fe6ec.png`. Exact model parameters were not exposed by the tool. | Unavailable: the workspace image-generation tool does not expose per-generation pricing. |
+| `app/icon.png`, `app/apple-icon.png`, `app/favicon.ico`, `public/brand/vestblock-icon-192.png`, `public/brand/vestblock-icon-512.png`, `public/brand/vestblock-maskable-512.png` | Browser, device, and installable-app identity | Raster derivatives of the repository-owned canonical SVG. | Rendered locally from `public/vestblock-mark.svg`; no third-party artwork. | N/A |
+| `components/seo/vestblock-social-card.tsx` | Shared 1200×630 Open Graph and X/Twitter preview | Original code-rendered composition using the canonical mark, typography, and route motif. | Rendered by `next/og` through `/opengraph-image` and `/twitter-image`; no stock imagery or remote asset dependency. | N/A |
+| `app/api/social-card/[pillar]/route.tsx` | 1200×1500 Capital, Deals, and Opportunity post creative | Existing code-rendered template updated to the Signal Ledger palette and convergence mark. | Rendered by `next/og`; the URL version is managed in `lib/social/visualCards.ts`. | N/A |
+
+No stock photography, listing photography, testimonial portrait, or third-party logo is used on the homepage.
 
 ## Public copy ledger
 
-| Surface | Previous language | Revised language | Claim review |
-| --- | --- | --- | --- |
-| Hero | “Connect real estate opportunities with the right partners.” | “See the property, the capital path, and the next decision.” | Describes preparation and visibility. It does not promise a match, approval, or funding result. |
-| Hero description | Broad list of participant types and “we help organize the next conversation.” | “Property context, diligence materials, capital requirements, counterparty fit, and a durable DealVault record.” | Names concrete operating inputs without stating that VestBlock underwrites, approves, or advises. |
-| Opportunity sequence | “Start with the role. Move toward the right partner.” | “Prepare an opportunity in the order it will be reviewed.” | States a workflow, not a guaranteed partner outcome. |
-| Intelligence section | “See who should be in the conversation.” | “Good decisions need an evidence trail, not a louder dashboard.” | The body identifies organization as decision support and explicitly states that VestBlock does not make lending, legal, tax, or investment decisions. |
-| DealVault | “Make every partnership easier to trust.” | “Keep the facts that support the relationship.” | Avoids assurances. Privacy language retains the limit that sensitive material remains private. |
-| Closing CTA | “Bring the next opportunity to the right partners.” | “Bring the next opportunity into focus before the next conversation.” | Avoids a matching or funding promise. |
+| Surface | Release language | Claim review |
+| --- | --- | --- |
+| Master promise | “Find your next move.” | A navigation and preparation promise, not an outcome guarantee. |
+| Platform definition | “VestBlock brings funding preparation, real-estate paths, and practical business growth into one place.” | Describes the coordinated scope without presenting VestBlock as a lender, broker, or approval authority. |
+| Primary CTA | “Build my free roadmap” | Matches the `/next-move` questionnaire and its educational 7/30/60/90-day roadmap output. |
+| Capital path | “Prepare for business funding” | The card states that independent providers set eligibility and terms. Property-specific financing is directed to Real Estate Deals. |
+| Deals path | “Buy, sell, or fund property” | The card separates buyer, seller, property-funding, and lender starting points and retains regulated-party boundaries. |
+| Opportunity path | “Build from a stronger base” | The card avoids promises about credit, leads, revenue, rankings, or profitability. |
+| Example roadmap | “Educational guidance only; not an approval, offer, or guarantee.” | The artifact is labeled as an example and does not display fabricated underwriting or results. |
+| Trust section | “No high-risk financial details required” | The supporting text names the specific items not requested rather than claiming no sensitive data is collected. |
+| DealVault | “Keep the record that supports the work.” | Describes record continuity without claiming universal privacy or an unsupported team-access model. The example states that raw documents remain off-chain. |
 
-## Financial-literacy guardrails in the homepage
+## Financial-literacy guardrails
 
-- “Capital path” refers to the preparation of capital requirements, partner criteria, use of proceeds, and diligence material. It does not mean a capital commitment.
-- “Counterparty fit” refers to stated criteria and capacity. It does not mean suitability, creditworthiness, approval, or an investment recommendation.
-- “DealVault record” refers to an organized record of materials, versions, milestones, and permissions. It does not make an unverified security or legal claim.
-- Any future UI that shows loan-to-value, loan-to-cost, debt service coverage, return, pricing, or scoring must identify whether values are illustrative, the source data used, and the decision rule. It must not display fabricated results as live underwriting.
+- Capital preparation means organizing the request, intended use, timing, and supporting records. It is not a commitment to lend or an approval.
+- Property paths organize role, criteria, property details, and timing. Buyers, sellers, lenders, licensed providers, and closing parties retain their own decisions.
+- The free roadmap is educational guidance. It is not financial, legal, tax, credit-repair, or investment advice.
+- Any future interface that displays loan-to-value, loan-to-cost, debt-service coverage, return, pricing, eligibility, or a score must identify its source data, decision rule, and illustrative status.
+- Testimonials, provider counts, response rates, funding totals, or performance metrics may be added only when they can be substantiated and reviewed.

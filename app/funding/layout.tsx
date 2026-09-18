@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 
 export const metadata: Metadata = {
   title: 'Business Funding Eligibility Checker And Prep Plan',
@@ -10,13 +14,14 @@ export const metadata: Metadata = {
     canonical: '/funding',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Business Funding Eligibility',
     description:
       'Free business funding eligibility check with paid prep support when a business needs document, credit, or application preparation.',
     url: absoluteUrl('/funding'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock business funding preview',
@@ -24,11 +29,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Business Funding Eligibility',
     description:
       'Free business funding eligibility check with paid prep support when a business needs document, credit, or application preparation.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

@@ -5,6 +5,7 @@ import {
   getVestBlockSocialVisual,
   isVestBlockSocialVisualKey,
 } from '@/lib/social/visualCards'
+import { VestBlockSocialMark } from '@/components/seo/vestblock-social-card'
 import { absoluteUrl } from '@/lib/seo/site'
 
 export const runtime = 'edge'
@@ -26,8 +27,8 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
           width: '100%',
           height: '100%',
           overflow: 'hidden',
-          color: '#f8fafc',
-          background: '#050816',
+          color: '#F4F2EA',
+          background: '#0B0D0C',
           fontFamily: 'sans-serif',
         }}
       >
@@ -52,7 +53,7 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
             inset: 0,
             display: 'flex',
             background:
-              'linear-gradient(90deg, rgba(5,8,22,0.98) 0%, rgba(5,8,22,0.92) 45%, rgba(5,8,22,0.32) 100%), radial-gradient(circle at 88% 12%, rgba(71,203,177,0.28), transparent 29%), radial-gradient(circle at 21% 89%, rgba(107,114,255,0.18), transparent 34%)',
+              'linear-gradient(90deg, rgba(11,13,12,0.99) 0%, rgba(11,13,12,0.94) 48%, rgba(11,13,12,0.48) 100%), radial-gradient(circle at 88% 12%, rgba(200,255,54,0.20), transparent 29%)',
           }}
         />
         <div
@@ -64,14 +65,13 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
             width: 238,
             height: 238,
             borderRadius: 999,
-            border: '1px solid rgba(146, 255, 219, 0.42)',
-            boxShadow: '0 0 0 22px rgba(146, 255, 219, 0.04), 0 0 100px rgba(71,203,177,0.23)',
+            border: '1px solid rgba(200,255,54,0.48)',
+            boxShadow: '0 0 0 22px rgba(200,255,54,0.04)',
           }}
         />
         <div
           style={{
             position: 'relative',
-            zIndex: 1,
             display: 'flex',
             width: '100%',
             flexDirection: 'column',
@@ -81,7 +81,7 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-              <img src={absoluteUrl('/vestblock-mark-transparent.png')} alt="" width={62} height={62} />
+              <VestBlockSocialMark size={62} />
               <div style={{ fontSize: 33, fontWeight: 800, letterSpacing: '-0.035em' }}>VestBlock</div>
             </div>
             <div
@@ -89,9 +89,9 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
                 display: 'flex',
                 alignSelf: 'flex-start',
                 borderRadius: 999,
-                border: '1px solid rgba(146,255,219,0.42)',
-                background: 'rgba(146,255,219,0.09)',
-                color: '#c8fff0',
+                border: '1px solid rgba(200,255,54,0.48)',
+                background: 'rgba(200,255,54,0.08)',
+                color: '#C8FF36',
                 padding: '10px 16px',
                 fontSize: 18,
                 fontWeight: 700,
@@ -107,7 +107,7 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
             <div style={{ fontSize: 88, lineHeight: 0.93, letterSpacing: '-0.062em', fontWeight: 800 }}>
               {visual.headline}
             </div>
-            <div style={{ maxWidth: 700, fontSize: 31, lineHeight: 1.25, color: '#dce7ef' }}>
+            <div style={{ maxWidth: 700, fontSize: 31, lineHeight: 1.25, color: '#C7C9C1' }}>
               {visual.supporting}
             </div>
           </div>
@@ -121,9 +121,9 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
                     display: 'flex',
                     borderRadius: 999,
                     border: '1px solid rgba(255,255,255,0.17)',
-                    background: 'rgba(4,9,19,0.68)',
+                    background: 'rgba(11,13,12,0.72)',
                     padding: '10px 13px',
-                    color: '#dce7ef',
+                    color: '#F4F2EA',
                     fontSize: 15,
                     fontWeight: 700,
                     letterSpacing: '0.08em',
@@ -137,9 +137,9 @@ export async function GET(_request: Request, context: { params: Promise<{ pillar
               style={{
                 display: 'flex',
                 borderRadius: 999,
-                background: '#a6f3dd',
+                background: '#C8FF36',
                 padding: '14px 20px',
-                color: '#071018',
+                color: '#0B0D0C',
                 fontSize: 19,
                 fontWeight: 800,
               }}

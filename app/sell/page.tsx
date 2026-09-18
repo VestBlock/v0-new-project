@@ -3,6 +3,10 @@ import { SellPage } from '@/components/sell/sell-page'
 import { FaqSection } from '@/components/marketing/faq-section'
 import { absoluteUrl } from '@/lib/seo/site'
 import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata'
+import {
   realEstatePartnerServiceJsonLd,
   faqPageJsonLd,
   breadcrumbJsonLd,
@@ -31,13 +35,14 @@ export const metadata: Metadata = {
     canonical: '/sell',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
     description:
       'Submit property details for review. VestBlock routes the submission to acquisitions review for fast cash, creative structure, novation, or another partner sale path.',
     url: absoluteUrl('/sell'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock — Submit your property for deal network review',
@@ -45,11 +50,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Submit a Property for Fast Cash, Creative, or Novation Review',
     description:
       'Submit property details for review. VestBlock routes fast cash, creative, novation, and partner review based on your situation.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 }
 

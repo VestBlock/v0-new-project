@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from '@/lib/seo/structuredData';
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
     canonical: '/visibility-expansion/proof-hub',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Visibility Proof Hub',
     description:
       'A crawlable proof hub for VestBlock visibility work, service facts, proof materials, and public submissions.',
@@ -23,12 +25,18 @@ export const metadata: Metadata = {
     type: 'article',
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock visibility proof hub preview',
       },
     ],
+  },
+  twitter: {
+    ...vestBlockTwitterDefaults,
+    title: 'VestBlock Visibility Proof Hub',
+    description:
+      'A crawlable proof hub for VestBlock visibility work, service facts, proof materials, and public submissions.',
   },
 };
 

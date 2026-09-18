@@ -1,8 +1,9 @@
 import type React from 'react';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Manrope, Newsreader } from 'next/font/google';
 import './globals.css';
 import '@/styles/private-ledger.css';
+import '@/styles/home-v3.css';
 import { GoogleAdsProvider } from '@/components/providers/google-ads-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -20,7 +21,7 @@ import { organizationJsonLd, websiteJsonLd } from '@/lib/seo/structuredData';
 const manrope = Manrope({
   subsets: ['latin'],
   variable: '--font-vb-sans',
-  display: 'swap',
+  display: 'block',
 });
 
 const newsreader = Newsreader({
@@ -65,10 +66,10 @@ export const metadata: Metadata = {
     description: vestBlockDefaultDescription,
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
-        alt: 'VestBlock Capital, Real Estate, Opportunity, and DealVault platform preview',
+        alt: 'VestBlock — find your next move across funding, real estate, and business growth',
       },
     ],
   },
@@ -76,7 +77,14 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${vestBlockSiteName} - Find Your Next Move`,
     description: vestBlockDefaultDescription,
-    images: [absoluteUrl('/opengraph-image')],
+    images: [
+      {
+        url: absoluteUrl('/twitter-image?v=3'),
+        width: 1200,
+        height: 630,
+        alt: 'VestBlock — find your next move across funding, real estate, and business growth',
+      },
+    ],
   },
   robots: {
     index: true,
@@ -89,6 +97,11 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
+};
+
+export const viewport: Viewport = {
+  colorScheme: 'dark light',
+  themeColor: '#0B0D0C',
 };
 
 export default function RootLayout({

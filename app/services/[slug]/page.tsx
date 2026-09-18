@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { absoluteUrl, vestBlockSiteName } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { breadcrumbJsonLd } from '@/lib/seo/structuredData';
 import {
   getServiceSeoPage,
@@ -47,13 +48,14 @@ export async function generateMetadata({
       canonical: `/services/${page.slug}`,
     },
     openGraph: {
+      ...vestBlockOpenGraphDefaults,
       title: page.seoTitle,
       description: page.metaDescription,
       url: absoluteUrl(`/services/${page.slug}`),
       type: 'article',
       images: [
         {
-          url: absoluteUrl('/opengraph-image'),
+          url: absoluteUrl('/opengraph-image?v=3'),
           width: 1200,
           height: 630,
           alt: 'VestBlock service guide preview',
@@ -61,10 +63,9 @@ export async function generateMetadata({
       ],
     },
     twitter: {
-      card: 'summary_large_image',
+      ...vestBlockTwitterDefaults,
       title: page.seoTitle,
       description: page.metaDescription,
-      images: [absoluteUrl('/opengraph-image')],
     },
   };
 }

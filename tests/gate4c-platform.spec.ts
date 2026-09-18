@@ -5,23 +5,37 @@ test.setTimeout(90_000)
 test.describe('Gate 4C public platform and customer workspace', () => {
   test('homepage explains the three paths and routes each public hub', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: 'Find your next move.' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Capital', exact: true }).first()).toHaveAttribute('href', '/capital')
-    await expect(page.getByRole('link', { name: 'Deals', exact: true }).first()).toHaveAttribute('href', '/real-estate')
-    await expect(page.getByRole('link', { name: 'Opportunity', exact: true }).first()).toHaveAttribute('href', '/opportunity')
-    await expect(page.getByRole('heading', { name: 'Where do you want to move forward?' })).toBeVisible()
-    await expect(page.getByText('Three paths · one coordinated platform')).toBeVisible()
+    await expect(page.locator('#homepage-hero-title')).toHaveText('Find your next move.')
+    await expect(page.locator('main h1')).toHaveCount(1)
+
+    const hero = page.locator('#homepage-hero-title').locator('xpath=ancestor::section[1]')
+    await expect(hero.locator('a[data-home-primary-cta]')).toHaveAttribute('href', '/next-move')
+
+    const directory = page.locator('#choose-your-path')
+    await expect(directory).toBeVisible()
+    for (const path of [
+      { id: 'funding', label: 'Funding', href: '/capital' },
+      { id: 'real-estate', label: 'Deals', href: '/real-estate' },
+      { id: 'opportunity', label: 'Opportunity', href: '/opportunity' },
+    ]) {
+      const card = directory.locator(`[data-home-path="${path.id}"]`)
+      await expect(card).toBeVisible()
+      await expect(card).toContainText(path.label, { ignoreCase: true })
+      await expect(card.locator(`a[href="${path.href}"]`).first()).toBeVisible()
+    }
   })
 
-  test('path selector previews Deals and saves guest continuity', async ({ page }) => {
+  test('all three homepage paths remain visible on mobile and route directly', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/#choose-your-path', { waitUntil: 'networkidle' })
-    await page.getByRole('button', { name: /Deals/ }).click()
-    await expect(page.getByRole('heading', { name: 'Evaluate, finance, buy, or sell real estate' })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Explore real estate deals/ })).toHaveAttribute('href', '/real-estate')
-    await page.getByRole('link', { name: /Explore real estate deals/ }).click()
+
+    const directory = page.locator('#choose-your-path')
+    const cards = directory.locator('[data-home-path]')
+    await expect(cards).toHaveCount(3)
+    for (let index = 0; index < 3; index += 1) await expect(cards.nth(index)).toBeVisible()
+
+    await directory.locator('[data-home-path="real-estate"] a[href="/real-estate"]').first().click()
     await expect(page).toHaveURL(/\/real-estate$/)
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('vestblock:selected-homepage-goal'))).toBe('deals')
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('vestblock:active-lane'))).toBe('real-estate')
   })
 
   for (const route of [
@@ -61,24 +75,55 @@ test.describe('Gate 4C public platform and customer workspace', () => {
     expect(response.status()).toBe(401)
   })
 
-  test('hero keeps a static decision example when reduced motion is requested', async ({ browser }) => {
+  test('homepage preserves its full story with motion reduced', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-decision-console')).toBeVisible()
-    await expect(page.getByText('Example next-step plan')).toBeVisible()
-    await expect(page.getByRole('link', { name: /Get my free next-step plan/ }).first()).toHaveAttribute('href', '/next-move')
+    await expect(page.locator('#homepage-hero-title')).toHaveText('Find your next move.')
+    await expect(page.locator('[data-home-steps]')).toBeVisible()
+    await expect(page.locator('a[data-home-primary-cta]').first()).toHaveAttribute('href', '/next-move')
+    await page.waitForTimeout(250)
+    const runningAnimations = await page.evaluate(() => (
+      document.querySelector('main')?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length || 0
+    ))
+    expect(runningAnimations).toBe(0)
     await context.close()
   })
 
-  test('hero is a framed next-step example with a working three-path handoff', async ({ page }) => {
+  test('homepage story moves from paths to explanation, boundaries, DealVault, and one next step', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.vb-decision-console')).toBeVisible()
-    await expect(page.locator('.vb-decision-console')).toHaveCount(1)
-    await expect(page.getByText('Prepare for business capital')).toBeVisible()
-    await page.getByRole('link', { name: /Explore the three paths/ }).click()
-    await expect(page).toHaveURL(/#choose-your-path$/)
-    await expect(page.getByRole('heading', { name: 'Where do you want to move forward?' })).toBeInViewport()
+    const sections = [
+      '#choose-your-path',
+      '[data-home-steps]',
+      '[data-home-trust]',
+      '[data-home-dealvault]',
+      '[data-home-final-cta]',
+    ]
+
+    for (const selector of sections) await expect(page.locator(selector)).toBeVisible()
+    const explicitSteps = page.locator('[data-home-steps] [data-home-step]')
+    if (await explicitSteps.count()) {
+      await expect(explicitSteps).toHaveCount(3)
+    } else {
+      await expect(page.locator('[data-home-steps] ol').first().locator(':scope > li')).toHaveCount(3)
+    }
+    await expect(page.locator('[data-home-dealvault]')).toContainText('DealVault')
+    await expect(page.locator('[data-home-dealvault] a[href^="/dealvault"]').first()).toBeVisible()
+    await expect(page.locator('[data-home-final-cta] a[data-home-primary-cta]')).toHaveAttribute('href', '/next-move')
+
+    const inNarrativeOrder = await page.evaluate((orderedSelectors) => {
+      const positions = orderedSelectors.map((selector) => {
+        const element = document.querySelector(selector)
+        return element ? element.getBoundingClientRect().top + window.scrollY : undefined
+      })
+      return positions.every((position, index) => {
+        if (typeof position !== 'number') return false
+        if (index === 0) return true
+        const previous = positions[index - 1]
+        return typeof previous === 'number' && position > previous
+      })
+    }, sections)
+    expect(inNarrativeOrder).toBe(true)
   })
 
   test('public surfaces have no horizontal overflow at phone and tablet widths', async ({ page }) => {

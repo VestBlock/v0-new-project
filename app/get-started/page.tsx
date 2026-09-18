@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 
 import { GetStartedPage } from '@/components/get-started-page';
 import { absoluteUrl } from '@/lib/seo/site';
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata';
 
 export const metadata: Metadata = {
   title: 'Choose Your VestBlock Path',
@@ -11,13 +15,14 @@ export const metadata: Metadata = {
     canonical: '/get-started',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Get Started With VestBlock',
     description:
       'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
     url: absoluteUrl('/get-started'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock get started preview',
@@ -25,11 +30,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Get Started With VestBlock',
     description:
       'Choose the right VestBlock path for sellers, buyers, lenders, developers, contractors, real estate funding, DealVault records, and member visibility support.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

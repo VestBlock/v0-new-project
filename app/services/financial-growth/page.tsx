@@ -25,6 +25,7 @@ import {
 import { financialSkillsetPackages } from '@/lib/services/financialSkillsets';
 import { pricedVestBlockOffers } from '@/lib/services/pricedOffers';
 import { absoluteUrl } from '@/lib/seo/site';
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata';
 import { buildPartnerReferralPath } from '@/lib/partners/referrals';
 import {
   breadcrumbJsonLd,
@@ -40,13 +41,14 @@ export const metadata: Metadata = {
     canonical: '/services/financial-growth',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'VestBlock Funding & Business Credit Prep Reviews',
     description:
       'Request focused prep reviews for business funding, business credit, grants, utilization, cash-flow documents, and real estate funding preparation.',
     url: absoluteUrl('/services/financial-growth'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock funding prep reviews preview',
@@ -54,11 +56,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'VestBlock Funding & Business Credit Prep Reviews',
     description:
       'Request focused prep reviews for business funding, business credit, grants, utilization, cash-flow documents, and real estate funding preparation.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 };
 

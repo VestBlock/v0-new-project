@@ -1,136 +1,112 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Building2, Landmark, ShieldCheck, TrendingUp } from "lucide-react"
+import { ArrowRight, Building2, Landmark, TrendingUp } from "lucide-react"
 
 export type HomepageOutcomeId = "capital" | "deals" | "opportunity"
 
 export const homepageOutcomes = [
   {
     id: "capital",
-    label: "Prepare for funding",
-    title: "Build a funding request that is ready for a real review",
+    hook: "funding",
+    number: "01",
+    eyebrow: "Capital",
+    title: "Prepare for business funding",
+    summary: "Use this path for business funding, grants, or business-credit preparation. Financing a specific property starts in Real Estate.",
     href: "/capital",
-    action: "Start the funding path",
-    access: "Free to explore · Provider review may be required",
-    summary: "Clarify the amount, purpose, timing, and supporting information behind a business or real-estate request before it reaches an independent provider.",
-    prepare: "Use of funds, requested amount, timing, business or property context, and supporting records.",
-    boundary: "VestBlock is not a lender and does not guarantee approval. Independent providers set eligibility, pricing, limits, and terms.",
-    shortcuts: [
-      ["Fund a business", "/capital?path=business-funding#capital-intake"],
-      ["Fund a property", "/real-estate-funding"],
+    action: "Explore funding",
+    note: "VestBlock is not a lender. Independent providers set eligibility and terms.",
+    links: [
+      ["Business funding", "/capital?path=business-funding#capital-intake"],
+      ["Grant preparation", "/next-move?focus=grants"],
     ],
     icon: Landmark,
   },
   {
     id: "deals",
-    label: "Find, buy, or sell property",
-    title: "Move a property from criteria to a signed agreement",
+    hook: "real-estate",
+    number: "02",
+    eyebrow: "Deals",
+    title: "Buy, sell, or fund property",
+    summary: "Start with your role, property details, criteria, and timeline, then continue into the right real-estate path.",
     href: "/real-estate",
-    action: "Open the real-estate path",
-    access: "Free profiles and submissions · Routing requires review",
-    summary: "Sellers can submit a property. Buyers define their criteria. VestBlock uses approved sources, underwriting, and compliant owner outreach to qualify possible matches, support offer decisions, preserve negotiation history, and coordinate the path to a signed agreement.",
-    prepare: "Market, role, asset type, price range, timing, property details, capacity, and clear no-go criteria.",
-    boundary: "VestBlock is not a broker or guarantor. Licensed and independent parties control regulated services, offers, underwriting, and closings.",
-    shortcuts: [
-      ["Find a property", "/buyers"],
-      ["Sell a property", "/sell"],
-      ["Fund a deal", "/real-estate-funding"],
-      ["Join as a lender", "/lenders"],
+    action: "Choose a real-estate path",
+    note: "Licensed and independent parties control regulated services, offers, financing, and closings.",
+    links: [
+      ["I want to buy", "/buyers"],
+      ["I want to sell", "/sell"],
+      ["I need property funding", "/real-estate-funding"],
+      ["I lend on property", "/lenders"],
     ],
     icon: Building2,
   },
   {
     id: "opportunity",
-    label: "Build or grow a business",
-    title: "Turn a business goal into an ordered growth plan",
+    hook: "opportunity",
+    number: "03",
+    eyebrow: "Opportunity",
+    title: "Build from a stronger base",
+    summary: "Get a practical starting plan for credit, income, business setup, visibility, or sustainable growth.",
     href: "/opportunity",
-    action: "Start the business-growth path",
-    access: "Free starting plan · Some tools require an account · Paid services are identified upfront",
-    summary: "Build a personal or business starting plan, improve financial readiness, set up a business, or explore practical growth and AI support.",
-    prepare: "Your goal, current position, available time, main obstacle, and—when relevant—your business offer and operating needs.",
-    boundary: "Roadmaps are educational, and growth support does not guarantee credit, rankings, leads, revenue, or profitability.",
-    shortcuts: [
+    action: "Build a growth plan",
+    note: "Roadmaps are educational and do not guarantee credit, leads, revenue, rankings, or profitability.",
+    links: [
       ["Free next-step plan", "/next-move"],
-      ["Set up a business", "/business-setup"],
-      ["Growth and AI support", "/services"],
+      ["Business setup", "/business-setup"],
+      ["Growth services", "/services"],
     ],
     icon: TrendingUp,
   },
 ] as const
 
-type HomepageDirectoryProps = {
-  selectedId: HomepageOutcomeId
-  onSelect: (id: HomepageOutcomeId) => void
+function rememberChoice(id: HomepageOutcomeId) {
+  try {
+    window.localStorage.setItem("vestblock:selected-homepage-goal", id)
+    window.localStorage.setItem("vestblock:active-lane", id === "deals" ? "real-estate" : id)
+  } catch {
+    // Navigation still works when storage is unavailable.
+  }
 }
 
-export function HomepageDirectory({ selectedId, onSelect }: HomepageDirectoryProps) {
-  const selected = homepageOutcomes.find((goal) => goal.id === selectedId) || homepageOutcomes[0]
-
-  const rememberChoice = () => {
-    try {
-      window.localStorage.setItem("vestblock:selected-homepage-goal", selected.id)
-      window.localStorage.setItem(
-        "vestblock:active-lane",
-        selected.id === "deals" ? "real-estate" : selected.id,
-      )
-    } catch {
-      // The route still works when storage is unavailable.
-    }
-  }
-
+export function HomepageDirectory() {
   return (
-    <section id="choose-your-path" className="vb-home-paths" aria-labelledby="path-selector-title">
-      <div className="vb-home-shell">
-        <div className="vb-home-heading vb-home-heading--split">
+    <section id="choose-your-path" className="vb3-paths" aria-labelledby="path-selector-title">
+      <div className="vb3-shell">
+        <div className="vb3-section-heading">
           <div>
-            <p className="vb-home-kicker">One platform · three clear outcomes</p>
-            <h2 id="path-selector-title">What are you working toward?</h2>
+            <p className="vb3-kicker vb3-kicker--dark"><span aria-hidden="true" /> Capital · Deals · Opportunity</p>
+            <h2 id="path-selector-title">Choose where you want to start.</h2>
           </div>
-          <p>Choose the closest goal. VestBlock shows what to prepare, what deserves attention first, and the next action that can move the work forward.</p>
+          <p>Pick the goal closest to yours. You can explore every path before creating an account.</p>
         </div>
 
-        <div className="vb-home-paths__workspace">
-          <div className="vb-home-paths__choices" aria-label="Choose your outcome">
-            {homepageOutcomes.map((goal, index) => {
-              const Icon = goal.icon
-              const active = selected.id === goal.id
-              return (
-                <button
-                  key={goal.id}
-                  type="button"
-                  aria-pressed={active}
-                  aria-controls="selected-path"
-                  data-active={active || undefined}
-                  onClick={() => onSelect(goal.id)}
-                >
-                  <span>0{index + 1}</span>
+        <div className="vb3-paths__grid">
+          {homepageOutcomes.map((goal) => {
+            const Icon = goal.icon
+            return (
+              <article key={goal.id} className="vb3-path-card" data-home-path={goal.hook}>
+                <header>
+                  <span>{goal.number}</span>
                   <Icon aria-hidden="true" />
-                  <strong>{goal.label}</strong>
-                  <ArrowRight aria-hidden="true" />
-                </button>
-              )
-            })}
-          </div>
+                </header>
+                <p className="vb3-path-card__eyebrow">{goal.eyebrow}</p>
+                <h3>{goal.title}</h3>
+                <p className="vb3-path-card__summary">{goal.summary}</p>
 
-          <article id="selected-path" className="vb-home-paths__preview" aria-live="polite" aria-atomic="true">
-            <header><span>Selected outcome</span><strong>{selected.label}</strong></header>
-            <h3>{selected.title}</h3>
-            <p className="vb-home-paths__summary">{selected.summary}</p>
-            <div className="vb-home-paths__shortcuts" aria-label={`${selected.label} options`}>
-              {selected.shortcuts.map(([label, href]) => <Link key={href} href={href} onClick={rememberChoice}>{label}<ArrowRight aria-hidden="true" /></Link>)}
-            </div>
-            <dl>
-              <div><dt>What to prepare</dt><dd>{selected.prepare}</dd></div>
-              <div><dt>What to know</dt><dd>{selected.boundary}</dd></div>
-            </dl>
-            <p className="vb-home-paths__access"><ShieldCheck aria-hidden="true" /> {selected.access}</p>
-            <div className="vb-home-paths__actions">
-              <Link href={selected.href} onClick={rememberChoice} className="vb-home-button vb-home-button--ink">
-                {selected.action} <ArrowRight aria-hidden="true" />
-              </Link>
-            </div>
-          </article>
+                <p className="vb3-path-card__options-label">Common starting points</p>
+                <div className="vb3-path-card__options" aria-label={`${goal.title} options`}>
+                  {goal.links.map(([label, href]) => (
+                    <Link key={href} href={href} onClick={() => rememberChoice(goal.id)}>{label}<ArrowRight aria-hidden="true" /></Link>
+                  ))}
+                </div>
+
+                <p className="vb3-path-card__note">{goal.note}</p>
+                <Link href={goal.href} onClick={() => rememberChoice(goal.id)} className="vb3-path-card__action">
+                  {goal.action} <ArrowRight aria-hidden="true" />
+                </Link>
+              </article>
+            )
+          })}
         </div>
       </div>
     </section>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SellPage } from '@/components/sell/sell-page'
 import { absoluteUrl } from '@/lib/seo/site'
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from '@/lib/seo/socialMetadata'
 import { realEstatePartnerServiceJsonLd } from '@/lib/seo/structuredData'
 
 const sellerMarkets = {
@@ -100,12 +101,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       canonical: path,
     },
     openGraph: {
+      ...vestBlockOpenGraphDefaults,
       title: market.title,
       description: market.description,
       url: absoluteUrl(path),
       images: [
         {
-          url: absoluteUrl('/opengraph-image'),
+          url: absoluteUrl('/opengraph-image?v=3'),
           width: 1200,
           height: 630,
           alt: `VestBlock ${marketLabel} property review`,
@@ -113,10 +115,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       ],
     },
     twitter: {
-      card: 'summary_large_image',
+      ...vestBlockTwitterDefaults,
       title: market.title,
       description: market.description,
-      images: [absoluteUrl('/opengraph-image')],
     },
   }
 }

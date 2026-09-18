@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 import { PropertyOpportunityAnalyzer } from '@/components/property/property-opportunity-analyzer'
 import { absoluteUrl } from '@/lib/seo/site'
+import {
+  vestBlockOpenGraphDefaults,
+  vestBlockTwitterDefaults,
+} from '@/lib/seo/socialMetadata'
 
 export const metadata: Metadata = {
   title: 'Free Property Opportunity Analyzer',
@@ -10,13 +14,14 @@ export const metadata: Metadata = {
     canonical: '/property-analyzer',
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: 'Free Property Opportunity Analyzer | VestBlock',
     description:
       'Screen a property before routing it to VestBlock buyers, lenders, operators, or acquisition review.',
     url: absoluteUrl('/property-analyzer'),
     images: [
       {
-        url: absoluteUrl('/opengraph-image'),
+        url: absoluteUrl('/opengraph-image?v=3'),
         width: 1200,
         height: 630,
         alt: 'VestBlock property opportunity analyzer',
@@ -24,11 +29,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    ...vestBlockTwitterDefaults,
     title: 'Free Property Opportunity Analyzer | VestBlock',
     description:
       'Rough value, MAO, buyer interest, creative, novation, and lender-fit screening for real estate opportunities.',
-    images: [absoluteUrl('/opengraph-image')],
   },
 }
 

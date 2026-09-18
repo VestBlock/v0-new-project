@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { absoluteUrl } from "@/lib/seo/site"
+import { vestBlockOpenGraphDefaults, vestBlockTwitterDefaults } from "@/lib/seo/socialMetadata"
 
 export const metadata: Metadata = {
   title: "Property Review And Sale Path Evaluation",
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
     canonical: "/sell",
   },
   openGraph: {
+    ...vestBlockOpenGraphDefaults,
     title: "VestBlock Property Review",
     description:
       "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
     url: absoluteUrl("/sell"),
     images: [
       {
-        url: absoluteUrl("/opengraph-image"),
+        url: absoluteUrl("/opengraph-image?v=3"),
         width: 1200,
         height: 630,
         alt: "VestBlock property review preview",
@@ -26,11 +28,10 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: "summary_large_image",
+    ...vestBlockTwitterDefaults,
     title: "VestBlock Property Review",
     description:
       "Request a property review so VestBlock can evaluate the best next sale path based on condition, timeline, liens, occupancy, and buyer fit.",
-    images: [absoluteUrl("/opengraph-image")],
   },
   robots: {
     index: true,
